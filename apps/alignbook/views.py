@@ -1,4 +1,5 @@
-from io import BytesIO
+import uuid
+from django.conf import settings
 import os
 from uuid import uuid4
 from rest_framework.views import APIView
@@ -7,7 +8,18 @@ from rest_framework import status
 import requests
 import json
 
-from django.conf import settings
+
+from datetime import datetime
+from .serializers import PhoneNumberSerializer
+from reportlab.lib.pagesizes import letter # type: ignore
+from reportlab.pdfgen import canvas # type: ignore
+from django.http import FileResponse, HttpResponse
+from reportlab.lib import colors # type: ignore
+
+
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer# type: ignore
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle # type: ignore
+
 
 class VoucherView(APIView):
     def post(self, request):
@@ -104,17 +116,6 @@ class VoucherView(APIView):
             
 #==============================================================================================================
 
-import requests
-import json
-from datetime import datetime
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .serializers import PhoneNumberSerializer
-from reportlab.lib.pagesizes import letter # type: ignore
-from reportlab.pdfgen import canvas # type: ignore
-from django.http import FileResponse, HttpResponse
-
 class FetchOutstandingLCView(APIView):
     def post(self, request):
         serializer = PhoneNumberSerializer(data=request.data)
@@ -145,7 +146,6 @@ class FetchOutstandingLCView(APIView):
                     for item in data:
                         if item["phone"] == phone_number:
                             user_id = item["id"]
-                            print(f"user_id for {phone_number}: {user_id}") #<== PRINT Statement
                             break
                     else:
                         return Response({"error": "Phone number not found"}, status=status.HTTP_404_NOT_FOUND)  
@@ -1274,48 +1274,72 @@ class FetchOutstandingLCView(APIView):
                             data_2 = json.loads(json_data_table_2)
 
                             if isinstance(data_2, list) and len(data_2) > 0:
-                                record = data_2[0]
-                                outstanding_lc = record.get("outstanding_lc")
-                                bill_date = record.get("bill_date")
-                                ref_no = record.get("ref_no")
-                                due_amount = record.get("due_amount")
-                                bill_amount = record.get("bill_amount")
-                                outstanding_lc_runnin = record.get("outstanding_lc_running")
-                                
+                                 party_name = data_2[0].get("party_name", "Unknown")
+                                 
+                                # Define the data for the table
+                                 table_data = [
+                                    ["Index No.","Date", "Voucher", "Debit", "Credit", "Balance"]
+                                ]
+                                 for idx, record in enumerate(data_2, start=1):
+                                    outstanding_lc = record.get("outstanding_lc", 0)
+                                    debit = outstanding_lc if outstanding_lc > 0 else 0
+                                    credit = -outstanding_lc if outstanding_lc < 0 else 0
+                                    row = [
+                                        idx,
+                                        datetime.strptime(record.get("bill_date", ""), "%Y-%m-%dT%H:%M:%S").strftime("%d/%m/%Y") if record.get("bill_date") else "",
+                                        record.get("bill_no", ""),
+                                        debit,
+                                        credit,
+                                        record.get("outstanding_lc_running", ""),                                       
+                                    ]
+                                    table_data.append(row)
 
-                                # buffer = BytesIO()
-                                # p = canvas.Canvas(buffer, pagesize=letter)
-                                # y_position = 750
-                                # for field_name, field_value in fields.items():
-                                #     p.drawString(100, y_position, f"{field_name.replace('_', ' ').title()}: {field_value}")
-                                #     y_position -= 20
-
-                                # p.showPage()
-                                # p.save()
-                                
-                                # buffer.seek(0)
+                                # Generate PDF with table
+                                 pdf_filename = f"{party_name}_{datetime.now().strftime('%Y-%m-%d')}_{uuid.uuid4()}.pdf"
+                                 pdf_path = os.path.join(settings.MEDIA_ROOT, pdf_filename)
  
-                                if outstanding_lc is not None:
-                                    # Generate PDF
-                                    pdf_filename = f"{uuid4()}.pdf"
-                                    pdf_path = os.path.join(settings.MEDIA_ROOT, pdf_filename)
-                                    p = canvas.Canvas(pdf_path, pagesize=letter)                                
+                                 doc = SimpleDocTemplate(pdf_path, pagesize=letter)
+                                 elements = []
+ 
+                                 # Add heading
+                                 styles = getSampleStyleSheet()
+                                 bold_style = ParagraphStyle(name='Bold', parent=styles['Normal'], fontName='Helvetica-Bold')
+                                 heading = Paragraph(f"Rudhra Industries", styles['Title'])
+                                 additional_text = Paragraph(f"Account Ledger: {party_name}", bold_style)  
+                                 
+                                 # Create a table to hold the heading and additional text side by side
+                                 header_table = Table([[heading], [additional_text]])
+                                 header_table.setStyle(TableStyle([
+                                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                                     ('LEFTPADDING', (0, 0), (-1, -1), 50),  # Adjust horizontal position
+                                     ('RIGHTPADDING', (0, 0), (-1, -1), 40),  # Adjust horizontal position
+                                    
+                                 ]))
+                                 
+                                 elements.append(header_table)
+                                 elements.append(Spacer(1, 12))
 
-                                    # Add the fields to the PDF
-                                    p.drawString(100, 750, f"Outstanding LC: {outstanding_lc}")
-                                    p.drawString(100, 730, f"bill_date: {bill_date}")
-                                    p.drawString(100, 710, f"ref_no: {ref_no}")
-                                    p.drawString(100, 690, f"due_amount: {due_amount}")
-                                    p.drawString(100, 670, f"Bill Amount: {bill_amount}")
-                                    p.drawString(100, 650, f"bill_amount: {bill_amount}")
-                                    p.drawString(100, 630, f"outstanding_lc_running: {outstanding_lc_runnin}")
-
-                                    p.showPage()
-                                    p.save()
-
-                                    pdf_url = request.build_absolute_uri(f"{settings.MEDIA_URL}{pdf_filename}")   
-                                
-                                    return Response({"outstanding_lc": outstanding_lc, "pdf_url": pdf_url}, status=status.HTTP_200_OK)
+                                 
+                                 # Create the table with styling
+                                 main_table = Table(table_data)
+                                 style = TableStyle([
+                                     ('BACKGROUND', (0, 0), (-1, 0), colors.grey), # Header background color
+                                     ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke), # Header text color
+                                     ('ALIGN', (0, 0), (-1, -1), 'CENTER'),  # Center align all cells
+                                     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'), 
+                                     ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                                     ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                                     ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                                 ])
+                                 main_table.setStyle(style)
+ 
+                                 elements.append(main_table)
+                                 doc.build(elements)
+ 
+                                 pdf_url = request.build_absolute_uri(f"{settings.MEDIA_URL}{pdf_filename}")
+                                 
+                                 return Response({"pdf_url": pdf_url}, status=status.HTTP_200_OK)
                             else:
                                 return Response({"error": "Invalid data format in JsonDataTable field"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                         else:
