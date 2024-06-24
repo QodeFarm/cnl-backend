@@ -1295,7 +1295,7 @@ class FetchOutstandingLCView(APIView):
                                     table_data.append(row)
 
                                 # Generate PDF with table
-                                 pdf_filename = f"{party_name}_{datetime.now().strftime('%Y-%m-%d')}_{uuid.uuid4()}.pdf"
+                                 pdf_filename = "Account_ledger_" +party_name.replace(' ' ,'_')+"_"+uuid.uuid4().hex[:6]+".pdf"
                                  pdf_path = os.path.join(settings.MEDIA_ROOT, pdf_filename)
  
                                  doc = SimpleDocTemplate(pdf_path, pagesize=letter)
