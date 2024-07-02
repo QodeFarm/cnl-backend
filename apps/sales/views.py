@@ -10,7 +10,7 @@ from uuid import UUID
 from rest_framework.views import APIView
 from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, update_multi_instance, validate_multiple_data, validate_payload_data
+from config.utils_methods import build_response, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, update_multi_instance, validate_multiple_data, validate_payload_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -27,7 +27,7 @@ class SaleOrderView(viewsets.ModelViewSet):
         if summary:
             sale_order = self.filter_queryset(self.get_queryset())
             data = SaleOrderOptionsSerializer.get_sale_order_summary(sale_order)
-            result = Response(data, status=status.HTTP_200_OK)
+            result = build_response(len(data),"Success",data,status.HTTP_200_OK)
         else:
             result = list_all_objects(self, request, *args, **kwargs)
         
