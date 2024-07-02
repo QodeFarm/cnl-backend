@@ -8,7 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer
-from config.utils_methods import create_multi_instance, delete_multi_instance, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, update_multi_instance, update_ordereddicts_with_ids
+from config.utils_methods import validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, update_multi_instance, validate_multiple_data, validate_payload_data
+from uuid import UUID
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -106,10 +107,11 @@ class VendorViewSet(APIView):
         except Vendor.DoesNotExist:
             logger.warning(f"Vendor with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        
+       
     def get(self, request,  *args, **kwargs):
         if 'pk' in kwargs:
-            return self.retrieve(self, request, *args, **kwargs)
+            result =  validate_input_pk(self,kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             instance = Vendor.objects.all()
         except Vendor.DoesNotExist:
@@ -119,7 +121,7 @@ class VendorViewSet(APIView):
             serializer = VendorSerializer(instance, many=True)
             logger.info("Vendor data retrieved successfully.")
             return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
-
+        
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a vendor and its related data (attachments, and addresses).
@@ -129,7 +131,7 @@ class VendorViewSet(APIView):
             if not pk:
                 logger.error("Primary key not provided in request.")
                 return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
-
+            
             # Retrieve the Vendor instance
             vendor = get_object_or_404(Vendor, pk=pk)
             vendor_serializer = VendorSerializer(vendor)
@@ -165,8 +167,8 @@ class VendorViewSet(APIView):
             return serializer.data
         except Exception as e:
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
-            return []
-        
+            return []       
+      
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
@@ -192,95 +194,84 @@ class VendorViewSet(APIView):
     def post(self, request, *args, **kwargs):   #To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
         return self.create(request, *args, **kwargs)
     
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
-        """
-        Handles the creation of vendor, vendor attachments, and vendor addresses.
-        vendor , vendor attachments and vendor addresses are mandatory.
-        """
+        # Extracting data from the request
         given_data = request.data
 
-        # Extracting data from the request
+        #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+
+        # Vlidated Vendor Data
         vendors_data = given_data.pop('vendor_data', None)
+        if vendors_data:
+            vendors_error = validate_payload_data(self, vendors_data , VendorSerializer)
+
+        # Vlidated VendorAttachment Data
         vendor_attachments_data = given_data.pop('vendor_attachments', None)
+        if vendor_attachments_data:
+            attachments_error = validate_multiple_data(self, vendor_attachments_data,VendorAttachmentSerializer,['vendor_id'])
+        else:
+            attachments_error = [] # Since 'VendorAttachment' is optional, so making an error is empty list
+
+        # Vlidated VendorAttachment Data
         vendor_addresses_data = given_data.pop('vendor_addresses', None)
+        if vendor_addresses_data:
+            addresses_error = validate_multiple_data(self, vendor_addresses_data,VendorAddressSerializer,['vendor_id'])
 
-        # Ensure mandatory vendor data is present
-        if not vendors_data or not vendor_attachments_data or not vendor_addresses_data:
-            logger.error("Vendor data , vendor_attachments_data and vendor_addresses_data are mandatory but not provided.")
-            return build_response(0, "Vendor data , vendor_attachments_data and vendor_addresses_data are mandatory", [], status.HTTP_400_BAD_REQUEST)
-
-        response_data = {}
-        errors = []
-
-        try:
-            # Create vendor
-            vendor_data = self.create_vendor(vendors_data)
-            if not vendor_data:
-                logger.error("Vendor creation failed.")
-                return build_response(0, "Vendor creation failed", [], status.HTTP_400_BAD_REQUEST)
-
-            vendor_id = vendor_data.get('vendor_id')
-            self.add_vendor_id_to_attachments(vendor_attachments_data, vendor_id)
-            self.add_vendor_id_to_addresses(vendor_addresses_data, vendor_id)
- 
-            # Create Vendor Attachment
-            attachments_data, attachments_errors = create_multi_instance(vendor_attachments_data, VendorAttachmentSerializer)
-            if not attachments_data:
-                logger.error("Vendor Attachment creation failed.")
-                return build_response(0, "Vendor Attachment creation failed", [], status.HTTP_400_BAD_REQUEST, attachments_errors)
-
-             # Create Vendor Address
-            addresses_data, addresses_errors = create_multi_instance(vendor_addresses_data, VendorAddressSerializer)
-            if not addresses_data:
-                logger.error("Vendor Address creation failed.")
-                return build_response(0, "Vendor Address creation failed", [], status.HTTP_400_BAD_REQUEST, addresses_errors)
-
-            response_data = [
-                {"vendor_data": vendor_data},
-                {"vendor_attachments": attachments_data},
-                {"vendor_addresses":addresses_data}
-            ]
-            error = attachments_errors + addresses_errors
-            errors.extend(error)
-
-            if errors:
-                logger.warning("Record created with some errors: %s", errors)
-                return build_response(1, "Record created with errors", response_data, status.HTTP_201_CREATED, errors)
-
-            logger.info("Record created successfully.")
-            return build_response(1, "Record created successfully", response_data, status.HTTP_201_CREATED)
-
-        except Exception as e:
-            logger.error("Error creating vendor: %s", str(e))
-            return build_response(0, "Record creation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def create_vendor(self, vendors_data):
-        """
-        Creates a vendor in the database.
-        """
-        serializer = VendorSerializer(data=vendors_data)
-        try:
-            serializer.is_valid(raise_exception=True)  # Validate vendor data
-            serializer.save()  # Save valid vendor to the database
-            logger.debug("Vendor created with data: %s", serializer.data)
-            return serializer.data
-        except ValidationError as e:
-            logger.error("Validation error on vendor: %s", str(e))  # Log validation error
-            return None
+        # Ensure mandatory data is present
+        if not vendors_data or not vendor_addresses_data:
+            logger.error("Vendor data and vendor addresses data are mandatory but not provided.")
+            return build_response(0, "Vendor and vendor addresses are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
-    def add_vendor_id_to_attachments(self, vendor_attachments_data, vendor_id):
-        """
-        Adds the vendor_id to each attachments in the vendor_attachments_data list.
-        """
-        update_ordereddicts_with_ids(vendor_attachments_data, 'vendor_id', vendor_id)
+        errors = {}
+        if vendors_error:
+            errors["vendor_data"] = vendors_error
+        if attachments_error:
+            errors["vendor_attachments"] = attachments_error
+        if addresses_error:
+            errors['vendor_addresses'] = addresses_error
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
 
-    def add_vendor_id_to_addresses(self, vendor_addresses_data, vendor_id):
+        #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
-        Adds the vendor_id to each addresses in the vendor_addresses_data list.
+        After the data is validated, this validated data is created as new instances.
         """
-        update_ordereddicts_with_ids(vendor_addresses_data, 'vendor_id', vendor_id)
-        
+            
+        # Hence the data is validated , further it can be created.
+
+        # Create Vendor Data
+        new_vendor_data = generic_data_creation(self, [vendors_data], VendorSerializer)
+        vendor_id = new_vendor_data[0].get("vendor_id",None) #Fetch vendor_id from mew instance
+        logger.info('Vendor - created*')     
+
+        # Create VendorAttachment Data
+        update_fields = {'vendor_id':vendor_id}
+        if vendor_attachments_data:
+            attachments_data = generic_data_creation(self, vendor_attachments_data, VendorAttachmentSerializer, update_fields)
+            logger.info('VendorAttachment - created*')
+        else:
+            # Since VendorAttachment Data is optional, so making it as an empty data list
+            attachments_data = []
+
+        # Create VendorAddress Data
+        update_fields = {'vendor_id':vendor_id}
+        addresses_data = generic_data_creation(self, vendor_addresses_data, VendorAddressSerializer, update_fields)
+        logger.info('VendorAddress - created*')
+
+        custom_data = [
+            {"vendor_data":new_vendor_data[0]},
+            {"vendor_attachments":attachments_data},
+            {"vendor_addresses":addresses_data}
+        ]
+
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+     
 
     def put(self, request, pk, *args, **kwargs):
         vendors_data = attachments_data = addresses_data =  response_data = None

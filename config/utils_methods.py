@@ -1,12 +1,14 @@
 #utils_methods file
 import logging
-from django.forms import ValidationError
+# from django.forms import ValidationError
+from rest_framework.serializers import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import models
 import uuid,django_filters
 from django.db.models import Q
 from uuid import uuid4
+from uuid import UUID
 import base64
 import os
 import json
@@ -15,7 +17,10 @@ from django.db import models
 from django.core.cache import cache
 
 
-# Get an instance of a logger
+# Set up basic configuration for logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Create a logger object
 logger = logging.getLogger(__name__)
 
 # -------------- File Path Handler (for Vendor model only)----------------------
@@ -105,6 +110,8 @@ def create_instance(self, request, *args, **kwargs):
         data = serializer.data
         return build_response(1, "Record created successfully", data, status.HTTP_201_CREATED)
     else:
+        errors_str = json.dumps(serializer.errors, indent=2)
+        logger.error("Serializer validation error: %s", errors_str)
         return build_response(0, "Form validation failed", [], status.HTTP_400_BAD_REQUEST)
 
 def update_instance(self, request, *args, **kwargs):
@@ -180,14 +187,15 @@ def create_multi_instance(data_set, serializer_class):
     data_list = []
     errors = []
     for item_data in data_set:
-        serializer = serializer_class(data=item_data)
         try:
-            serializer.is_valid(raise_exception=True)  # Validate each item
-            serializer.save()  # Save each valid item to the database
+            serializer = serializer_class(data=item_data)
+            serializer.is_valid(raise_exception=True)  # Validate sale order data
+            serializer.save()  # Save valid sale order to the database
             data_list.append(serializer.data)
         except ValidationError as e:
             logger.error("Validation error: %s", str(e))  # Log validation errors
-            errors.append(str(e))  # Collect validation errors
+            errors.extend([str(e),status.HTTP_400_BAD_REQUEST])
+
     return data_list, errors
 
 def build_response(success, message, data, status_code, errors=None):
@@ -281,3 +289,65 @@ def update_multi_instance(pk, update_data, related_model_class, serializer_name,
                 errors.append(str(e))  # Collect validation errors
             data_list.append(serializer.data)
     return data_list, errors
+
+def validate_multiple_data(self, bulk_data, model_serializer, exclude_fields):
+        errors = []
+        
+        # Validate child data
+        child_serializers = []
+        for data in bulk_data:
+            child_serializer = model_serializer(data=data)
+            if not child_serializer.is_valid(raise_exception=False):
+                error = child_serializer.errors
+                exclude_keys = exclude_fields
+                # Create a new dictionary excluding specified keys
+                filtered_data = {k: v for k, v in error.items() if k not in exclude_keys}
+                if filtered_data:
+                    errors.append(filtered_data)
+
+        return errors
+
+def validate_payload_data(self, data , model_serializer):
+        errors = []
+
+        # Validate parent data
+        serializer = model_serializer(data=data)
+        # If Main model data is not valid
+        if not serializer.is_valid(raise_exception=False):
+            error = serializer.errors
+            model = serializer.Meta.model
+            model_name = model.__name__
+            logger.error("Validation error on %s: %s",model_name, str(error))  # Log validation error
+            errors.append(error)
+        
+        return errors
+
+def generic_data_creation(self, valid_data, serializer_class, update_fields=None):
+    '''
+    ** This function creates new instances with valid data & at the same time it updates the data with required fields**
+    valid_data - The data to be created
+    serializer_class - name of the serializer for which the data is to be created.
+    update_fields - fields to be updated before the data is created [input type dict]
+    '''
+    # If any fields to be updated before the data is created
+    if update_fields:
+        for data in valid_data:
+            for key, value in update_fields.items():
+                data[key] = value
+
+    data_list = []
+    for data in valid_data:
+        serializer = serializer_class(data=data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        data_list.append(serializer.data)
+
+    return data_list
+
+# Validates the input 'pk'
+def validate_input_pk(self, pk=None):
+    try:
+        UUID(pk, version=4)
+    except ValueError:
+        logger.info('Invalid UUID provided')
+        return build_response(0, "Invalid UUID provided", [], status.HTTP_404_NOT_FOUND)
