@@ -94,7 +94,7 @@ class Customer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):   
-        return f"{self.name} {self.customer_id}"
+        return f"{self.name}_{self.customer_id}"
     
     class Meta:
         db_table = customerstable

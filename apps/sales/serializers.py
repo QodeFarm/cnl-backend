@@ -1,6 +1,5 @@
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
-from apps.inventory.serializers import ModWarehousesSerializer
 from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer
 from apps.products.serializers import ModProductGroupsSerializer, ModproductsSerializer
 from .models import *
@@ -77,7 +76,6 @@ class SaleInvoiceOrdersSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
     
-
     class Meta:
         model = SaleInvoiceOrders
         fields = '__all__'

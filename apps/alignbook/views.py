@@ -1278,9 +1278,9 @@ class FetchOutstandingLCView(APIView):
                                  
                                 # Define the data for the table
                                  table_data = [
-                                    ["Index No.","Date", "Voucher", "Debit", "Credit", "Balance"]
+                                    ["IDX","Date", "Voucher", "Debit", "Credit", "Balance"]
                                 ]
-                                 for idx, record in enumerate(data_2, start=1):
+                                 for idx, record in enumerate(data_2[-25:][::-1], start=1):
                                     outstanding_lc = record.get("outstanding_lc", 0)
                                     debit = outstanding_lc if outstanding_lc > 0 else 0
                                     credit = -outstanding_lc if outstanding_lc < 0 else 0
@@ -1319,10 +1319,9 @@ class FetchOutstandingLCView(APIView):
                                  
                                  elements.append(header_table)
                                  elements.append(Spacer(1, 12))
-
                                  
                                  # Create the table with styling
-                                 main_table = Table(table_data)
+                                 main_table = Table(table_data, colWidths=[30, 60, 70, 60, 65, 70])
                                  style = TableStyle([
                                      ('BACKGROUND', (0, 0), (-1, 0), colors.grey), # Header background color
                                      ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke), # Header text color
