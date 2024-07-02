@@ -6,7 +6,8 @@ from .models import *
 from .serializers import *
 from config.utils_methods import *
 from config.utils_variables import *
-from config.utils_methods import create_multi_instance, delete_multi_instance, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, update_ordereddicts_with_ids, update_multi_instance
+from config.utils_methods import validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, update_multi_instance, validate_multiple_data, validate_payload_data
+from uuid import UUID
 from apps.sales.serializers import OrderAttachmentsSerializer,OrderShipmentsSerializer
 from apps.sales.models import OrderAttachments,OrderShipments
 from rest_framework import viewsets
@@ -127,7 +128,8 @@ class PurchaseOrderViewSet(APIView):
 
     def get(self, request, *args, **kwargs):
         if 'pk' in kwargs:
-            return self.retrieve(request, *args, **kwargs)
+           result =  validate_input_pk(self,kwargs['pk'])
+           return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             instance = PurchaseOrders.objects.all()
         except PurchaseOrders.DoesNotExist:
@@ -217,131 +219,121 @@ class PurchaseOrderViewSet(APIView):
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
-
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
-        """
-        Handles the creation of purchase order, purchase order items, order attachments, and order shipments.
-        Purchase order and purchase order items are mandatory. Order attachments and order shipments are optional.
-        """
+        # Extracting data from the request
         given_data = request.data
 
-        # Extracting data from the request
-        purchase_order_data = given_data.pop('purchase_order', None)
+        #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+
+        # Validated PurchaseOrders Data
+        purchase_order_data = given_data.pop('purchase_order', None) # parent_data
+        if purchase_order_data:
+            order_error = validate_payload_data(self, purchase_order_data , PurchaseOrdersSerializer)
+
+            # validate the order_type in 'purchase_order' data
+            order_type = purchase_order_data.get('order_type',None) # 'order_type' is additonal Field and not defined in model
+            if order_type is None and len(order_error) > 0:
+                order_error[0]['order_type'] = ["Specify type of order"]
+            elif order_type is None:
+                order_error.append([{'order_type':"This field is required"}])
+            else:
+                order_type = get_object_or_none(OrderTypes, name=order_type)
+                if order_type is None and len(order_error) > 0:
+                    order_error[0]['order_type'] = ["Invalid order type"]
+                elif order_type is None:
+                    order_error.append([{'order_type':"Invalid order type"}])
+                
+        # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
+        if purchase_order_items_data:
+            item_error = validate_multiple_data(self, purchase_order_items_data,PurchaseorderItemsSerializer,['purchase_order_id'])
+
+        # Validated OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
+        if order_attachments_data:
+            attachment_error = validate_multiple_data(self, order_attachments_data ,OrderAttachmentsSerializer,['order_id','order_type_id'])
+        else:
+            attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
+
+        # Validated OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_multiple_data(self, [order_shipments_data] , OrderShipmentsSerializer,['order_id','order_type_id'])
+        else:
+            shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
         # Ensure mandatory data is present
         if not purchase_order_data or not purchase_order_items_data:
-            logger.error("Purchase order and purchase order items are mandatory but not provided.")
-            return build_response(0, "Purchase order and purchase order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+            logger.error("Purchase order and Purchase order items are mandatory but not provided.")
+            return build_response(0, "Purchase order and Purchase order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+        errors = {}
 
-        response_data = {}
-        errors = []
-
-        try:
-            # Create purchase order
-            purchaseorder_data = self.create_purchase_order(purchase_order_data)
-            if not purchaseorder_data:
-                logger.error("Purchase order creation failed.")
-                return build_response(0, "Purchase order creation failed", [], status.HTTP_400_BAD_REQUEST)
-
-            purchase_order_id = purchaseorder_data.get('purchase_order_id')
-            self.add_purchase_order_id_to_items(purchase_order_items_data, purchase_order_id)
-
-            # Create purchase order items
-            items_data, items_errors = create_multi_instance(purchase_order_items_data, PurchaseorderItemsSerializer)
-            if not items_data:
-                logger.error("Purchase order items creation failed.")
-                return build_response(0, "Purchase order items creation failed", [], status.HTTP_400_BAD_REQUEST, items_errors)
-
-            response_data = [
-                {"purchase_order": purchaseorder_data},
-                {"purchase_order_items": items_data}
-            ]
-            errors.extend(items_errors)
-
-            order_type_id = None
-
-            # Check if optional data exists and fetch order_type_id if necessary
-            if order_attachments_data or order_shipments_data:
-                order_type_id = self.get_order_type_id_from_purchase_order(purchase_order_data)
-                logger.debug("Order type ID retrieved: %s", order_type_id)
-
-            if order_attachments_data:
-                self.update_attachments_data(order_attachments_data, purchase_order_id, order_type_id)
-                attachments_data, attachments_errors = create_multi_instance(order_attachments_data, OrderAttachmentsSerializer)
-                response_data.append({"order_attachments": attachments_data})
-                errors.extend(attachments_errors)
-
-            if order_shipments_data:
-                shipments_data, shipment_errors = self.create_order_shipments(order_shipments_data, purchase_order_id, order_type_id)
-                response_data.append({"order_shipments": shipments_data})
-                errors.extend(shipment_errors)
-
-            if errors:
-                logger.warning("Record created with some errors: %s", errors)
-                return build_response(1, "Record created with errors", response_data, status.HTTP_201_CREATED, errors)
-
-            logger.info("Record created successfully.")
-            return build_response(1, "Record created successfully", response_data, status.HTTP_201_CREATED)
-
-        except Exception as e:
-            logger.error("Error creating purchase order: %s", str(e))
-            return build_response(0, "Record creation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def create_purchase_order(self, purchase_order_data):
+        if order_error:
+            errors["purchase_order"] = order_error
+        if item_error:
+                errors["purchase_order_items"] = item_error
+        if attachment_error:
+                errors['order_attachments'] = attachment_error
+        if shipments_error:
+                errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+        
+        #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
-        Creates a purchase order in the database.
+        After the data is validated, this validated data is created as new instances.
         """
-        serializer = PurchaseOrdersSerializer(data=purchase_order_data)
-        try:
-            serializer.is_valid(raise_exception=True)  # Validate purchase order data
-            serializer.save()  # Save valid purchase order to the database
-            logger.debug("Purchase order created with data: %s", serializer.data)
-            return serializer.data
-        except ValidationError as e:
-            logger.error("Validation error on purchase order: %s", str(e))  # Log validation error
-            return None
+            
+        # Hence the data is validated , further it can be created.
 
-    def add_purchase_order_id_to_items(self, purchase_order_items_data, purchase_order_id):
-        """
-        Adds the purchase_order_id to each item in the purchase_order_items_data list.
-        """
-        update_ordereddicts_with_ids(purchase_order_items_data, 'purchase_order_id', purchase_order_id)
+        # Create PurchaseOrders Data
+        new_purchase_order_data = generic_data_creation(self, [purchase_order_data], PurchaseOrdersSerializer)
+        purchase_order_id = new_purchase_order_data[0].get("purchase_order_id",None) #Fetch purchase_order_id from mew instance
+        logger.info('PurchaseOrders - created*')
 
-    def get_order_type_id_from_purchase_order(self, purchase_order_data):
-        """
-        Fetches the order_type_id from the purchase_order_data.
-        """
+        # Create PurchaseorderItems Data
+        update_fields = {'purchase_order_id':purchase_order_id}
+        items_data = generic_data_creation(self, purchase_order_items_data, PurchaseorderItemsSerializer, update_fields)
+        logger.info('PurchaseorderItems - created*')
+
+        # Get order_type_id from OrderTypes model
         order_type_val = purchase_order_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
-        return order_type.order_type_id if order_type else None
+        type_id = order_type.order_type_id
 
-    def update_attachments_data(self, order_attachments_data, purchase_order_id, order_type_id):
-        """
-        Updates order_attachments_data with order_type_id and purchase_order_id.
-        """
-        update_ordereddicts_with_ids(order_attachments_data, 'order_type_id', order_type_id)
-        update_ordereddicts_with_ids(order_attachments_data, 'order_id', purchase_order_id)
+        # Create OrderAttchments Data
+        update_fields = {'order_id':purchase_order_id, 'order_type_id':type_id}
+        if order_attachments_data:
+            order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields)
+            logger.info('OrderAttchments - created*')
+        else:
+            # Since OrderAttchments Data is optional, so making it as an empty data list
+            order_attachments = []
 
-    def create_order_shipments(self, order_shipments_data, purchase_order_id, order_type_id):
-        """
-        Creates an order shipment in the database.
-        """
-        order_shipments_data['order_id'] = purchase_order_id
-        order_shipments_data['order_type_id'] = order_type_id
-        serializer = OrderShipmentsSerializer(data=order_shipments_data)
-        try:
-            serializer.is_valid(raise_exception=True)  # Validate order shipments data
-            serializer.save()  # Save valid order shipments to the database
-            logger.debug("Order shipment created with data: %s", serializer.data)
-            return serializer.data, []
-        except ValidationError as e:
-            logger.error("Validation error on order shipments: %s", str(e))  # Log validation error
-            return None, [str(e)]
-        
+        # create OrderShipments Data
+        if order_shipments_data:
+            order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields)
+            logger.info('OrderShipments - created*')
+        else:
+            # Since OrderShipments Data is optional, so making it as an empty data list
+            order_shipments = []
+
+        custom_data = [
+            {"purchase_order":new_purchase_order_data},
+            {"purchase_order_items":items_data},
+            {"order_attachments":order_attachments},
+            {"order_shipments":order_shipments},
+        ]
+
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
     def put(self, request, pk, *args, **kwargs):
         purchaseorder_data = items_data = attachments_data = shipments_data = response_data = None
         errors = []
@@ -371,6 +363,7 @@ class PurchaseOrderViewSet(APIView):
             order_shipments_data = request.data.pop('order_shipments')
             shipments_data, shipments_errors = update_multi_instance(pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, filter_field_1='order_id')
             errors.extend(shipments_errors)
+
             if errors:
                 logger.warning("Record created with some errors: %s", errors)
                 return build_response(1, "Record created with errors", response_data, status.HTTP_201_CREATED, errors)
