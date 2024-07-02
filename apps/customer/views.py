@@ -1,6 +1,7 @@
 from uuid import UUID
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
+from requests import request
 from rest_framework import viewsets, generics, mixins as mi
 from apps import customer
 from apps.customer.filters import LedgerAccountsFilters, CustomerFilters, CustomerAddressesFilters, CustomerAttachmentsFilters
@@ -48,6 +49,7 @@ class CustomerViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
+        # return create_instance(self, request, *args, **kwargs)
         summary = request.query_params.get('summary', 'false').lower() == 'true'
         if summary:
             customers = self.filter_queryset(self.get_queryset())
@@ -99,29 +101,37 @@ class CustomerAttachmentsViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 #==========================================================================  
-
+    
 class CustomerCreateViews(APIView):
-
     def get_object(self, pk):
         try:
             return Customer.objects.get(pk=pk)
         except Customer.DoesNotExist:
             logger.warning(f"Customer with ID {pk} does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+            return None
 
-    def get(self, request,  *args, **kwargs):
-        if 'pk' in kwargs:
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
+
         try:
-            instance = Customer.objects.all()
-        except Customer.DoesNotExist:
-            logger.error("Customer does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        else:
-            serializer = CustomerSerializer(instance, many=True)
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving customer summary")
+                customers = Customer.objects.all()
+                data = CustomerOptionSerializer.get_customer_summary(customers)
+                return Response(data, status=status.HTTP_200_OK)
+
+            logger.info("Retrieving all customers")
+            queryset = Customer.objects.all()
+            serializer = CustomerSerializer(queryset, many=True)
             logger.info("Customer data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -158,16 +168,17 @@ class CustomerCreateViews(APIView):
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_related_data(self, model, serializer_class, filter_field, filter_value):
-        """
-        Retrieves related data for a given model, serializer, and filter field.
-        """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
             serializer = serializer_class(related_data, many=True)
-            logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
+            logger.debug(
+                f"Retrieved related data for model {model.__name__} with filter {filter_field}={filter_value}."
+            )
             return serializer.data
         except Exception as e:
-            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
+            logger.exception(
+                f"Error retrieving related data for model {model.__name__} with filter {filter_field}={filter_value}: {str(e)}"
+            )
             return []
       
     @transaction.atomic
@@ -325,4 +336,4 @@ class CustomerCreateViews(APIView):
             response_data = build_response(0, "Record updation failed", [serializer.errors], status.HTTP_400_BAD_REQUEST)
        
         return response_data
- 
+#=================================
