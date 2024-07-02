@@ -21,4 +21,5 @@ urlpatterns = [
     path('',include(router.urls)),
     path('sale_order/', SaleOrderViewSet.as_view(), name='sales-order-list-create'),
     path('sale_order/<str:pk>/', SaleOrderViewSet.as_view(), name='sales-order-detail-update-delete'),
+    path('reset_sale_order/', ResetSaleOrder.as_view(), name='reset'),
 ]
