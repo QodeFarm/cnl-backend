@@ -3,6 +3,7 @@ from django.db import transaction
 from django.forms import ValidationError
 from django.http import  Http404
 from django.shortcuts import render,get_object_or_404
+from requests import Response
 from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
@@ -22,7 +23,14 @@ class SaleOrderView(viewsets.ModelViewSet):
     serializer_class = SaleOrderSerializer
     
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        summary = request.query_params.get('summary', 'false').lower() == 'true'
+        if summary:
+            sale_order = self.filter_queryset(self.get_queryset())
+            data = SaleOrderOptionsSerializer.get_sale_order_summary(sale_order)
+            result = Response(data, status=status.HTTP_200_OK)
+        else:
+            result = list_all_objects(self, request, *args, **kwargs)        
+        return result
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

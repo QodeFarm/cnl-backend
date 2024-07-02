@@ -116,3 +116,18 @@ class OrderShipmentsSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderShipments
         fields = '__all__'
+
+#-----------------------------------------------------------------------------------------------------
+class SaleOrderOptionsSerializer(serializers.ModelSerializer):
+   
+    class Meta:
+        model = SaleOrder
+        fields = ['order_no', 'order No']
+ 
+    def get_sale_order_summary(sale_order):
+        serializer = SaleOrderOptionsSerializer(sale_order, many=True)
+        return {
+            "count": len(serializer.data),
+            "msg": "SUCCESS333333",
+            "data": serializer.data
+        }

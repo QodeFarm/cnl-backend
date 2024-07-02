@@ -43,8 +43,8 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     vehicle_name = models.CharField(max_length=255, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
     order_status_id  = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
-    shipping_address = models.CharField(max_length=1024, null=True, default=None)
-    billing_address = models.CharField(max_length=1024, null=True, default=None)
+    #shipping_address = models.CharField(max_length=1024, null=True, default=None)
+    #billing_address = models.CharField(max_length=1024, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
