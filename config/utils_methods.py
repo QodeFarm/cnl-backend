@@ -91,13 +91,6 @@ def filter_uuid(queryset, name, value):
     return queryset.filter(Q(**{name: value}))
 #======================================================================
 
-def build_response(count, msg, data, status):
-    return Response({
-        'count':count,
-        'message': msg,
-        'data': data,
-    },status=status) 
-
 def list_all_objects(self, request, *args, **kwargs):
     queryset = self.filter_queryset(self.get_queryset())
     serializer = self.get_serializer(queryset, many=True)
