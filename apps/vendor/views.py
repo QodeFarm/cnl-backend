@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer
-from config.utils_methods import validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, update_multi_instance, validate_multiple_data, validate_payload_data
+from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_payload_data, validate_put_method_data
 from uuid import UUID
 
 # Set up basic configuration for logging
@@ -175,10 +175,10 @@ class VendorViewSet(APIView):
         Handles the deletion of a vendor and its related attachments, and addresses.
         """
         try:
-            # Get the SaleOrder instance
+            # Get the vendor instance
             instance = Vendor.objects.get(pk=pk)
 
-            # Delete the main SaleOrder instance
+            # Delete the main vendor instance
             instance.delete()
 
             logger.info(f"Vendor with ID {pk} deleted successfully.")
@@ -271,47 +271,87 @@ class VendorViewSet(APIView):
         ]
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-     
 
     def put(self, request, pk, *args, **kwargs):
-        vendors_data = attachments_data = addresses_data =  response_data = None
+
+        #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data  
+
+        # Vlidated Vendor Data
+        vendors_data = given_data.pop('vendor_data', None)
+        if vendors_data:
+            vendors_error = validate_multiple_data(self, [vendors_data] , VendorSerializer, ['vendor_id'])
+
+        # Vlidated VendorAttachment Data
+        vendor_attachments_data = given_data.pop('vendor_attachments', None)
+        if vendor_attachments_data:
+            exclude_fields = ['vendor_id']
+            attachments_error = validate_put_method_data(self, vendor_attachments_data,VendorAttachmentSerializer, exclude_fields, current_model_pk_field='vendor_id')
+        else:
+            attachments_error = [] # Since 'VendorAttachment' is optional, so making an error is empty list
+
+        # Vlidated VendorAttachment Data
+        vendor_addresses_data = given_data.pop('vendor_addresses', None)
+        if vendor_addresses_data:
+            exclude_fields = ['vendor_id']
+            addresses_error = validate_put_method_data(self, vendor_addresses_data,VendorAddressSerializer, exclude_fields, current_model_pk_field='vendor_id')
+
+        # Ensure mandatory data is present
+        if not vendors_data or not vendor_addresses_data:
+            logger.error("Vendor data and vendor addresses data are mandatory but not provided.")
+            return build_response(0, "Vendor and vendor addresses are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+        errors = {}
+        if vendors_error:
+            errors["vendor_data"] = vendors_error
+        if attachments_error:
+            errors["vendor_attachments"] = attachments_error
+        if addresses_error:
+            errors['vendor_addresses'] = addresses_error
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+        
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        # Prepare empty list to store errors
         errors = []
 
+        # Prepare for Update
         partial = kwargs.pop('partial', False)
+
+        # Get vendor instance
         instance = self.get_object(pk)
-        serializer = VendorSerializer(instance, data=request.data['vendor_data'], partial=partial)
-        try:
-            if serializer.is_valid(raise_exception=True):
-                serializer.save()
-        except Exception as e:
-            logger.error("Validation error: %s", str(e))  # Log validation errors
-            errors.append(str(e))  # Collect validation errors
-        else:
-            vendors_data = serializer.data
 
-            # Update vendor_attachments
-            vendor_attachments_data = request.data.pop('vendor_attachments')
-            attachments_data, attachments_errors= update_multi_instance(pk, vendor_attachments_data, VendorAttachment, VendorAttachmentSerializer, filter_field_1='vendor_id')
-            errors.extend(attachments_errors)
+        # Update the 'Vendor'
+        if vendors_data:
+            serializer = VendorSerializer(instance, data=vendors_data, partial=partial)
+            try:
+                if serializer.is_valid(raise_exception=True):
+                    serializer.save()
+            except Exception as e:
+                logger.error("Validation error: %s", str(e))  # Log validation errors
+                errors.append(str(e))  # Collect validation errors
+            else:
+                Vendor_data = serializer.data
+                logger.info("Vendor - updated**")
 
-            # Update vendor_addresses
-            vendor_addresses_data = request.data.pop('vendor_addresses')
-            addresses_data, addresses_errors= update_multi_instance(pk, vendor_addresses_data, VendorAddress, VendorAddressSerializer, filter_field_1='vendor_id')
-            errors.extend(addresses_errors)
-            if errors:
-                logger.warning("Record created with some errors: %s", errors)
-                return build_response(1, "Record created with errors", response_data, status.HTTP_201_CREATED, errors)
+        # Update VendorAttachment Data
+        update_fields = {'vendor_id':pk}
+        attachments_data = update_multi_instances(self,pk, vendor_attachments_data,VendorAttachment,VendorAttachmentSerializer, update_fields, main_model_related_field='vendor_id', current_model_pk_field='attachment_id')
 
-        #  Here 'or' operator is used becaused data can be either empty list or filled with data. so that all the model data can be represented on output
-        if vendors_data or attachments_data or addresses_data :  
-            custom_data = {
-                "vendor_data": vendors_data,
-                "vendor_attachments": attachments_data,
-                "vendor_addresses":addresses_data
-            }
-            response_data = build_response(1, "Record updated successfully", custom_data, status.HTTP_200_OK)
-        else:
-            logger.error("Error in VendorViewSet")
-            response_data = build_response(0, "Record updation failed", [serializer.errors], status.HTTP_400_BAD_REQUEST)
-        
-        return response_data
+        # Update VendorAddress Data
+        addresses_data = update_multi_instances(self,pk, vendor_addresses_data,VendorAddress, VendorAddressSerializer, update_fields, main_model_related_field='vendor_id', current_model_pk_field='vendor_address_id')
+
+        custom_data = [
+            {"vendor_data":Vendor_data},
+            {"vendor_attachments":attachments_data if attachments_data else []},
+            {"vendor_addresses":addresses_data if addresses_data else []}
+        ]
+
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
