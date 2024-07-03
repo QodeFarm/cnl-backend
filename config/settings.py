@@ -38,7 +38,7 @@ else:
 
 #------------File_uploads_requirements------------
 import os
-MEDIA_URL = '/media/'
+MEDIA_URL = '/cdn/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #--------------------------------------------
 
@@ -125,7 +125,7 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "cnl2",
+        "NAME": "cnl",
         "USER": "root",
         "PASSWORD": "root",
         "HOST": "127.0.0.1",
