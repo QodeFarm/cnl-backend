@@ -158,7 +158,7 @@ class CustomerCreateViews(APIView):
                 "customer_addresses": addresses_data
             }
             logger.info("Customers and related data retrieved successfully.")
-            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK) 
 
         except Http404:
             logger.error("Sale order with pk %s does not exist.", pk)
@@ -270,7 +270,7 @@ class CustomerCreateViews(APIView):
         customer_id = new_customer_data[0].get("customer_id",None) #Fetch customer_id from mew instance
         logger.info('Customer - created*')     
 
-        # Create VendorAttachment Data
+        # Create CustomerAttachment Data
         update_fields = {'customer_id':customer_id}
         if attachments_data:
             attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields)
@@ -279,7 +279,7 @@ class CustomerCreateViews(APIView):
             # Since CustomerAttachments Data is optional, so making it as an empty data list
             attachments_data = []
 
-        # Create VendorAddress Data
+        # Create CustomerAddress Data
         update_fields = {'customer_id':customer_id}
         addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields)
         logger.info('CustomerAddress - created*')
@@ -291,49 +291,87 @@ class CustomerCreateViews(APIView):
         ]
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)        
- 
-#=============================================================================================================       
-    
+
     def put(self, request, pk, *args, **kwargs):
-        customer_data = attachments_data = addresses_data =  response_data = None
-        errors = []
- 
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object(pk)
-        serializer = CustomerSerializer(instance, data=request.data['customer_data'], partial=partial)
-        try:
-            if serializer.is_valid(raise_exception=True):
-                serializer.save()
-        except Exception as e:
-            logger.error("Validation error: %s", str(e))  # Log validation errors
-            errors.append(str(e))  # Collect validation errors
-        else:
-            customer_data = serializer.data
- 
-            # Update customer_attachments
-            customer_attachments_data = request.data.pop('customer_attachments')
-            attachments_data, attachments_error = update_multi_instance(pk, customer_attachments_data, CustomerAttachments, CustomerAttachmentsSerializers, filter_field_1='customer_id')
-            errors.extend(attachments_error)
+
+            #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+            """
+            All the data in request will be validated here. it will handle the following errors:
+            - Invalid data types
+            - Invalid foreign keys
+            - nulls in required fields
+            """
+            # Get the given data from request
+            given_data = request.data  
+
+            # Vlidated Customer Data
+            customer_data = given_data.pop('customer_data', None)
+            if customer_data:
+                customer_error = validate_multiple_data(self, [customer_data] , CustomerSerializer, ['customer_id'])
+
+            # Vlidated CustomerAttachment Data
+            attachments_data = given_data.pop('customer_attachments', None)
+            if attachments_data:
+                exclude_fields = ['customer_id']
+                attachments_error = validate_put_method_data(self, attachments_data,CustomerAttachmentsSerializers, exclude_fields, current_model_pk_field='customer_id')
+            else:
+                attachments_error = [] # Since 'CustomerAttachment' is optional, so making an error is empty list
+
+            # Vlidated CustomerAddresses Data
+            addresses_data = given_data.pop('customer_addresses', None)
+            if addresses_data:
+                exclude_fields = ['customer_id']
+                addresses_error = validate_put_method_data(self, addresses_data,CustomerAddressesSerializers, exclude_fields, current_model_pk_field='customer_id')
+
+            # Ensure mandatory data is present
+            if not customer_data or not addresses_data:
+                logger.error("Customer data and Customer addresses data are mandatory but not provided.")
+                return build_response(0, "Customer and Customer addresses are mandatory", [], status.HTTP_400_BAD_REQUEST)
             
-            # Update customer_addresses
-            customer_addresses_data = request.data.pop('customer_addresses')
-            addresses_data, addresses_error = update_multi_instance(pk, customer_addresses_data, CustomerAddresses, CustomerAddressesSerializers, filter_field_1='customer_id')
-            errors.extend(addresses_error)
-            
+            errors = {}
+            if customer_error:
+                errors["customer_data"] = customer_error
+            if attachments_error:
+                errors["customer_attachments"] = attachments_error
+            if addresses_error:
+                errors['customer_addresses'] = addresses_error
             if errors:
-                logger.warning("Record created with some errors: %s", errors)
-                return build_response(1, "Record created with errors", response_data, status.HTTP_201_CREATED, errors)
+                return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
             
-        if customer_data or attachments_data or addresses_data :  
-            custom_data = {
-                "customer_data": customer_data,
-                "customer_attachments": attachments_data,
-                "customer_addresses":addresses_data
-            }
-            response_data = build_response(1, "Record updated successfully", custom_data, status.HTTP_200_OK)
-        else:
-            logger.error("Error in customerViewSet")
-            response_data = build_response(0, "Record updation failed", [serializer.errors], status.HTTP_400_BAD_REQUEST)
-       
-        return response_data
-#=================================
+            # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+            # Prepare empty list to store errors
+            errors = []
+
+            # Prepare for Update
+            partial = kwargs.pop('partial', False)
+
+            # Get customer instance
+            instance = self.get_object(pk)
+
+            # Update the 'customer'
+            if customer_data:
+                serializer = CustomerSerializer(instance, data=customer_data, partial=partial)
+                try:
+                    if serializer.is_valid(raise_exception=True):
+                        serializer.save()
+                except Exception as e:
+                    logger.error("Validation error: %s", str(e))  # Log validation errors
+                    errors.append(str(e))  # Collect validation errors
+                else:
+                    customer_data = serializer.data
+                    logger.info("Customer - updated**")
+
+            # Update CustomerAttachment Data
+            update_fields = {'customer_id':pk}
+            attachments_data = update_multi_instances(self,pk, attachments_data,CustomerAttachments,CustomerAttachmentsSerializers, update_fields, main_model_related_field='customer_id', current_model_pk_field='attachment_id')
+
+            # Update CustomerAddress Data
+            addresses_data = update_multi_instances(self,pk, addresses_data,CustomerAddresses, CustomerAddressesSerializers, update_fields, main_model_related_field='customer_id', current_model_pk_field='customer_address_id')
+
+            custom_data = [
+                {"customer_data":customer_data},
+                {"customer_attachments":attachments_data if attachments_data else []},
+                {"customer_addresses":addresses_data if addresses_data else []}
+            ]
+
+            return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
