@@ -24,12 +24,12 @@ class ModSaleInvoiceOrdersSerializer(serializers.ModelSerializer):
 # -------------------------------------------------------
 
 class SaleOrderSerializer(serializers.ModelSerializer):
-    # gst_type = ModGstTypesSerializer(source='gst_type_id', read_only=True)
-    # customer = ModCustomersSerializer(source='customer_id', read_only=True)
-    # customer_address = ModCustomerAddressesSerializer(source='customer_address_id', read_only=True)
-    # payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
-    # sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
-    # ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
+    gst_type = ModGstTypesSerializer(source='gst_type_id', read_only=True)
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    customer_address = ModCustomerAddressesSerializer(source='customer_address_id', read_only=True)
+    payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
+    sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     
     class Meta:
         model = SaleOrder
@@ -59,8 +59,8 @@ class SalesPriceListSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class SaleOrderItemsSerializer(serializers.ModelSerializer):
-    # sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
-    # product = ModproductsSerializer(source='product_id', read_only=True)
+    sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
+    product = ModproductsSerializer(source='product_id', read_only=True)
 
     class Meta:
         model = SaleOrderItems
@@ -102,16 +102,16 @@ class SaleReturnItemsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class OrderAttachmentsSerializer(serializers.ModelSerializer):
-    # order_type = ModOrderTypesSerializer(source='order_type_id', read_only=True)
+    order_type = ModOrderTypesSerializer(source='order_type_id', read_only=True)
 
     class Meta:
         model = OrderAttachments
         fields = '__all__'
 
 class OrderShipmentsSerializer(serializers.ModelSerializer):
-    # shipping_mode = ShippingModesSerializer(source='shipping_mode_id', read_only=True)
-    # shipping_company = ModShippingCompaniesSerializer(source='shipping_company_id', read_only=True)
-    # order_type = ModOrderTypesSerializer(source='order_type_id', read_only=True)
+    shipping_mode = ShippingModesSerializer(source='shipping_mode_id', read_only=True)
+    shipping_company = ModShippingCompaniesSerializer(source='shipping_company_id', read_only=True)
+    order_type = ModOrderTypesSerializer(source='order_type_id', read_only=True)
 
     class Meta:
         model = OrderShipments
