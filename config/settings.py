@@ -38,7 +38,7 @@ else:
 
 #------------File_uploads_requirements------------
 import os
-MEDIA_URL = '/media/'
+MEDIA_URL = '/cdn/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #--------------------------------------------
 
@@ -125,7 +125,7 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "cnl2",
+        "NAME": "cnl",
         "USER": "root",
         "PASSWORD": "root",
         "HOST": "127.0.0.1",
@@ -286,11 +286,13 @@ CACHES = {
 }
 
 CORS_ALLOWED_ORIGINS = [
+    "https://dev.qodefarm.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     'http://localhost:4200',
     'http://localhost:8080',
     'http://127.0.0.1:5500',
+
 ]
 
 # from django_safe_settings.patch import patch_all  # type: ignore

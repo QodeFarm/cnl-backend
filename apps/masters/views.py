@@ -34,6 +34,9 @@ class FileUploadView(APIView):
             else:
                 return Response({'count':len(files), 'msg':'No Files Selected', 'data':[]}, status=status.HTTP_400_BAD_REQUEST)  
         else:
+            media_folder = settings.MEDIA_ROOT
+            if not os.path.exists(media_folder):
+                os.makedirs(media_folder)                
             if len(files) != 0:
                 uploaded_files = []
                 for file in files:
@@ -47,7 +50,7 @@ class FileUploadView(APIView):
                     uploaded_files.append({
                         'attachment_name': file.name,
                         'file_size': file.size,
-                        'attachment_path': file_path.replace('\\', '/').replace(' ', '_')
+                        'attachment_path':unique_file_name 
                     })
                 return Response({'count': len(files), 'msg': 'Files Uploaded Successfully', 'data': uploaded_files}, status=status.HTTP_201_CREATED)
             else:
