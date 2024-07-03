@@ -391,5 +391,3 @@ def validate_order_type(data, error_list, model_name,look_up=None):
                 error_list[0][look_up] = ["Invalid order type."]
             else:
                 error_list.append({look_up:["Invalid order type."]})
-
-                
