@@ -199,13 +199,7 @@ class SaleOrderViewSet(APIView):
             items_data = self.get_related_data(SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-            if shipments_data:
-                try:
-                    shipments_data = shipments_data[0]
-                except IndexError as e:
-                    shipments_data = {}
-            else:
-                 shipments_data = {}
+            shipments_data = shipments_data[0] if shipments_data else {}
 
             # Customizing the response data
             custom_data = {
