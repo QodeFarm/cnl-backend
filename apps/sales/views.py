@@ -424,27 +424,11 @@ class SaleOrderViewSet(APIView):
         
 
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
-        # Prepare empty list to store errors
-        errors = []
 
-        # Prepare for Update
-        partial = kwargs.pop('partial', False)
-
-        # Get saleorder instance
-        instance = self.get_object(pk)
-
-        # Update the 'sale_order'
+        # update SaleOrder
         if sale_order_data:
-            serializer = SaleOrderSerializer(instance, data=sale_order_data, partial=partial)
-            try:
-                if serializer.is_valid(raise_exception=True):
-                    serializer.save()
-            except Exception as e:
-                logger.error("Validation error: %s", str(e))  # Log validation errors
-                errors.append(str(e))  # Collect validation errors
-            else:
-                saleorder_data = serializer.data
-                logger.info("Saleorder - updated**")
+            update_fields = [] # No need to update any fields
+            saleorder_data = update_multi_instances(self, pk, [sale_order_data], SaleOrder, SaleOrderSerializer, update_fields,main_model_related_field='sale_order_id', current_model_pk_field='sale_order_id')
 
         # Update the 'sale_order_items'
         update_fields = {'sale_order_id':pk}
