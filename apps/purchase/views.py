@@ -6,7 +6,7 @@ from .models import *
 from .serializers import *
 from config.utils_methods import *
 from config.utils_variables import *
-from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_payload_data, validate_put_method_data
+from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from uuid import UUID
 from apps.sales.serializers import OrderAttachmentsSerializer,OrderShipmentsSerializer
 from apps.sales.models import OrderAttachments,OrderShipments
@@ -158,7 +158,14 @@ class PurchaseOrderViewSet(APIView):
             items_data = self.get_related_data(PurchaseorderItems, PurchaseorderItemsSerializer, 'purchase_order_id', pk)
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-
+            if shipments_data:
+                try:
+                    shipments_data = shipments_data[0]
+                except IndexError as e:
+                    shipments_data = {}
+            else:
+                shipments_data = {}
+                
             # Customizing the response data
             custom_data = {
                 "purchase_order": purchase_order_serializer.data,
@@ -219,6 +226,7 @@ class PurchaseOrderViewSet(APIView):
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
+
     def create(self, request, *args, **kwargs):
         # Extracting data from the request
         given_data = request.data
@@ -237,17 +245,7 @@ class PurchaseOrderViewSet(APIView):
             order_error = validate_payload_data(self, purchase_order_data , PurchaseOrdersSerializer)
 
             # validate the order_type in 'purchase_order' data
-            order_type = purchase_order_data.get('order_type',None) # 'order_type' is additonal Field and not defined in model
-            if order_type is None and len(order_error) > 0:
-                order_error[0]['order_type'] = ["Specify type of order"]
-            elif order_type is None:
-                order_error.append([{'order_type':"This field is required"}])
-            else:
-                order_type = get_object_or_none(OrderTypes, name=order_type)
-                if order_type is None and len(order_error) > 0:
-                    order_error[0]['order_type'] = ["Invalid order type"]
-                elif order_type is None:
-                    order_error.append([{'order_type':"Invalid order type"}])
+            validate_order_type(purchase_order_data, order_error, OrderTypes,look_up='order_type')
                 
         # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
@@ -274,7 +272,6 @@ class PurchaseOrderViewSet(APIView):
             return build_response(0, "Purchase order and Purchase order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
-
         if order_error:
             errors["purchase_order"] = order_error
         if item_error:
@@ -320,6 +317,7 @@ class PurchaseOrderViewSet(APIView):
         # create OrderShipments Data
         if order_shipments_data:
             order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields)
+            order_shipments = order_shipments[0]
             logger.info('OrderShipments - created*')
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
@@ -346,42 +344,31 @@ class PurchaseOrderViewSet(APIView):
         # Get the given data from request
         given_data = request.data
 
-        # Vlidated PurchaseOrders Data
+        # Validated PurchaseOrders Data
         purchase_order_data = given_data.pop('purchase_order', None) # parent_data
         if purchase_order_data:
             order_error = validate_multiple_data(self, [purchase_order_data] , PurchaseOrdersSerializer,['order_no'])
-
             # validate the 'order_type' in 'purchase_order' data
-            order_type = purchase_order_data.get('order_type',None) # 'order_type' is additonal Field and not defined in model
-            if order_type is None and len(order_error) > 0:
-                order_error[0]['order_type'] = ["Specify type of order"]
-            elif order_type is None:
-                order_error.append([{'order_type':"This field is required."}])
-            else:
-                order_type = get_object_or_none(OrderTypes, name=order_type)
-                if order_type is None and len(order_error) > 0:
-                    order_error[0]['order_type'] = ["Invalid order type"]
-                elif order_type is None:
-                    order_error.append([{'order_type':"Invalid order type"}])
+            validate_order_type(purchase_order_data, order_error, OrderTypes,look_up='order_type')
                 
-        # Vlidated PurchaseorderItems Data
+        # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
         if purchase_order_items_data:
             exclude_fields = ['purchase_order_id']
-            item_error = validate_put_method_data(self, purchase_order_items_data, PurchaseorderItemsSerializer, exclude_fields, current_model_pk_field='purchase_order_item_id')
+            item_error = validate_put_method_data(self, purchase_order_items_data, PurchaseorderItemsSerializer, exclude_fields, PurchaseorderItems, current_model_pk_field='purchase_order_item_id')
 
-        # Vlidated OrderAttchments Data
+        # Validated OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
+        exclude_fields = ['order_id','order_type_id']
         if order_attachments_data:
-            exclude_fields = ['order_id','order_type_id']
-            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, current_model_pk_field='attachment_id')
+            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
         else:
             attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
 
-        # Vlidated OrderShipments Data
+        # Validated OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
         if order_shipments_data:
-            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, current_model_pk_field='shipment_id')
+            shipments_error = validate_put_method_data(self, [order_shipments_data], OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
@@ -404,27 +391,10 @@ class PurchaseOrderViewSet(APIView):
         
 
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
-        # Prepare empty list to store errors
-        errors = []
-
-        # Prepare for Update
-        partial = kwargs.pop('partial', False)
-
-        # Get PurchaseOrders instance
-        instance = self.get_object(pk)
-
-        # Update the 'purchase_order'
+        # update PurchaseOrders
         if purchase_order_data:
-            serializer = PurchaseOrdersSerializer(instance, data=purchase_order_data, partial=partial)
-            try:
-                if serializer.is_valid(raise_exception=True):
-                    serializer.save()
-            except Exception as e:
-                logger.error("Validation error: %s", str(e))  # Log validation errors
-                errors.append(str(e))  # Collect validation errors
-            else:
-                purchaseorder_data = serializer.data
-                logger.info("PurchaseOrders - updated**")
+            update_fields = {} # No need to update any fields
+            purchaseorder_data = update_multi_instances(self, pk, [purchase_order_data], PurchaseOrders, PurchaseOrdersSerializer, update_fields,main_model_related_field='purchase_order_id', current_model_pk_field='purchase_order_id')
 
         # Update the 'purchase_order_items'
         update_fields = {'purchase_order_id':pk}
@@ -440,7 +410,7 @@ class PurchaseOrderViewSet(APIView):
         attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
 
         # Update the 'shipments'
-        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        shipment_data = update_multi_instances(self, pk, [order_shipments_data], OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
 
         custom_data = [
             {"purchase_order":purchaseorder_data},
