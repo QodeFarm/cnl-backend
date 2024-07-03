@@ -8,7 +8,8 @@ from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer
-from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_payload_data, validate_put_method_data
+#from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
+from config.utils_methods import *
 from uuid import UUID
 
 # Set up basic configuration for logging
@@ -142,7 +143,7 @@ class VendorViewSet(APIView):
 
             # Customizing the response data
             custom_data = {
-                "vendor": vendor_serializer.data,
+                "vendor_data": vendor_serializer.data,
                 "vendor_attachments": attachments_data,
                 "vendor_addresses": addresses_data
             }
@@ -260,7 +261,6 @@ class VendorViewSet(APIView):
             attachments_data = []
 
         # Create VendorAddress Data
-        update_fields = {'vendor_id':vendor_id}
         addresses_data = generic_data_creation(self, vendor_addresses_data, VendorAddressSerializer, update_fields)
         logger.info('VendorAddress - created*')
 
@@ -282,18 +282,18 @@ class VendorViewSet(APIView):
         - nulls in required fields
         """
         # Get the given data from request
-        given_data = request.data  
+        given_data = request.data
 
         # Vlidated Vendor Data
         vendors_data = given_data.pop('vendor_data', None)
         if vendors_data:
-            vendors_error = validate_multiple_data(self, [vendors_data] , VendorSerializer, ['vendor_id'])
+            vendors_error = validate_payload_data(self, vendors_data , VendorSerializer)
 
         # Vlidated VendorAttachment Data
         vendor_attachments_data = given_data.pop('vendor_attachments', None)
         if vendor_attachments_data:
             exclude_fields = ['vendor_id']
-            attachments_error = validate_put_method_data(self, vendor_attachments_data,VendorAttachmentSerializer, exclude_fields, current_model_pk_field='vendor_id')
+            attachments_error = validate_put_method_data(self, vendor_attachments_data,VendorAttachmentSerializer, exclude_fields, VendorAttachment,current_model_pk_field='attachment_id')
         else:
             attachments_error = [] # Since 'VendorAttachment' is optional, so making an error is empty list
 
@@ -301,7 +301,7 @@ class VendorViewSet(APIView):
         vendor_addresses_data = given_data.pop('vendor_addresses', None)
         if vendor_addresses_data:
             exclude_fields = ['vendor_id']
-            addresses_error = validate_put_method_data(self, vendor_addresses_data,VendorAddressSerializer, exclude_fields, current_model_pk_field='vendor_id')
+            addresses_error = validate_put_method_data(self, vendor_addresses_data,VendorAddressSerializer, exclude_fields,VendorAddress, current_model_pk_field='vendor_address_id')
 
         # Ensure mandatory data is present
         if not vendors_data or not vendor_addresses_data:
@@ -319,27 +319,11 @@ class VendorViewSet(APIView):
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
-        # Prepare empty list to store errors
-        errors = []
-
-        # Prepare for Update
-        partial = kwargs.pop('partial', False)
-
-        # Get vendor instance
-        instance = self.get_object(pk)
-
+       
         # Update the 'Vendor'
         if vendors_data:
-            serializer = VendorSerializer(instance, data=vendors_data, partial=partial)
-            try:
-                if serializer.is_valid(raise_exception=True):
-                    serializer.save()
-            except Exception as e:
-                logger.error("Validation error: %s", str(e))  # Log validation errors
-                errors.append(str(e))  # Collect validation errors
-            else:
-                Vendor_data = serializer.data
-                logger.info("Vendor - updated**")
+            update_fields = []# No need to update any fields
+            Vendor_data = update_multi_instances(self, pk, [vendors_data], Vendor, VendorSerializer, update_fields,main_model_related_field='vendor_id', current_model_pk_field='vendor_id')
 
         # Update VendorAttachment Data
         update_fields = {'vendor_id':pk}
