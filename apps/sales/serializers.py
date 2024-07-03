@@ -116,3 +116,16 @@ class OrderShipmentsSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderShipments
         fields = '__all__'
+
+class SaleOrderOptionsSerializer(serializers.ModelSerializer):
+    customer_id = ModCustomersSerializer()
+    sale_type_id = ModSaleTypesSerializer()
+   
+    class Meta:
+        model = SaleOrder
+        fields = ['order_no','tax','advance_amount','remarks', 'order_date', 'tax_amount', 'customer_id', 'sale_type_id']
+ 
+    def get_sale_order_summary(sale_order):
+        serializer = SaleOrderOptionsSerializer(sale_order, many=True)
+        return serializer.data
+        

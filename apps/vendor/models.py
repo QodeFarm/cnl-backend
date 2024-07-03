@@ -80,15 +80,15 @@ class Vendor(models.Model):
     territory_id = models.ForeignKey(Territory,  on_delete=models.CASCADE,null=True, default=None, db_column='territory_id')
     vendor_category_id = models.ForeignKey(VendorCategory, on_delete=models.CASCADE, null=True, default=None, db_column='vendor_category_id')
     contact_person = models.CharField(max_length=255, null=True, default=None)
-    picture = models.ImageField(upload_to=custom_upload_to, max_length=255, null=True, default=None)
+    picture = models.CharField(max_length=255, null=True, default=None)
     gst = models.CharField(max_length=255, null=True, default=None)
     registration_date = models.DateField(null=True, default=None)
     cin = models.CharField(max_length=255, null=True, default=None)
     pan = models.CharField(max_length=255, null=True, default=None)
     gst_category_id = models.ForeignKey(GstCategories, on_delete=models.CASCADE, null=True, default=None, db_column='gst_category_id')
     gst_suspend = models.BooleanField(null=True, default=None)
-    TAX_TYPE_CHOICES = [('inclusive', 'Inclusive'),
-                        ('exclusive', 'Exclusive')
+    TAX_TYPE_CHOICES = [('Inclusive', 'Inclusive'),
+                        ('Exclusive', 'Exclusive')
                         ]
     tax_type = models.CharField(max_length=20, choices=TAX_TYPE_CHOICES , default= 'Inclusive')
     distance = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
@@ -138,8 +138,8 @@ class VendorAddress(models.Model):
     vendor_address_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id')
     ADDRESS_TYPE_CHOICES = [
-        ('billing', 'Billing'),
-        ('shipping', 'Shipping')
+        ('Billing', 'Billing'),
+        ('Shipping', 'Shipping')
         ]
     address_type = models.CharField(max_length=10, choices=ADDRESS_TYPE_CHOICES, null=True, default=None)
     address = models.CharField(max_length=255, null=True, default=None)
@@ -159,4 +159,4 @@ class VendorAddress(models.Model):
         db_table = vendoraddresses
 
     def __str__(self):
-        return f'{self.vendor_address_id}_{self.attachment_name}'
+        return f'{self.vendor_address_id}_{self.address}'

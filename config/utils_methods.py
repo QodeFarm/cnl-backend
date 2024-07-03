@@ -392,5 +392,4 @@ def validate_order_type(data, error_list, model_name,look_up=None):
             else:
                 error_list.append({look_up:["Invalid order type."]})
 
-#------------- remove in last PR--------------
-def update_multi_instance():pass
+

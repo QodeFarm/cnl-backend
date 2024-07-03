@@ -313,7 +313,7 @@ class CustomerCreateViews(APIView):
             attachments_data = given_data.pop('customer_attachments', None)
             if attachments_data:
                 exclude_fields = ['customer_id']
-                attachments_error = validate_put_method_data(self, attachments_data,CustomerAttachmentsSerializers, exclude_fields, current_model_pk_field='customer_id')
+                attachments_error = validate_put_method_data(self, attachments_data,CustomerAttachmentsSerializers, exclude_fields, CustomerAttachments, current_model_pk_field='attachment_id')
             else:
                 attachments_error = [] # Since 'CustomerAttachment' is optional, so making an error is empty list
 
@@ -321,7 +321,7 @@ class CustomerCreateViews(APIView):
             addresses_data = given_data.pop('customer_addresses', None)
             if addresses_data:
                 exclude_fields = ['customer_id']
-                addresses_error = validate_put_method_data(self, addresses_data,CustomerAddressesSerializers, exclude_fields, current_model_pk_field='customer_id')
+                addresses_error = validate_put_method_data(self, addresses_data,CustomerAddressesSerializers, exclude_fields, CustomerAddresses, current_model_pk_field='customer_addresses_id')
 
             # Ensure mandatory data is present
             if not customer_data or not addresses_data:
