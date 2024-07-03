@@ -37,7 +37,6 @@ class FileUploadView(APIView):
             media_folder = settings.MEDIA_ROOT
             if not os.path.exists(media_folder):
                 os.makedirs(media_folder)                
-            fpath = baseurl + ""
             if len(files) != 0:
                 uploaded_files = []
                 for file in files:
