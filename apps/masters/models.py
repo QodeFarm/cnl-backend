@@ -263,7 +263,7 @@ def product_brands_picture(instance, filename):
     # Construct the filename
     #branch_name = instance.name.replace(' ', '_')
     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-    return f"products/product_brands/{original_filename}_{unique_id}{file_extension}"
+    return f"{original_filename}_{unique_id}{file_extension}"
 
 class ProductBrands(models.Model):
     brand_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

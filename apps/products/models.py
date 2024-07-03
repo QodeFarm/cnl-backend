@@ -16,7 +16,7 @@ def product_groups_picture(instance, filename):
     # Construct the filename
     #branch_name = instance.name.replace(' ', '_')
     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-    return f"products/product_groups/{original_filename}_{unique_id}{file_extension}"
+    return f"{original_filename}_{unique_id}{file_extension}"
 
 # Create your models here.
 class ProductGroups(models.Model):
@@ -54,7 +54,7 @@ def product_categories_picture(instance, filename):
     # Construct the filename
     #branch_name = instance.name.replace(' ', '_')
     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-    return f"products/product_categories/{original_filename}_{unique_id}{file_extension}"
+    return f"{original_filename}_{unique_id}{file_extension}"
 
 class ProductCategories(models.Model):
     category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -178,7 +178,7 @@ def products_picture(instance, filename):
     # Construct the filename
     #branch_name = instance.name.replace(' ', '_')
     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-    return f"products/products/{original_filename}_{unique_id}{file_extension}"
+    return f"{original_filename}_{unique_id}{file_extension}"
 
 class Products(models.Model):
     product_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

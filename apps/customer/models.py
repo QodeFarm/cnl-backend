@@ -47,7 +47,7 @@ def customer_picture(instance, filename):
  
     # Construct the filename
     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-    return f"customers/{original_filename}_{unique_id}{file_extension}"
+    return f"{original_filename}_{unique_id}{file_extension}"
 
 class Customer(models.Model):
     TAX_CHOICES = [
