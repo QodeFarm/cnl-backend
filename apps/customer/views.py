@@ -307,7 +307,7 @@ class CustomerCreateViews(APIView):
             # Vlidated Customer Data
             customer_data = given_data.pop('customer_data', None)
             if customer_data:
-                customer_error = validate_multiple_data(self, [customer_data] , CustomerSerializer, ['customer_id'])
+                customer_error = validate_payload_data(self, customer_data , CustomerSerializer)
 
             # Vlidated CustomerAttachment Data
             attachments_data = given_data.pop('customer_attachments', None)
@@ -339,27 +339,9 @@ class CustomerCreateViews(APIView):
                 return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
             
             # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
-            # Prepare empty list to store errors
-            errors = []
-
-            # Prepare for Update
-            partial = kwargs.pop('partial', False)
-
-            # Get customer instance
-            instance = self.get_object(pk)
-
-            # Update the 'customer'
             if customer_data:
-                serializer = CustomerSerializer(instance, data=customer_data, partial=partial)
-                try:
-                    if serializer.is_valid(raise_exception=True):
-                        serializer.save()
-                except Exception as e:
-                    logger.error("Validation error: %s", str(e))  # Log validation errors
-                    errors.append(str(e))  # Collect validation errors
-                else:
-                    customer_data = serializer.data
-                    logger.info("Customer - updated**")
+                update_fields = []# No need to update any fields
+                customer_data = update_multi_instances(self, pk, [customer_data], Customer, CustomerSerializer, update_fields,main_model_related_field='customer_id', current_model_pk_field='customer_id')
 
             # Update CustomerAttachment Data
             update_fields = {'customer_id':pk}
