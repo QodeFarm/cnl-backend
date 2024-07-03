@@ -299,7 +299,6 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
     except Exception as e:
         logger.error(f"Error fetching instances from {related_model_name.__name__}: {str(e)}")
 
-
     # get the ids that are updated
     pks_in_update_data = []
 
@@ -339,8 +338,8 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
                 logger.warning(f'Error deleting the record in {related_model_name.__name__} with id {id}')
   
     if update_count == len(old_instances_list):
-        logger.info('All old instances are updated')
-        logger.info(f'Old inatsnces count ={len(old_instances_list)}')
+        logger.info(f'All old instances in {related_model_name.__name__} are updated')
+        logger.info(f'Old instances count ={len(old_instances_list)}')
 
     return data_list
 

@@ -199,6 +199,13 @@ class SaleOrderViewSet(APIView):
             items_data = self.get_related_data(SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+            if shipments_data:
+                try:
+                    shipments_data = shipments_data[0]
+                except IndexError as e:
+                    shipments_data = {}
+            else:
+                 shipments_data = {}
 
             # Customizing the response data
             custom_data = {
@@ -228,7 +235,6 @@ class SaleOrderViewSet(APIView):
             return serializer.data
         except Exception as e:
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
-            return []
    
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
@@ -401,7 +407,7 @@ class SaleOrderViewSet(APIView):
         # Vlidated OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
         if order_shipments_data:
-            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+            shipments_error = validate_put_method_data(self, [order_shipments_data], OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
@@ -422,12 +428,11 @@ class SaleOrderViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
-
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
 
         # update SaleOrder
         if sale_order_data:
-            update_fields = [] # No need to update any fields
+            update_fields = {} # No need to update any fields
             saleorder_data = update_multi_instances(self, pk, [sale_order_data], SaleOrder, SaleOrderSerializer, update_fields,main_model_related_field='sale_order_id', current_model_pk_field='sale_order_id')
 
         # Update the 'sale_order_items'
@@ -444,7 +449,7 @@ class SaleOrderViewSet(APIView):
         attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
 
         # Update the 'shipments'
-        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        shipment_data = update_multi_instances(self, pk, [order_shipments_data], OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
 
         custom_data = [
             {"sale_order":saleorder_data},
