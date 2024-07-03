@@ -158,13 +158,7 @@ class PurchaseOrderViewSet(APIView):
             items_data = self.get_related_data(PurchaseorderItems, PurchaseorderItemsSerializer, 'purchase_order_id', pk)
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-            if shipments_data:
-                try:
-                    shipments_data = shipments_data[0]
-                except IndexError as e:
-                    shipments_data = {}
-            else:
-                shipments_data = {}
+            shipments_data = shipments_data[0] if shipments_data else {}
                 
             # Customizing the response data
             custom_data = {
@@ -194,7 +188,6 @@ class PurchaseOrderViewSet(APIView):
             return serializer.data
         except Exception as e:
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
-            return []
       
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
@@ -388,7 +381,6 @@ class PurchaseOrderViewSet(APIView):
             errors['order_shipments'] = shipments_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
-        
 
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
         # update PurchaseOrders
