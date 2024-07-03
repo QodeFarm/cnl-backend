@@ -38,7 +38,7 @@ else:
 
 #------------File_uploads_requirements------------
 import os
-MEDIA_URL = '/media/'
+MEDIA_URL = '/cdn/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #--------------------------------------------
 
@@ -286,6 +286,7 @@ CACHES = {
 }
 
 CORS_ALLOWED_ORIGINS = [
+    "https://dev.qodefarm.com",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     'http://localhost:4200',
