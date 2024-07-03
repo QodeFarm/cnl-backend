@@ -292,6 +292,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:4200',
     'http://localhost:8080',
     'http://127.0.0.1:5500',
+
 ]
 
 # from django_safe_settings.patch import patch_all  # type: ignore
