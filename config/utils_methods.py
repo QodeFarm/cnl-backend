@@ -61,7 +61,6 @@ class EncryptedTextField(models.TextField):
             return decrypt(value)
         except Exception as e:
             # Handle decryption errors gracefully
-            print("Error decrypting value:", e)
             return None
         # Implement decryption logic here
         return decrypt(value)
@@ -297,7 +296,6 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
         filter_kwargs = {main_model_related_field:pk}
         old_instances_list  = list(related_model_name.objects.filter(**filter_kwargs).values_list('pk', flat=True))
         old_instances_list = [str(uuid) for uuid in old_instances_list] # conversion 
-        print('old istances = ',old_instances_list)
     except Exception as e:
         logger.error(f"Error fetching instances from {related_model_name.__name__}: {str(e)}")
 
@@ -331,10 +329,7 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
                 return build_response(0,f"Error during update: new record creation failed in {related_model_name.__name__}",[],status.HTTP_400_BAD_REQUEST)
             
     # Delete the previous records if those are not mentioned in update data
-    print('update count = ',update_count)
-    print('pks in update data = ',pks_in_update_data)
     for id in old_instances_list:
-        print('old id =',id)
         if id not in pks_in_update_data:
             try:
                 instance = related_model_name.objects.get(pk=id)
@@ -349,7 +344,7 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
 
     return data_list
 
-def validate_put_method_data(self, valid_data, related_class_name, update_fields, current_model_pk_field=None):
+def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None):
 
     error_list = []
 
@@ -357,7 +352,8 @@ def validate_put_method_data(self, valid_data, related_class_name, update_fields
         id = data.get(current_model_pk_field,None) # get the primary key in updated data
         # update the data for avilable pks
         if id is not None:
-            serializer = related_class_name(data=data)
+            instance = model_class_name.objects.filter(pk=id).first()
+            serializer = serializer_name(instance,data=data)
             # If Main model data is not valid
             if not serializer.is_valid(raise_exception=False):
                 error = serializer.errors
@@ -368,7 +364,7 @@ def validate_put_method_data(self, valid_data, related_class_name, update_fields
 
         # If there is no pk avilabe (id will be None), validate the new record
         else:
-            serializer = related_class_name(data=data)
+            serializer = serializer_name(data=data)
             if not serializer.is_valid(raise_exception=False):
                 error = serializer.errors
                 exclude_keys = update_fields
@@ -379,68 +375,23 @@ def validate_put_method_data(self, valid_data, related_class_name, update_fields
 
     return error_list
 
-#-----------------remove if not used------------------------
-def create_multi_instance(data_set, serializer_class):
-    """
-    Creates multiple instances in the database using the provided serializer class.
-    Returns a list of created data and a list of any validation errors.
-    """
-    data_list = []
-    errors = []
-    for item_data in data_set:
-        try:
-            serializer = serializer_class(data=item_data)
-            serializer.is_valid(raise_exception=True)  # Validate sale order data
-            serializer.save()  # Save valid sale order to the database
-            data_list.append(serializer.data)
-        except ValidationError as e:
-            logger.error("Validation error: %s", str(e))  # Log validation errors
-            errors.extend([str(e),status.HTTP_400_BAD_REQUEST])
-
-    return data_list, errors
-
-def update_multi_instance(pk, update_data, related_model_class, serializer_name, filter_field_1=None):
-    """
-    Update instances from a related model based on a field value from the main model.
-
-    :param main_model_class: The main model class.
-    :param related_model_class: The related model class from which to delete instances.
-    :param main_model_field: The field name in the related model that references the main model.
-    """
-
+def validate_order_type(data, error_list, model_name,look_up=None):
     '''
-    Below block of code will get the previously created instances. From that list each instance primary key will be fetched.
+    data - the data to be validated
+    error_list - the list contains erros
+    model_name - Name of the model
+    look_up - field that needs to be validated
     '''
-    try:
-        filter_kwargs = {filter_field_1:pk}
-        pks_list  = list(related_model_class.objects.filter(**filter_kwargs).values_list('pk', flat=True))
-    except Exception as e:
-        logger.error(f"Error fetching instances from {related_model_class.__name__}: {str(e)}")
-        return None
+    order_type = data.get(look_up,None) # 'order_type' is additonal Field and not defined in model
+    if order_type is None:
+        error_list.append({look_up:["This field may not be null."]})
+    else:
+        order_type = get_object_or_none(model_name, name=order_type)
+        if order_type is None:
+            if len(error_list) > 0:
+                error_list[0][look_up] = ["Invalid order type."]
+            else:
+                error_list.append({look_up:["Invalid order type."]})
 
-    data_list = []
-    errors = []
-    i = 0
-    for data in update_data:
-        try:
-            instance = related_model_class.objects.filter(pk=pks_list[i]).first()
-        except related_model_class.DoesNotExist:
-            logger.warning(f"{related_model_class} with ID {pk} does not exist.")
-        else:
-            serializer = serializer_name(instance, data=data, partial=False)
-            try:
-                serializer.is_valid(raise_exception=True)
-                serializer.save()
-                i = i+1
-            except Exception as e:
-                logger.error("Validation error: %s", str(e))  # Log validation errors
-                errors.append(str(e))  # Collect validation errors
-            data_list.append(serializer.data)
-    return data_list, errors
-
-def update_ordereddicts_with_ids(data_list, id_key, id_value):
-    """
-    Updates dictionaries in a list with a key-value pair.
-    """
-    for data in data_list:
-        data[id_key] = id_value
+#------------- remove in last PR--------------
+def update_multi_instance():pass

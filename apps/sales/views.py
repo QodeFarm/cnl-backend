@@ -10,7 +10,7 @@ from uuid import UUID
 from rest_framework.views import APIView
 from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_payload_data, validate_put_method_data
+from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -277,20 +277,9 @@ class SaleOrderViewSet(APIView):
         sale_order_data = given_data.pop('sale_order', None) # parent_data
         if sale_order_data:
             order_error = validate_payload_data(self, sale_order_data , SaleOrderSerializer)
-
             # validate the order_type in 'sale_order' data
-            order_type = sale_order_data.get('order_type',None) # 'order_type' is additonal Field and not defined in model
-            if order_type is None and len(order_error) > 0:
-                order_error[0]['order_type'] = ["Specify type of order"]
-            elif order_type is None:
-                order_error.append([{'order_type':"This field is required."}])
-            else:
-                order_type = get_object_or_none(OrderTypes, name=order_type)
-                if order_type is None and len(order_error) > 0:
-                    order_error[0]['order_type'] = ["Invalid order type"]
-                elif order_type is None:
-                    order_error.append([{'order_type':"Invalid order type"}])
-                
+            validate_order_type(sale_order_data, order_error, OrderTypes,look_up='order_type')
+                            
         # Vlidated SaleOrderItems Data
         sale_order_items_data = given_data.pop('sale_order_items', None)
         if sale_order_items_data:
@@ -392,38 +381,27 @@ class SaleOrderViewSet(APIView):
         sale_order_data = given_data.pop('sale_order', None) # parent_data
         if sale_order_data:
             order_error = validate_multiple_data(self, [sale_order_data] , SaleOrderSerializer,['order_no'])
-
             # validate the 'order_type' in 'sale_order' data
-            order_type = sale_order_data.get('order_type',None) # 'order_type' is additonal Field and not defined in model
-            if order_type is None and len(order_error) > 0:
-                order_error[0]['order_type'] = ["Specify type of order"]
-            elif order_type is None:
-                order_error.append([{'order_type':"This field is required."}])
-            else:
-                order_type = get_object_or_none(OrderTypes, name=order_type)
-                if order_type is None and len(order_error) > 0:
-                    order_error[0]['order_type'] = ["Invalid order type"]
-                elif order_type is None:
-                    order_error.append([{'order_type':"Invalid order type"}])
+            validate_order_type(sale_order_data, order_error, OrderTypes,look_up='order_type')
                 
         # Vlidated SaleOrderItems Data
         sale_order_items_data = given_data.pop('sale_order_items', None)
         if sale_order_items_data:
             exclude_fields = ['sale_order_id']
-            item_error = validate_put_method_data(self, sale_order_items_data, SaleOrderItemsSerializer, exclude_fields, current_model_pk_field='sale_order_item_id')
+            item_error = validate_put_method_data(self, sale_order_items_data, SaleOrderItemsSerializer, exclude_fields, SaleOrderItems, current_model_pk_field='sale_order_item_id')
 
         # Vlidated OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
+        exclude_fields = ['order_id','order_type_id']
         if order_attachments_data:
-            exclude_fields = ['order_id','order_type_id']
-            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, current_model_pk_field='attachment_id')
+            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
         else:
             attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
 
         # Vlidated OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
         if order_shipments_data:
-            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, current_model_pk_field='shipment_id')
+            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
