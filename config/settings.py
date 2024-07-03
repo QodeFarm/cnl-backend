@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'djoser',
     # 'django_safe_settings',
     'drf_yasg',
+    'django_filters',
     
     #modules
     'apps.vendor',

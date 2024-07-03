@@ -7,6 +7,8 @@ from config.utils_variables import *
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
 from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter
+from rest_framework.response import Response
+from rest_framework import status
 
 # Create your views here.
 class ProductGroupsViewSet(viewsets.ModelViewSet):
@@ -113,8 +115,16 @@ class productsViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name','code','barcode','category_id','product_group_id','type_id','gst_classification_id','created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
-
+        summary = request.query_params.get('summary', 'false').lower() == 'true'
+        if summary:
+            products = self.filter_queryset(self.get_queryset())
+            data = ProductOptionsSerializer.get_product_summary(products)
+            result = Response(data, status=status.HTTP_200_OK)
+        else:
+            result = list_all_objects(self, request, *args, **kwargs)
+        
+        return result
+        
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
 

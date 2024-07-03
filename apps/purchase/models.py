@@ -89,8 +89,8 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     vendor_agent_id = models.ForeignKey(VendorAgent, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_agent_id')
     
     TAX_CHOICES = [
-        ('inclusive', 'Inclusive'),
-        ('exclusive', 'Exclusive')
+        ('Inclusive', 'Inclusive'),
+        ('Exclusive', 'Exclusive')
     ]
     tax = models.CharField(max_length=20, choices=TAX_CHOICES, blank=True, null=True)    
     vendor_address_id = models.ForeignKey(VendorAddress, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_address_id')

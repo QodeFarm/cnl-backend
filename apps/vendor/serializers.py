@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import *
 from apps.customer.serializers import ModLedgerAccountsSerializers
-from apps.masters.serializers import ModFirmStatusesSerializers, ModTerritorySerializers, ModGstCategoriesSerializers, ModTransportersSerializers, ModPriceCategoriesSerializers, ModCitySerializer
+from apps.masters.serializers import ModFirmStatusesSerializers, ModTerritorySerializers, ModGstCategoriesSerializers, ModTransportersSerializers, ModPriceCategoriesSerializers, ModCitySerializer,ModStateSerializer, ModCountrySerializer
 
 #Create Serializers
 
@@ -50,6 +50,8 @@ class VendorAttachmentSerializer(serializers.ModelSerializer):
 class VendorAddressSerializer(serializers.ModelSerializer):
     vendor = ModVendorSerializer(source='vendor_id', read_only = True)
     city = ModCitySerializer(source='city_id', read_only = True)
+    state = ModStateSerializer(source='state_id', read_only = True)
+    country = ModCountrySerializer(source='country_id', read_only = True)
     class Meta:
         model = VendorAddress
         fields = '__all__'

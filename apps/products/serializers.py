@@ -163,3 +163,17 @@ class productsSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+
+class ProductOptionsSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = Products
+        fields = ['product_id', 'name', 'sales_description', 'barcode', 'mrp', 'sales_rate','discount', 'dis_amount']
+ 
+    def get_product_summary(products):
+        serializer = ProductOptionsSerializer(products, many=True)
+        return {
+            "count": len(serializer.data),
+            "msg": "SUCCESS",
+            "data": serializer.data
+        }

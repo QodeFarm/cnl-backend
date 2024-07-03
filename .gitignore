@@ -1,6 +1,7 @@
 .env
 upload.html
 
+
 apps/alignbook/__pycache__/
 apps/company/__pycache__/
 apps/customer/__pycache__/
@@ -14,3 +15,4 @@ apps/users/__pycache__/
 apps/vendor/__pycache__/
 config/__pycache__/
 /media
+

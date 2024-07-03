@@ -493,6 +493,10 @@ def generate_order_number_view(request):
         Response: A JSON response containing the generated order number or an error message.
     """
     order_type_prefix = request.GET.get('type')
+    
+    if not order_type_prefix:
+        return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
+    
     order_type_prefix = order_type_prefix.upper()
     valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR']
     
