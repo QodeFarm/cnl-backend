@@ -127,10 +127,5 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
  
     def get_sale_order_summary(sale_order):
         serializer = SaleOrderOptionsSerializer(sale_order, many=True)
-        return {
-            "count": len(serializer.data),
-            "msg": "SUCCESS",
-            "data": serializer.data
-        }
-    
+        return serializer.data
   

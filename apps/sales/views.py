@@ -182,7 +182,7 @@ class SaleOrderViewSet(APIView):
                 logger.info("Retrieving Sale order summary")
                 saleorders = SaleOrder.objects.all()
                 data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
-                return Response(data, status=status.HTTP_200_OK)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
  
             logger.info("Retrieving all sale order")
             queryset = SaleOrder.objects.all()
