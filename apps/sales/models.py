@@ -137,7 +137,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
         db_table = saleinvoiceorderstable
 
     def __str__(self):
-        return self.sale_invoice_id
+        return str(self.sale_invoice_id)
     
 class PaymentTransactions(models.Model): #required fields are updated
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -232,7 +232,7 @@ class SaleReturnOrders(OrderNumberMixin):
         db_table = salereturnorderstable
 
     def __str__(self):
-        return self.sale_return_id
+        return str(self.sale_return_id)
     
 class SaleReturnItems(models.Model):
     sale_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

@@ -9,7 +9,7 @@ router = DefaultRouter()
 router.register(r'sale_order_get', SaleOrderView)
 router.register(r'sales_price_list', SalesPriceListView)
 router.register(r'sale_order_items', SaleOrderItemsView)
-router.register(r'sale_invoice_order',SaleInvoiceOrdersView)
+router.register(r'sale_invoice_order_get',SaleInvoiceOrdersView)
 router.register(r'payment_transactions', PaymentTransactionsView)
 router.register(r'sale_invoice_items', SaleInvoiceItemsView)
 router.register(r'sale_return_orders', SaleReturnOrdersView)
@@ -21,4 +21,6 @@ urlpatterns = [
     path('',include(router.urls)),
     path('sale_order/', SaleOrderViewSet.as_view(), name='sales-order-list-create'),
     path('sale_order/<str:pk>/', SaleOrderViewSet.as_view(), name='sales-order-detail-update-delete'),
+    path('sale_invoice_orders/', SaleInvoiceOrdersViewSet.as_view(), name='sales-invoice-orders-list-create'),
+    path('sale_invoice_orders/<str:pk>/', SaleInvoiceOrdersViewSet.as_view(), name='sales-invoice-orders-detail-update-delete'),
 ]
