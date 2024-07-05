@@ -123,7 +123,7 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
    
     class Meta:
         model = SaleOrder
-        fields = ['order_no','tax','advance_amount','remarks', 'order_date', 'tax_amount', 'customer_id', 'sale_type_id']
+        fields = ['sale_order_id', 'order_no', 'tax', 'advance_amount', 'remarks', 'order_date', 'tax_amount', 'customer_id', 'sale_type_id']
  
     def get_sale_order_summary(sale_order):
         serializer = SaleOrderOptionsSerializer(sale_order, many=True)
