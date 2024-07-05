@@ -7,7 +7,7 @@ from rest_framework import viewsets,status
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
-from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer
+from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorsOptionsSerializer
 from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
 
@@ -108,19 +108,27 @@ class VendorViewSet(APIView):
             logger.warning(f"Vendor with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
        
-    def get(self, request,  *args, **kwargs):
-        if 'pk' in kwargs:
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
             result =  validate_input_pk(self,kwargs['pk'])
-            return result if result else self.retrieve(self, request, *args, **kwargs)
+            return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            instance = Vendor.objects.all()
-        except Vendor.DoesNotExist:
-            logger.error("Vendor does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        else:
-            serializer = VendorSerializer(instance, many=True)
-            logger.info("Vendor data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving vendors summary")
+                vendors = Vendor.objects.all()
+                data = VendorsOptionsSerializer.get_vendors_summary(vendors)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+ 
+            logger.info("Retrieving all vendors")
+            queryset = Vendor.objects.all()
+            serializer = VendorSerializer(queryset, many=True)
+            logger.info("vendors data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+ 
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def retrieve(self, request, *args, **kwargs):
         """
