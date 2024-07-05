@@ -1,9 +1,7 @@
+from apps.masters.serializers import ModFirmStatusesSerializers, ModTerritorySerializers, ModGstCategoriesSerializers, ModTransportersSerializers, ModPriceCategoriesSerializers, ModCitySerializer,ModStateSerializer, ModCountrySerializer
+from apps.customer.serializers import ModLedgerAccountsSerializers
 from rest_framework import serializers
 from .models import *
-from apps.customer.serializers import ModLedgerAccountsSerializers
-from apps.masters.serializers import ModFirmStatusesSerializers, ModTerritorySerializers, ModGstCategoriesSerializers, ModTransportersSerializers, ModPriceCategoriesSerializers, ModCitySerializer,ModStateSerializer, ModCountrySerializer
-
-#Create Serializers
 
 class ModVendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerializer
     class Meta:
@@ -72,4 +70,46 @@ class VendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerialize
     class Meta:
         model = Vendor
         fields = '__all__'
+
+class VendorsOptionsSerializer(serializers.ModelSerializer):
+    email = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    vendor_category_id = ModVendorCategorySerializer()
+    ledger_account_id = ModLedgerAccountsSerializers()
+    city = serializers.SerializerMethodField() 
+
+    class Meta:
+        model = Vendor
+        fields = ['vendor_id', 'gst_no', 'email', 'phone', 'vendor_category_id', 'ledger_account_id', 'city'] 
+
+    def get_vendor_address_details(self, obj):
+        addresses = VendorAddress.objects.filter(vendor_id=obj.vendor_id)
+      
+        email = None
+        phone = None  
+        city = None   
+        
+        for address in addresses:
+            if email is None:
+                email = address.email
+            if phone is None:
+                phone = address.phone
+            if city is None:
+                city = address.city_id
+        return email, phone, city
+
+    def get_email(self, obj):
+         return self.get_vendor_address_details(obj)[0]
+
+    def get_phone(self, obj):
+        return self.get_vendor_address_details(obj)[1]
     
+    def get_city(self, obj):
+        city = self.get_vendor_address_details(obj)[2]
+        if city:
+            return ModCitySerializer(city).data
+        return None
+    
+    def get_vendors_summary(vendors):
+        serializer = VendorsOptionsSerializer(vendors, many=True)
+        return serializer.data
