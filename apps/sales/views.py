@@ -522,14 +522,7 @@ class SaleInvoiceOrdersViewSet(APIView):
         if "pk" in kwargs:
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
-        try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
-            if summary:
-                logger.info("Retrieving Sale invoice order summary")
-                saleoinvoicerders = SaleInvoiceOrders.objects.all()
-                data = SaleOrderOptionsSerializer.get_sale_order_summary(saleoinvoicerders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
- 
+        try: 
             logger.info("Retrieving all sale invoice orders")
             queryset = SaleInvoiceOrders.objects.all()
             serializer = SaleInvoiceOrdersSerializer(queryset, many=True)
@@ -558,7 +551,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             items_data = self.get_related_data(SaleInvoiceItems, SaleInvoiceItemsSerializer, 'sale_invoice_id', pk)
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-            shipments_data = shipments_data[0] if len(shipments_data)>0 else shipments_data
+            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
 
             # Customizing the response data
             custom_data = {
@@ -575,7 +568,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.exception(
-                "An error occurred while retrieving sale order with pk %s: %s", pk, str(e))
+                "An error occurred while retrieving sale invoice order with pk %s: %s", pk, str(e))
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_related_data(self, model, serializer_class, filter_field, filter_value):
@@ -781,7 +774,7 @@ class SaleInvoiceOrdersViewSet(APIView):
 
         # Ensure mandatory data is present
         if not sale_invoice_order_data or not sale_invoice_items_data:
-            logger.error("Sale order and sale order items are mandatory but not provided.")
+            logger.error("Sale invoice order and sale invoice items are mandatory but not provided.")
             return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
@@ -831,19 +824,3 @@ class SaleInvoiceOrdersViewSet(APIView):
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
-
-class ResetSaleOrder(APIView):
-    def delete(self, request, *args, **kwargs):
-        SaleOrder.objects.all().delete()
-        # NOTE : SaleOrderItems will be deleted if SaleOrder gets deleted.
-        OrderAttachments.objects.all().delete()
-        OrderShipments.objects.all().delete()
-        return build_response(0, "Records deleted successfully", [], status.HTTP_204_NO_CONTENT)
-    
-class ResetSaleInvoiceOrder(APIView):
-    def delete(self, request, *args, **kwargs):
-        SaleInvoiceOrders.objects.all().delete()
-        # NOTE : SaleInvoiceOrderItems will be deleted if SaleOrder gets deleted.
-        OrderAttachments.objects.all().delete()
-        OrderShipments.objects.all().delete()
-        return build_response(0, "Records deleted successfully", [], status.HTTP_204_NO_CONTENT)
