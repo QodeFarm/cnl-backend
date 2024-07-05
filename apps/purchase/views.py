@@ -114,7 +114,7 @@ class PurchasePriceListViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-
+#=====================PurchaseOrder=======================================================
 class PurchaseOrderViewSet(APIView):
     """
     API ViewSet for handling purchase order creation and related data.
@@ -410,5 +410,313 @@ class PurchaseOrderViewSet(APIView):
             {"order_attachments":attachment_data if attachment_data else []},
             {"order_shipments":shipment_data if shipment_data else []}
         ]
+
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
+#=====================PurchaseInvoiceOrder========================================================
+class PurchaseInvoiceOrderViewSet(APIView):
+    """
+    API ViewSet for handling Purchase Invoice Order creation and related data.
+    """
+    def get_object(self, pk):
+        try:
+            return PurchaseInvoiceOrders.objects.get(pk=pk)
+        except PurchaseInvoiceOrders.DoesNotExist:
+            logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)   
+      
+    def get(self, request, *args, **kwargs):
+        if 'pk' in kwargs:
+           result =  validate_input_pk(self,kwargs['pk'])
+           return result if result else self.retrieve(self, request, *args, **kwargs)
+        try:
+            instance = PurchaseInvoiceOrders.objects.all()
+        except PurchaseInvoiceOrders.DoesNotExist:
+            logger.error("Purchase invoice order does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        else:
+            serializer = PurchaseInvoiceOrdersSerializer(instance, many=True)
+            logger.info("Purchase invoice order data retrieved successfully.")
+            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)      
+     
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a Purchase Invoice Orders and its related data (Invoiceitems, attachments, and shipments).
+        """
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the PurchaseInvoiceOrders instance
+            purchase_invoice_order = get_object_or_404(PurchaseInvoiceOrders, pk=pk)
+            purchase_invoice_order_serializer = PurchaseInvoiceOrdersSerializer(purchase_invoice_order)
+
+            # Retrieve related data
+            invoice_items_data = self.get_related_data(PurchaseInvoiceItem, PurchaseInvoiceItemSerializer, 'purchase_invoice_id', pk)
+            attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
+            shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+                
+            # Customizing the response data
+            custom_data = {
+                "purchase_invoice_orders": purchase_invoice_order_serializer.data,
+                "purchase_invoice_items": invoice_items_data,
+                "order_attachments": attachments_data,
+                "order_shipments": shipments_data
+            }
+            logger.info("Purchase invoice Order and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+        
+        except Http404:
+            logger.error("Purchase invoice order with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception("An error occurred while retrieving purchase invoice order with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+      
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
+            return []
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a Purchase Invoice Orders and its related attachments and shipments.
+        """
+        try:
+            # Get the PurchaseInvoiceOrders instance
+            instance = PurchaseInvoiceOrders.objects.get(pk=pk)
+
+            # Delete related OrderAttachments and OrderShipments
+            if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
+                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
+                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Delete the main PurchaseInvoiceOrders instance
+            instance.delete()
+
+            logger.info(f"PurchaseInvoiceOrders with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except PurchaseInvoiceOrders.DoesNotExist:
+            logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting PurchaseInvoiceOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        # Extracting data from the request
+        given_data = request.data
+
+        #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+ 
+        """
+
+        # Validated PurchaseInvoiceOrders Data
+        purchase_invoice_orders_data = given_data.pop('purchase_invoice_orders', None) # parent_data
+        if purchase_invoice_orders_data:
+            invoice_order_error = validate_payload_data(self, purchase_invoice_orders_data , PurchaseInvoiceOrdersSerializer)
+            # validate the order_type in 'PurchaseInvoiceOrders' data
+            validate_order_type(purchase_invoice_orders_data, invoice_order_error, OrderTypes,look_up='order_type')
+                
+        # Validated PurchaseInvoiceItems Data
+        purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+        if purchase_invoice_items_data:
+            invoice_item_error = validate_multiple_data(self, purchase_invoice_items_data,PurchaseInvoiceItemSerializer,['purchase_invoice_id'])
+
+        # Validated OrderAttchments Data
+        order_attachments_data = given_data.pop('order_attachments', None)
+        if order_attachments_data:
+            attachment_error = validate_multiple_data(self, order_attachments_data ,OrderAttachmentsSerializer,['order_id','order_type_id'])
+        else:
+            attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
+
+        # Validated OrderShipments Data
+        order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_multiple_data(self, [order_shipments_data] , OrderShipmentsSerializer,['order_id','order_type_id'])
+        else:
+            shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
+
+        # Ensure mandatory data is present
+        if not purchase_invoice_orders_data or not purchase_invoice_items_data:
+            logger.error("Purchase invoice order and Purchase invoice items are mandatory but not provided.")
+            return build_response(0, "Purchase invoice order and Purchase invoice items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+        errors = {}
+        if invoice_order_error:
+            errors["purchase_invoice_orders"] = invoice_order_error
+        if invoice_item_error:
+                errors["purchase_invoice_items"] = invoice_item_error
+        if attachment_error:
+                errors['order_attachments'] = attachment_error
+        if shipments_error:
+                errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+        
+        #---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data is created as new instances.
+        """
+            
+        # Hence the data is validated , further it can be created.
+
+        # Create PurchaseInvoiceOrders Data
+        new_purchase_invoice_orders_data = generic_data_creation(self, [purchase_invoice_orders_data], PurchaseInvoiceOrdersSerializer)
+        new_purchase_invoice_orders_data = new_purchase_invoice_orders_data[0]
+        purchase_invoice_id = new_purchase_invoice_orders_data.get("purchase_invoice_id",None) #Fetch purchase_invoice_id from mew instance
+        logger.info('PurchaseInvoiceOrders - created*')
+
+        # Create PurchaseInvoiceItem Data
+        update_fields = {'purchase_invoice_id': purchase_invoice_id}
+        invoice_items_data = generic_data_creation(self, purchase_invoice_items_data, PurchaseInvoiceItemSerializer, update_fields)
+        logger.info('PurchaseInvoiceItem - created*')
+
+        # Get order_type_id from OrderTypes model
+        order_type_val = purchase_invoice_orders_data.get('order_type')
+        order_type = get_object_or_none(OrderTypes, name=order_type_val)
+        type_id = order_type.order_type_id
+
+        # Create OrderAttchments Data
+        update_fields = {'order_id':purchase_invoice_id, 'order_type_id':type_id}
+        if order_attachments_data:
+            order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields)
+            logger.info('OrderAttchments - created*')
+        else:
+            # Since OrderAttchments Data is optional, so making it as an empty data list
+            order_attachments = []
+
+        # create OrderShipments Data
+        if order_shipments_data:
+            order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields)
+            order_shipments = order_shipments[0]
+            logger.info('OrderShipments - created*')
+        else:
+            # Since OrderShipments Data is optional, so making it as an empty data list
+            order_shipments = {}
+
+        custom_data = {
+            "purchase_invoice_orders":new_purchase_invoice_orders_data,
+            "purchase_invoice_items":invoice_items_data,
+            "order_attachments":order_attachments,
+            "order_shipments":order_shipments,
+        }
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+    
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+
+        #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+
+        # Validated PurchaseInvoiceOrders Data
+        purchase_invoice_orders_data = given_data.pop('purchase_invoice_orders', None) # parent_data
+        if purchase_invoice_orders_data:
+            purchase_invoice_orders_data['purchase_invoice_id'] = pk
+            invoice_order_error = validate_multiple_data(self, purchase_invoice_orders_data , PurchaseInvoiceOrdersSerializer,['invoice_no'])
+            # validate the 'order_type' in 'purchase_invoice_orders' data
+            validate_order_type(purchase_invoice_orders_data, invoice_order_error, OrderTypes,look_up='order_type')
+
+        # Validated PurchaseInvoiceItem Data
+        purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+        if purchase_invoice_items_data:
+            exclude_fields = ['purchase_invoice_id']
+            invoice_item_error = validate_put_method_data(self, purchase_invoice_items_data, PurchaseInvoiceItemSerializer, exclude_fields, PurchaseInvoiceItem, current_model_pk_field='purchase_invoice_item_id')
+
+        # Validated OrderAttchments Data
+        order_attachments_data = given_data.pop('order_attachments', None)
+        exclude_fields = ['order_id','order_type_id']
+        if order_attachments_data:
+            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
+        else:
+            attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
+
+        # Validated OrderShipments Data
+        order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+        else:
+            shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
+
+        # Ensure mandatory data is present
+        if not purchase_invoice_orders_data or not purchase_invoice_items_data:
+            logger.error("Purchase invoice order and Purchase invoice items are mandatory but not provided.")
+            return build_response(0, "Purchase invoice order and Purchase invoice items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+        errors = {}
+        if invoice_order_error:
+            errors["purchase_invoice_orders"] = invoice_order_error
+        if invoice_item_error:
+            errors["purchase_invoice_items"] = invoice_item_error
+        if attachment_error:
+            errors['order_attachments'] = attachment_error
+        if shipments_error:
+            errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)        
+      
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        # update PurchaseInvoiceOrders
+        if purchase_invoice_orders_data:
+            update_fields = [] # No need to update any fields
+            purchaseinvoiceorder_data = update_multi_instances(self, pk, purchase_invoice_orders_data, PurchaseInvoiceOrders, PurchaseInvoiceOrdersSerializer, update_fields,main_model_related_field='purchase_invoice_id', current_model_pk_field='purchase_invoice_id')
+            purchaseinvoiceorder_data = purchaseinvoiceorder_data[0] if len(purchaseinvoiceorder_data)==1 else purchaseinvoiceorder_data
+
+        # Update the 'PurchaseInvoiceItem'
+        update_fields = {'purchase_invoice_id':pk}
+        invoice_items_data = update_multi_instances(self, pk, purchase_invoice_items_data, PurchaseInvoiceItem, PurchaseInvoiceItemSerializer, update_fields, main_model_related_field='purchase_invoice_id', current_model_pk_field='purchase_invoice_item_id')
+
+        # Get 'order_type_id' from 'OrderTypes' model
+        order_type_val = purchase_invoice_orders_data.get('order_type')
+        order_type = get_object_or_none(OrderTypes, name=order_type_val)
+        type_id = order_type.order_type_id
+
+        # Update the 'order_attchments'
+        update_fields = {'order_id':pk, 'order_type_id':type_id}
+        attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
+
+        # Update the 'shipments'
+        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
+
+        custom_data = {
+            "purchase_invoice_orders":purchaseinvoiceorder_data,
+            "purchase_invoice_items":invoice_items_data if invoice_items_data else [],
+            "order_attachments":attachment_data if attachment_data else [],
+            "order_shipments":shipment_data if shipment_data else {}
+        }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
