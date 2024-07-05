@@ -15,5 +15,5 @@ router.register(r'vendor_address', VendorAddressView)
 urlpatterns = [
     path('',include(router.urls)),
     path('vendors/', VendorViewSet.as_view(), name='vendor_list_create'),
-    path('vendor/<str:pk>/', VendorViewSet.as_view(), name='vendor_detail_update_delete'),
+    path('vendors/<str:pk>/', VendorViewSet.as_view(), name='vendor_detail_update_delete'),
 ]
