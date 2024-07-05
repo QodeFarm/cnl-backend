@@ -101,16 +101,20 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
     customer_addresses = serializers.SerializerMethodField()
+    city = serializers.SerializerMethodField() 
+    ledger_account_id = ModLedgerAccountsSerializers()
+
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'email', 'phone', 'customer_addresses']
+        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account_id', 'created_at', 'customer_addresses']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
         
         email = None
         phone = None
+        city = None
         billing_address = None
         shipping_address = None
         
@@ -119,6 +123,8 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
                 email = address.email
             if phone is None:
                 phone = address.phone
+            if city is None:
+                city = address.city_id
             if address.address_type == 'Billing':
                 billing_address = address
             elif address.address_type == 'Shipping':
@@ -134,17 +140,24 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
         if shipping_address:
             customer_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone}"
 
-        return email, phone, customer_addresses
+        return email, phone, city, customer_addresses
 
     def get_email(self, obj):
         return self.get_customer_details(obj)[0]
 
     def get_phone(self, obj):
         return self.get_customer_details(obj)[1]
+    
+    def get_city(self, obj):
+        city = self.get_customer_details(obj)[2]
+        if city:
+            return ModCitySerializer(city).data
+        return None
 
     def get_customer_addresses(self, obj):
-        return self.get_customer_details(obj)[2]
+        return self.get_customer_details(obj)[3]
     
+        
     def get_customer_summary(customers):
         serializer = CustomerOptionSerializer(customers, many=True)
         return {
