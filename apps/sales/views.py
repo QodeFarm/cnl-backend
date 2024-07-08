@@ -526,15 +526,6 @@ class SaleOrderViewSet(APIView):
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 #====================================================================================================================
-
-# views.py
-
-from rest_framework import status
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from .models import QuickPacks, QuickPackItems
-from .serializers import QuickPackSerializer, QuickPackItemSerializer
-
 class QuickPackCreateView(APIView):
     def post(self, request):
         # QuickPacks data
