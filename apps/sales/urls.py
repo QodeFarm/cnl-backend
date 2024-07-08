@@ -16,6 +16,8 @@ router.register(r'sale_return_orders', SaleReturnOrdersView)
 router.register(r'sale_return_items', SaleReturnItemsView)
 router.register(r'order_attachements', OrderAttachmentsView)
 router.register(r'order_shipments', OrderShipmentsView)
+router.register(r'quick_packs', QuickPacksView)
+router.register(r'quick_pack_items', QuickPacksItemsView)
 
 urlpatterns = [
     path('',include(router.urls)),

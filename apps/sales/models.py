@@ -1,8 +1,9 @@
 from django.db import models
+from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.inventory.models import Warehouses
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, ProductItemType, CustomerCategories, SaleTypes, ShippingCompanies, ShippingModes
-from config.utils_variables import saleorderreturns, saleorders, paymenttransactions, invoices, saleinvoiceitemstable, shipments, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable
+from config.utils_variables import quickpackitems, quickpacks, saleorderreturns, saleorders, paymenttransactions, invoices, saleinvoiceitemstable, shipments, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable
 from apps.products.models import ProductGroups, Products
 import uuid
 from config.utils_methods import OrderNumberMixin
@@ -300,3 +301,25 @@ class OrderShipments(OrderNumberMixin):
 
     def __str__(self):
         return self.shipment_id
+#==============================================================================================================
+class QuickPacks(models.Model):
+    quick_pack_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    description = models.TextField(null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    customer_id = models.ForeignKey(Customer,on_delete=models.CASCADE, db_column='customer_id')
+
+    class Meta:
+        db_table = quickpacks
+
+class QuickPackItems(models.Model):
+    quick_pack_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    quantity = models.IntegerField(null=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    quick_pack_id = models.ForeignKey(QuickPacks,on_delete=models.CASCADE, db_column='quick_pack_id')
+    product_id = models.ForeignKey(Products,on_delete=models.CASCADE, db_column='product_id')
+     
+    class Meta:
+        db_table = quickpackitems
