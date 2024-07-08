@@ -305,7 +305,9 @@ class OrderShipments(OrderNumberMixin):
 class QuickPacks(models.Model):
     quick_pack_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    description = models.TextField(null=True, default=None)
+    description = models.CharField(max_length=512)
+    active = models.CharField(max_length=1, choices=[('Y', 'Yes'), ('N', 'No')], default='Y')
+    lot_qty = models.IntegerField(default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     customer_id = models.ForeignKey(Customer,on_delete=models.CASCADE, db_column='customer_id')
