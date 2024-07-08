@@ -1528,3 +1528,28 @@ CREATE TABLE IF NOT EXISTS task_history (
     FOREIGN KEY (status_id) REFERENCES statuses(status_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
+
+/* Quick Packs Table */
+-- Stores information about the quick packs associated with each customer.
+CREATE TABLE IF NOT EXISTS quick_packs (
+    quick_pack_id CHAR(36) PRIMARY KEY,
+    customer_id CHAR(36) NOT NULL,
+    name VARCHAR(255) NOT NULL, 
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+);
+ 
+/* Quick Pack Items Table */
+-- Stores the items that are part of each quick pack.
+CREATE TABLE IF NOT EXISTS quick_pack_items (
+    quick_pack_item_id CHAR(36) PRIMARY KEY,
+    quick_pack_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    quantity INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (quick_pack_id) REFERENCES quick_packs(quick_pack_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
