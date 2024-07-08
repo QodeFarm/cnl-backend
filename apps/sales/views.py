@@ -525,3 +525,44 @@ class SaleOrderViewSet(APIView):
         ]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+#====================================================================================================================
+
+# views.py
+
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .models import QuickPacks, QuickPackItems
+from .serializers import QuickPackSerializer, QuickPackItemSerializer
+
+class QuickPackCreateView(APIView):
+    def post(self, request):
+        # QuickPacks data
+        quickpack_serializer = QuickPackSerializer(data=request.data)
+        if quickpack_serializer.is_valid():
+            quickpack = quickpack_serializer.save()
+            
+            # QuickPackItems data
+            quick_pack_id = quickpack.quick_pack_id
+            items_data = request.data.get('quick_pack_data_items', [])
+            created_items = []
+            #print("items_data", items_data)
+            if items_data:
+                for item_data in items_data:
+                    item_data['quick_pack_id'] = quick_pack_id
+                    quickpackitem_serializer = QuickPackItemSerializer(data=item_data)
+                    if quickpackitem_serializer.is_valid():
+                        quickpackitem = quickpackitem_serializer.save()
+                        created_items.append(quickpackitem)
+                    else:
+                        # Rollback if any item fails
+                        quickpack.delete()
+                        return build_response(0, "ValidationError", quickpackitem_serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+            quickpackitem_data = QuickPackItemSerializer(created_items, many=True).data
+            response_data = {
+                'quick_pack': QuickPackSerializer(quickpack).data,
+                'quick_pack_items': quickpackitem_data
+            }
+            return build_response(len(response_data), 'Success',response_data, status.HTTP_201_CREATED)
+        return build_response(0, "ValidationError", quickpack_serializer.errors, status.HTTP_400_BAD_REQUEST)
