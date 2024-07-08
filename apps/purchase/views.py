@@ -125,7 +125,7 @@ class PurchaseOrderViewSet(APIView):
         except PurchaseOrders.DoesNotExist:
             logger.warning(f"PurchaseOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-
+        
     def get(self, request, *args, **kwargs):
         if 'pk' in kwargs:
            result =  validate_input_pk(self,kwargs['pk'])
@@ -158,25 +158,25 @@ class PurchaseOrderViewSet(APIView):
             items_data = self.get_related_data(PurchaseorderItems, PurchaseorderItemsSerializer, 'purchase_order_id', pk)
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-            shipments_data = shipments_data[0] if shipments_data else {}
-                
+            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+              
             # Customizing the response data
             custom_data = {
-                "purchase_order": purchase_order_serializer.data,
+                "purchase_order_data": purchase_order_serializer.data,
                 "purchase_order_items": items_data,
                 "order_attachments": attachments_data,
                 "order_shipments": shipments_data
             }
             logger.info("Purchase order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
-
+        
         except Http404:
             logger.error("Purchase order with pk %s does not exist.", pk)
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.exception("An error occurred while retrieving purchase order with pk %s: %s", pk, str(e))
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        
     def get_related_data(self, model, serializer_class, filter_field, filter_value):
         """
         Retrieves related data for a given model, serializer, and filter field.
@@ -188,7 +188,8 @@ class PurchaseOrderViewSet(APIView):
             return serializer.data
         except Exception as e:
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
-      
+            return []
+
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
@@ -217,9 +218,11 @@ class PurchaseOrderViewSet(APIView):
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
-
+    
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         # Extracting data from the request
         given_data = request.data
@@ -233,13 +236,13 @@ class PurchaseOrderViewSet(APIView):
         """
 
         # Validated PurchaseOrders Data
-        purchase_order_data = given_data.pop('purchase_order', None) # parent_data
+        purchase_order_data = given_data.pop('purchase_order_data', None) # parent_data
         if purchase_order_data:
             order_error = validate_payload_data(self, purchase_order_data , PurchaseOrdersSerializer)
-
             # validate the order_type in 'purchase_order' data
             validate_order_type(purchase_order_data, order_error, OrderTypes,look_up='order_type')
-                
+
+
         # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
         if purchase_order_items_data:
@@ -266,7 +269,7 @@ class PurchaseOrderViewSet(APIView):
         
         errors = {}
         if order_error:
-            errors["purchase_order"] = order_error
+            errors["purchase_order_data"] = order_error
         if item_error:
                 errors["purchase_order_items"] = item_error
         if attachment_error:
@@ -285,7 +288,8 @@ class PurchaseOrderViewSet(APIView):
 
         # Create PurchaseOrders Data
         new_purchase_order_data = generic_data_creation(self, [purchase_order_data], PurchaseOrdersSerializer)
-        purchase_order_id = new_purchase_order_data[0].get("purchase_order_id",None) #Fetch purchase_order_id from mew instance
+        new_purchase_order_data = new_purchase_order_data[0]
+        purchase_order_id = new_purchase_order_data.get("purchase_order_id",None) #Fetch purchase_order_id from mew instance
         logger.info('PurchaseOrders - created*')
 
         # Create PurchaseorderItems Data
@@ -314,18 +318,22 @@ class PurchaseOrderViewSet(APIView):
             logger.info('OrderShipments - created*')
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
-            order_shipments = []
+            order_shipments = {}
 
-        custom_data = [
-            {"purchase_order":new_purchase_order_data},
-            {"purchase_order_items":items_data},
-            {"order_attachments":order_attachments},
-            {"order_shipments":order_shipments},
-        ]
+        custom_data = {
+            "purchase_order":new_purchase_order_data,
+            "purchase_order_items":items_data,
+            "order_attachments":order_attachments,
+            "order_shipments":order_shipments,
+        }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-
-    def put(self, request, pk, *args, **kwargs):
+    
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+   
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
 
         #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
         """
@@ -338,12 +346,13 @@ class PurchaseOrderViewSet(APIView):
         given_data = request.data
 
         # Validated PurchaseOrders Data
-        purchase_order_data = given_data.pop('purchase_order', None) # parent_data
+        purchase_order_data = given_data.pop('purchase_order_data', None) # parent_data
         if purchase_order_data:
-            order_error = validate_multiple_data(self, [purchase_order_data] , PurchaseOrdersSerializer,['order_no'])
-            # validate the 'order_type' in 'purchase_order' data
+            purchase_order_data['purchase_order_id'] = pk    
+            order_error = validate_multiple_data(self, purchase_order_data , PurchaseOrdersSerializer,['order_no'])
+            # validate the 'order_type' in 'purchase_order_data' data
             validate_order_type(purchase_order_data, order_error, OrderTypes,look_up='order_type')
-                
+
         # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
         if purchase_order_items_data:
@@ -372,7 +381,7 @@ class PurchaseOrderViewSet(APIView):
         
         errors = {}
         if order_error:
-            errors["purchase_order"] = order_error
+            errors["purchase_order_data"] = order_error
         if item_error:
             errors["purchase_order_items"] = item_error
         if attachment_error:
@@ -387,6 +396,7 @@ class PurchaseOrderViewSet(APIView):
         if purchase_order_data:
             update_fields = {} # No need to update any fields
             purchaseorder_data = update_multi_instances(self, pk, [purchase_order_data], PurchaseOrders, PurchaseOrdersSerializer, update_fields,main_model_related_field='purchase_order_id', current_model_pk_field='purchase_order_id')
+            purchaseorder_data = purchaseorder_data[0] if len(purchaseorder_data)==1 else purchaseorder_data
 
         # Update the 'purchase_order_items'
         update_fields = {'purchase_order_id':pk}
@@ -402,14 +412,15 @@ class PurchaseOrderViewSet(APIView):
         attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
 
         # Update the 'shipments'
-        shipment_data = update_multi_instances(self, pk, [order_shipments_data], OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
 
-        custom_data = [
-            {"purchase_order":purchaseorder_data},
-            {"purchase_order_items":items_data if items_data else []},
-            {"order_attachments":attachment_data if attachment_data else []},
-            {"order_shipments":shipment_data if shipment_data else []}
-        ]
+        custom_data = {
+            "purchase_order":purchaseorder_data,
+            "purchase_order_items":items_data if items_data else [],
+            "order_attachments":attachment_data if attachment_data else [],
+            "order_shipments":shipment_data if shipment_data else {}
+        }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
@@ -522,6 +533,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
 
+    @transaction.atomic
     def create(self, request, *args, **kwargs):
         # Extracting data from the request
         given_data = request.data
@@ -716,6 +728,315 @@ class PurchaseInvoiceOrderViewSet(APIView):
         custom_data = {
             "purchase_invoice_orders":purchaseinvoiceorder_data,
             "purchase_invoice_items":invoice_items_data if invoice_items_data else [],
+            "order_attachments":attachment_data if attachment_data else [],
+            "order_shipments":shipment_data if shipment_data else {}
+        }
+
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+#=====================PurchaseReturnOrders========================================================
+class PurchaseReturnOrderViewSet(APIView):
+    """
+    API ViewSet for handling Purchase Return Order creation and related data.
+    """
+    def get_object(self, pk):
+        try:
+            return PurchaseReturnOrders.objects.get(pk=pk)
+        except PurchaseReturnOrders.DoesNotExist:
+            logger.warning(f"PurchaseReturnOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)   
+      
+    def get(self, request, *args, **kwargs):
+        if 'pk' in kwargs:
+           result =  validate_input_pk(self,kwargs['pk'])
+           return result if result else self.retrieve(self, request, *args, **kwargs)
+        try:
+            instance = PurchaseReturnOrders.objects.all()
+        except PurchaseReturnOrders.DoesNotExist:
+            logger.error("Purchase return order does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        else:
+            serializer = PurchaseReturnOrdersSerializer(instance, many=True)
+            logger.info("Purchase return order data retrieved successfully.")
+            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)  
+        
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a Purchase Return Orders and its related data (ReturnItems, attachments, and shipments).
+        """
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the PurchaseReturnOrders instance
+            purchase_return_order = get_object_or_404(PurchaseReturnOrders, pk=pk)
+            purchase_return_order_serializer = PurchaseReturnOrdersSerializer(purchase_return_order)
+
+            # Retrieve related data
+            return_items_data = self.get_related_data(PurchaseReturnItems, PurchaseReturnItemsSerializer, 'purchase_return_id', pk)
+            attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
+            shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+                
+            # Customizing the response data
+            custom_data = {
+                "purchase_return_orders": purchase_return_order_serializer.data,
+                "purchase_return_items": return_items_data,
+                "order_attachments": attachments_data,
+                "order_shipments": shipments_data
+            }
+            logger.info("Purchase return Order and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+        
+        except Http404:
+            logger.error("Purchase return order with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception("An error occurred while retrieving purchase return order with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+ 
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
+            return []
+        
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a Purchase Return Orders and its related attachments and shipments.
+        """
+        try:
+            # Get the PurchaseReturnOrders instance
+            instance = PurchaseReturnOrders.objects.get(pk=pk)
+
+            # Delete related OrderAttachments and OrderShipments
+            if not delete_multi_instance(pk, PurchaseReturnOrders, OrderAttachments, main_model_field_name='order_id'):
+                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, PurchaseReturnOrders, OrderShipments, main_model_field_name='order_id'):
+                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Delete the main PurchaseReturnOrders instance
+            instance.delete()
+
+            logger.info(f"PurchaseReturnOrders with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except PurchaseReturnOrders.DoesNotExist:
+            logger.warning(f"PurchaseReturnOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting PurchaseReturnOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        # Extracting data from the request
+        given_data = request.data
+
+        #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+ 
+        """
+
+        # Validated PurchaseReturnOrders Data
+        purchase_return_orders_data = given_data.pop('purchase_return_orders', None) # parent_data
+        if purchase_return_orders_data:
+            return_order_error = validate_payload_data(self, purchase_return_orders_data , PurchaseReturnOrdersSerializer)
+            # validate the order_type in 'PurchaseReturnOrders' data
+            validate_order_type(purchase_return_orders_data, return_order_error, OrderTypes,look_up='order_type')
+                
+        # Validated PurchaseInvoiceItems Data
+        purchase_return_items_data = given_data.pop('purchase_return_items', None)
+        if purchase_return_items_data:
+            return_item_error = validate_multiple_data(self, purchase_return_items_data,PurchaseReturnItemsSerializer,['purchase_return_id'])
+
+        # Validated OrderAttchments Data
+        order_attachments_data = given_data.pop('order_attachments', None)
+        if order_attachments_data:
+            attachment_error = validate_multiple_data(self, order_attachments_data ,OrderAttachmentsSerializer,['order_id','order_type_id'])
+        else:
+            attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
+
+        # Validated OrderShipments Data
+        order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_multiple_data(self, [order_shipments_data] , OrderShipmentsSerializer,['order_id','order_type_id'])
+        else:
+            shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
+
+        # Ensure mandatory data is present
+        if not purchase_return_orders_data or not purchase_return_items_data:
+            logger.error("Purchase return order and Purchase return items are mandatory but not provided.")
+            return build_response(0, "Purchase return order and Purchase return items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+        errors = {}
+        if return_order_error:
+            errors["purchase_return_orders"] = return_order_error
+        if return_item_error:
+                errors["purchase_return_items"] = return_item_error
+        if attachment_error:
+                errors['order_attachments'] = attachment_error
+        if shipments_error:
+                errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+        
+        #---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data is created as new instances.
+        """
+            
+        # Hence the data is validated , further it can be created.
+
+        # Create PurchaseReturnOrders Data
+        new_purchase_return_orders_data = generic_data_creation(self, [purchase_return_orders_data], PurchaseReturnOrdersSerializer)
+        new_purchase_return_orders_data = new_purchase_return_orders_data[0]
+        purchase_return_id = new_purchase_return_orders_data.get("purchase_return_id",None) #Fetch purchase_return_id from mew instance
+        logger.info('PurchaseReturnOrders - created*')
+
+        # Create PurchaseReturnItems Data
+        update_fields = {'purchase_return_id': purchase_return_id}
+        return_items_data = generic_data_creation(self, purchase_return_items_data, PurchaseReturnItemsSerializer, update_fields)
+        logger.info('PurchaseReturnItems - created*')
+
+        # Get order_type_id from OrderTypes model
+        order_type_val = purchase_return_orders_data.get('order_type')
+        order_type = get_object_or_none(OrderTypes, name=order_type_val)
+        type_id = order_type.order_type_id
+
+        # Create OrderAttchments Data
+        update_fields = {'order_id':purchase_return_id, 'order_type_id':type_id}
+        if order_attachments_data:
+            order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields)
+            logger.info('OrderAttchments - created*')
+        else:
+            # Since OrderAttchments Data is optional, so making it as an empty data list
+            order_attachments = []
+
+        # create OrderShipments Data
+        if order_shipments_data:
+            order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields)
+            order_shipments = order_shipments[0]
+            logger.info('OrderShipments - created*')
+        else:
+            # Since OrderShipments Data is optional, so making it as an empty data list
+            order_shipments = {}
+
+        custom_data = {
+            "purchase_return_orders":new_purchase_return_orders_data,
+            "purchase_return_items":return_items_data,
+            "order_attachments":order_attachments,
+            "order_shipments":order_shipments,
+        }
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+    
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+
+        #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+
+        # Validated PurchaseReturnOrders Data
+        purchase_return_orders_data = given_data.pop('purchase_return_orders', None) # parent_data
+        if purchase_return_orders_data:
+            purchase_return_orders_data['purchase_return_id'] = pk
+            return_order_error = validate_multiple_data(self, purchase_return_orders_data , PurchaseReturnOrdersSerializer,['return_no'])
+            # validate the 'order_type' in 'purchase_return_orders' data
+            validate_order_type(purchase_return_orders_data, return_order_error, OrderTypes,look_up='order_type')
+
+        # Validated PurchaseReturnItems Data
+        purchase_return_items_data = given_data.pop('purchase_return_items', None)
+        if purchase_return_items_data:
+            exclude_fields = ['purchase_return_id']
+            return_item_error = validate_put_method_data(self, purchase_return_items_data, PurchaseReturnItemsSerializer, exclude_fields, PurchaseReturnItems, current_model_pk_field='purchase_return_item_id')
+
+        # Validated OrderAttchments Data
+        order_attachments_data = given_data.pop('order_attachments', None)
+        exclude_fields = ['order_id','order_type_id']
+        if order_attachments_data:
+            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
+        else:
+            attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
+
+        # Validated OrderShipments Data
+        order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+        else:
+            shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
+
+        # Ensure mandatory data is present
+        if not purchase_return_orders_data or not purchase_return_items_data:
+            logger.error("Purchase return order and Purchase return items are mandatory but not provided.")
+            return build_response(0, "Purchase return order and Purchase return items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+        errors = {}
+        if return_order_error:
+            errors["purchase_return_orders"] = return_order_error
+        if return_item_error:
+            errors["purchase_return_items"] = return_item_error
+        if attachment_error:
+            errors['order_attachments'] = attachment_error
+        if shipments_error:
+            errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)        
+      
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        # update PurchaseReturnOrders
+        if purchase_return_orders_data:
+            update_fields = [] # No need to update any fields
+            purchasereturnorder_data = update_multi_instances(self, pk, purchase_return_orders_data, PurchaseReturnOrders, PurchaseReturnOrdersSerializer, update_fields,main_model_related_field='purchase_return_id', current_model_pk_field='purchase_return_id')
+            purchasereturnorder_data = purchasereturnorder_data[0] if len(purchasereturnorder_data)==1 else purchasereturnorder_data
+
+        # Update the 'PurchaseReturnItems'
+        update_fields = {'purchase_return_id':pk}
+        return_items_data = update_multi_instances(self, pk, purchase_return_items_data, PurchaseReturnItems, PurchaseReturnItemsSerializer, update_fields, main_model_related_field='purchase_return_id', current_model_pk_field='purchase_return_item_id')
+
+        # Get 'order_type_id' from 'OrderTypes' model
+        order_type_val = purchase_return_orders_data.get('order_type')
+        order_type = get_object_or_none(OrderTypes, name=order_type_val)
+        type_id = order_type.order_type_id
+
+        # Update the 'order_attchments'
+        update_fields = {'order_id':pk, 'order_type_id':type_id}
+        attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
+
+        # Update the 'shipments'
+        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
+
+        custom_data = {
+            "purchase_return_orders":purchasereturnorder_data,
+            "purchase_return_items":return_items_data if return_items_data else [],
             "order_attachments":attachment_data if attachment_data else [],
             "order_shipments":shipment_data if shipment_data else {}
         }
