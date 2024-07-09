@@ -22,6 +22,7 @@ productgstclassificationstable = 'product_gst_classifications'
 productsalesgltable = 'product_sales_gl'
 productpurchasegltable ='product_purchase_gl'
 productstable = 'products'
+productitembalancetable = 'product_item_balance'
 
 #vendor db_tables
 vendorcategory='vendor_category'

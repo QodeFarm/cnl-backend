@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import *
 from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer
-
+from apps.inventory.serializers import ModWarehousesSerializer
 
 class ModProductGroupsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -116,7 +116,6 @@ class ProductPurchaseGlSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductPurchaseGl
         fields = '__all__'
-	
 
 class ModproductsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -177,3 +176,15 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+    
+class ModProductItemBalanceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductItemBalance
+        fields = ['product_balance_id','balance','location_id']
+
+class ProductItemBalanceSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id',read_only=True)
+    warehouse = ModWarehousesSerializer(source='warehouse_id',read_only=True)
+    class Meta:
+        model = ProductItemBalance
+        fields = '__all__'

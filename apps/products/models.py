@@ -2,6 +2,7 @@ import os,uuid
 from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import pre_delete
+from apps.inventory.models import Warehouses
 from config.utils_methods import *
 from config.utils_variables import *
 from apps.masters.models import ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands
@@ -223,6 +224,8 @@ class Products(models.Model):
         ('Inactive', 'Inactive'),
     ]
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, null=True, default=None)
+    print_name = models.CharField(max_length=255)
+    hsn_code= models.CharField(max_length=15)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -240,4 +243,19 @@ class Products(models.Model):
                 os.remove(file_path)
                 picture_dir = os.path.dirname(file_path)
                 if not os.listdir(picture_dir):
-                    os.rmdir(picture_dir)
+                    os.rmdir(picture_dir)   
+
+class ProductItemBalance(models.Model):
+    product_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id')
+    balance = models.IntegerField(default=0)
+    location_id= models.CharField(max_length=36)
+    warehouse_id = models.ForeignKey(Warehouses, on_delete=models.CASCADE, null=True, default=None, db_column = 'warehouse_id')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = productitembalancetable
+
+    def __str__(self):
+        return f"{self.product_balance_id}"
