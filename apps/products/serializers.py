@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import *
-from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer
+from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
 from apps.inventory.serializers import ModWarehousesSerializer
 
 class ModProductGroupsSerializer(serializers.ModelSerializer):
@@ -162,21 +162,6 @@ class productsSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
-
-class ProductOptionsSerializer(serializers.ModelSerializer):
-    
-    class Meta:
-        model = Products
-        fields = ['product_id', 'name', 'sales_description', 'barcode', 'mrp', 'sales_rate','discount', 'dis_amount']
- 
-    def get_product_summary(products):
-        serializer = ProductOptionsSerializer(products, many=True)
-        return {
-            "count": len(serializer.data),
-            "msg": "SUCCESS",
-            "data": serializer.data
-        }
-    
 class ModProductItemBalanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductItemBalance
@@ -188,3 +173,31 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductItemBalance
         fields = '__all__'
+
+class ProductOptionsSerializer(serializers.ModelSerializer):
+    unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
+    product_balance = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Products
+        fields = ['product_id', 'code', 'name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'print_name', 'hsn_code', 'barcode']
+
+    def get_product_details(self, obj):
+        balance = ProductItemBalance.objects.filter(product_id=obj.product_id)
+        product_balance = None
+
+        for balances in balance:
+            if product_balance is None:
+                product_balance = balances.balance
+        return product_balance
+    
+    def get_product_balance(self, obj):
+        return self.get_product_details(obj)
+ 
+    def get_product_summary(products):
+        serializer = ProductOptionsSerializer(products, many=True)
+        return {
+            "count": len(serializer.data),
+            "msg": "SUCCESS",
+            "data": serializer.data
+        }

@@ -140,6 +140,11 @@ class UnitOptionsSerializer(serializers.ModelSerializer):
         model = UnitOptions
         fields = '__all__'
 
+class ModUnitOptionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnitOptions
+        fields = ['unit_options_id', 'unit_name']
+
 class ProductDrugTypesSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductDrugTypes

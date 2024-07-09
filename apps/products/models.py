@@ -5,6 +5,7 @@ from django.db.models.signals import pre_delete
 from apps.inventory.models import Warehouses
 from config.utils_methods import *
 from config.utils_variables import *
+from config.utils_methods import OrderNumberMixin
 from apps.masters.models import ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands
 
 def product_groups_picture(instance, filename):
@@ -181,13 +182,15 @@ def products_picture(instance, filename):
     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
     return f"products/products/{original_filename}_{unique_id}{file_extension}"
 
-class Products(models.Model):
+class Products(OrderNumberMixin):
     product_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     product_group_id = models.ForeignKey(ProductGroups, on_delete=models.CASCADE, db_column = 'product_group_id')
     category_id = models.ForeignKey(ProductCategories, on_delete=models.CASCADE, null=True, default=None, db_column = 'category_id')
     type_id = models.ForeignKey(ProductTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'type_id')
     code = models.CharField(max_length=50)
+    order_no_prefix = 'PRD'
+    order_no_field = 'code'
     barcode = models.CharField(max_length=50, null=True, default=None)
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, null=True, default=None, db_column = 'unit_options_id')
     gst_input = models.CharField(max_length=255, null=True, default=None)

@@ -151,16 +151,26 @@ def generate_order_number(order_type_prefix):
     Returns:
         str: The generated order number.
     """
-    current_date = timezone.now()
-    date_str = current_date.strftime('%y%m')
+    if order_type_prefix == "PRD":
+        key = f"{order_type_prefix}"
+        sequence_number = cache.get(key, 0)
+        sequence_number += 1
+        cache.set(key, sequence_number, timeout=None)
 
-    key = f"{order_type_prefix}-{date_str}"
-    sequence_number = cache.get(key, 0)
-    sequence_number += 1
-    cache.set(key, sequence_number, timeout=None)
+        sequence_number_str = f"{sequence_number:05d}"
+        order_number = f"{order_type_prefix}-{sequence_number_str}"
+    else:
 
-    sequence_number_str = f"{sequence_number:05d}"
-    order_number = f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+        current_date = timezone.now()
+        date_str = current_date.strftime('%y%m')
+
+        key = f"{order_type_prefix}-{date_str}"
+        sequence_number = cache.get(key, 0)
+        sequence_number += 1
+        cache.set(key, sequence_number, timeout=None)
+
+        sequence_number_str = f"{sequence_number:05d}"
+        order_number = f"{order_type_prefix}-{date_str}-{sequence_number_str}"
     return order_number
 
 class OrderNumberMixin(models.Model):
