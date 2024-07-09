@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import *
 from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
-
+from apps.inventory.serializers import ModWarehousesSerializer
 
 class ModProductGroupsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -116,7 +116,6 @@ class ProductPurchaseGlSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductPurchaseGl
         fields = '__all__'
-	
 
 class ModproductsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -163,13 +162,37 @@ class productsSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+class ModProductItemBalanceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductItemBalance
+        fields = ['product_balance_id','balance','location_id']
+
+class ProductItemBalanceSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id',read_only=True)
+    warehouse = ModWarehousesSerializer(source='warehouse_id',read_only=True)
+    class Meta:
+        model = ProductItemBalance
+        fields = '__all__'
 
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
+    product_balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
         fields = ['product_id', 'code', 'name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'print_name', 'hsn_code', 'barcode']
+
+    def get_product_details(self, obj):
+        balance = ProductItemBalance.objects.filter(product_id=obj.product_id)
+        product_balance = None
+
+        for balances in balance:
+            if product_balance is None:
+                product_balance = balances.balance
+        return product_balance
+    
+    def get_product_balance(self, obj):
+        return self.get_product_details(obj)
  
     def get_product_summary(products):
         serializer = ProductOptionsSerializer(products, many=True)
