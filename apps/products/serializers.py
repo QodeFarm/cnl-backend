@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import *
-from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer
+from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
 
 
 class ModProductGroupsSerializer(serializers.ModelSerializer):
@@ -165,10 +165,11 @@ class productsSerializer(serializers.ModelSerializer):
 
 
 class ProductOptionsSerializer(serializers.ModelSerializer):
-    
+    unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
+
     class Meta:
         model = Products
-        fields = ['product_id', 'name', 'sales_description', 'barcode', 'mrp', 'sales_rate','discount', 'dis_amount']
+        fields = ['product_id', 'code', 'name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'print_name', 'hsn_code', 'barcode']
  
     def get_product_summary(products):
         serializer = ProductOptionsSerializer(products, many=True)
