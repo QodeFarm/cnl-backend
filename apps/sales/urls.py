@@ -12,7 +12,7 @@ router.register(r'sale_order_items', SaleOrderItemsView)
 router.register(r'sale_invoice_order_get',SaleInvoiceOrdersView)
 router.register(r'payment_transactions', PaymentTransactionsView)
 router.register(r'sale_invoice_items', SaleInvoiceItemsView)
-router.register(r'sale_return_orders', SaleReturnOrdersView)
+router.register(r'sale_return_orders_get', SaleReturnOrdersView)
 router.register(r'sale_return_items', SaleReturnItemsView)
 router.register(r'order_attachements', OrderAttachmentsView)
 router.register(r'order_shipments', OrderShipmentsView)
@@ -23,4 +23,6 @@ urlpatterns = [
     path('sale_order/<str:pk>/', SaleOrderViewSet.as_view(), name='sales-order-detail-update-delete'),
     path('sale_invoice_orders/', SaleInvoiceOrdersViewSet.as_view(), name='sales-invoice-orders-list-create'),
     path('sale_invoice_orders/<str:pk>/', SaleInvoiceOrdersViewSet.as_view(), name='sales-invoice-orders-detail-update-delete'),
+    path('sale_return_orders/', SaleReturnOrdersViewSet.as_view(), name='sales-return-orders-list-create'),
+    path('sale_return_orders/<str:pk>/', SaleReturnOrdersViewSet.as_view(), name='sales-return-orders-detail-update-delete'),
 ]

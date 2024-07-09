@@ -159,7 +159,7 @@ class OrderShipmentsView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-
+#------ CRUD Operation on bulk data-------#
 class SaleOrderViewSet(APIView):
     """
     API ViewSet for handling sale order creation and related data.
@@ -503,9 +503,7 @@ class SaleOrderViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-    
 
-#--------------SaleInvoiceOrder----Intigrated API-----------------#
 class SaleInvoiceOrdersViewSet(APIView):
     """
     API ViewSet for handling sale invoice order creation and related data.
@@ -823,4 +821,338 @@ class SaleInvoiceOrdersViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+class SaleReturnOrdersViewSet(APIView):
+    def get_object(self, pk):
+        try:
+            return SaleReturnOrders.objects.get(pk=pk)
+        except SaleReturnOrders.DoesNotExist:
+            logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            result =  validate_input_pk(self,kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs) 
+        try: 
+            logger.info("Retrieving all sale return order")
+            queryset = SaleReturnOrders.objects.all()
+            serializer = SaleReturnOrdersSerializer(queryset, many=True)
+            logger.info("sale return order data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+ 
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a sale return order and its related data (items, attachments, and shipments).
+        """
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the SaleReturnOrders instance
+            sale_return_order = get_object_or_404(SaleReturnOrders, pk=pk)
+            sale_return_order_serializer = SaleReturnOrdersSerializer(sale_return_order)
+
+            # Retrieve related data
+            items_data = self.get_related_data(
+                SaleReturnItems, SaleReturnItemsSerializer, 'sale_return_id', pk)
+            attachments_data = self.get_related_data(
+                OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
+            shipments_data = self.get_related_data(
+                OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+
+            # Customizing the response data
+            custom_data = {
+                "sale_return_order": sale_return_order_serializer.data,
+                "sale_order_items": items_data,
+                "order_attachments": attachments_data,
+                "order_shipments": shipments_data
+            }
+            logger.info("Sale return order and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+        except Http404:
+            logger.error("Sale return order with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(
+                "An error occurred while retrieving sale return order with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.",
+                         model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
+                             model.__name__, filter_field, filter_value, str(e))
+            return []
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a sale return order and its related attachments and shipments.
+        """
+        try:
+            # Get the SaleReturnOrders instance
+            instance = SaleReturnOrders.objects.get(pk=pk)
+
+            # Delete related OrderAttachments and OrderShipments
+            if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id'):
+                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id'):
+                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Delete the main SaleOrder instance
+            instance.delete()
+
+            logger.info(f"SaleReturnOrders with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except SaleReturnOrders.DoesNotExist:
+            logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting SaleReturnOrder with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        # Extracting data from the request
+        given_data = request.data
+
+        # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+
+        # Vlidated SaleReturnOrders Data
+        sale_return_order_data = given_data.pop('sale_return_order', None)  # parent_data
+        if sale_return_order_data:
+            order_error = validate_payload_data(
+                self, sale_return_order_data, SaleReturnOrdersSerializer)
+            # validate the order_type in 'sale_return_order' data
+            validate_order_type(sale_return_order_data, order_error,
+                                OrderTypes, look_up='order_type')
+
+        # Vlidated SaleReturnItems Data
+        sale_return_items_data = given_data.pop('sale_return_items', None)
+        if sale_return_items_data:
+            item_error = validate_multiple_data(
+                self, sale_return_items_data, SaleReturnItemsSerializer, ['sale_return_id'])
+
+        # Vlidated OrderAttchments Data
+        order_attachments_data = given_data.pop('order_attachments', None)
+        if order_attachments_data:
+            attachment_error = validate_multiple_data(
+                self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'])
+        else:
+            # Since 'order_attachments' is optional, so making an error is empty list
+            attachment_error = []
+
+        # Vlidated OrderShipments Data
+        order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_multiple_data(
+                self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'])
+        else:
+            # Since 'order_shipments' is optional, so making an error is empty list
+            shipments_error = []
+
+        # Ensure mandatory data is present
+        if not sale_return_order_data or not sale_return_items_data:
+            logger.error(
+                "Sale return order and sale return items are mandatory but not provided.")
+            return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if order_error:
+            errors["sale_return_order"] = order_error
+        if item_error:
+            errors["sale_return_items"] = item_error
+        if attachment_error:
+            errors['order_attachments'] = attachment_error
+        if shipments_error:
+            errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data is created as new instances.
+        """
+
+        # Hence the data is validated , further it can be created.
+
+        # Create SaleReturnOrders Data
+        new_sale_return_order_data = generic_data_creation(self, [sale_return_order_data], SaleReturnOrdersSerializer)
+        new_sale_return_order_data = new_sale_return_order_data[0]
+        sale_return_id = new_sale_return_order_data.get("sale_return_id", None)  # Fetch sale_return_id from mew instance
+        logger.info('SaleReturnOrders - created*')
+
+        # Create SaleReturnItems Data
+        update_fields = {'sale_return_id': sale_return_id}
+        items_data = generic_data_creation(
+            self, sale_return_items_data, SaleReturnItemsSerializer, update_fields)
+        logger.info('SaleReturnItems - created*')
+
+        # Get order_type_id from OrderTypes model
+        order_type_val = sale_return_order_data.get('order_type')
+        order_type = get_object_or_none(OrderTypes, name=order_type_val)
+        type_id = order_type.order_type_id
+
+        # Create OrderAttchments Data
+        update_fields = {'order_id': sale_return_id, 'order_type_id': type_id}
+        if order_attachments_data:
+            order_attachments = generic_data_creation(
+                self, order_attachments_data, OrderAttachmentsSerializer, update_fields)
+            logger.info('OrderAttchments - created*')
+        else:
+            # Since OrderAttchments Data is optional, so making it as an empty data list
+            order_attachments = []
+
+        # create OrderShipments Data
+        if order_shipments_data:
+            order_shipments = generic_data_creation(
+                self, [order_shipments_data], OrderShipmentsSerializer, update_fields)
+            order_shipments = order_shipments[0]
+            logger.info('OrderShipments - created*')
+        else:
+            # Since OrderShipments Data is optional, so making it as an empty data list
+            order_shipments = {}
+
+        custom_data = {
+            "sale_return_order": new_sale_return_order_data,
+            "sale_return_items": items_data,
+            "order_attachments": order_attachments,
+            "order_shipments": order_shipments,
+        }
+
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+
+        # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+
+        # Vlidated SaleReturnOrders Data
+        sale_return_order_data = given_data.pop('sale_return_order', None)  # parent_data
+        if sale_return_order_data:
+            sale_return_order_data['sale_return_id'] = pk
+            order_error = validate_multiple_data(self, [sale_return_order_data], SaleReturnOrdersSerializer, ['return_no'])
+            # validate the 'order_type' in 'sale_return_order' data
+            validate_order_type(sale_return_order_data, order_error,OrderTypes, look_up='order_type')
+
+        # Vlidated SaleReturnItems Data
+        sale_return_items_data = given_data.pop('sale_return_items', None)
+        if sale_return_items_data:
+            exclude_fields = ['sale_return_id']
+            item_error = validate_put_method_data(self, sale_return_items_data, SaleReturnItemsSerializer,
+                                                  exclude_fields, SaleReturnItems, current_model_pk_field='sale_order_item_id')
+
+        # Vlidated OrderAttchments Data
+        order_attachments_data = given_data.pop('order_attachments', None)
+        exclude_fields = ['order_id', 'order_type_id']
+        if order_attachments_data:
+            attachment_error = validate_put_method_data(
+                self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
+        else:
+            # Since 'order_attachments' is optional, so making an error is empty list
+            attachment_error = []
+
+        # Vlidated OrderShipments Data
+        order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_put_method_data(
+                self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+        else:
+            # Since 'order_shipments' is optional, so making an error is empty list
+            shipments_error = []
+
+        # Ensure mandatory data is present
+        if not sale_return_order_data or not sale_return_items_data:
+            logger.error(
+                "Sale return order and sale return items are mandatory but not provided.")
+            return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if order_error:
+            errors["sale_return_order"] = order_error
+        if item_error:
+            errors["sale_return_items"] = item_error
+        if attachment_error:
+            errors['order_attachments'] = attachment_error
+        if shipments_error:
+            errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+
+        # update SaleReturnOrders
+        if sale_return_order_data:
+            update_fields = []  # No need to update any fields
+            return_order_data = update_multi_instances(self, pk, sale_return_order_data, SaleReturnOrders, SaleReturnOrdersSerializer,update_fields, main_model_related_field='sale_return_id', current_model_pk_field='sale_return_id')
+            return_order_data = return_order_data[0] if len(return_order_data)==1 else return_order_data
+
+        # Update the 'sale_return_items'
+        update_fields = {'sale_return_id': pk}
+        items_data = update_multi_instances(self, pk, sale_return_items_data, SaleReturnItems, SaleReturnItemsSerializer,
+                                            update_fields, main_model_related_field='sale_return_id', current_model_pk_field='sale_return_item_id')
+
+        # Get 'order_type_id' from 'OrderTypes' model
+
+        order_type_val = sale_return_order_data.get('order_type')
+        order_type = get_object_or_none(OrderTypes, name=order_type_val)
+        type_id = order_type.order_type_id
+
+        # Update the 'order_attchments'
+        update_fields = {'order_id': pk, 'order_type_id': type_id}
+        attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer,
+                                                 update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
+
+        # Update the 'shipments'
+        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
+                                               update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+
+        custom_data = {
+            "sale_return_order": return_order_data,
+            "sale_return_items": items_data if items_data else [],
+            "order_attachments": attachment_data if attachment_data else [],
+            "order_shipments": shipment_data[0] if shipment_data else {}
+        }
+
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
 

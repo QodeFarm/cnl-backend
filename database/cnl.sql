@@ -1011,20 +1011,21 @@ CREATE TABLE IF NOT EXISTS sale_orders(
 CREATE TABLE IF NOT EXISTS sale_order_items (
     sale_order_item_id CHAR(36) PRIMARY KEY,
     sale_order_id CHAR(36) NOT NULL,
+	print_name CHAR(255),
     product_id CHAR(36) NOT NULL,
+	unit_option_id CHAR(36) NOT NULL,
     quantity DECIMAL(18, 2),
-    unit_price DECIMAL(18, 2),
+	total_boxes INT,
     rate DECIMAL(18, 2),
     amount DECIMAL(18, 2),
-    discount_percentage DECIMAL(18, 2),
+	tax DECIMAL(18, 2),
+	remarks VARCHAR(255),
     discount DECIMAL(18, 2),
-    dis_amt DECIMAL(18, 2),
-    tax_code VARCHAR(255),
-    tax_rate DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+	FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Invoices Table */
@@ -1527,4 +1528,29 @@ CREATE TABLE IF NOT EXISTS task_history (
     FOREIGN KEY (task_id) REFERENCES tasks(task_id),
     FOREIGN KEY (status_id) REFERENCES statuses(status_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+/* Quick Packs Table */
+-- Stores information about the quick packs associated with each customer.
+CREATE TABLE IF NOT EXISTS quick_packs (
+    quick_pack_id CHAR(36) PRIMARY KEY,
+    customer_id CHAR(36) NOT NULL,
+    name VARCHAR(255) NOT NULL, 
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
+);
+ 
+/* Quick Pack Items Table */
+-- Stores the items that are part of each quick pack.
+CREATE TABLE IF NOT EXISTS quick_pack_items (
+    quick_pack_item_id CHAR(36) PRIMARY KEY,
+    quick_pack_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    quantity INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (quick_pack_id) REFERENCES quick_packs(quick_pack_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
