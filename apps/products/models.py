@@ -226,7 +226,6 @@ class Products(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, null=True, default=None)
     print_name = models.CharField(max_length=255)
     hsn_code= models.CharField(max_length=15)
-    product_balance_id = models.ForeignKey('ProductItemBalance', on_delete=models.CASCADE, db_column = 'product_balance_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

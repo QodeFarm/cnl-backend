@@ -64,7 +64,7 @@ class ProductItemBalanceFilter(FilterSet):
     product_balance_id = filters.CharFilter(method=filter_uuid)
     product_id = filters.CharFilter(method=filter_uuid)
     product_name = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
-    balance = django_filters.NumberFilter(field_name='num_branches', lookup_expr='exact')
+    balance = django_filters.NumberFilter(field_name='balance', lookup_expr='exact')
     location_id = filters.CharFilter(lookup_expr='icontains')
     warehouse_id = filters.CharFilter(method=filter_uuid)
     warehouse_name = filters.CharFilter(field_name='warehouse_id__name', lookup_expr='icontains')

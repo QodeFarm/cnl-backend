@@ -46,8 +46,6 @@ By following these best practices, developers can ensure that the database layer
 
 */
 
-SET foreign_key_checks = 0;
-
 /* Country Table */
 -- Stores all countries info
 CREATE TABLE IF NOT EXISTS country (
@@ -723,7 +721,6 @@ CREATE TABLE IF NOT EXISTS products (
     status ENUM('Active', 'Inactive'),
     print_name VARCHAR(255),
     hsn_code VARCHAR(15),
-    product_balance_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_group_id) REFERENCES product_groups(product_group_id),
@@ -736,8 +733,7 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (purchase_gl_id) REFERENCES product_purchase_gl(purchase_gl_id),
     FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
     FOREIGN KEY (drug_type_id) REFERENCES product_drug_types(drug_type_id),
-    FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id),
-    FOREIGN KEY (product_balance_id) REFERENCES product_item_balance(product_balance_id)
+    FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id)
 );
 
 /* Vendor Category Table */
@@ -1573,9 +1569,3 @@ CREATE TABLE IF NOT EXISTS product_item_balance (
     FOREIGN KEY (product_id) REFERENCES products(product_id),
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
 );
-
-SET foreign_key_checks = 1;
--- Add the foreign key constraint
-ALTER TABLE products
-ADD CONSTRAINT fk_product_item_balance
-FOREIGN KEY (product_balance_id) REFERENCES product_item_balance(product_balance_id);

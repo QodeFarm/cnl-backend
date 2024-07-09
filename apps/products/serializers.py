@@ -116,11 +116,6 @@ class ProductPurchaseGlSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductPurchaseGl
         fields = '__all__'
-	
-class ModProductItemBalanceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProductItemBalance
-        fields = ['product_balance_id','balance','location_id']
 
 class ModproductsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -139,7 +134,6 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
-    product_balance = ModProductItemBalanceSerializer(source='product_balance_id',read_only=True)
     class Meta:
         model = Products
         fields = '__all__'
@@ -182,6 +176,12 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+    
+class ModProductItemBalanceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductItemBalance
+        fields = ['product_balance_id','balance','location_id']
+
 class ProductItemBalanceSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id',read_only=True)
     warehouse = ModWarehousesSerializer(source='warehouse_id',read_only=True)
