@@ -719,6 +719,8 @@ CREATE TABLE IF NOT EXISTS products (
     purchase_warranty_months INT,
     sales_warranty_months INT,
     status ENUM('Active', 'Inactive'),
+    print_name VARCHAR(255),
+    hsn_code VARCHAR(15),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_group_id) REFERENCES product_groups(product_group_id),
@@ -1011,9 +1013,9 @@ CREATE TABLE IF NOT EXISTS sale_orders(
 CREATE TABLE IF NOT EXISTS sale_order_items (
     sale_order_item_id CHAR(36) PRIMARY KEY,
     sale_order_id CHAR(36) NOT NULL,
-	print_name CHAR(255),
     product_id CHAR(36) NOT NULL,
 	unit_option_id CHAR(36) NOT NULL,
+    print_name CHAR(255),
     quantity DECIMAL(18, 2),
 	total_boxes INT,
     rate DECIMAL(18, 2),
@@ -1553,4 +1555,18 @@ CREATE TABLE IF NOT EXISTS quick_pack_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (quick_pack_id) REFERENCES quick_packs(quick_pack_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+
+/* Product Item Balance Table */
+-- Stores the current balance of products.
+CREATE TABLE IF NOT EXISTS product_item_balance (
+    product_balance_id CHAR(36) PRIMARY KEY,
+    product_id CHAR(36) NOT NULL,
+    balance INT NOT NULL DEFAULT 0,
+    location_id CHAR(36),
+    warehouse_id CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
 );

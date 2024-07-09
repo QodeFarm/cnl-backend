@@ -74,13 +74,14 @@ class VendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerialize
 class VendorsOptionsSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
+    vendor_addresses = serializers.SerializerMethodField()
     vendor_category_id = ModVendorCategorySerializer()
     ledger_account_id = ModLedgerAccountsSerializers()
     city = serializers.SerializerMethodField() 
 
     class Meta:
         model = Vendor
-        fields = ['vendor_id', 'gst_no', 'email', 'phone', 'vendor_category_id', 'ledger_account_id', 'city'] 
+        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category_id', 'ledger_account_id', 'created_at','vendor_addresses'] 
 
     def get_vendor_address_details(self, obj):
         addresses = VendorAddress.objects.filter(vendor_id=obj.vendor_id)
@@ -88,6 +89,8 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
         email = None
         phone = None  
         city = None   
+        billing_address = None
+        shipping_address = None
         
         for address in addresses:
             if email is None:
@@ -96,7 +99,22 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
                 phone = address.phone
             if city is None:
                 city = address.city_id
-        return email, phone, city
+            if address.address_type == 'Billing':
+                billing_address = address
+            elif address.address_type == 'Shipping':
+                shipping_address = address
+
+        vendor_addresses = {
+            "billing_address": None,
+            "shipping_address": None
+        }
+
+        if billing_address:
+            vendor_addresses["billing_address"] = f"{billing_address.address}, {billing_address.city_id.city_name}, {billing_address.state_id.state_name}, {billing_address.country_id.country_name}, {billing_address.pin_code}, Phone: {billing_address.phone}"
+        if shipping_address:
+            vendor_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone}"
+
+        return email, phone, city, vendor_addresses
 
     def get_email(self, obj):
          return self.get_vendor_address_details(obj)[0]
@@ -109,6 +127,9 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
         if city:
             return ModCitySerializer(city).data
         return None
+    
+    def get_vendor_addresses(self, obj):
+        return self.get_vendor_address_details(obj)[3]
     
     def get_vendors_summary(vendors):
         serializer = VendorsOptionsSerializer(vendors, many=True)

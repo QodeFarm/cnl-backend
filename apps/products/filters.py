@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter, NumberFilter
-import datetime
+import datetime,django_filters
 from django.utils import timezone
-from .models import ProductGstClassifications
+from .models import ProductGstClassifications, ProductItemBalance
 from config.utils_methods import filter_uuid
 
 class ProductGroupsFilter(FilterSet):
@@ -60,3 +60,15 @@ class ProductsFilter(FilterSet):
     #Date filters - custom methods
     created_at = filters.DateFromToRangeFilter()
 
+class ProductItemBalanceFilter(FilterSet):
+    product_balance_id = filters.CharFilter(method=filter_uuid)
+    product_id = filters.CharFilter(method=filter_uuid)
+    product_name = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
+    balance = django_filters.NumberFilter(field_name='balance', lookup_expr='exact')
+    location_id = filters.CharFilter(lookup_expr='icontains')
+    warehouse_id = filters.CharFilter(method=filter_uuid)
+    warehouse_name = filters.CharFilter(field_name='warehouse_id__name', lookup_expr='icontains')
+
+    class Meta:
+        model = ProductItemBalance
+        fields =[]
