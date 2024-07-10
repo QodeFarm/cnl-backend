@@ -32,7 +32,7 @@ class ModPurchaseorderItemsSerializer(serializers.ModelSerializer):
         fields = ['purchaseorder_item_id','print_name','quantity', 'amount']
 
 class PurchaseorderItemsSerializer(serializers.ModelSerializer):
-    purchaseorder = ModPurchaseOrdersSerializer(source='purchaseorder_id',read_only=True)
+    purchaseorder = ModPurchaseOrdersSerializer(source='purchase_order_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
     unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
     class Meta:
