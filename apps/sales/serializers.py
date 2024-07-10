@@ -128,4 +128,28 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
     def get_sale_order_summary(sale_order):
         serializer = SaleOrderOptionsSerializer(sale_order, many=True)
         return serializer.data
-  
+
+class ModQuickPackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickPacks
+        fields = ['quick_pack_id','name'] 
+
+class QuickPackSerializer(serializers.ModelSerializer):
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    
+    class Meta:
+        model = QuickPacks
+        fields = '__all__'
+
+class ModQuickPackItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickPackItems
+        fields = ['quick_pack_item_id'] 
+
+class QuickPackItemSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    quickpack = ModQuickPackSerializer(source='quick_pack_id', read_only=True)
+
+    class Meta:
+        model = QuickPackItems
+        fields = '__all__'
