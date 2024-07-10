@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
-from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer
+from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer
 from apps.products.serializers import ModProductGroupsSerializer, ModproductsSerializer
 from .models import *
 from django.conf import settings
@@ -45,6 +45,7 @@ class PaymentTransactionsSerializer(serializers.ModelSerializer):
 class SaleInvoiceItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
+    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
 
     class Meta:
         model = SaleInvoiceItems
@@ -61,6 +62,7 @@ class SalesPriceListSerializer(serializers.ModelSerializer):
 class SaleOrderItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
+    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
 
     class Meta:
         model = SaleOrderItems
@@ -96,6 +98,7 @@ class SaleReturnOrdersSerializer(serializers.ModelSerializer):
 class SaleReturnItemsSerializer(serializers.ModelSerializer):
     sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
+    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
     
     class Meta:
         model = SaleReturnItems
@@ -128,4 +131,28 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
     def get_sale_order_summary(sale_order):
         serializer = SaleOrderOptionsSerializer(sale_order, many=True)
         return serializer.data
-  
+
+class ModQuickPackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickPacks
+        fields = ['quick_pack_id','name'] 
+
+class QuickPackSerializer(serializers.ModelSerializer):
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    
+    class Meta:
+        model = QuickPacks
+        fields = '__all__'
+
+class ModQuickPackItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickPackItems
+        fields = ['quick_pack_item_id'] 
+
+class QuickPackItemSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    quickpack = ModQuickPackSerializer(source='quick_pack_id', read_only=True)
+
+    class Meta:
+        model = QuickPackItems
+        fields = '__all__'

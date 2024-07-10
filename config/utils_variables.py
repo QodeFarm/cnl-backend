@@ -48,6 +48,8 @@ salereturnorderstable = 'sale_return_orders'
 salereturnitemstable = 'sale_return_items'
 orderattachmentstable = 'order_attachments' 
 ordershipmentstable = 'order_shipments'
+quickpackitems = 'quick_pack_items'
+quickpacks = 'quick_packs'
 
 #inventory db_tables
 warehousestable ='warehouses'

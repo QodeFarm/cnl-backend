@@ -286,6 +286,11 @@ class ModTaskPrioritiesSerializer(serializers.ModelSerializer):
         model = TaskPriorities
         fields = ['priority_id','priority_name']
 
+class ModUnitOptionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnitOptions
+        fields = ['unit_options_id','unit_name']
+
 class TaskPrioritiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskPriorities
