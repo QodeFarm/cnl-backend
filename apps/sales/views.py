@@ -871,7 +871,7 @@ class SaleReturnOrdersViewSet(APIView):
             # Customizing the response data
             custom_data = {
                 "sale_return_order": sale_return_order_serializer.data,
-                "sale_order_items": items_data,
+                "sale_return_items": items_data,
                 "order_attachments": attachments_data,
                 "order_shipments": shipments_data
             }
