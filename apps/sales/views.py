@@ -692,7 +692,7 @@ class QuickPackCreateViewSet(APIView):
         logger.info('QuickPackItem - created*')
 
         custom_data = {
-            "quick_pack_data": quick_packs_data,
+            "quick_pack_data": new_quick_pack_data,
             "quick_pack_data_items": items_data,            
         }
 
