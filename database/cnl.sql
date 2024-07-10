@@ -1290,19 +1290,20 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     purchase_order_item_id CHAR(36) PRIMARY KEY,
     purchase_order_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    quantity DECIMAL(18, 2) NOT NULL,
-    unit_price DECIMAL(18, 2),
+    unit_option_id CHAR(36) NOT NULL,
+    print_name CHAR(255),
+    quantity DECIMAL(18, 2),
+    total_boxes INT,
     rate DECIMAL(18, 2),
     amount DECIMAL(18, 2),
-    discount_percentage DECIMAL(18, 2),
+    tax DECIMAL(18, 2),
+    remarks VARCHAR(255),
     discount DECIMAL(18, 2),
-    dis_amt DECIMAL(18, 2),
-    tax_code VARCHAR(255),
-    tax_rate DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(purchase_order_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Purchase Invoices Table */
@@ -1357,19 +1358,20 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
     purchase_invoice_item_id CHAR(36) PRIMARY KEY,
     purchase_invoice_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    quantity DECIMAL(18, 2) NOT NULL,
-    unit_price DECIMAL(18, 2),
+    unit_option_id CHAR(36) NOT NULL,
+    print_name CHAR(255),
+    quantity DECIMAL(18, 2),
+    total_boxes INT,
     rate DECIMAL(18, 2),
     amount DECIMAL(18, 2),
-    discount_percentage DECIMAL(18, 2),
+    tax DECIMAL(18, 2),
+    remarks VARCHAR(255),
     discount DECIMAL(18, 2),
-    dis_amt DECIMAL(18, 2),
-    tax_code VARCHAR(255),
-    tax_rate DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Purchase Returns Table */
@@ -1421,19 +1423,20 @@ CREATE TABLE IF NOT EXISTS purchase_return_items (
     purchase_return_item_id CHAR(36) PRIMARY KEY,
     purchase_return_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    quantity DECIMAL(18, 2) NOT NULL,
-    unit_price DECIMAL(18, 2),
+    unit_option_id CHAR(36) NOT NULL,
+    print_name CHAR(255),
+    quantity DECIMAL(18, 2),
+    total_boxes INT,
     rate DECIMAL(18, 2),
     amount DECIMAL(18, 2),
-    discount_percentage DECIMAL(18, 2),
+    tax DECIMAL(18, 2),
+    remarks VARCHAR(255),
     discount DECIMAL(18, 2),
-    dis_amt DECIMAL(18, 2),
-    tax_code VARCHAR(255),
-    tax_rate DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_return_id) REFERENCES purchase_return_orders(purchase_return_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Sales Price List Table */

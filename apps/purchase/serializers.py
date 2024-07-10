@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import *
 from .serializers import *
 from apps.vendor.serializers import ModVendorSerializer,ModVendorAgentSerializer,VendorAddressSerializer,ModVendorPaymentTermsSerializer
-from apps.masters.serializers import ModOrderStatusesSerializer, ModProductBrandsSerializer, PurchaseTypesSerializer, ModGstTypesSerializer
+from apps.masters.serializers import ModOrderStatusesSerializer, ModProductBrandsSerializer, ModUnitOptionsSerializer, PurchaseTypesSerializer, ModGstTypesSerializer
 from apps.customer.serializers import ModLedgerAccountsSerializers,ModCustomersSerializer
 from apps.products.serializers import ModproductsSerializer
 
@@ -29,12 +29,12 @@ class PurchaseOrdersSerializer(serializers.ModelSerializer):
 class ModPurchaseorderItemsSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseorderItems
-        fields = ['purchaseorder_item_id','tax_code']
+        fields = ['purchaseorder_item_id','print_name','quantity', 'amount']
 
 class PurchaseorderItemsSerializer(serializers.ModelSerializer):
     purchaseorder = ModPurchaseOrdersSerializer(source='purchaseorder_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
-
+    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
     class Meta:
         model = PurchaseorderItems
         fields = '__all__'
@@ -61,11 +61,12 @@ class PurchaseInvoiceOrdersSerializer(serializers.ModelSerializer):
 class ModPurchaseInvoiceItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseInvoiceItem
-        fields = ['purchase_invoice_item_id', 'quantity', 'amount']
+        fields = ['purchase_invoice_item_id','print_name','quantity', 'amount']
 
 class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
     purchase_invoice = ModPurchaseInvoiceOrdersSerializer(source='purchase_invoice_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
+    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
     class Meta:
         model = PurchaseInvoiceItem
         fields = '__all__'
@@ -91,9 +92,12 @@ class PurchaseReturnOrdersSerializer(serializers.ModelSerializer):
 class ModPurchaseReturnItemsSerializer(serializers.ModelSerializer):
     class Meta:
         model = PurchaseReturnItems
-        fields = ['purchase_return_item_id', 'quantity', 'amount']
+        fields = ['purchase_return_item_id', 'print_name','quantity', 'amount']
 
 class PurchaseReturnItemsSerializer(serializers.ModelSerializer):
+    purchase_return = ModPurchaseReturnOrdersSerializer(source='purchase_return_id',read_only=True)
+    product = ModproductsSerializer(source='product_id',read_only=True)
+    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
     class Meta:
         model = PurchaseReturnItems
         fields = '__all__'
