@@ -4,7 +4,7 @@ from .models import *
 from .serializers import *
 from config.utils_methods import *
 from config.utils_variables import *
-from django_filters.rest_framework import DjangoFilterBackend
+from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.filters import OrderingFilter
 from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter
 from rest_framework.response import Response
