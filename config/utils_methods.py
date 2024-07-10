@@ -345,7 +345,7 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
             new_instance = generic_data_creation(self,[data],related_class_name,update_fields=update_fields)
             if new_instance:
                 data_list.append(new_instance[0]) # append the new record to existing records
-                logger.info(f'New instances in {related_model_name.__name__} is created')
+                logger.info(f'New instance in {related_model_name.__name__} is created')
             else:
                 logger.warning("Error during update: new record creation failed in {related_model_name.__name__}")
                 return build_response(0,f"Error during update: new record creation failed in {related_model_name.__name__}",[],status.HTTP_400_BAD_REQUEST)
@@ -361,8 +361,7 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
                 logger.warning(f'Error deleting the record in {related_model_name.__name__} with id {id}')
   
     if (update_count == len(old_instances_list)) and update_count != 0:
-        logger.info(f'All old instances in {related_model_name.__name__} are updated')
-        logger.info(f'Old instances count ={len(old_instances_list)}')
+        logger.info(f'All old instances in {related_model_name.__name__} are updated (update count : {len(old_instances_list)})')
 
     return data_list
 
