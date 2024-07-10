@@ -531,44 +531,6 @@ class SaleOrderViewSet(APIView):
         ]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-# ====================================================================================================================
-class QuickPackCreateView(APIView):
-    def post(self, request):
-        # QuickPacks data
-        quickpack_serializer = QuickPackSerializer(data=request.data)
-        if quickpack_serializer.is_valid():
-            quickpack = quickpack_serializer.save()
-
-            # QuickPackItems data
-            quick_pack_id = quickpack.quick_pack_id
-            items_data = request.data.get('quick_pack_data_items', [])
-            created_items = []
-            # print("items_data", items_data)
-            if items_data:
-                for item_data in items_data:
-                    item_data['quick_pack_id'] = quick_pack_id
-                    quickpackitem_serializer = QuickPackItemSerializer(
-                        data=item_data)
-                    if quickpackitem_serializer.is_valid():
-                        quickpackitem = quickpackitem_serializer.save()
-                        created_items.append(quickpackitem)
-                    else:
-                        # Rollback if any item fails
-                        quickpack.delete()
-                        return build_response(0, "ValidationError", quickpackitem_serializer.errors, status.HTTP_400_BAD_REQUEST)
-
-            quickpackitem_data = QuickPackItemSerializer(
-                created_items, many=True).data
-            response_data = {
-                'quick_pack': QuickPackSerializer(quickpack).data,
-                'quick_pack_items': quickpackitem_data
-            }
-            return build_response(len(response_data), 'Success', response_data, status.HTTP_201_CREATED)
-        return build_response(0, "ValidationError", quickpack_serializer.errors, status.HTTP_400_BAD_REQUEST)
-
-# =================================================================================================================================================
-# =======++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++==============
-# =======================Quick_Packs=====================================================
 
 class QuickPackCreateViewSet(APIView):
     """
@@ -587,13 +549,6 @@ class QuickPackCreateViewSet(APIView):
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
-            if summary:
-                logger.info("Retrieving QuickPacks summary")
-                saleorders = QuickPacks.objects.all()
-                data = QuickPackSerializer.get_sale_order_summary(saleorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
- 
             logger.info("Retrieving all QuickPacks")
             queryset = QuickPacks.objects.all()
             serializer = QuickPackSerializer(queryset, many=True)
@@ -607,7 +562,7 @@ class QuickPackCreateViewSet(APIView):
 
     def retrieve(self, request, *args, **kwargs):
         """
-        Retrieves a sale order and its related data (items, attachments, and shipments).
+        Retrieves a QuickPacks and its related data (items).
         """
         try:
             pk = kwargs.get('pk')
@@ -616,34 +571,28 @@ class QuickPackCreateViewSet(APIView):
                 return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
 
             # Retrieve the SaleOrder instance
-            sale_order = get_object_or_404(SaleOrder, pk=pk)
-            sale_order_serializer = SaleOrderSerializer(sale_order)
+            quick_packs = get_object_or_404(QuickPacks, pk=pk)
+            quick_packs_serializer = QuickPackSerializer(quick_packs)
 
             # Retrieve related data
             items_data = self.get_related_data(
-                SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
-            attachments_data = self.get_related_data(
-                OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
-            shipments_data = self.get_related_data(
-                OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
-
+                QuickPackItems, QuickPackItemSerializer, 'quick_pack_id', pk)
+            
             # Customizing the response data
             custom_data = {
-                "sale_order": sale_order_serializer.data,
-                "sale_order_items": items_data,
-                "order_attachments": attachments_data,
-                "order_shipments": shipments_data
+                "quick_pack_data": quick_packs_serializer.data,
+                "quick_pack_data_items": items_data,                  
             }
-            logger.info("Sale order and related data retrieved successfully.")
+
+            logger.info("quick_packs and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
 
         except Http404:
-            logger.error("Sale order with pk %s does not exist.", pk)
+            logger.error("quick_packs with pk %s does not exist.", pk)
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.exception(
-                "An error occurred while retrieving sale order with pk %s: %s", pk, str(e))
+                "An error occurred while retrieving quick_packs with pk %s: %s", pk, str(e))
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_related_data(self, model, serializer_class, filter_field, filter_value):
@@ -664,28 +613,22 @@ class QuickPackCreateViewSet(APIView):
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale order and its related attachments and shipments.
+        Handles the deletion of a Quick Packs.
         """
         try:
-            # Get the SaleOrder instance
-            instance = SaleOrder.objects.get(pk=pk)
+            # Get the QuickPacks instance
+            instance = QuickPacks.objects.get(pk=pk)
 
-            # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            # Delete the main SaleOrder instance
+           # Delete the main QuickPacks instance
             instance.delete()
 
-            logger.info(f"SaleOrder with ID {pk} deleted successfully.")
+            logger.info(f"QuickPacks with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
-        except SaleOrder.DoesNotExist:
-            logger.warning(f"SaleOrder with ID {pk} does not exist.")
+        except QuickPacks.DoesNotExist:
+            logger.warning(f"QuickPacks with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
+            logger.error(f"Error deleting QuickPacks with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handling POST requests for creating
@@ -693,7 +636,6 @@ class QuickPackCreateViewSet(APIView):
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
 
-    @transaction.atomic
     def create(self, request, *args, **kwargs):
         # Extracting data from the request
         given_data = request.data
@@ -706,7 +648,7 @@ class QuickPackCreateViewSet(APIView):
         - nulls in required fields
         """
 
-        # Vlidated SaleOrder Data
+        # Vlidated quick_packs_data
         quick_packs_data = given_data.pop('quick_pack_data', None)  # parent_data
         if quick_packs_data:
             quick_packs_error = validate_payload_data(
@@ -720,8 +662,7 @@ class QuickPackCreateViewSet(APIView):
 
         # Ensure mandatory data is present
         if not quick_packs_data or not quick_pack_items_data:
-            logger.error(
-                "Quick Packs and Quick Pack Items items are mandatory but not provided.")
+            logger.error("Quick Packs and Quick Pack Items items are mandatory but not provided.")
             return build_response(0, "Quick Packs and Quick Pack items are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
@@ -751,115 +692,65 @@ class QuickPackCreateViewSet(APIView):
         logger.info('QuickPackItem - created*')
 
         custom_data = {
-            "quick_packs": quick_packs_data,
-            "quick_packs_items": items_data,
-            
+            "quick_pack_data": quick_packs_data,
+            "quick_pack_data_items": items_data,            
         }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
-    # def put(self, request, *args, **kwargs):
-    #     return self.update(request, *args, **kwargs)
-    
-    # @transaction.atomic
-    # def update(self, request, pk, *args, **kwargs):
+    def put(self, request, pk, *args, **kwargs):
 
-    #     # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
-    #     """
-    #     All the data in request will be validated here. it will handle the following errors:
-    #     - Invalid data types
-    #     - Invalid foreign keys
-    #     - nulls in required fields
-    #     """
-    #     # Get the given data from request
-    #     given_data = request.data
+        # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+         # Get the given data from request
+        given_data = request.data
+ 
+        # Vlidated Vendor Data
+        quick_pack_data = given_data.pop('quick_pack_data', None)
+        if quick_pack_data:
+            order_error = validate_payload_data(self, quick_pack_data , QuickPackSerializer)
 
-    #     # Vlidated SaleOrder Data
-    #     sale_order_data = given_data.pop('sale_order', None)  # parent_data
-    #     if sale_order_data:
-    #         sale_order_data['sale_order_id'] = pk
-    #         order_error = validate_multiple_data(
-    #             self, [sale_order_data], SaleOrderSerializer, ['order_no'])
-    #         # validate the 'order_type' in 'sale_order' data
-    #         validate_order_type(sale_order_data, order_error,OrderTypes, look_up='order_type')
+        # Vlidated QuickPackItems Data
+        quick_pack_data_items = given_data.pop('quick_pack_data_items', None)
+        if quick_pack_data_items:
+            exclude_fields = ['quick_pack_id']
+            item_error = validate_put_method_data(self, quick_pack_data_items, QuickPackItemSerializer,
+                                    exclude_fields, QuickPackItems, current_model_pk_field='quick_pack_item_id')
 
-    #     # Vlidated SaleOrderItems Data
-    #     sale_order_items_data = given_data.pop('sale_order_items', None)
-    #     if sale_order_items_data:
-    #         exclude_fields = ['sale_order_id']
-    #         item_error = validate_put_method_data(self, sale_order_items_data, SaleOrderItemsSerializer,
-    #                                               exclude_fields, SaleOrderItems, current_model_pk_field='sale_order_item_id')
+      # Ensure mandatory data is present
+        if not quick_pack_data or not quick_pack_data_items:
+            logger.error("quick_pack and sale quick_pack_items are mandatory but not provided.")
+            return build_response(0, "quick_pack and quick_pack_items are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
-    #     # Vlidated OrderAttchments Data
-    #     order_attachments_data = given_data.pop('order_attachments', None)
-    #     exclude_fields = ['order_id', 'order_type_id']
-    #     if order_attachments_data:
-    #         attachment_error = validate_put_method_data(
-    #             self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
-    #     else:
-    #         # Since 'order_attachments' is optional, so making an error is empty list
-    #         attachment_error = []
+        errors = {}
+        if order_error:
+            errors["quick_pack"] = order_error
+        if item_error:
+            errors["quick_pack_items"] = item_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
-    #     # Vlidated OrderShipments Data
-    #     order_shipments_data = given_data.pop('order_shipments', None)
-    #     if order_shipments_data:
-    #         shipments_error = validate_put_method_data(
-    #             self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
-    #     else:
-    #         # Since 'order_shipments' is optional, so making an error is empty list
-    #         shipments_error = []
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
 
-    #     # Ensure mandatory data is present
-    #     if not sale_order_data or not sale_order_items_data:
-    #         logger.error(
-    #             "Sale order and sale order items are mandatory but not provided.")
-    #         return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        # update QuickPacks
+        if quick_pack_data:
+            update_fields = []  # No need to update any fields
+            quickpack_data = update_multi_instances(self, pk, [quick_pack_data], QuickPacks, QuickPackSerializer,
+                                                    update_fields, main_model_related_field='quick_pack_id', current_model_pk_field='quick_pack_id')
 
-    #     errors = {}
-    #     if order_error:
-    #         errors["sale_order"] = order_error
-    #     if item_error:
-    #         errors["sale_order_items"] = item_error
-    #     if attachment_error:
-    #         errors['order_attachments'] = attachment_error
-    #     if shipments_error:
-    #         errors['order_shipments'] = shipments_error
-    #     if errors:
-    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+        # Update the 'QuickPackItems'
+        update_fields = {'quick_pack_id': pk}
+        items_data = update_multi_instances(self, pk, quick_pack_data_items, QuickPackItems, QuickPackItemSerializer,
+                                            update_fields, main_model_related_field='quick_pack_id', current_model_pk_field='quick_pack_item_id')
 
-    #     # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        custom_data = [
+            {"quick_pack_data": quickpack_data},
+            {"quick_pack_data_items": items_data if items_data else []}           
+        ]
 
-    #     # update SaleOrder
-    #     if sale_order_data:
-    #         update_fields = []  # No need to update any fields
-    #         saleorder_data = update_multi_instances(self, pk, [sale_order_data], SaleOrder, SaleOrderSerializer,
-    #                                                 update_fields, main_model_related_field='sale_order_id', current_model_pk_field='sale_order_id')
-
-    #     # Update the 'sale_order_items'
-    #     update_fields = {'sale_order_id': pk}
-    #     items_data = update_multi_instances(self, pk, sale_order_items_data, SaleOrderItems, SaleOrderItemsSerializer,
-    #                                         update_fields, main_model_related_field='sale_order_id', current_model_pk_field='sale_order_item_id')
-
-    #     # Get 'order_type_id' from 'OrderTypes' model
-    #     order_type_val = sale_order_data.get('order_type')
-    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
-    #     type_id = order_type.order_type_id
-
-    #     # Update the 'order_attchments'
-    #     update_fields = {'order_id': pk, 'order_type_id': type_id}
-    #     attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer,
-    #                                              update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
-
-    #     # Update the 'shipments'
-    #     shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
-    #                                            update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
-
-    #     custom_data = {
-    #         "sale_order": saleorder_data[0] if saleorder_data else {},
-    #         "sale_order_items": items_data if items_data else [],
-    #         "order_attachments": attachment_data if attachment_data else [],
-    #         "order_shipments": shipment_data[0] if shipment_data else {}
-    #     }
-
-    #     return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-    
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
