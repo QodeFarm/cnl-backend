@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.asset.models import AssetStatuses, AssetCategories, Locations, Assets, AssetMaintenance
+from apps.assets.models import AssetStatuses, AssetCategories, Locations, Assets, AssetMaintenance
 
 
 #Create your serializers here.

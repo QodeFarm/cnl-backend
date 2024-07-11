@@ -69,7 +69,7 @@ taskcommentstable ='task_comments'
 taskattachmentstable ='task_attachments'
 taskhistorytable='task_history'
 
-#asset db_tables
+#assets db_tables
 assetstatusestable = 'asset_statuses'
 assetcategoriestable = 'asset_categories'
 locationstable ='locations'

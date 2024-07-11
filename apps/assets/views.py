@@ -1,8 +1,8 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from config.utils_methods import list_all_objects,create_instance,update_instance
-from apps.asset.serializers import AssetStatusesSerializers, AssetCategoriesSerializers, LocationsSerializers, AssetsSerializer, AssetMaintenanceSerializer
-from apps.asset.models import AssetStatuses, AssetCategories, Locations, Assets, AssetMaintenance
+from apps.assets.serializers import AssetStatusesSerializers, AssetCategoriesSerializers, LocationsSerializers, AssetsSerializer, AssetMaintenanceSerializer
+from apps.assets.models import AssetStatuses, AssetCategories, Locations, Assets, AssetMaintenance
 
 
 # Create your views here.
