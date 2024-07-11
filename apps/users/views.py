@@ -253,3 +253,60 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
                 'data':[e.detail],
             }
             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
+
+# =====================++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++=======================++++++++++++
+import requests
+import speech_recognition as sr
+
+r = sr.Recognizer()
+
+class SpeechToTextAPIView(APIView):
+    def post(self, request, *args, **kwargs):
+        try:
+            with sr.Microphone() as source2:
+                print("Plz ask something.....")
+                r.adjust_for_ambient_noise(source2, duration=0.2)
+                audio2 = r.listen(source2)
+                MyText = r.recognize_google(audio2)
+                MyText = MyText.lower()
+                text = " "
+                payload = {}
+                if 'create new role for product manager' in MyText:
+                    # MyText.split('create a new role')[-1].strip()
+                    text = 'product manager'
+                    payload = {
+                        "role_name": "product manager",
+                        "description": "product manager desc"
+                    }
+                elif 'create new role for vendor manager' in MyText:
+                    text = 'vendor manager'
+                    payload = {
+                        "role_name": "vendor manager",
+                        "description": "vendor manager desc"
+                    }
+                elif 'create new role for master' in MyText:
+                    text = 'admin'
+                    payload = {
+                        "role_name": "master",
+                        "description": "master desc"
+                    }
+                else:
+                    text = "Not Recognize"
+
+                if payload:
+                    try:
+                        url = "http://127.0.0.1:8000/api/v1/users/role/"
+                        headers = {'Content-Type': 'application/json'}
+
+                        api_response = requests.post(url, data=json.dumps(payload),headers=headers)
+                        api_response.raise_for_status()
+                    except requests.exceptions.RequestException as e:
+                        return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+                return Response({"text": text,'payload' : payload, 'MyText' : MyText}, status=status.HTTP_200_OK)
+
+        except sr.RequestError as e:
+            return Response({"error": "Could not request results; {0}".format(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except sr.UnknownValueError:
+            return Response({"error": "Unknown error occurred"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

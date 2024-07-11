@@ -2,7 +2,7 @@ from django.urls import path
 from django.contrib.auth import get_user_model
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt import views as jwtview
-from apps.users.views import CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, GetUserDataViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet
+from apps.users.views import CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, GetUserDataViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet,SpeechToTextAPIView
 
 router = DefaultRouter()
 
@@ -27,6 +27,8 @@ urlpatterns = [
     path('reset_password/<uid>/<token>/', UserPasswordResetView.as_view(), name='reset_password' ),
     path('reset_password_email/', SendPasswordResetEmailView.as_view(), name='reset_password_email'),
     path('activation/<uid>/<token>/', CustomUserActivationViewSet.as_view({'post': 'activation'}), name='activation'),
+    path('stt/', SpeechToTextAPIView.as_view(), name='speech_to_text')
+
 ]
 urlpatterns  += router.urls
 
