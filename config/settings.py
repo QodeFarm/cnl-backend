@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'apps.tasks',
     'apps.leads',
     'apps.hrms',
+    'apps.assets',
 ]
 
 MIDDLEWARE = [
