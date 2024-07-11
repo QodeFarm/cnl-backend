@@ -1576,6 +1576,41 @@ CREATE TABLE IF NOT EXISTS product_item_balance (
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
 );
 
+/* ======== HRMS Management ======== */
+
+/* designations Table */
+-- Lookup table for employee designations.
+CREATE TABLE IF NOT EXISTS designations (
+   designation_id CHAR(36) PRIMARY KEY,
+   designation_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* departments Table */
+-- Lookup table for employee departments.
+CREATE TABLE IF NOT EXISTS departments (
+   department_id CHAR(36) PRIMARY KEY,
+   department_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* employees Table */
+-- Stores information about employees.
+CREATE TABLE IF NOT EXISTS employees (
+   employee_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   email VARCHAR(255) NOT NULL,
+   phone VARCHAR(20),
+   designation_id CHAR(36) NOT NULL,
+   department_id CHAR(36) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
+   FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
+
 /* ======== LEAD Management ======== */
 
 /* lead_statuses Table */
@@ -1623,37 +1658,62 @@ CREATE TABLE IF NOT EXISTS lead_assignments (
    FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
 );
 
-/* ======== HRMS Management ======== */
+/* ======== Asset Management ======== */
 
-/* designations Table */
--- Lookup table for employee designations.
-CREATE TABLE IF NOT EXISTS designations (
-   designation_id CHAR(36) PRIMARY KEY,
-   designation_name VARCHAR(50) NOT NULL,
+/* asset_statuses Table */
+-- Lookup table for asset statuses.
+CREATE TABLE IF NOT EXISTS asset_statuses (
+   asset_status_id CHAR(36) PRIMARY KEY,
+   status_name VARCHAR(50) NOT NULL,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* departments Table */
--- Lookup table for employee departments.
-CREATE TABLE IF NOT EXISTS departments (
-   department_id CHAR(36) PRIMARY KEY,
-   department_name VARCHAR(50) NOT NULL,
+/* asset_categories Table */
+-- Lookup table for asset categories.
+CREATE TABLE IF NOT EXISTS asset_categories (
+   asset_category_id CHAR(36) PRIMARY KEY,
+   category_name VARCHAR(50) NOT NULL,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* employees Table */
--- Stores information about employees.
-CREATE TABLE IF NOT EXISTS employees (
-   employee_id CHAR(36) PRIMARY KEY,
-   name VARCHAR(255) NOT NULL,
-   email VARCHAR(255) NOT NULL,
-   phone VARCHAR(20),
-   designation_id CHAR(36) NOT NULL,
-   department_id CHAR(36) NOT NULL,
+/* locations Table */
+-- Lookup table for locations where assets are stored.
+CREATE TABLE IF NOT EXISTS locations (
+   location_id CHAR(36) PRIMARY KEY,
+   location_name VARCHAR(50) NOT NULL,
+   address VARCHAR(1024),
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* assets Table */
+-- Stores information about assets.
+CREATE TABLE IF NOT EXISTS assets (
+   asset_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(100) NOT NULL,
+   asset_category_id CHAR(36) NOT NULL,
+   asset_status_id CHAR(36) NOT NULL,
+   location_id CHAR(36) NOT NULL,
+   purchase_date DATE,
+   price DECIMAL(10, 2),
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
-   FOREIGN KEY (department_id) REFERENCES departments(department_id)
+   FOREIGN KEY (asset_category_id) REFERENCES asset_categories(asset_category_id),
+   FOREIGN KEY (asset_status_id) REFERENCES asset_statuses(asset_status_id),
+   FOREIGN KEY (location_id) REFERENCES locations(location_id)
+);
+
+/* asset_maintenance Table */
+-- Stores information about asset maintenance activities.
+CREATE TABLE IF NOT EXISTS asset_maintenance (
+   asset_maintenance_id CHAR(36) PRIMARY KEY,
+   asset_id CHAR(36) NOT NULL,
+   maintenance_date DATE,
+   maintenance_description VARCHAR(1024),
+   cost DECIMAL(10, 2),
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (asset_id) REFERENCES assets(asset_id)
 );
