@@ -1622,3 +1622,38 @@ CREATE TABLE IF NOT EXISTS lead_assignments (
    FOREIGN KEY (lead_id) REFERENCES leads(lead_id),
    FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
 );
+
+/* ======== HRMS Management ======== */
+
+/* designations Table */
+-- Lookup table for employee designations.
+CREATE TABLE IF NOT EXISTS designations (
+   designation_id CHAR(36) PRIMARY KEY,
+   designation_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* departments Table */
+-- Lookup table for employee departments.
+CREATE TABLE IF NOT EXISTS departments (
+   department_id CHAR(36) PRIMARY KEY,
+   department_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* employees Table */
+-- Stores information about employees.
+CREATE TABLE IF NOT EXISTS employees (
+   employee_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   email VARCHAR(255) NOT NULL,
+   phone VARCHAR(20),
+   designation_id CHAR(36) NOT NULL,
+   department_id CHAR(36) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
+   FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
