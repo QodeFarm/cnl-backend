@@ -35,10 +35,6 @@ router.register(r'order_types', OrderTypesView)
 
 router.register(r'task_priorities', TaskPrioritiesViewSet)
 
-router.register(r'asset_statuses', AssetStatusesViewSet)
-router.register(r'asset_categories', AssetCategoriesViewSet)
-router.register(r'locations', LocationsViewSet)
-
 urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),

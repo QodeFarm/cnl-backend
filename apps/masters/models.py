@@ -424,41 +424,4 @@ class TaskPriorities(models.Model):
     
     class Meta:
         db_table = taskprioritiestable
-
-class AssetStatuses(models.Model):
-    asset_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    status_name = models.CharField(max_length=50)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = assetstatusestable
-
-    def __str__(self):
-        return f"{self.asset_status_id} {self.status_name}"
-		
-		
-class AssetCategories(models.Model):
-    asset_category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    category_name = models.CharField(max_length=50)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = assetcategoriestable
-
-    def __str__(self):
-        return f"{self.asset_category_id} {self.category_name}"		
-		
-class Locations(models.Model):
-    location_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    location_name = models.CharField(max_length=50)
-    address = models.CharField(max_length=1024, null=True, default=None)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = locationstable
-
-    def __str__(self):
-        return f"{self.location_id} {self.location_name}"
+        
