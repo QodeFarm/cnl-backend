@@ -124,7 +124,7 @@ def create_instance(self, request, *args, **kwargs):
     else:
         errors_str = json.dumps(serializer.errors, indent=2)
         logger.error("Serializer validation error: %s", errors_str)
-        return build_response(0, "Form validation failed", [], status.HTTP_400_BAD_REQUEST)
+        return build_response(0, "Form validation failed", [], errors = serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
 def update_instance(self, request, *args, **kwargs):
     partial = kwargs.pop('partial', False)

@@ -45,7 +45,7 @@ class PaymentTransactionsSerializer(serializers.ModelSerializer):
 class SaleInvoiceItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
-    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
 
     class Meta:
         model = SaleInvoiceItems
@@ -62,7 +62,7 @@ class SalesPriceListSerializer(serializers.ModelSerializer):
 class SaleOrderItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
-    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
 
     class Meta:
         model = SaleOrderItems
@@ -98,7 +98,7 @@ class SaleReturnOrdersSerializer(serializers.ModelSerializer):
 class SaleReturnItemsSerializer(serializers.ModelSerializer):
     sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
-    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     
     class Meta:
         model = SaleReturnItems
