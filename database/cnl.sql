@@ -1014,7 +1014,7 @@ CREATE TABLE IF NOT EXISTS sale_order_items (
     sale_order_item_id CHAR(36) PRIMARY KEY,
     sale_order_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-	unit_option_id CHAR(36) NOT NULL,
+	unit_options_id CHAR(36) NOT NULL,
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
 	total_boxes INT,
@@ -1027,7 +1027,7 @@ CREATE TABLE IF NOT EXISTS sale_order_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-	FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
+	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Invoices Table */
@@ -1083,7 +1083,7 @@ CREATE TABLE IF NOT EXISTS sale_invoice_items (
     sale_invoice_item_id CHAR(36) PRIMARY KEY,
     sale_invoice_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-	unit_option_id CHAR(36) NOT NULL,
+	unit_options_id CHAR(36) NOT NULL,
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
 	total_boxes INT,
@@ -1096,7 +1096,7 @@ CREATE TABLE IF NOT EXISTS sale_invoice_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-	FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
+	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Sale Retuns Table */
@@ -1152,7 +1152,7 @@ CREATE TABLE IF NOT EXISTS sale_return_items (
     sale_return_item_id CHAR(36) PRIMARY KEY,
     sale_return_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-	unit_option_id CHAR(36) NOT NULL,
+	unit_options_id CHAR(36) NOT NULL,
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
 	total_boxes INT,
@@ -1165,7 +1165,7 @@ CREATE TABLE IF NOT EXISTS sale_return_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-	FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
+	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Payment Transactions Table */
@@ -1293,7 +1293,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     purchase_order_item_id CHAR(36) PRIMARY KEY,
     purchase_order_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    unit_option_id CHAR(36) NOT NULL,
+    unit_options_id CHAR(36) NOT NULL,
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
     total_boxes INT,
@@ -1306,7 +1306,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(purchase_order_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
+    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Purchase Invoices Table */
@@ -1361,7 +1361,7 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
     purchase_invoice_item_id CHAR(36) PRIMARY KEY,
     purchase_invoice_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    unit_option_id CHAR(36) NOT NULL,
+    unit_options_id CHAR(36) NOT NULL,
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
     total_boxes INT,
@@ -1374,7 +1374,7 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
+    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Purchase Returns Table */
@@ -1426,7 +1426,7 @@ CREATE TABLE IF NOT EXISTS purchase_return_items (
     purchase_return_item_id CHAR(36) PRIMARY KEY,
     purchase_return_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    unit_option_id CHAR(36) NOT NULL,
+    unit_options_id CHAR(36) NOT NULL,
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
     total_boxes INT,
@@ -1439,7 +1439,7 @@ CREATE TABLE IF NOT EXISTS purchase_return_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_return_id) REFERENCES purchase_return_orders(purchase_return_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
+    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Sales Price List Table */
