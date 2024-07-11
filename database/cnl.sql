@@ -1293,19 +1293,20 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     purchase_order_item_id CHAR(36) PRIMARY KEY,
     purchase_order_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    quantity DECIMAL(18, 2) NOT NULL,
-    unit_price DECIMAL(18, 2),
+    unit_option_id CHAR(36) NOT NULL,
+    print_name CHAR(255),
+    quantity DECIMAL(18, 2),
+    total_boxes INT,
     rate DECIMAL(18, 2),
     amount DECIMAL(18, 2),
-    discount_percentage DECIMAL(18, 2),
+    tax DECIMAL(18, 2),
+    remarks VARCHAR(1024),
     discount DECIMAL(18, 2),
-    dis_amt DECIMAL(18, 2),
-    tax_code VARCHAR(255),
-    tax_rate DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(purchase_order_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Purchase Invoices Table */
@@ -1360,19 +1361,20 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
     purchase_invoice_item_id CHAR(36) PRIMARY KEY,
     purchase_invoice_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    quantity DECIMAL(18, 2) NOT NULL,
-    unit_price DECIMAL(18, 2),
+    unit_option_id CHAR(36) NOT NULL,
+    print_name CHAR(255),
+    quantity DECIMAL(18, 2),
+    total_boxes INT,
     rate DECIMAL(18, 2),
     amount DECIMAL(18, 2),
-    discount_percentage DECIMAL(18, 2),
+    tax DECIMAL(18, 2),
+    remarks VARCHAR(1024),
     discount DECIMAL(18, 2),
-    dis_amt DECIMAL(18, 2),
-    tax_code VARCHAR(255),
-    tax_rate DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Purchase Returns Table */
@@ -1424,19 +1426,20 @@ CREATE TABLE IF NOT EXISTS purchase_return_items (
     purchase_return_item_id CHAR(36) PRIMARY KEY,
     purchase_return_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
-    quantity DECIMAL(18, 2) NOT NULL,
-    unit_price DECIMAL(18, 2),
+    unit_option_id CHAR(36) NOT NULL,
+    print_name CHAR(255),
+    quantity DECIMAL(18, 2),
+    total_boxes INT,
     rate DECIMAL(18, 2),
     amount DECIMAL(18, 2),
-    discount_percentage DECIMAL(18, 2),
+    tax DECIMAL(18, 2),
+    remarks VARCHAR(1024),
     discount DECIMAL(18, 2),
-    dis_amt DECIMAL(18, 2),
-    tax_code VARCHAR(255),
-    tax_rate DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_return_id) REFERENCES purchase_return_orders(purchase_return_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (unit_option_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* Sales Price List Table */
@@ -1571,4 +1574,146 @@ CREATE TABLE IF NOT EXISTS product_item_balance (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(product_id),
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
+);
+
+/* ======== HRMS Management ======== */
+
+/* designations Table */
+-- Lookup table for employee designations.
+CREATE TABLE IF NOT EXISTS designations (
+   designation_id CHAR(36) PRIMARY KEY,
+   designation_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* departments Table */
+-- Lookup table for employee departments.
+CREATE TABLE IF NOT EXISTS departments (
+   department_id CHAR(36) PRIMARY KEY,
+   department_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* employees Table */
+-- Stores information about employees.
+CREATE TABLE IF NOT EXISTS employees (
+   employee_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   email VARCHAR(255) NOT NULL,
+   phone VARCHAR(20),
+   designation_id CHAR(36) NOT NULL,
+   department_id CHAR(36) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
+   FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
+
+/* ======== LEAD Management ======== */
+
+/* lead_statuses Table */
+-- Lookup table for lead statuses.
+CREATE TABLE IF NOT EXISTS lead_statuses (
+   lead_status_id CHAR(36) PRIMARY KEY,
+   status_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* interaction_types Table */
+-- Lookup table for types of interactions with leads.
+CREATE TABLE IF NOT EXISTS interaction_types (
+   interaction_type_id CHAR(36) PRIMARY KEY,
+   interaction_type VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* leads Table */
+-- Stores information about potential customers.
+CREATE TABLE IF NOT EXISTS leads (
+   lead_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   email VARCHAR(255) NOT NULL,
+   phone VARCHAR(20),
+   lead_status_id CHAR(36) NOT NULL,
+   score INT DEFAULT 0,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (lead_status_id) REFERENCES lead_statuses(lead_status_id)
+);
+
+/* lead_assignments Table */
+-- Stores information about which leads are assigned to which sales representatives.
+CREATE TABLE IF NOT EXISTS lead_assignments (
+   assignment_id CHAR(36) PRIMARY KEY,
+   lead_id CHAR(36) NOT NULL,
+   sales_rep_id CHAR(36) NOT NULL,
+   assignment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (lead_id) REFERENCES leads(lead_id),
+   FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
+);
+
+/* ======== Asset Management ======== */
+
+/* asset_statuses Table */
+-- Lookup table for asset statuses.
+CREATE TABLE IF NOT EXISTS asset_statuses (
+   asset_status_id CHAR(36) PRIMARY KEY,
+   status_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* asset_categories Table */
+-- Lookup table for asset categories.
+CREATE TABLE IF NOT EXISTS asset_categories (
+   asset_category_id CHAR(36) PRIMARY KEY,
+   category_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* locations Table */
+-- Lookup table for locations where assets are stored.
+CREATE TABLE IF NOT EXISTS locations (
+   location_id CHAR(36) PRIMARY KEY,
+   location_name VARCHAR(50) NOT NULL,
+   address VARCHAR(1024),
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* assets Table */
+-- Stores information about assets.
+CREATE TABLE IF NOT EXISTS assets (
+   asset_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(100) NOT NULL,
+   asset_category_id CHAR(36) NOT NULL,
+   asset_status_id CHAR(36) NOT NULL,
+   location_id CHAR(36) NOT NULL,
+   purchase_date DATE,
+   price DECIMAL(10, 2),
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (asset_category_id) REFERENCES asset_categories(asset_category_id),
+   FOREIGN KEY (asset_status_id) REFERENCES asset_statuses(asset_status_id),
+   FOREIGN KEY (location_id) REFERENCES locations(location_id)
+);
+
+/* asset_maintenance Table */
+-- Stores information about asset maintenance activities.
+CREATE TABLE IF NOT EXISTS asset_maintenance (
+   asset_maintenance_id CHAR(36) PRIMARY KEY,
+   asset_id CHAR(36) NOT NULL,
+   maintenance_date DATE,
+   maintenance_description VARCHAR(1024),
+   cost DECIMAL(10, 2),
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (asset_id) REFERENCES assets(asset_id)
 );
