@@ -1575,3 +1575,50 @@ CREATE TABLE IF NOT EXISTS product_item_balance (
     FOREIGN KEY (product_id) REFERENCES products(product_id),
     FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
 );
+
+/* ======== LEAD Management ======== */
+
+/* lead_statuses Table */
+-- Lookup table for lead statuses.
+CREATE TABLE IF NOT EXISTS lead_statuses (
+   lead_status_id CHAR(36) PRIMARY KEY,
+   status_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* interaction_types Table */
+-- Lookup table for types of interactions with leads.
+CREATE TABLE IF NOT EXISTS interaction_types (
+   interaction_type_id CHAR(36) PRIMARY KEY,
+   interaction_type VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* leads Table */
+-- Stores information about potential customers.
+CREATE TABLE IF NOT EXISTS leads (
+   lead_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   email VARCHAR(255) NOT NULL,
+   phone VARCHAR(20),
+   lead_status_id CHAR(36) NOT NULL,
+   score INT DEFAULT 0,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (lead_status_id) REFERENCES lead_statuses(lead_status_id)
+);
+
+/* lead_assignments Table */
+-- Stores information about which leads are assigned to which sales representatives.
+CREATE TABLE IF NOT EXISTS lead_assignments (
+   assignment_id CHAR(36) PRIMARY KEY,
+   lead_id CHAR(36) NOT NULL,
+   sales_rep_id CHAR(36) NOT NULL,
+   assignment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (lead_id) REFERENCES leads(lead_id),
+   FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
+);
