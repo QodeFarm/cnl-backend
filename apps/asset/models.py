@@ -1,9 +1,9 @@
 from django.db import models
 import uuid
-from config.utils_variables import *
+from config.utils_variables import assetstable, assetmaintenancetable
 from apps.masters.models import AssetCategories,AssetStatuses,Locations
 
-
+# Create your models here.
 class Assets(models.Model):
     asset_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
