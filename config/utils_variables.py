@@ -69,6 +69,10 @@ taskcommentstable ='task_comments'
 taskattachmentstable ='task_attachments'
 taskhistorytable='task_history'
 
+#asset db_tables
+assetstable = 'assets'
+assetmaintenancetable ='asset_maintenance'
+
 #Master db_tables
 countrytable = 'country'
 statetable = 'state'
@@ -98,6 +102,9 @@ paymentlinktable = 'payment_link_types'
 orderstatusestable = 'order_statuses'
 ordertypestable = 'order_types'
 taskprioritiestable ='task_priorities'
+assetstatusestable = 'asset_statuses'
+assetcategoriestable = 'asset_categories'
+locationstable ='locations'
 
 #Authentication db_tables
 userstable = 'users'

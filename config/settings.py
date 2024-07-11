@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     'apps.per_val',
     'apps.alignbook',
     'apps.tasks',
+    'apps.asset',
 ]
 
 MIDDLEWARE = [

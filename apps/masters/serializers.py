@@ -295,3 +295,33 @@ class TaskPrioritiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskPriorities
         fields = '__all__'
+
+class ModAssetStatusesSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = AssetStatuses
+        fields = ['asset_status_id','status_name']
+
+class AssetStatusesSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = AssetStatuses
+        fields = '__all__'
+
+class ModAssetCategoriesSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = AssetCategories
+        fields = ['asset_category_id','category_name']
+
+class AssetCategoriesSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = AssetCategories
+        fields = '__all__'
+		
+class ModLocationsSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = Locations
+        fields = ['location_id','location_name','address']
+
+class LocationsSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = Locations
+        fields = '__all__'

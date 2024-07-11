@@ -526,3 +526,42 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+class AssetStatusesViewSet(viewsets.ModelViewSet):
+    queryset = AssetStatuses.objects.all()
+    serializer_class = AssetStatusesSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+		
+class AssetCategoriesViewSet(viewsets.ModelViewSet):
+    queryset = AssetCategories.objects.all()
+    serializer_class = AssetCategoriesSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+		
+class LocationsViewSet(viewsets.ModelViewSet):
+    queryset = Locations.objects.all()
+    serializer_class = LocationsSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
