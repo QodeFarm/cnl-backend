@@ -34,7 +34,7 @@ class ModPurchaseorderItemsSerializer(serializers.ModelSerializer):
 class PurchaseorderItemsSerializer(serializers.ModelSerializer):
     purchaseorder = ModPurchaseOrdersSerializer(source='purchase_order_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
-    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     class Meta:
         model = PurchaseorderItems
         fields = '__all__'
@@ -66,7 +66,7 @@ class ModPurchaseInvoiceItemSerializer(serializers.ModelSerializer):
 class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
     purchase_invoice = ModPurchaseInvoiceOrdersSerializer(source='purchase_invoice_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
-    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     class Meta:
         model = PurchaseInvoiceItem
         fields = '__all__'
@@ -97,7 +97,7 @@ class ModPurchaseReturnItemsSerializer(serializers.ModelSerializer):
 class PurchaseReturnItemsSerializer(serializers.ModelSerializer):
     purchase_return = ModPurchaseReturnOrdersSerializer(source='purchase_return_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
-    unit_option = ModUnitOptionsSerializer(source='unit_option_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     class Meta:
         model = PurchaseReturnItems
         fields = '__all__'
