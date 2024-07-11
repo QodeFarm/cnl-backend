@@ -7,6 +7,8 @@ from django.urls import reverse
 def api_links(request):
     #Here we need to define the list of API endpoints and their names
     api_endpoints = [
+        ('api/v1/hrms/', 'HRMS API'),
+        ('api/v1/leads/', 'Leads API'),
         ('api/v1/users/', 'Users API'),
         ('api/v1/masters/', 'Masters API'),
         ('api/v1/company/', 'Company API'),

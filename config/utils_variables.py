@@ -111,3 +111,14 @@ usertimerestrictions = 'user_time_restrictions'
 userallowedweekdays = 'user_allowed_weekdays'
 userpermissions = 'user_permissions'
 userroles = 'user_roles'
+
+# LEAD Management
+leadstatuses = 'lead_statuses'
+interactiontypes = 'interaction_types'
+leads = 'leads'
+leadassignments = 'lead_assignments'
+
+# HRMS
+designations = 'designations'
+departments = 'departments'
+employees = 'employees'
