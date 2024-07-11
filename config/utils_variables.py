@@ -69,6 +69,13 @@ taskcommentstable ='task_comments'
 taskattachmentstable ='task_attachments'
 taskhistorytable='task_history'
 
+#assets db_tables
+assetstatusestable = 'asset_statuses'
+assetcategoriestable = 'asset_categories'
+locationstable ='locations'
+assetstable = 'assets'
+assetmaintenancetable ='asset_maintenance'
+
 #Master db_tables
 countrytable = 'country'
 statetable = 'state'
