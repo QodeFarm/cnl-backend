@@ -295,3 +295,26 @@ class TaskPrioritiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskPriorities
         fields = '__all__'
+
+
+# ------ H R M S -------#
+class DesignationsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Designations
+        fields = '__all__'
+
+class DepartmentsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Departments
+        fields = '__all__'
+
+# ------ L E A D S -------#
+class LeadStatusesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeadStatuses
+        fields = '__all__'
+
+class InteractionTypesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InteractionTypes
+        fields = '__all__'
