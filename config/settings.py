@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'djoser',
+    'phonenumber_field',
+    
     # 'django_safe_settings',
     'drf_yasg',
     'django_filters',
@@ -75,6 +77,8 @@ INSTALLED_APPS = [
     'apps.per_val',
     'apps.alignbook',
     'apps.tasks',
+    'apps.leads',
+    'apps.hrms',
     'apps.assets',
 ]
 
