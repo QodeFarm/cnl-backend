@@ -35,13 +35,6 @@ router.register(r'order_types', OrderTypesView)
 
 router.register(r'task_priorities', TaskPrioritiesViewSet)
 
-#HRMS
-router.register(r'designations', DesignationsView)
-router.register(r'departments', DepartmentsView)
-#LEADS
-router.register(r'lead_statuses', LeadStatusesView)
-router.register(r'interaction_types', InteractionTypesView)
-
 urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),
