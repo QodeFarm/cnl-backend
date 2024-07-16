@@ -124,6 +124,8 @@ leadstatuses = 'lead_statuses'
 interactiontypes = 'interaction_types'
 leads = 'leads'
 leadassignments = 'lead_assignments'
+leadinteractions = 'lead_interactions'
+leadassignmenthistory = 'lead_assignment_history'
 
 # HRMS
 designations = 'designations'

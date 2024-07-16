@@ -59,3 +59,33 @@ class LeadAssignments(models.Model):
 
 	class Meta:
 		db_table = leadassignments
+
+class LeadInteractions(models.Model):
+	interaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, db_column='lead_id')
+	interaction_type_id = models.ForeignKey(InteractionTypes, on_delete=models.CASCADE, db_column='interaction_type_id')
+	interaction_date = models.DateTimeField(null=False, default=datetime.today)
+	notes = models.TextField(null=True, default=None)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	def __str__(self):
+		return f"{self.interaction_id}"
+
+	class Meta:
+		db_table = leadinteractions
+
+class LeadAssignmentHistory(models.Model):
+	history_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, db_column='lead_id')
+	sales_rep_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='sales_rep_id')
+	assignment_date = models.DateTimeField(null=False, default=datetime.today)
+	end_date = models.DateTimeField(null=True, default=None)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	def __str__(self):
+		return f"{self.history_id}"
+
+	class Meta:
+		db_table = leadassignmenthistory
