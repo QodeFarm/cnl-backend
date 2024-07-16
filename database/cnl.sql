@@ -1661,9 +1661,9 @@ CREATE TABLE IF NOT EXISTS lead_assignments (
 /* lead_interactions Table */
 -- Stores interactions with leads.
 CREATE TABLE IF NOT EXISTS lead_interactions (
-   interaction_id INT AUTO_INCREMENT PRIMARY KEY,
-   lead_id INT NOT NULL,
-   interaction_type_id INT NOT NULL,
+   interaction_id CHAR(36) PRIMARY KEY,
+   lead_id CHAR(36) NOT NULL,
+   interaction_type_id CHAR(36) NOT NULL,
    interaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    notes TEXT,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1675,11 +1675,13 @@ CREATE TABLE IF NOT EXISTS lead_interactions (
 /* lead_assignment_history Table */
 -- Stores history of lead assignments to sales representatives.
 CREATE TABLE IF NOT EXISTS lead_assignment_history (
-   history_id INT AUTO_INCREMENT PRIMARY KEY,
-   lead_id INT NOT NULL,
-   sales_rep_id INT NOT NULL,
+   history_id CHAR(36) PRIMARY KEY,
+   lead_id CHAR(36) NOT NULL,
+   sales_rep_id CHAR(36) NOT NULL,
    assignment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    end_date TIMESTAMP NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    FOREIGN KEY (lead_id) REFERENCES leads(lead_id),
    FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
 );

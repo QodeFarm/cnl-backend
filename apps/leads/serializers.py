@@ -20,3 +20,13 @@ class LeadAssignmentsSerializer(serializers.ModelSerializer):
     class Meta:
         model = LeadAssignments
         fields = '__all__'
+
+class LeadInteractionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeadInteractions
+        fields = '__all__'
+
+class LeadAssignmentHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeadAssignmentHistory
+        fields = '__all__'
