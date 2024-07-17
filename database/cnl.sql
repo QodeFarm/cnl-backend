@@ -322,6 +322,19 @@ CREATE TABLE IF NOT EXISTS user_allowed_weekdays (
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 ) ENGINE=InnoDB;
 
+/* django_admin_log Table */
+-- This table is used for Action Tracking.
+CREATE TABLE `django_admin_log` (
+  `id` int NOT NULL DEFAULT '0',
+  `action_time` datetime(6) NOT NULL,
+  `object_id` longtext,
+  `object_repr` varchar(200) NOT NULL,
+  `action_flag` smallint unsigned NOT NULL,
+  `change_message` longtext NOT NULL,
+  `content_type_id` int DEFAULT NULL,
+  `user_id` int NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 /* Ledger Groups Table */
 -- Stores information about ledger groups used in accounting.
 CREATE TABLE IF NOT EXISTS ledger_groups (
