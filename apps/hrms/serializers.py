@@ -1,6 +1,11 @@
 from rest_framework import serializers
 from .models import *
 
+class ModEmployeesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Employees
+        fields = ['employee_id','name']
+
 class DesignationsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Designations
