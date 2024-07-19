@@ -331,6 +331,7 @@ class LeadsViewSet(APIView):
         assignment_data = given_data.pop('assignment', None)
         exclude_fields = ['lead_id']
         if assignment_data:
+            assignment_data['lead_id'] = pk
             assignment_error = validate_multiple_data(self, [assignment_data], LeadAssignmentsSerializer, exclude_fields)
             if assignment_error:
                 errors["assignment"] = assignment_error
@@ -338,6 +339,7 @@ class LeadsViewSet(APIView):
         # Validate LeadAssignmentHistory Data
         assignment_history_data = given_data.pop('assignment_history', None)
         if assignment_history_data:
+            assignment_history_data['lead_id'] = pk
             history_error = validate_multiple_data(self, [assignment_history_data], LeadAssignmentHistorySerializer, exclude_fields)
             if history_error:
                 errors["assignment_history"] = history_error
@@ -345,6 +347,7 @@ class LeadsViewSet(APIView):
         # Validate LeadInteractions Data
         interaction_data = given_data.pop('interaction', None)
         if interaction_data:
+            interaction_data['lead_id'] = pk
             interaction = validate_multiple_data(self, [interaction_data], LeadInteractionsSerializer, exclude_fields)
             if interaction:
                 errors["interaction"] = interaction
@@ -371,11 +374,12 @@ class LeadsViewSet(APIView):
 
         # Update the 'LeadAssignments'
         update_fields = {'lead_id': pk}
-        if assignment_data:
-            assignmentdata = update_multi_instances(self, pk, assignment_data, LeadAssignments, LeadAssignmentsSerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='lead_id')
+        assignmentdata = update_multi_instances(self, pk, assignment_data, LeadAssignments, LeadAssignmentsSerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='assignment_id')
+        if assignmentdata:
             custom_data["assignment"] = assignmentdata[0]
 
-            # create assignment_history_data when 'LeadAssignments' data is added in PUT method
+        # create assignment_history_data when 'LeadAssignments' data is added in PUT method
+        if assignment_data:
             if not assignment_history_data:
                 # verify if any previous instance is present with current "lead_id", if not present then create new instance in 'LeadAssignmentHistory'
                 if not LeadAssignmentHistory.objects.filter(lead_id=pk):
@@ -387,13 +391,13 @@ class LeadsViewSet(APIView):
                     logger.info('LeadAssignmentHistory - created*')
 
         # Update the 'LeadAssignmentHistory'
-        if assignment_history_data:
-            assignmenthistory_data = update_multi_instances(self, pk, assignment_history_data, LeadAssignmentHistory, LeadAssignmentHistorySerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='lead_id')
+        assignmenthistory_data = update_multi_instances(self, pk, assignment_history_data, LeadAssignmentHistory, LeadAssignmentHistorySerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='history_id')
+        if assignmenthistory_data:
             custom_data["assignment_history"] = assignmenthistory_data[0]
 
         # Update the 'LeadInteractions'
-        if interaction_data:
-            interactiondata = update_multi_instances(self, pk, interaction_data, LeadInteractions, LeadInteractionsSerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='lead_id')
+        interactiondata = update_multi_instances(self, pk, interaction_data, LeadInteractions, LeadInteractionsSerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='interaction_id')
+        if interactiondata:
             custom_data["interaction"] = interactiondata[0]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
