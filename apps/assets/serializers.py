@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from apps.assets.models import AssetStatuses, AssetCategories, Locations, Assets, AssetMaintenance
+from apps.masters.serializers import ModUnitOptionsSerializer
 
 
 #Create your serializers here.
@@ -42,6 +43,7 @@ class AssetsSerializer(serializers.ModelSerializer):
     asset_category = ModAssetCategoriesSerializers(source='asset_category_id', read_only=True)
     asset_status = ModAssetStatusesSerializers(source='asset_status_id', read_only=True)
     location = ModLocationsSerializers(source='location_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     class Meta:
         model = Assets
         fields = '__all__'

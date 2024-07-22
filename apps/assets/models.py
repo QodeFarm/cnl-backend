@@ -1,5 +1,6 @@
 from django.db import models
 import uuid
+from apps.masters.models import UnitOptions
 from config.utils_variables import assetstatusestable,assetcategoriestable,assetstable,locationstable, assetmaintenancetable
 
 
@@ -47,6 +48,7 @@ class Assets(models.Model):
     asset_category_id = models.ForeignKey(AssetCategories, on_delete=models.CASCADE, db_column='asset_category_id')
     asset_status_id = models.ForeignKey(AssetStatuses, on_delete=models.CASCADE, db_column='asset_status_id')
     location_id = models.ForeignKey(Locations, on_delete=models.CASCADE, db_column='location_id')
+    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, null=True, default=None, db_column = 'unit_options_id')
     purchase_date = models.DateField(null=True, default=None)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)

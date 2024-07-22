@@ -1724,13 +1724,15 @@ CREATE TABLE IF NOT EXISTS assets (
    asset_category_id CHAR(36) NOT NULL,
    asset_status_id CHAR(36) NOT NULL,
    location_id CHAR(36) NOT NULL,
+   unit_options_id CHAR(36),
    purchase_date DATE,
    price DECIMAL(10, 2),
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    FOREIGN KEY (asset_category_id) REFERENCES asset_categories(asset_category_id),
    FOREIGN KEY (asset_status_id) REFERENCES asset_statuses(asset_status_id),
-   FOREIGN KEY (location_id) REFERENCES locations(location_id)
+   FOREIGN KEY (location_id) REFERENCES locations(location_id),
+   FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
 );
 
 /* asset_maintenance Table */
