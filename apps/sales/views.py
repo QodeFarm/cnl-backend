@@ -208,14 +208,12 @@ class SaleOrderViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get(
-                "summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Sale order summary")
                 saleorders = SaleOrder.objects.all()
-                data = SaleOrderOptionsSerializer.get_sale_order_summary(
-                    saleorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+                data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
+                return Response(data, status=status.HTTP_200_OK)
 
             logger.info("Retrieving all sale order")
             queryset = SaleOrder.objects.all()

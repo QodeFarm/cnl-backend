@@ -199,6 +199,10 @@ class ProductBrandsSerializer(serializers.ModelSerializer):
             instance.save()
         return super().update(instance, validated_data)
 
+class ModPurchaseTypesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseTypes
+        fields = ['purchase_type_id','name']
 
 class PurchaseTypesSerializer(serializers.ModelSerializer):
     class Meta:

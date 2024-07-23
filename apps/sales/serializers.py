@@ -21,6 +21,11 @@ class ModSaleInvoiceOrdersSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleInvoiceOrders
         fields = ['sale_invoice_id','invoice_date','invoice_no',]
+
+class ModSaleOrderItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SaleOrderItems
+        fields = ['sale_order_item_id','amount']
 # -------------------------------------------------------
 
 class SaleOrderSerializer(serializers.ModelSerializer):
@@ -123,14 +128,33 @@ class OrderShipmentsSerializer(serializers.ModelSerializer):
 class SaleOrderOptionsSerializer(serializers.ModelSerializer):
     customer_id = ModCustomersSerializer()
     sale_type_id = ModSaleTypesSerializer()
-   
+    amount = serializers.SerializerMethodField()
+
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'tax', 'advance_amount', 'remarks', 'order_date', 'tax_amount', 'customer_id', 'sale_type_id']
- 
+        fields = ['sale_order_id', 'order_no', 'tax', 'advance_amount', 'remarks', 'order_date', 'amount', 'tax_amount', 'customer_id', 'sale_type_id']
+
+    def get_sale_order_details(self, obj):
+        sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
+        
+        amount = 0
+        
+        for saleorderamount in sale_order_items:
+            amount += saleorderamount.amount
+        
+        return amount
+
+    def get_amount(self, obj):
+        return self.get_sale_order_details(obj)
+    
+    @staticmethod
     def get_sale_order_summary(sale_order):
         serializer = SaleOrderOptionsSerializer(sale_order, many=True)
-        return serializer.data
+        return {
+            "count": len(serializer.data),
+            "msg": "SUCCESS",
+            "data": serializer.data
+        }
 
 class ModQuickPackSerializer(serializers.ModelSerializer):
     class Meta:
