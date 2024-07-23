@@ -379,6 +379,7 @@ class LeadsViewSet(APIView):
             custom_data["assignment"] = assignmentdata[0]
 
         # create assignment_history_data when 'LeadAssignments' data is added in PUT method
+        assignment_history_data_status = False
         if assignment_data:
             if not assignment_history_data:
                 # verify if any previous instance is present with current "lead_id", if not present then create new instance in 'LeadAssignmentHistory'
@@ -388,12 +389,14 @@ class LeadsViewSet(APIView):
                     assignments_history = generic_data_creation(self, [assignment_history], LeadAssignmentHistorySerializer, update_fields)
                     assignments_history = assignments_history[0] if assignments_history else {}
                     custom_data["assignment_history"] = assignments_history
+                    assignment_history_data_status = True
                     logger.info('LeadAssignmentHistory - created*')
 
         # Update the 'LeadAssignmentHistory'
-        assignmenthistory_data = update_multi_instances(self, pk, assignment_history_data, LeadAssignmentHistory, LeadAssignmentHistorySerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='history_id')
-        if assignmenthistory_data:
-            custom_data["assignment_history"] = assignmenthistory_data[0]
+        if assignment_history_data_status == False: # 'False' means it is old instance then update it
+            assignmenthistory_data = update_multi_instances(self, pk, assignment_history_data, LeadAssignmentHistory, LeadAssignmentHistorySerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='history_id')
+            if assignmenthistory_data:
+                custom_data["assignment_history"] = assignmenthistory_data[0]
 
         # Update the 'LeadInteractions'
         interactiondata = update_multi_instances(self, pk, interaction_data, LeadInteractions, LeadInteractionsSerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='interaction_id')
