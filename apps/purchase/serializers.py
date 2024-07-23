@@ -138,3 +138,15 @@ class PurchaseReturnOrdersOptionsSerializer(serializers.ModelSerializer):
     def get_purchase_return_orders_summary(purchase_return_orders):
         serializer = PurchaseReturnOrdersOptionsSerializer(purchase_return_orders, many=True)
         return serializer.data
+
+class PurchaseInvoiceOrdersOptionsSerializer(serializers.ModelSerializer):
+    vendor_id = ModVendorSerializer()
+    order_status_id = ModOrderStatusesSerializer()
+
+    class Meta:
+        model = PurchaseInvoiceOrders
+        fields = ['purchase_invoice_id', 'invoice_no', 'supplier_invoice_no', 'tax', 'advance_amount', 'remarks', 'total_amount', 'tax_amount', 'vendor_id', 'order_status_id']
+    
+    def get_purchase_invoice_orders_summary(purchase_invoice_orders):
+        serializer = PurchaseInvoiceOrdersOptionsSerializer(purchase_invoice_orders, many=True)
+        return serializer.data

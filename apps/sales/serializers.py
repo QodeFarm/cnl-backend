@@ -156,6 +156,30 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
             "data": serializer.data
         }
 
+class SaleInvoiceOrderOptionsSerializer(serializers.ModelSerializer):
+    customer_id = ModCustomersSerializer()
+    order_status_id = ModOrderStatusesSerializer()
+
+    class Meta:
+        model = SaleInvoiceOrders
+        fields = ['sale_invoice_id', 'invoice_no', 'tax', 'advance_amount', 'remarks', 'total_amount', 'tax_amount', 'customer_id', 'order_status_id']
+
+    def get_sale_invoice_order_summary(sale_invoice_order):
+        serializer = SaleInvoiceOrderOptionsSerializer(sale_invoice_order, many=True)
+        return serializer.data
+
+class SaleReturnOrdersOptionsSerializer(serializers.ModelSerializer):
+    customer_id = ModCustomersSerializer()
+    order_status_id = ModOrderStatusesSerializer()
+
+    class Meta:
+        model = SaleReturnOrders
+        fields = ['sale_return_id', 'return_no', 'return_date', 'tax', 'return_reason', 'remarks', 'total_amount', 'due_date', 'tax_amount', 'customer_id', 'order_status_id']
+
+    def get_sale_return_orders_summary(sale_invoice_order):
+        serializer = SaleInvoiceOrderOptionsSerializer(sale_invoice_order, many=True)
+        return serializer.data
+           
 class ModQuickPackSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuickPacks

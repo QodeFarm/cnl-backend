@@ -551,7 +551,14 @@ class SaleInvoiceOrdersViewSet(APIView):
         if "pk" in kwargs:
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
-        try: 
+        try:
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving sale invoice order summary")
+                saleinvoiceorder = SaleInvoiceOrders.objects.all()
+                data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+             
             logger.info("Retrieving all sale invoice orders")
             queryset = SaleInvoiceOrders.objects.all()
             serializer = SaleInvoiceOrdersSerializer(queryset, many=True)
@@ -865,7 +872,14 @@ class SaleReturnOrdersViewSet(APIView):
         if "pk" in kwargs:
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
-        try: 
+        try:
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving sale return orders summary")
+                salereturnorders = SaleInvoiceOrders.objects.all()
+                data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+             
             logger.info("Retrieving all sale return order")
             queryset = SaleReturnOrders.objects.all()
             serializer = SaleReturnOrdersSerializer(queryset, many=True)

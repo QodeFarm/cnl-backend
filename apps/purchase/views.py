@@ -449,6 +449,13 @@ class PurchaseInvoiceOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving Purchase Invoice orders summary")
+                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all()
+                data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+            
             instance = PurchaseInvoiceOrders.objects.all()
         except PurchaseInvoiceOrders.DoesNotExist:
             logger.error("Purchase invoice order does not exist.")
