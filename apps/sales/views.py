@@ -876,7 +876,7 @@ class SaleReturnOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving sale return orders summary")
-                salereturnorders = SaleInvoiceOrders.objects.all()
+                salereturnorders = SaleReturnOrders.objects.all()
                 data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
