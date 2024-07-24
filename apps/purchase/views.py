@@ -131,6 +131,13 @@ class PurchaseOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving Purchase order summary")
+                purchaseorders = PurchaseOrders.objects.all()
+                data = PurchaseOrdersOptionsSerializer.get_purchase_orders_summary(purchaseorders)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+            
             instance = PurchaseOrders.objects.all()
         except PurchaseOrders.DoesNotExist:
             logger.error("Purchase order does not exist.")
@@ -442,6 +449,13 @@ class PurchaseInvoiceOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving Purchase Invoice orders summary")
+                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all()
+                data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+            
             instance = PurchaseInvoiceOrders.objects.all()
         except PurchaseInvoiceOrders.DoesNotExist:
             logger.error("Purchase invoice order does not exist.")
@@ -751,6 +765,13 @@ class PurchaseReturnOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving Purchase return orders summary")
+                purchasereturnorders = PurchaseReturnOrders.objects.all()
+                data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(purchasereturnorders)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+            
             instance = PurchaseReturnOrders.objects.all()
         except PurchaseReturnOrders.DoesNotExist:
             logger.error("Purchase return order does not exist.")

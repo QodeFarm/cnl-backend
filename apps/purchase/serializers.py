@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import *
 from .serializers import *
 from apps.vendor.serializers import ModVendorSerializer,ModVendorAgentSerializer,VendorAddressSerializer,ModVendorPaymentTermsSerializer
-from apps.masters.serializers import ModOrderStatusesSerializer, ModProductBrandsSerializer, ModUnitOptionsSerializer, PurchaseTypesSerializer, ModGstTypesSerializer
+from apps.masters.serializers import ModOrderStatusesSerializer, ModProductBrandsSerializer, ModUnitOptionsSerializer, PurchaseTypesSerializer, ModGstTypesSerializer, ModPurchaseTypesSerializer
 from apps.customer.serializers import ModLedgerAccountsSerializers,ModCustomersSerializer
 from apps.products.serializers import ModproductsSerializer
 
@@ -115,3 +115,38 @@ class PurchasePriceListSerializer(serializers.ModelSerializer):
         model = PurchasePriceList
         fields = '__all__'
 
+class PurchaseOrdersOptionsSerializer(serializers.ModelSerializer):
+    vendor_id = ModVendorSerializer()
+    purchase_type_id = ModPurchaseTypesSerializer()
+
+    class Meta:
+        model = PurchaseOrders
+        fields = ['purchase_order_id', 'order_no', 'tax', 'advance_amount', 'remarks', 'order_date', 'tax_amount','total_amount', 'vendor_id', 'purchase_type_id']
+ 
+    def get_purchase_orders_summary(purchase_orders):
+        serializer = PurchaseOrdersOptionsSerializer(purchase_orders, many=True)
+        return serializer.data
+
+class PurchaseReturnOrdersOptionsSerializer(serializers.ModelSerializer):
+    vendor_id = ModVendorSerializer()
+    purchase_type_id = ModPurchaseTypesSerializer()
+
+    class Meta:
+        model = PurchaseReturnOrders
+        fields = ['purchase_return_id', 'return_no', 'tax', 'return_reason', 'remarks', 'total_amount', 'due_date', 'tax_amount', 'vendor_id', 'purchase_type_id']
+    
+    def get_purchase_return_orders_summary(purchase_return_orders):
+        serializer = PurchaseReturnOrdersOptionsSerializer(purchase_return_orders, many=True)
+        return serializer.data
+
+class PurchaseInvoiceOrdersOptionsSerializer(serializers.ModelSerializer):
+    vendor_id = ModVendorSerializer()
+    order_status_id = ModOrderStatusesSerializer()
+
+    class Meta:
+        model = PurchaseInvoiceOrders
+        fields = ['purchase_invoice_id', 'invoice_no', 'supplier_invoice_no', 'tax', 'advance_amount', 'remarks', 'total_amount', 'tax_amount', 'vendor_id', 'order_status_id']
+    
+    def get_purchase_invoice_orders_summary(purchase_invoice_orders):
+        serializer = PurchaseInvoiceOrdersOptionsSerializer(purchase_invoice_orders, many=True)
+        return serializer.data
