@@ -133,7 +133,7 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer_id', 'sale_type_id', 'order_status_id', 'remarks',]
+        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer_id', 'sale_type_id', 'order_status_id', 'remarks']
 
     def get_sale_order_details(self, obj):
         sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
@@ -141,7 +141,9 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
         amount = 0
         
         for saleorderamount in sale_order_items:
-            amount += saleorderamount.amount
+            item_amount = saleorderamount.amount
+            if item_amount is not None:
+                amount += item_amount
         
         return amount
 
