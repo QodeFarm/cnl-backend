@@ -351,6 +351,7 @@ class TaskView(APIView):
                     logger.info("'status_id' is changed**")                   
                     task_history_data = create_new_history(self)
 
+
             update_fields = [] # No need to update any fields
             taskdata = update_multi_instances(self, pk, task_data, Tasks, TasksSerializer, update_fields,main_model_related_field='task_id', current_model_pk_field='task_id')
             taskdata = taskdata[0] if len(taskdata)==1 else taskdata
