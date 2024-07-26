@@ -419,3 +419,22 @@ def validate_order_type(data, error_list, model_name,look_up=None):
                 error_list[0][look_up] = ["Invalid order type."]
             else:
                 error_list.append({look_up:["Invalid order type."]})
+
+
+#================================================================================================================================================
+#===========================================CHETAN'S METHOD============================================================================
+#================================================================================================================================================
+
+def get_object_or_error(model, **kwargs):
+    """Fetches an object from the database or returns None if it doesn't exist."""
+    try:
+        return model.objects.get(**kwargs)
+    except model.DoesNotExist:
+        return None
+
+def validate_uuid(value):
+    """Validates if the provided value is a valid UUID."""
+    try:
+        uuid.UUID(str(value))
+    except ValueError:
+        raise ValidationError(f"{value} is not a valid UUID.")
