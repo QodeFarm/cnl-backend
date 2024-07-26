@@ -75,10 +75,10 @@ class ModulesViewSet(viewsets.ModelViewSet):
     serializer_class = ModulesSerializer
 
     def list(self, request, *args, **kwargs):
-        summary = request.query_params.get('summary', 'false').lower() == 'true'
-        if summary:
+        sections = request.query_params.get('sections', 'false').lower() == 'true'
+        if sections:
             modules = self.filter_queryset(self.get_queryset())
-            data = ModulesOptionsSerializer.get_modules_summary(modules)
+            data = ModulesOptionsSerializer.get_modules_sections(modules)
             result = Response(data, status=status.HTTP_200_OK)
         else:
             result = list_all_objects(self, request, *args, **kwargs)

@@ -234,7 +234,7 @@ class ModulesOptionsSerializer(serializers.ModelSerializer):
         model = Modules
         fields = ['module_id', 'module_name', 'description', 'module_sections']
 
-    def get_modules_summary(modules):
+    def get_modules_sections(modules):
         serializer = ModulesOptionsSerializer(modules, many=True)
         return {
             "count": len(serializer.data),
