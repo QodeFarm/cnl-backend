@@ -17,7 +17,7 @@ router.register(r'user_allowed_weekday', UserAllowedWeekdaysViewSet, basename='u
 router.register(r'user_time_restrictions', UserTimeRestrictionsViewSet, basename='user_time_restrictions')
 
 router.register(r'user_roles', UserRoleViewSet, basename='user_roles')  
-router.register(r'role_permissions', RolePermissionsViewSet, basename='role_permissions')
+router.register(r'role_permissions_list', RolePermissionsViewSet, basename='role_permissions')
 
 urlpatterns = [
     path("login/", UserLoginView.as_view(), name="User_Login_View"),
@@ -27,8 +27,8 @@ urlpatterns = [
     path('reset_password/<uid>/<token>/', UserPasswordResetView.as_view(), name='reset_password' ),
     path('reset_password_email/', SendPasswordResetEmailView.as_view(), name='reset_password_email'),
     path('activation/<uid>/<token>/', CustomUserActivationViewSet.as_view({'post': 'activation'}), name='activation'),
-    path('rpd/', RolePermissionsAPIView.as_view(), name='load-role-permissions'),
-    path('rpd/<uuid:role_permission_id>/', RolePermissionsAPIView.as_view(), name='load-role-permissions')
+    path('role_permissions/', RolePermissionsAPIView.as_view(), name='load-role-permissions'),
+    path('role_permissions/<uuid:role_permission_id>/', RolePermissionsAPIView.as_view(), name='load-role-permissions')
 
 ]
 urlpatterns  += router.urls

@@ -1,7 +1,7 @@
 import copy
 from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
-from config.utils_methods import list_all_objects, create_instance, update_instance, remove_fields, validate_uuid, get_object_or_error
+from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid, get_object_or_error
 from rest_framework.decorators import permission_classes
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -256,6 +256,8 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
 
 # =================================================================================================
+
+
 class CustomUserActivationViewSet(DjoserUserViewSet):
     @action(["post"], detail=False)
     def activation(self, request, *args, **kwargs):
@@ -275,7 +277,7 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
             }
             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
 # ================+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++=======================================
-#================+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++=======================================
+# ================+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++=======================================
 # ++==================================CODE with POST and DELETE Method:========+++++++++++++++++++++++++++++++++++++++
 
 class RolePermissionsAPIView(APIView):
@@ -285,124 +287,76 @@ class RolePermissionsAPIView(APIView):
 
         # Check if roles data is present
         if not roles_data:
-            return Response({
-                "count": 0,
-                "message": "ValidationError: roles data is missing",
-                "data": {}
-            }, status=status.HTTP_400_BAD_REQUEST)
-
+            return build_response(0, "ValidationError: roles data is missing" , [], status.HTTP_400_BAD_REQUEST)
+           
         with transaction.atomic():
             for role_data in roles_data:
                 # Validate role_id
                 role_id = role_data.get('role_id')
                 if not role_id:
-                    return Response({
-                        "count": 0,
-                        "message": "ValidationError: role_id is missing",
-                        "data": {}
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                    return build_response(0, "ValidationError: role_id is missing" , [], status.HTTP_400_BAD_REQUEST)
+               
                 try:
                     validate_uuid(role_id)
                 except ValidationError as e:
-                    return Response({
-                        "count": 0,
-                        "message": "role_id " + str(e),
-                        "data": {}
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                    return build_response(0, "role_id " + str(e) , [], status.HTTP_400_BAD_REQUEST)
+                
                 role = get_object_or_error(Roles, role_id=role_id)
                 if not role:
-                    return Response({
-                        "count": 0,
-                        "message": f"ValidationError: Role with id {role_id} does not exist.",
-                        "data": {}
-                    }, status=status.HTTP_400_BAD_REQUEST)
-
+                    return build_response(0, f"ValidationError: Role with id {role_id} does not exist." , [], status.HTTP_400_BAD_REQUEST)
+                   
                 for module_data in role_data.get('modules', []):
                     # Validate module_id
                     module_id = module_data.get('module_id')
                     if not module_id:
-                        return Response({
-                            "count": 0,
-                            "message": "ValidationError: module_id is missing",
-                            "data": {}
-                        }, status=status.HTTP_400_BAD_REQUEST)
+                        return build_response(0, "ValidationError: module_id is missing" , [], status.HTTP_400_BAD_REQUEST)
+                    
                     try:
                         validate_uuid(module_id)
                     except ValidationError as e:
-                        return Response({
-                            "count": 0,
-                            "message": str(e),
-                            "data": {}
-                        }, status=status.HTTP_400_BAD_REQUEST)
+                        return build_response(0, "module_id" + str(e) , [], status.HTTP_400_BAD_REQUEST)
+                  
                     module = get_object_or_error(Modules, module_id=module_id)
                     if not module:
-                        return Response({
-                            "count": 0,
-                            "message": f"ValidationError: Module with id {module_id} does not exist.",
-                            "data": {}
-                        }, status=status.HTTP_400_BAD_REQUEST)
-
+                        return build_response(0, f"ValidationError: Module with id {module_id} does not exist." , [], status.HTTP_400_BAD_REQUEST)
+                    
                     for section_data in module_data.get('sections', []):
                         # Validate section_id
                         section_id = section_data.get('section_id')
                         if not section_id:
-                            return Response({
-                                "count": 0,
-                                "message": "ValidationError: section_id is missing",
-                                "data": {}
-                            }, status=status.HTTP_400_BAD_REQUEST)
+                            return build_response(0, "ValidationError: section_id is missing" , [], status.HTTP_400_BAD_REQUEST)
+                       
                         try:
                             validate_uuid(section_id)
                         except ValidationError as e:
-                            return Response({
-                                "count": 0,
-                                "message": str(e),
-                                "data": {}
-                            }, status=status.HTTP_400_BAD_REQUEST)
+                            return build_response(0, "section_id " + str(e) , [], status.HTTP_400_BAD_REQUEST)
+                        
                         section = get_object_or_error(
                             ModuleSections, section_id=section_id, module_id=module)
                         if not section:
-                            return Response({
-                                "count": 0,
-                                "message": f"ValidationError: Section with id {section_id} does not exist in module {module.module_name}.",
-                                "data": {}
-                            }, status=status.HTTP_400_BAD_REQUEST)
-
+                            return  build_response(0, f"ValidationError: Section with id {section_id} does not exist in module {module.module_name}." , [], status.HTTP_400_BAD_REQUEST)
+                      
                         # Validate actions field presence
                         actions_data = section_data.get('actions')
                         if actions_data is None:
-                            return Response({
-                                "count": 0,
-                                "message": f"ValidationError: Actions field is missing in section {section_id}.",
-                                "data": {}
-                            }, status=status.HTTP_400_BAD_REQUEST)
-
+                            return build_response(0, f"ValidationError: Actions field is missing in section {section_id}.", [], status.HTTP_400_BAD_REQUEST)
+                        
                         for action_data in actions_data:
                             # Validate action_id
                             action_id = action_data.get('action_id')
                             if not action_id:
-                                return Response({
-                                    "count": 0,
-                                    "message": "ValidationError: action_id is missing",
-                                    "data": {}
-                                }, status=status.HTTP_400_BAD_REQUEST)
+                                return build_response(0, "ValidationError: action_id is missing", [], status.HTTP_400_BAD_REQUEST)
+                         
                             try:
                                 validate_uuid(action_id)
                             except ValidationError as e:
-                                return Response({
-                                    "count": 0,
-                                    "message": str(e),
-                                    "data": {}
-                                }, status=status.HTTP_400_BAD_REQUEST)
+                                return build_response(0, "action_id " + str(e), [], status.HTTP_400_BAD_REQUEST)
+                            
                             action = get_object_or_error(
                                 Actions, action_id=action_id)
                             if not action:
-                                return Response({
-                                    "count": 0,
-                                    "message": f"ValidationError: Action with id {action_id} does not exist.",
-                                    "data": {}
-                                }, status=status.HTTP_400_BAD_REQUEST)
-
+                                return build_response(0, f"ValidationError: Action with id {action_id} does not exist." , [], status.HTTP_400_BAD_REQUEST)
+                            
                             # Create role permission and serialize
                             role_permission_data = RolePermissions.objects.create(
                                 role_id=role,
@@ -414,49 +368,32 @@ class RolePermissionsAPIView(APIView):
                                 role_permission_data)
                             role_permissions_data.append(serializer.data)
 
-        return Response({
-            "message": "Role permissions loaded successfully.",
-            "count": len(role_permissions_data),
-            "data": role_permissions_data
-        }, status=status.HTTP_201_CREATED)
-
+        return build_response(len(role_permissions_data), "Record created successfully", role_permissions_data, status.HTTP_201_CREATED)      
 # ================================================================================================================================================
 # ===========================================DELETE METHOD============================================================================
 # ================================================================================================================================================
-
     def delete(self, request, role_permission_id):
-        """Deletes a role permission by its ID if it exists."""
+        """Deletes all role permissions by role_id if it exists."""
+
         # Validate role_permission_id
         try:
             validate_uuid(role_permission_id)
         except ValidationError as e:
-            return Response({
-                "count": 0,
-                "message": "role_permission_id " + str(e),
-                "data": {}
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "role_permission_id " + str(e), [], status.HTTP_400_BAD_REQUEST)
+       
+        # Fetch all RolePermission objects with the given role_id
+        role_permissions = RolePermissions.objects.filter(role_id=role_permission_id)
+        if not role_permissions.exists():
+            return build_response(0, "ValidationError: No RolePermissions found with role_id" + str(role_permission_id), [], status.HTTP_400_BAD_REQUEST)
+           
+        # Delete the RolePermission objects
+        count, _ = role_permissions.delete()
 
-        # Fetch the RolePermission object
-        role_permission = get_object_or_error(
-            RolePermissions, role_permission_id=role_permission_id)
-        if not role_permission:
-            return Response({
-                "count": 0,
-                "message": f"ValidationError: RolePermission with id {role_permission_id} does not exist.",
-                "data": {}
-            }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Delete the RolePermission object
-        role_permission.delete()
-
-        return Response({
-            "message": "Record has been deleted."
-        }, status=status.HTTP_200_OK)
+        return build_response(count, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
 
 # ================================================================================================================================================
 # ===========================================PUT METHOD============================================================================
 # ================================================================================================================================================
-
     def put(self, request, role_permission_id):
         """Updates a role permission by its ID if it exists."""
         # Validate role_permission_id
