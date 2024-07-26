@@ -1,5 +1,5 @@
 import copy
-from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer
+from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import list_all_objects, create_instance, update_instance, remove_fields
 from rest_framework.decorators import permission_classes
@@ -75,7 +75,15 @@ class ModulesViewSet(viewsets.ModelViewSet):
     serializer_class = ModulesSerializer
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        summary = request.query_params.get('summary', 'false').lower() == 'true'
+        if summary:
+            modules = self.filter_queryset(self.get_queryset())
+            data = ModulesOptionsSerializer.get_modules_summary(modules)
+            result = Response(data, status=status.HTTP_200_OK)
+        else:
+            result = list_all_objects(self, request, *args, **kwargs)
+        
+        return result
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
