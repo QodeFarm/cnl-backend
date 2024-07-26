@@ -420,7 +420,7 @@ class TaskPriorities(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return f"{self.priority_id} {self.priority_name}"
+        return f"{self.priority_name}"
     
     class Meta:
         db_table = taskprioritiestable

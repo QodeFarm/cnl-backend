@@ -7,7 +7,7 @@ from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
 class ModTasksSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tasks
-        fields = ['task_id','user_id','status_id','priority_id','title','due_date']
+        fields = ['task_id','priority_id','title','due_date']
 
 class TasksSerializer(serializers.ModelSerializer):
     user = ModUserSerializer(source='user_id', read_only=True)
@@ -20,7 +20,7 @@ class TasksSerializer(serializers.ModelSerializer):
 class ModTaskCommentsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskComments
-        fields = ['comment_id','task_id','user_id']
+        fields = ['comment_id','comment_text']
 
 class TaskCommentsSerializer(serializers.ModelSerializer):
     task = ModTasksSerializer(source='task_id', read_only=True)
@@ -32,7 +32,7 @@ class TaskCommentsSerializer(serializers.ModelSerializer):
 class ModTaskAttachmentsSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskAttachments
-        fields = ['attachment_id','task_id','attachment_name','attachment_path']
+        fields = ['attachment_id','attachment_name','attachment_path']
 
 class TaskAttachmentsSerializer(serializers.ModelSerializer):
     task = ModTasksSerializer(source='task_id', read_only=True)
