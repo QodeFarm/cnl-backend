@@ -227,3 +227,17 @@ class UserPasswordResetSerializer(serializers.Serializer):
       raise serializers.ValidationError('Token is not Valid or Expired')
   
         
+class ModulesOptionsSerializer(serializers.ModelSerializer):
+    module_sections = ModModuleSectionsSerializer(many=True, read_only=True, source='modulesections_set')
+
+    class Meta:
+        model = Modules
+        fields = ['module_id', 'module_name', 'description', 'module_sections']
+
+    def get_modules_sections(modules):
+        serializer = ModulesOptionsSerializer(modules, many=True)
+        return {
+            "count": len(serializer.data),
+            "msg": "SUCCESS",
+            "data": serializer.data
+        }

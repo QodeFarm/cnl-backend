@@ -1541,9 +1541,11 @@ CREATE TABLE IF NOT EXISTS task_history (
 -- Stores information about the quick packs associated with each customer.
 CREATE TABLE IF NOT EXISTS quick_packs (
     quick_pack_id CHAR(36) PRIMARY KEY,
-    customer_id CHAR(36) NOT NULL,
+    customer_id CHAR(36),
     name VARCHAR(255) NOT NULL, 
-    description TEXT,
+    description VARCHAR(1024),
+    active ENUM('Y', 'N'),
+    lot_qty INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id)
