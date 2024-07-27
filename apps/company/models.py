@@ -3,7 +3,7 @@ from django.core.validators import RegexValidator
 import uuid,os # type: ignore
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
-from config.utils_methods import EncryptedTextField
+# from config.utils_methods import EncryptedTextField 
 from config.utils_variables import companytable, branchestable, branchbankdetails
 
 def company_logos(instance, filename):
@@ -50,9 +50,9 @@ class Companies(models.Model):
     authorized_person = models.CharField(max_length=255, default=None, null=True)
     iec_code = models.CharField(max_length=50, default=None, null=True)
     eway_username = models.CharField(max_length=100, default=None, null=True)
-    eway_password = EncryptedTextField(max_length=100, default=None, null=True)
+    #eway_password = EncryptedTextField(max_length=100, default=None, null=True)
     gstn_username = models.CharField(max_length=100, default=None, null=True)
-    gstn_password = EncryptedTextField(max_length=100, default=None, null=True)
+    #gstn_password = EncryptedTextField(max_length=100, default=None, null=True)
     VAT_GST_STATUS_CHOICES = (
         ('Active', 'Active'),
         ('Inactive', 'Inactive'),
@@ -114,9 +114,9 @@ class Branches(models.Model):
     status_id = models.ForeignKey('masters.Statuses', on_delete=models.CASCADE, db_column = 'status_id')
     allowed_warehouse = models.CharField(max_length=255, default=None, null=True)
     e_way_username = models.CharField(max_length=255, default=None, null=True)
-    e_way_password = EncryptedTextField(max_length=255, default=None, null=True) 
+    #e_way_password = EncryptedTextField(max_length=255, default=None, null=True) 
     gstn_username = models.CharField(max_length=255, default=None, null=True)
-    gstn_password = EncryptedTextField(max_length=255, default=None, null=True)
+    #gstn_password = EncryptedTextField(max_length=255, default=None, null=True)
     other_license_1 = models.CharField(max_length=255, default=None, null=True)
     other_license_2 = models.CharField(max_length=255, default=None, null=True)
     picture = models.ImageField(max_length=255, default=None, null=True, upload_to=branches_picture) 
@@ -153,7 +153,7 @@ class BranchBankDetails(models.Model):
     bank_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     branch_id = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column = 'branch_id')
     bank_name = models.CharField(max_length=255,default=None, null=True)
-    account_number = EncryptedTextField(max_length=255, default=None, null=True)  # Using custom encrypted field
+    #account_number = EncryptedTextField(max_length=255, default=None, null=True)  # Using custom encrypted field
     branch_name = models.CharField(max_length=255, default=None, null=True)
     ifsc_code = models.CharField(max_length=100, default=None, null=True)
     swift_code = models.CharField(max_length=100, default=None, null=True)
