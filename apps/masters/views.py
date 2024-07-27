@@ -3,7 +3,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import generate_order_number
 from rest_framework.views import APIView
 from django.shortcuts import render
 from rest_framework import viewsets

@@ -5,7 +5,8 @@ from rest_framework.serializers import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import models
-import uuid,django_filters
+from apps.users.models import Actions, ModuleSections, Modules, RolePermissions, Roles
+import uuid
 from django.db.models import Q
 from uuid import uuid4
 from uuid import UUID
@@ -424,17 +425,12 @@ def validate_order_type(data, error_list, model_name,look_up=None):
 #================================================================================================================================================
 #===========================================CHETAN'S METHOD============================================================================
 #================================================================================================================================================
-
-def get_object_or_error(model, **kwargs):
-    """Fetches an object from the database or returns None if it doesn't exist."""
+def validate_uuid(uuid_to_test, version=4):
     try:
-        return model.objects.get(**kwargs)
-    except model.DoesNotExist:
-        return None
-
-def validate_uuid(value):
-    """Validates if the provided value is a valid UUID."""
-    try:
-        uuid.UUID(str(value))
+        uuid_obj = uuid.UUID(uuid_to_test, version=version)
     except ValueError:
-        raise ValidationError(f"{value} is not a valid UUID.")
+        raise ValidationError("Invalid UUID")
+    return uuid_obj
+
+
+        
