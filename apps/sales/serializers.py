@@ -82,6 +82,7 @@ class SaleInvoiceOrdersSerializer(serializers.ModelSerializer):
     payment_link_type = ModPaymentLinkTypesSerializer(source='payment_link_type_id', read_only=True)
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
+    sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     
     class Meta:
         model = SaleInvoiceOrders
@@ -95,6 +96,7 @@ class SaleReturnOrdersSerializer(serializers.ModelSerializer):
     orders_salesman = ModOrdersSalesmanSerializer(source='order_salesman_id', read_only=True)
     payment_link_type = ModPaymentLinkTypesSerializer(source='payment_link_type_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
+    sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
 
     class Meta:
         model = SaleReturnOrders
