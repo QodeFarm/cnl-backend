@@ -5,7 +5,6 @@ from rest_framework.serializers import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import models
-from apps.users.models import Actions, ModuleSections, Modules, RolePermissions, Roles
 import uuid
 from django.db.models import Q
 from uuid import uuid4
