@@ -1,8 +1,8 @@
 from django.urls import path
-from .views import VoucherView, FetchOutstandingLCView
+from .views import TrackOrderAndAccountLedger
 
 urlpatterns = [
-    path('track_order/', VoucherView.as_view(), name='voucher'),
-    path('account_ledger/', FetchOutstandingLCView.as_view(), name='account_ledger'),
+    path('track_order/', TrackOrderAndAccountLedger.as_view(), name='voucher'),
+    path('account_ledger/', TrackOrderAndAccountLedger.as_view(), name='account_ledger'),
 
 ]
