@@ -5,7 +5,7 @@ from rest_framework.serializers import ValidationError
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import models
-import uuid,django_filters
+import uuid
 from django.db.models import Q
 from uuid import uuid4
 from uuid import UUID
@@ -419,3 +419,17 @@ def validate_order_type(data, error_list, model_name,look_up=None):
                 error_list[0][look_up] = ["Invalid order type."]
             else:
                 error_list.append({look_up:["Invalid order type."]})
+
+
+#================================================================================================================================================
+#===========================================CHETAN'S METHOD============================================================================
+#================================================================================================================================================
+def validate_uuid(uuid_to_test, version=4):
+    try:
+        uuid_obj = uuid.UUID(uuid_to_test, version=version)
+    except ValueError:
+        raise ValidationError("Invalid UUID")
+    return uuid_obj
+
+
+        

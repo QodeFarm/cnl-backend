@@ -84,15 +84,17 @@ class ActionsSerializer(serializers.ModelSerializer):
         model = Actions
         fields = '__all__'
 
-class ModulesSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Modules
-        fields = '__all__'
-
 class ModuleSectionsSerializer(serializers.ModelSerializer):
     module = ModModulesSerializer(source='module_id', read_only = True)
     class Meta:
         model = ModuleSections
+        fields = '__all__'
+
+class ModulesSerializer(serializers.ModelSerializer):
+    module_sections = ModuleSectionsSerializer(many=True, read_only=True, source='modulesections_set')
+
+    class Meta:
+        model = Modules
         fields = '__all__'
 
 class RolePermissionsSerializer(serializers.ModelSerializer):

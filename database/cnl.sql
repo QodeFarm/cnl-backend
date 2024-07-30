@@ -1065,6 +1065,7 @@ CREATE TABLE IF NOT EXISTS sale_invoice_orders(
 	order_status_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
+    sale_order_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
@@ -1074,7 +1075,8 @@ CREATE TABLE IF NOT EXISTS sale_invoice_orders(
     FOREIGN KEY (order_salesman_id) REFERENCES orders_salesman(order_salesman_id),
     FOREIGN KEY (payment_link_type_id) REFERENCES payment_link_types(payment_link_type_id),
     FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id),
-	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id)
 );
 
 /* Order Items Table */
@@ -1137,13 +1139,15 @@ CREATE TABLE IF NOT EXISTS sale_return_orders(
 	billing_address VARCHAR(1024),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    sale_invoice_id CHAR(36),
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     FOREIGN KEY (customer_address_id) REFERENCES customer_addresses(customer_address_id),
     FOREIGN KEY (payment_term_id) REFERENCES customer_payment_terms(payment_term_id),
     FOREIGN KEY (order_salesman_id) REFERENCES orders_salesman(order_salesman_id),
     FOREIGN KEY (payment_link_type_id) REFERENCES payment_link_types(payment_link_type_id),
-	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id)
 );
 
 /* Order Items Table */

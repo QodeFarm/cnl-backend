@@ -4,10 +4,12 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework import viewsets,status
-from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, delete_multi_instance, validate_payload_data, validate_multiple_data, generic_data_creation, update_multi_instances
+from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances
 from apps.tasks.serializers import TasksSerializer,TaskCommentsSerializer,TaskAttachmentsSerializer,TaskHistorySerializer
 from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
 import logging
+from apps.masters.models import Statuses
+from apps.masters.serializers import ModStatusesSerializer
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -117,7 +119,7 @@ class TaskView(APIView):
 
             # Retrieve TaskHistory data
             task_history_data = self.get_related_data(TaskHistory, TaskHistorySerializer, 'task_id', pk)
-            task_history_data = task_history_data[0] if task_history_data else {}
+            task_history_data = task_history_data if task_history_data else []
 
             # Customizing the response data
             custom_data = {
@@ -212,20 +214,13 @@ class TaskView(APIView):
             if task_attachments_error:
                 errors["task_attachments"] = task_attachments_error
 
-        # Vlidated TaskHistory Data
-        task_history_data = given_data.pop('task_history', None)
-        if task_history_data:
-            task_history_error = validate_multiple_data(self, task_history_data, TaskHistorySerializer, ['task_id'])
-            if task_history_error:
-                errors["task_history"] = task_history_error
-
         # Ensure mandatory data is present
         if not task_data:
             logger.error("Task data is mandatory but not provided.")
             return build_response(0, "Task data is mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         if errors:
-            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "ValidationError :", errors, status_code=status.HTTP_400_BAD_REQUEST)
         
         # ---------------------- D A T A   C R E A T I O N ----------------------------#
         """
@@ -254,17 +249,16 @@ class TaskView(APIView):
 
         # Create TaskHistory Data if Tasks is present
         user_id = new_task_data.get("user_id", None) # Fetch user_id from  new_task_data
-        status_id = new_task_data.get("status_id", None)# Fetch status_id from  new_task_data
-        task_history_data = {}
+        status_id = new_task_data.get("status_id", None)# Fetch status_id from  new_task_data        
         update_fields = {'task_id': task_id, 'user_id': user_id, 'status_id': status_id}
-        task_history_data = generic_data_creation(self, [task_history_data], TaskHistorySerializer, update_fields)
+        task_history_data = generic_data_creation(self, [{}], TaskHistorySerializer, update_fields)
         logger.info('TaskHistory - created*')#If Task is created then Initial TaskHistory is created
 
         custom_data = {
             "task": new_task_data,
             "task_comments": task_comments_data,
             "task_attachments": task_attachments_data,
-            "task_history":task_history_data[0] if task_history_data else {}
+            "task_history":task_history_data[0] if task_history_data else []
         }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
@@ -316,8 +310,10 @@ class TaskView(APIView):
         # Validate TaskHistory Data
         task_history_data = given_data.pop('task_history', None)
         if task_history_data:
-            task_history_data['task_id'] = pk
-            task_history_error = validate_multiple_data(self, [task_history_data], TaskHistorySerializer, exclude_fields)
+            for data in task_history_data:
+                data['task_id'] = pk
+            exclude_fields = ['task_id','user_id','status_id']
+            task_history_error = validate_multiple_data(self, task_history_data, TaskHistorySerializer, exclude_fields)
             if task_history_error:
                 errors["task_history"] = task_history_error
 
@@ -332,6 +328,30 @@ class TaskView(APIView):
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
         # update Tasks
         if task_data:
+
+            def create_new_history(self):
+                update_fields = {'task_id':pk, 'status_id':task_data.get('status_id'), 'user_id':task_data.get('user_id')}
+                task_history = generic_data_creation(self, [{}], TaskHistorySerializer, update_fields)
+                task_history = task_history if task_history else []
+                logger.info("'task_history' is created**")
+                return task_history
+
+            # Fetch last record in 'Task' | generally one record exists with one 'task_id'
+            data_set = Tasks.objects.filter(task_id=pk).order_by('created_at').last()
+            if data_set is not None:
+                previous_user_id= str(data_set.user_id_id)
+                current_user_id = task_data.get('user_id')  
+                if previous_user_id != current_user_id: # if 'user_id' change is detected
+                    logger.info("'user_id' is changed**")
+                    task_history_data = create_new_history(self)
+
+                previous_status_id= str(data_set.status_id_id)
+                current_status_id = task_data.get('status_id')  
+                if previous_status_id != current_status_id: # if 'status_id' change is detected
+                    logger.info("'status_id' is changed**")                   
+                    task_history_data = create_new_history(self)
+
+
             update_fields = [] # No need to update any fields
             taskdata = update_multi_instances(self, pk, task_data, Tasks, TasksSerializer, update_fields,main_model_related_field='task_id', current_model_pk_field='task_id')
             taskdata = taskdata[0] if len(taskdata)==1 else taskdata
@@ -340,18 +360,14 @@ class TaskView(APIView):
         update_fields = {'task_id':pk}
         taskcomments_data = update_multi_instances(self, pk, task_comments_data, TaskComments, TaskCommentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='comment_id')
 
-        # Update the 'TaskComments'
+        # Update the 'Taskattachments'
         taskattachments_data = update_multi_instances(self, pk, task_attachments_data, TaskAttachments, TaskAttachmentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='attachment_id')
-
-        # Update the 'TaskHistory'
-        taskhistory_data = update_multi_instances(self, pk, task_history_data, TaskHistory, TaskHistorySerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='history_id')
-        taskhistory_data = taskhistory_data[0] if len(taskhistory_data)==1 else taskhistory_data
 
         custom_data = {
             "task":taskdata,
             "task_comments":taskcomments_data if taskcomments_data else [],
             "task_attachments":taskattachments_data if taskattachments_data else [],
-            "task_history":taskhistory_data if taskhistory_data else {}
+            "task_history":task_history_data if task_history_data else []
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
