@@ -1,7 +1,7 @@
 import os
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
 from django.conf import settings
 from rest_framework.views import APIView
@@ -54,7 +54,8 @@ class TrackOrderAndAccountLedger(APIView):
             # Calling fetch-outstanding-lc API
             url = "https://service.alignbooks.com/ABReportService.svc/GetReportData"
 
-            f_body = {
+            if flag == "account_ledger":
+                f_body = {
                 "report_type": 4036,
                 "filter_data": {
                     "date_time_at_client": "2024-05-27 10:14:54",
@@ -1165,192 +1166,1260 @@ class TrackOrderAndAccountLedger(APIView):
                 }
             }
             
-            try:
-                response = requests.post(url, headers=headers, json=f_body)
-                response.raise_for_status()
-            except requests.exceptions.RequestException as e:
-                return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+                try:
+                    response = requests.post(url, headers=headers, json=f_body)
+                    response.raise_for_status()
+                except requests.exceptions.RequestException as e:
+                    return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-            if response.status_code == 200:
-                response_data = response.json()
-                json_data_table = response_data.get("JsonDataTable")
+                if response.status_code == 200:
+                    response_data = response.json()
+                    json_data_table = response_data.get("JsonDataTable")
 
-                if flag == "track_order":
                     if json_data_table:
-                        # string ==> json
-                        voucher_id = json.loads(json_data_table)
-                        voucher_id = voucher_id[-1].get('bill_no')
+                                # string ==> json
+                                data_2 = json.loads(json_data_table)
 
-                    # Now fetching party, delivery_date, invoice_no from voucher_id
+                                if isinstance(data_2, list) and len(data_2) > 0:
+                                    party_name = data_2[0].get("party_name", "Unknown")
+
+                                # Define the data for the table
+                                    table_data = [
+                                        ["IDX", "Date", "Voucher","Debit", "Credit", "Balance"]
+                                    ]
+                                    for idx, record in enumerate(data_2[-25:][::-1], start=1):
+                                        outstanding_lc = record.get("outstanding_lc", 0)
+                                        debit = outstanding_lc if outstanding_lc > 0 else 0
+                                        credit = -outstanding_lc if outstanding_lc < 0 else 0
+                                        row =[
+                                                idx,
+                                                datetime.strptime(record.get("bill_date", ""), "%Y-%m-%dT%H:%M:%S").strftime(
+                                                    "%d/%m/%Y") if record.get("bill_date") else "",
+                                                record.get("bill_no", ""),
+                                                debit,
+                                                credit,
+                                                record.get("outstanding_lc_running", ""),
+                                            ]
+                                        table_data.append(row)
+
+                                # Generate PDF with table
+                                    pdf_filename = "Account_ledger_" + \
+                                        party_name.replace(
+                                            ' ', '_')+"_"+uuid.uuid4().hex[:6]+".pdf"
+                                    pdf_path = os.path.join(
+                                        settings.MEDIA_ROOT, pdf_filename)
+
+                                    doc = SimpleDocTemplate(
+                                        pdf_path, pagesize=letter)
+                                    elements = []
+
+                                    # Add heading
+                                    styles = getSampleStyleSheet()
+                                    bold_style = ParagraphStyle(
+                                        name='Bold', parent=styles['Normal'], fontName='Helvetica-Bold')
+                                    heading = Paragraph(
+                                        f"Rudhra Industries", styles['Title'])
+                                    additional_text = Paragraph(
+                                        f"Account Ledger: {party_name}", bold_style)
+
+                                    # Create a table to hold the heading and additional text side by side
+                                    header_table = Table(
+                                        [[heading], [additional_text]])
+                                    header_table.setStyle(TableStyle([
+                                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                                        # Adjust horizontal position
+                                        ('LEFTPADDING', (0, 0), (-1, -1), 50),
+                                        # Adjust horizontal position
+                                        ('RIGHTPADDING', (0, 0), (-1, -1), 40),
+
+                                    ]))
+
+                                    elements.append(header_table)
+                                    elements.append(Spacer(1, 12))
+
+                                    # Create the table with styling
+                                    main_table = Table(table_data, colWidths=[
+                                                    30, 60, 70, 60, 65, 70])
+                                    style = TableStyle([
+                                        # Header background color
+                                        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                                        # Header text color
+                                        ('TEXTCOLOR', (0, 0),
+                                        (-1, 0), colors.whitesmoke),
+                                        # Center align all cells
+                                        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                                        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                                        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                                    ])
+                                    main_table.setStyle(style)
+
+                                    elements.append(main_table)
+                                    doc.build(elements)
+
+                                    pdf_url = request.build_absolute_uri(
+                                        f"{settings.MEDIA_URL}{pdf_filename}")
+
+                                    return Response({"pdf_url": pdf_url}, status=status.HTTP_200_OK)
+                                else:
+                                    return Response({"error": "Invalid data format in JsonDataTable field"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            if flag == "track_order":
                     payload = {
-                        "report_type": 4444,
-                        "filter_data": {
-                            "period_from": {
-                                "name": "Date_From",
-                                "applicable": True,
-                                "caption": "Period",
-                                "master_list_type": 0,
-                                "multi_select": True,
-                                "value": "2024-05-24 00:11:00"
-                            },
-                            "period_to": {
-                                "name": "Date_To",
-                                "applicable": True,
-                                "caption": "Period",
-                                "master_list_type": 0,
-                                "multi_select": True,
-                                "value": "2024-05-24 00:11:00"
-                            },
-                            "Pending": {
-                                "name": "Combo_Pending",
-                                "applicable": False,
-                                "caption": "",
-                                "master_list_type": 0,
-                                "multi_select": True,
-                                "value": "2"
-                            },
-                            "txt_misc_1": {
-                                "name": "Text_VoucherNo",
-                                "applicable": True,
-                                "caption": "",
-                                "master_list_type": 0,
-                                "multi_select": False,
-                                "value": voucher_id
-                            },
-                            "location": {
-                                "name": "Text_VoucherNo",
-                                "applicable": False,
-                                "caption": "",
-                                "master_list_type": 0,
-                                "multi_select": True,
-                                "value": ""
+                                "report_type": 4029,
+                                "filter_data": {
+                                    "chkcmbMisc1": {
+                                        "name": "CheckedCombo_Misc1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "voucher_no": {
+                                        "name": "Text_VoucherNo",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "cmb_misc_2": {
+                                        "name": "Combo_Misc2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "abcrm_contact": {
+                                        "name": "Text_ABCRM_Contact",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "txt_list_1": {
+                                        "name": "Text_List1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "party_category": {
+                                        "name": "Text_PartyCategory",
+                                        "applicable": True,
+                                        "caption": "Party Category",
+                                        "master_list_type": 23,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "print_on_different_page": {
+                                        "name": "None",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "period_from": {
+                                        "name": "Date_From",
+                                        "applicable": True,
+                                        "caption": "Period",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "period_to": {
+                                        "name": "Date_To",
+                                        "applicable": True,
+                                        "caption": "Period",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": datetime.now().strftime("%Y-%m-%d"),
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "location": {
+                                        "name": "Text_Location",
+                                        "applicable": True,
+                                        "caption": "Branch",
+                                        "master_list_type": 39,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "counter": {
+                                        "name": "Text_Counter",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "1",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "warehouse": {
+                                        "name": "Text_Warehouse",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "to_location": {
+                                        "name": "Text_ToLocation",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "to_warehouse": {
+                                        "name": "Text_ToWarehouse",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "party": {
+                                        "name": "Text_Party",
+                                        "applicable": True,
+                                        "caption": "Customer",
+                                        "master_list_type": 41,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": user_id,
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_party": {
+                                        "name": "Text_SubParty",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "ledger": {
+                                        "name": "Text_Ledger",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "gstin": {
+                                        "name": "Text_GSTIN",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_ledger": {
+                                        "name": "Text_SubLedger",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_group": {
+                                        "name": "Text_ItemGroup",
+                                        "applicable": True,
+                                        "caption": "Item Group",
+                                        "master_list_type": 2,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item": {
+                                        "name": "Text_Item",
+                                        "applicable": True,
+                                        "caption": "Item",
+                                        "master_list_type": 1,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_item": {
+                                        "name": "Text_SubItem",
+                                        "applicable": True,
+                                        "caption": "SubItem",
+                                        "master_list_type": 113,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "salesman": {
+                                        "name": "Text_Salesman",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "trans_salesman": {
+                                        "name": "Text_TransSalesman",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "agent": {
+                                        "name": "Text_Agent",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "trans_agent": {
+                                        "name": "Text_TransAgent",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "territory": {
+                                        "name": "Text_Territory",
+                                        "applicable": True,
+                                        "caption": "Territory",
+                                        "master_list_type": 9,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "document_categories": {
+                                        "name": "Text_DocumentCategory",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "ledger_attribute1": {
+                                        "name": "Text_LedgerAttribute1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "ledger_attribute2": {
+                                        "name": "Text_LedgerAttribute2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "ledger_attribute3": {
+                                        "name": "Text_LedgerAttribute3",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "ledger_attribute4": {
+                                        "name": "Text_LedgerAttribute4",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "ledger_attribute5": {
+                                        "name": "Text_LedgerAttribute5",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_attribute1": {
+                                        "name": "Text_ItemAttribute1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_attribute2": {
+                                        "name": "Text_ItemAttribute2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_attribute3": {
+                                        "name": "Text_ItemAttribute3",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_attribute4": {
+                                        "name": "Text_ItemAttribute4",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_attribute5": {
+                                        "name": "Text_ItemAttribute5",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "fixed_asset_attribute1": {
+                                        "name": "Text_FixedAssetAttribute1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "fixed_asset_attribute2": {
+                                        "name": "Text_FixedAssetAttribute2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "fixed_asset_attribute3": {
+                                        "name": "Text_FixedAssetAttribute3",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "fixed_asset_attribute4": {
+                                        "name": "Text_FixedAssetAttribute4",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "fixed_asset_attribute5": {
+                                        "name": "Text_FixedAssetAttribute5",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_master_attribute1": {
+                                        "name": "Text_ItemMasterAttribute1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_master_attribute2": {
+                                        "name": "Text_ItemMasterAttribute2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_master_attribute3": {
+                                        "name": "Text_ItemMasterAttribute3",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_master_attribute4": {
+                                        "name": "Text_ItemMasterAttribute4",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_master_attribute5": {
+                                        "name": "Text_ItemMasterAttribute5",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "timesheet_attribute1": {
+                                        "name": "Text_TimesheetAttribute1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "timesheet_attribute2": {
+                                        "name": "Text_TimesheetAttribute2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "timesheet_attribute3": {
+                                        "name": "Text_TimesheetAttribute3",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "timesheet_attribute4": {
+                                        "name": "Text_TimesheetAttribute4",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "timesheet_attribute5": {
+                                        "name": "Text_TimesheetAttribute5",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_item_master_attribute1": {
+                                        "name": "Text_SubItemMasterAttribute1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_item_master_attribute2": {
+                                        "name": "Text_SubItemMasterAttribute2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_item_master_attribute3": {
+                                        "name": "Text_SubItemMasterAttribute3",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_item_master_attribute4": {
+                                        "name": "Text_SubItemMasterAttribute4",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "sub_item_master_attribute5": {
+                                        "name": "Text_SubItemMasterAttribute5",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "taxcode": {
+                                        "name": "Text_Taxcode",
+                                        "applicable": True,
+                                        "caption": "Taxcode",
+                                        "master_list_type": 35,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "company": {
+                                        "name": "Text_Company",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "party_ledger": {
+                                        "name": "Text_PartyGL",
+                                        "applicable": True,
+                                        "caption": "Party GL",
+                                        "master_list_type": 96,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_type": {
+                                        "name": "CheckedCombo_ItemType",
+                                        "applicable": True,
+                                        "caption": "Item Type",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "salary_wages": {
+                                        "name": "CheckedCombo_SalaryWages",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "stock_location": {
+                                        "name": "Combo_StockLocation",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "document_status": {
+                                        "name": "CheckedCombo_DocumentStatus",
+                                        "applicable": True,
+                                        "caption": "Document Status",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "4,0,2,3",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "approval_status": {
+                                        "name": "CheckedCombo_ApprovalStatus",
+                                        "applicable": True,
+                                        "caption": "Approval Status",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "1",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "gst_type": {
+                                        "name": "CheckedCombo_GSTType",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "skip_zero": {
+                                        "name": "Check_SkipZero",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "chk_misc_1": {
+                                        "name": "Check_Misc1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "chk_misc_2": {
+                                        "name": "Check_Misc2",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "txt_misc_1": {
+                                        "name": "Text_Misc1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "cmb_misc_1": {
+                                        "name": "Combo_Misc1",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "contra_gl": {
+                                        "name": "Text_ContraGL",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "contra_party": {
+                                        "name": "Text_ContraParty",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "user": {
+                                        "name": "Text_User",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "due_date": {
+                                        "name": "Date_DueDate",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "Pending": {
+                                        "name": "Combo_Pending",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "ledger_group": {
+                                        "name": "Text_LedgerGroup",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "depreciation_rule": {
+                                        "name": "Combo_DepreciationRule",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "valuation_method": {
+                                        "name": "Combo_ValuationMethod",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "cb_ledger": {
+                                        "name": "Text_CBLedger",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "currency": {
+                                        "name": "Text_Currency",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "contra_cb_gl": {
+                                        "name": "Text_ContraCBLedger",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "tds_section": {
+                                        "name": "Text_TDSSection",
+                                        "applicable": False,
+                                        "caption": "",
+                                        "master_list_type": 0,
+                                        "multi_select": True,
+                                        "sequence": 0,
+                                        "value": "",
+                                        "parentName": "",
+                                        "parentFieldName": "",
+                                        "vType": 0
+                                    },
+                                    "item_category": {
+                                    "name": "Text_ItemCategory",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "asset_no": {
+                                    "name": "Text_AssetNo",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "employee": {
+                                    "name": "Text_Employee",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "department": {
+                                    "name": "Text_Department",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "designation": {
+                                    "name": "Text_Designation",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "hsn_code": {
+                                    "name": "Text_HSNCode",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "month": {
+                                    "name": "Combo_Month",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "year": {
+                                    "name": "Combo_Year",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                },
+                                "vtype": {
+                                    "name": "Combo_VType",
+                                    "applicable": False,
+                                    "caption": "",
+                                    "master_list_type": 0,
+                                    "multi_select": True,
+                                    "sequence": 0,
+                                    "value": "",
+                                    "parentName": "",
+                                    "parentFieldName": "",
+                                    "vType": 0
+                                }
                             }
                         }
-                    }
-
                     try:
-                        api_response = requests.post(url, data=json.dumps(payload), headers=headers)
-                        api_response.raise_for_status()
+                        response = requests.post(url, headers=headers, json=payload)
+                        response.raise_for_status()
                     except requests.exceptions.RequestException as e:
                         return Response({'error': str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-                    response_data = api_response.json()
-                    json_data_table = None
-                    party = "default"
-                    delivery_date = "default"
-                    invoice_no = None
-                    extracted_values = []
-                    if response_data:
-                        if response_data["JsonDataTable"]:
-                            json_data_table = json.loads(response_data["JsonDataTable"])
-                            if json_data_table[0]["Party"] is not None:
-                                party = json_data_table[0]["Party"]
-                            if json_data_table[0]["delivery_date"] is not None:
-                                delivery_date = json_data_table[0]["delivery_date"]
+                    if response.status_code == 200:
+                        response_data = response.json()
+                        json_data_table = None
+                        party = "default"
+                        delivery_date = "default"
+                        message_status = None
+                        extracted_values = []
+                        if response_data:
+                            if response_data["JsonDataTable"]:
+                                json_data_table = json.loads(response_data["JsonDataTable"])
+                                last_json_data_table = json_data_table[-1] 
 
-                            if json_data_table[0]["invoice_no"] is None:
-                                invoice_no = "Processing"
-                            else:
-                                invoice_no = "Ready to dispatch"
+                                if last_json_data_table["Party"] is not None:
+                                    party = last_json_data_table["Party"]
+                                if last_json_data_table["delivery_date"] is not None:
+                                    delivery_date = last_json_data_table["delivery_date"]                               
 
-                            extracted_values.append({
-                                'party': party,
-                                'delivery_date': delivery_date,
-                                'invoice_no': invoice_no
-                            })
+                                if last_json_data_table["Approval_Status"] is "Approved":
+                                    message_status =  "Ready to dispatch" 
+                                else:
+                                    message_status = "Processing"
 
-                elif flag == "account_ledger":
-                    if json_data_table:
-                            # string ==> json
-                            data_2 = json.loads(json_data_table)
-
-                            if isinstance(data_2, list) and len(data_2) > 0:
-                                party_name = data_2[0].get("party_name", "Unknown")
-
-                            # Define the data for the table
-                                table_data = [
-                                    ["IDX", "Date", "Voucher","Debit", "Credit", "Balance"]
-                                ]
-                                for idx, record in enumerate(data_2[-25:][::-1], start=1):
-                                    outstanding_lc = record.get("outstanding_lc", 0)
-                                    debit = outstanding_lc if outstanding_lc > 0 else 0
-                                    credit = -outstanding_lc if outstanding_lc < 0 else 0
-                                    row =[
-                                            idx,
-                                            datetime.strptime(record.get("bill_date", ""), "%Y-%m-%dT%H:%M:%S").strftime(
-                                                "%d/%m/%Y") if record.get("bill_date") else "",
-                                            record.get("bill_no", ""),
-                                            debit,
-                                            credit,
-                                            record.get("outstanding_lc_running", ""),
-                                        ]
-                                    table_data.append(row)
-
-                            # Generate PDF with table
-                                pdf_filename = "Account_ledger_" + \
-                                    party_name.replace(
-                                        ' ', '_')+"_"+uuid.uuid4().hex[:6]+".pdf"
-                                pdf_path = os.path.join(
-                                    settings.MEDIA_ROOT, pdf_filename)
-
-                                doc = SimpleDocTemplate(
-                                    pdf_path, pagesize=letter)
-                                elements = []
-
-                                # Add heading
-                                styles = getSampleStyleSheet()
-                                bold_style = ParagraphStyle(
-                                    name='Bold', parent=styles['Normal'], fontName='Helvetica-Bold')
-                                heading = Paragraph(
-                                    f"Rudhra Industries", styles['Title'])
-                                additional_text = Paragraph(
-                                    f"Account Ledger: {party_name}", bold_style)
-
-                                # Create a table to hold the heading and additional text side by side
-                                header_table = Table(
-                                    [[heading], [additional_text]])
-                                header_table.setStyle(TableStyle([
-                                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                                    # Adjust horizontal position
-                                    ('LEFTPADDING', (0, 0), (-1, -1), 50),
-                                    # Adjust horizontal position
-                                    ('RIGHTPADDING', (0, 0), (-1, -1), 40),
-
-                                ]))
-
-                                elements.append(header_table)
-                                elements.append(Spacer(1, 12))
-
-                                # Create the table with styling
-                                main_table = Table(table_data, colWidths=[
-                                                   30, 60, 70, 60, 65, 70])
-                                style = TableStyle([
-                                    # Header background color
-                                    ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-                                    # Header text color
-                                    ('TEXTCOLOR', (0, 0),
-                                     (-1, 0), colors.whitesmoke),
-                                    # Center align all cells
-                                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                                    ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-                                    ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-                                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                                ])
-                                main_table.setStyle(style)
-
-                                elements.append(main_table)
-                                doc.build(elements)
-
-                                pdf_url = request.build_absolute_uri(
-                                    f"{settings.MEDIA_URL}{pdf_filename}")
-
-                                return Response({"pdf_url": pdf_url}, status=status.HTTP_200_OK)
-                            else:
-                                return Response({"error": "Invalid data format in JsonDataTable field"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                    extracted_values.append({
-                                "ELSE" : "BLOCK"
-                            })
+                                extracted_values.append({
+                                    'party': party,
+                                    'delivery_date': delivery_date,
+                                    'message_status': message_status
+                                })
 
         return Response({"response_data": extracted_values}, status=status.HTTP_200_OK)
