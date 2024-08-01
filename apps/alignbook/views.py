@@ -2411,7 +2411,7 @@ class TrackOrderAndAccountLedger(APIView):
                                 if last_json_data_table["delivery_date"] is not None:
                                     delivery_date = last_json_data_table["delivery_date"]                               
 
-                                if last_json_data_table["Approval_Status"] == "Approved":
+                                if last_json_data_table["Approval_Status"]  ==  "Approved":
                                     message_status =  "Ready to dispatch" 
                                 else:
                                     message_status = "Processing"
