@@ -140,6 +140,11 @@ class UnitOptionsSerializer(serializers.ModelSerializer):
         model = UnitOptions
         fields = '__all__'
 
+class ModUnitOptionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnitOptions
+        fields = ['unit_options_id', 'unit_name']
+
 class ProductDrugTypesSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductDrugTypes
@@ -194,6 +199,10 @@ class ProductBrandsSerializer(serializers.ModelSerializer):
             instance.save()
         return super().update(instance, validated_data)
 
+class ModPurchaseTypesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PurchaseTypes
+        fields = ['purchase_type_id','name']
 
 class PurchaseTypesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -280,6 +289,11 @@ class ModTaskPrioritiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskPriorities
         fields = ['priority_id','priority_name']
+
+class ModUnitOptionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnitOptions
+        fields = ['unit_options_id','unit_name']
 
 class TaskPrioritiesSerializer(serializers.ModelSerializer):
     class Meta:

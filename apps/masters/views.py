@@ -3,7 +3,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import generate_order_number
 from rest_framework.views import APIView
 from django.shortcuts import render
 from rest_framework import viewsets
@@ -493,8 +492,12 @@ def generate_order_number_view(request):
         Response: A JSON response containing the generated order number or an error message.
     """
     order_type_prefix = request.GET.get('type')
+    
+    if not order_type_prefix:
+        return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
+    
     order_type_prefix = order_type_prefix.upper()
-    valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR']
+    valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD']
     
     if order_type_prefix not in valid_prefixes:
         return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)

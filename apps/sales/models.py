@@ -1,10 +1,10 @@
-from django.db import models
-from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
-from apps.inventory.models import Warehouses
-from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, ProductItemType, CustomerCategories, SaleTypes, ShippingCompanies, ShippingModes
-from config.utils_variables import saleorderreturns, saleorders, paymenttransactions, invoices, saleinvoiceitemstable, shipments, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable
-from apps.products.models import ProductGroups, Products
 import uuid
+from django.db import models
+from apps import products
+from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
+from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions
+from apps.products.models import Products
+from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable
 from config.utils_methods import OrderNumberMixin
 # Create your models here.
 
@@ -75,15 +75,15 @@ class SaleOrderItems(models.Model):
     sale_order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.CASCADE, db_column='sale_order_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
+    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    unit_price = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    total_boxes = models.IntegerField(null=True, default=None)
     rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    discount_percentage = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    dis_amt = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    tax_code = models.CharField(max_length=255, null=True, default=None)
-    tax_rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    remarks = models.CharField(max_length=1024, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -95,6 +95,7 @@ class SaleOrderItems(models.Model):
     
 class SaleInvoiceOrders(OrderNumberMixin):
     sale_invoice_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.CASCADE, db_column='sale_order_id')
     BILL_TYPE_CHOICES = [('CASH', 'Cash'),('CREDIT', 'Credit'),('OTHERS', 'Others'),]
     bill_type = models.CharField(max_length=6, choices=BILL_TYPE_CHOICES)
     invoice_date = models.DateField()
@@ -137,7 +138,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
         db_table = saleinvoiceorderstable
 
     def __str__(self):
-        return self.sale_invoice_id
+        return str(self.sale_invoice_id)
     
 class PaymentTransactions(models.Model): #required fields are updated
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -169,15 +170,15 @@ class SaleInvoiceItems(models.Model): #required fields are updated
     sale_invoice_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
+    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    unit_price = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    total_boxes = models.IntegerField(null=True, default=None)
     rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    discount_percentage = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    dis_amt = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    tax_code = models.CharField(max_length=255,null=True,default=None)
-    tax_rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    remarks = models.CharField(max_length=1024, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -189,6 +190,7 @@ class SaleInvoiceItems(models.Model): #required fields are updated
 
 class SaleReturnOrders(OrderNumberMixin):
     sale_return_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
     BILL_TYPE_CHOICES = [('CASH', 'Cash'),('CREDIT', 'Credit'),('OTHERS', 'Others'),]
     bill_type = models.CharField(max_length=6, choices=BILL_TYPE_CHOICES)  
     return_date = models.DateField()
@@ -232,21 +234,21 @@ class SaleReturnOrders(OrderNumberMixin):
         db_table = salereturnorderstable
 
     def __str__(self):
-        return self.sale_return_id
+        return str(self.sale_return_id)
     
 class SaleReturnItems(models.Model):
     sale_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, db_column='sale_return_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
-    quantity = models.DecimalField(max_digits=18, decimal_places=2)
-    unit_price = models.DecimalField(max_digits=18, decimal_places=2)
-    rate = models.DecimalField(max_digits=18, decimal_places=2)
-    amount = models.DecimalField(max_digits=18, decimal_places=2)
-    discount_percentage = models.DecimalField(max_digits=18, decimal_places=2)
-    discount = models.DecimalField(max_digits=18, decimal_places=2)
-    dis_amt = models.DecimalField(max_digits=18, decimal_places=2)
-    tax_code = models.CharField(max_length=255, null=True, default=None)
-    tax_rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    print_name = models.CharField(max_length=255, null=True, default=None)
+    quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    total_boxes = models.IntegerField(null=True, default=None)
+    rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    remarks = models.CharField(max_length=1024, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -300,3 +302,34 @@ class OrderShipments(OrderNumberMixin):
 
     def __str__(self):
         return self.shipment_id
+
+class QuickPacks(models.Model):
+    quick_pack_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    description = models.CharField(max_length=512, null=True, default=None)
+    active = models.CharField(max_length=1, choices=[('Y', 'Yes'), ('N', 'No')], null=True, default='Y')
+    lot_qty = models.IntegerField(default=1, null=True)
+    customer_id = models.ForeignKey(Customer,on_delete=models.CASCADE, db_column='customer_id', null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+
+    class Meta:
+        db_table = quickpacks
+
+    def __str__(self):
+        return self.name
+
+class QuickPackItems(models.Model):
+    quick_pack_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    quantity = models.IntegerField(null=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    quick_pack_id = models.ForeignKey(QuickPacks,on_delete=models.CASCADE, db_column='quick_pack_id')
+    product_id = models.ForeignKey(Products,on_delete=models.CASCADE, db_column='product_id')
+     
+    class Meta:
+        db_table = quickpackitems
+
+    def __str__(self):
+        return str(self.quick_pack_item_id)

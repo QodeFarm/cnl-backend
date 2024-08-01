@@ -38,10 +38,12 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/v1/leads/', include('apps.leads.urls')),
+    path('api/v1/hrms/', include('apps.hrms.urls')),
     path('api/v1/users/', include('apps.users.url')),
     path('api/v1/company/', include('apps.company.urls')),
     path('api/v1/customers/', include('apps.customer.urls')),
-    path('api/v1/vendor/', include('apps.vendor.urls')),
+    path('api/v1/vendors/', include('apps.vendor.urls')),
     path('api/v1/company/', include('apps.company.urls')),
     path('api/v1/masters/', include('apps.masters.urls')),
     path('api/v1/products/', include('apps.products.urls')),
@@ -51,6 +53,7 @@ urlpatterns = [
     path('api/v1/per_val/', include('apps.per_val.url')),
     path('api/v1/alignbooks/', include('apps.alignbook.url')),
     path('api/v1/tasks/', include('apps.tasks.urls')),
+    path('api/v1/assets/', include('apps.assets.urls')),
     path('', api_links, name='api_links'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]

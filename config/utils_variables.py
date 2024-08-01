@@ -22,6 +22,7 @@ productgstclassificationstable = 'product_gst_classifications'
 productsalesgltable = 'product_sales_gl'
 productpurchasegltable ='product_purchase_gl'
 productstable = 'products'
+productitembalancetable = 'product_item_balance'
 
 #vendor db_tables
 vendorcategory='vendor_category'
@@ -47,6 +48,8 @@ salereturnorderstable = 'sale_return_orders'
 salereturnitemstable = 'sale_return_items'
 orderattachmentstable = 'order_attachments' 
 ordershipmentstable = 'order_shipments'
+quickpackitems = 'quick_pack_items'
+quickpacks = 'quick_packs'
 
 #inventory db_tables
 warehousestable ='warehouses'
@@ -65,6 +68,13 @@ taskstable = 'tasks'
 taskcommentstable ='task_comments'
 taskattachmentstable ='task_attachments'
 taskhistorytable='task_history'
+
+#assets db_tables
+assetstatusestable = 'asset_statuses'
+assetcategoriestable = 'asset_categories'
+locationstable ='locations'
+assetstable = 'assets'
+assetmaintenancetable ='asset_maintenance'
 
 #Master db_tables
 countrytable = 'country'
@@ -108,3 +118,16 @@ usertimerestrictions = 'user_time_restrictions'
 userallowedweekdays = 'user_allowed_weekdays'
 userpermissions = 'user_permissions'
 userroles = 'user_roles'
+
+# LEAD Management
+leadstatuses = 'lead_statuses'
+interactiontypes = 'interaction_types'
+leads = 'leads'
+leadassignments = 'lead_assignments'
+leadinteractions = 'lead_interactions'
+leadassignmenthistory = 'lead_assignment_history'
+
+# HRMS
+designations = 'designations'
+departments = 'departments'
+employees = 'employees'

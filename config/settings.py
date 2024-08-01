@@ -58,8 +58,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'djoser',
+    'phonenumber_field',
+    
     # 'django_safe_settings',
     'drf_yasg',
+    'django_filters',
     
     #modules
     'apps.vendor',
@@ -74,6 +77,9 @@ INSTALLED_APPS = [
     'apps.per_val',
     'apps.alignbook',
     'apps.tasks',
+    'apps.leads',
+    'apps.hrms',
+    'apps.assets',
 ]
 
 MIDDLEWARE = [
@@ -291,6 +297,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:4200',
     'http://localhost:8080',
     'http://127.0.0.1:5500',
+
 ]
 
 # from django_safe_settings.patch import patch_all  # type: ignore

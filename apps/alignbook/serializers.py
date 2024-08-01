@@ -6,3 +6,4 @@ class VoucherSerializer(serializers.Serializer):
 
 class PhoneNumberSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=15)
+    flag = serializers.CharField(max_length=155)
