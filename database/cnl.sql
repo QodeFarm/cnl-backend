@@ -915,7 +915,6 @@ CREATE TABLE IF NOT EXISTS warehouses (
     name VARCHAR(255) NOT NULL,
     code VARCHAR(255),
     item_type_id CHAR(36),
-    customer_id CHAR(36) NOT NULL,
     address VARCHAR(255),
     city_id CHAR(36) NOT NULL,
 	state_id CHAR(36) NOT NULL,
@@ -928,7 +927,6 @@ CREATE TABLE IF NOT EXISTS warehouses (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
-    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     FOREIGN KEY (city_id) REFERENCES city(city_id),
 	FOREIGN KEY (state_id) REFERENCES state(state_id),
 	FOREIGN KEY (country_id) REFERENCES country(country_id)
