@@ -15,6 +15,13 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Create a logger object
 logger = logging.getLogger(__name__)
 
+class ModLeadSerializerView(viewsets.ModelViewSet):
+    queryset = Leads.objects.all()
+    serializer_class = ModLeadSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
 class LeadStatusesView(viewsets.ModelViewSet):
     queryset = LeadStatuses.objects.all()
     serializer_class = LeadStatusesSerializer

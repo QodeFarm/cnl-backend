@@ -11,6 +11,7 @@ router.register(r'leads_get', LeadsView)
 router.register(r'lead_assignments', LeadAssignmentsView)
 router.register(r'lead_interactions', LeadInteractionsView)
 router.register(r'lead_assignment_history', LeadAssignmentHistoryView)
+router.register(r'lead_group', ModLeadSerializerView)
 
 urlpatterns = [
     path('',include(router.urls)),

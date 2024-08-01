@@ -48,7 +48,7 @@ class Leads(models.Model):
 
 class LeadAssignments(models.Model):
 	assignment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, null=False, db_column='lead_id')
+	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, null=False, db_column='lead_id', related_name='asignment')
 	sales_rep_id = models.ForeignKey(Employees, on_delete=models.CASCADE, null=False, db_column='sales_rep_id')
 	assignment_date = models.DateTimeField(null=False, default=datetime.today)
 	created_at = models.DateTimeField(auto_now_add=True)
@@ -62,7 +62,7 @@ class LeadAssignments(models.Model):
 
 class LeadInteractions(models.Model):
 	interaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, db_column='lead_id')
+	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, db_column='lead_id', related_name='interaction')
 	interaction_type_id = models.ForeignKey(InteractionTypes, on_delete=models.CASCADE, db_column='interaction_type_id')
 	interaction_date = models.DateTimeField(null=False, default=datetime.today)
 	notes = models.TextField(null=True, default=None)
@@ -77,7 +77,7 @@ class LeadInteractions(models.Model):
 
 class LeadAssignmentHistory(models.Model):
 	history_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, db_column='lead_id')
+	lead_id = models.ForeignKey(Leads, on_delete=models.CASCADE, db_column='lead_id', related_name='history')
 	sales_rep_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='sales_rep_id')
 	assignment_date = models.DateTimeField(null=False, default=datetime.today)
 	end_date = models.DateTimeField(null=True, default=None)
