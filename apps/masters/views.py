@@ -4,7 +4,6 @@ from rest_framework.filters import OrderingFilter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.shortcuts import render
 from rest_framework import viewsets
 from config.utils_methods import *
 from rest_framework import status
@@ -12,7 +11,6 @@ from django.conf import settings
 from .serializers import *
 from .filters import *
 from .models import *
-import json
 import os
 
 class FileUploadView(APIView):
@@ -46,11 +44,12 @@ class FileUploadView(APIView):
                     with open(file_path, 'wb+') as destination:
                         for chunk in file.chunks():
                             destination.write(chunk)
+                    full_path = get_full_path(request,unique_file_name)
                     uploaded_files.append({
-                        'attachment_name': file.name,
                         'file_size': file.size,
-                        'attachment_path':unique_file_name 
-                    })
+                        'attachment_name': file.name,
+                        'attachment_path':unique_file_name ,
+                        'full_path' : full_path})
                 return Response({'count': len(files), 'msg': 'Files Uploaded Successfully', 'data': uploaded_files}, status=status.HTTP_201_CREATED)
             else:
                 return Response({'count':len(files), 'msg':'No Files uploaded', 'data':[]}, status=status.HTTP_400_BAD_REQUEST) 
