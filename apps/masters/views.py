@@ -14,22 +14,19 @@ from .models import *
 import os
 
 # Function to get the full path
-def get_full_path(request, folder_name, file_name, subfolder_name=None):
-    if subfolder_name:
-        return request.build_absolute_uri(f"{settings.MEDIA_URL}{folder_name}/{subfolder_name}/{file_name}")
-    return request.build_absolute_uri(f"{settings.MEDIA_URL}{folder_name}/{file_name}")
+def get_full_path(request, folder_path, file_name):
+    return request.build_absolute_uri(f"{settings.MEDIA_URL}{folder_path}/{file_name}")
 
 class FileUploadView(APIView):
     parser_classes = (MultiPartParser, FormParser)
-    def post(self, request, folder_name, subfolder_name=None, *args, **kwargs):
+
+    def post(self, request, *args, **kwargs):
         flag = request.data.get('flag')
         files = request.FILES.getlist('files')
-
-        if subfolder_name:
-            target_folder = os.path.join(settings.MEDIA_ROOT, folder_name, subfolder_name)
-        else:
-            target_folder = os.path.join(settings.MEDIA_ROOT, folder_name)
-
+        folder_path = request.query_params.get('fp')
+        if not folder_path:
+            return Response({'count': 0, 'msg': 'Folder path not provided', 'data': []}, status=status.HTTP_400_BAD_REQUEST)
+        target_folder = os.path.join(settings.MEDIA_ROOT, folder_path)
         if flag == "remove_file":
             file_names = request.data.getlist('file_names')
             if len(file_names) != 0:
@@ -56,7 +53,7 @@ class FileUploadView(APIView):
                     with open(file_path, 'wb+') as destination:
                         for chunk in file.chunks():
                             destination.write(chunk)
-                    full_path = get_full_path(request, folder_name, unique_file_name, subfolder_name)
+                    full_path = get_full_path(request, folder_path, unique_file_name)
                     uploaded_files.append({
                         'file_size': file.size,
                         'attachment_name': file.name,
