@@ -91,6 +91,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'middleware.download_response_middleware.StripDownloadJsonMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -299,6 +300,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:5500',
 
 ]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
