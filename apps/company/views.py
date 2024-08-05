@@ -4,7 +4,7 @@ from .models import Companies, Branches, BranchBankDetails
 from .serializers import CompaniesSerializer, BranchesSerializer, BranchBankDetailsSerializer
 from config.utils_methods import list_all_objects, create_instance, update_instance
 from config.utils_variables import *
-from django_filters.rest_framework import DjangoFilterBackend
+from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from .filters import CompaniesFilters, BranchesFilters, BranchBankDetailsFilters
 from rest_framework.filters import OrderingFilter
 

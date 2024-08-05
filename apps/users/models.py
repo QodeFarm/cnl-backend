@@ -95,7 +95,7 @@ def profile_picture(instance, filename):
     unique_id = uuid.uuid4().hex[:6]
     # Construct the filename
     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-    return f"{original_filename}_{unique_id}{file_extension}"
+    return f"User/{original_filename}_{unique_id}{file_extension}"
 
 #====
 class User(AbstractBaseUser):
