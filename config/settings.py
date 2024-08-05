@@ -302,5 +302,7 @@ CORS_ALLOWED_ORIGINS = [
 
 ]
 
+CORS_ALLOW_CREDENTIALS = True
+
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()

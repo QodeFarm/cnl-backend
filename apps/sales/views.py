@@ -3,12 +3,14 @@ from django.db import transaction
 from django.forms import ValidationError
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
-
+from .filters import SaleOrderFilter
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
 from .serializers import *
@@ -26,6 +28,9 @@ logger = logging.getLogger(__name__)
 class SaleOrderView(viewsets.ModelViewSet):
     queryset = SaleOrder.objects.all()
     serializer_class = SaleOrderSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SaleOrderFilter
+    ordering_fields = ['num_employees', 'created_at', 'updated_at', 'name']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

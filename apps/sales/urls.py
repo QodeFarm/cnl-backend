@@ -6,7 +6,7 @@ from rest_framework.routers import DefaultRouter
 
 router = DefaultRouter()
 
-router.register(r'sale_order_get', SaleOrderView)
+router.register(r'sale_order_search', SaleOrderView)
 router.register(r'sales_price_list', SalesPriceListView)
 router.register(r'sale_order_items', SaleOrderItemsView)
 router.register(r'sale_invoice_order_get',SaleInvoiceOrdersView)
