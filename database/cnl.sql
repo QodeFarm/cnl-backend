@@ -1656,24 +1656,14 @@ CREATE TABLE IF NOT EXISTS leads (
    email VARCHAR(255) NOT NULL,
    phone VARCHAR(20),
    lead_status_id CHAR(36) NOT NULL,
+   sales_rep_id CHAR(36) NOT NULL,
    score INT DEFAULT 0,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-   FOREIGN KEY (lead_status_id) REFERENCES lead_statuses(lead_status_id)
-);
-
-/* lead_assignments Table */
--- Stores information about which leads are assigned to which sales representatives.
-CREATE TABLE IF NOT EXISTS lead_assignments (
-   assignment_id CHAR(36) PRIMARY KEY,
-   lead_id CHAR(36) NOT NULL,
-   sales_rep_id CHAR(36) NOT NULL,
-   assignment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-   FOREIGN KEY (lead_id) REFERENCES leads(lead_id),
+   FOREIGN KEY (lead_status_id) REFERENCES lead_statuses(lead_status_id),
    FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
 );
+
 
 /* lead_interactions Table */
 -- Stores interactions with leads.
