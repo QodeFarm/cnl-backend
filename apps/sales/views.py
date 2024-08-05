@@ -219,16 +219,6 @@ class SaleOrderViewSet(APIView):
                 saleorders = SaleOrder.objects.all()
                 data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
                 return Response(data, status=status.HTTP_200_OK)
-            
-            customer = request.query_params.get("customer_id", None)
-            if customer:
-                logger.info("Retrieving filters for Sale order ")
-                saleorders = SaleOrder.objects.filter(customer_id = customer)
-                # data = SaleOrderSerializer(saleorders)
-                # print(data.data)
-                data = list(saleorders.values()) 
-                # data = SaleOrderOptionsSerializer
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
 
             logger.info("Retrieving all sale order")
             queryset = SaleOrder.objects.all()
