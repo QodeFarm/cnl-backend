@@ -13,46 +13,59 @@ from .filters import *
 from .models import *
 import os
 
+# Function to get the full path
+def get_full_path(request, folder_name, file_name, subfolder_name=None):
+    if subfolder_name:
+        return request.build_absolute_uri(f"{settings.MEDIA_URL}{folder_name}/{subfolder_name}/{file_name}")
+    return request.build_absolute_uri(f"{settings.MEDIA_URL}{folder_name}/{file_name}")
+
 class FileUploadView(APIView):
     parser_classes = (MultiPartParser, FormParser)
-    def post(self, request, *args, **kwargs):
+    def post(self, request, folder_name, subfolder_name=None, *args, **kwargs):
         flag = request.data.get('flag')
         files = request.FILES.getlist('files')
+
+        if subfolder_name:
+            target_folder = os.path.join(settings.MEDIA_ROOT, folder_name, subfolder_name)
+        else:
+            target_folder = os.path.join(settings.MEDIA_ROOT, folder_name)
+
         if flag == "remove_file":
             file_names = request.data.getlist('file_names')
             if len(file_names) != 0:
                 for file_name in file_names:
-                    file_path = os.path.join(settings.MEDIA_ROOT, file_name)
+                    file_path = os.path.join(target_folder, file_name)
                     if os.path.exists(file_path):
                         os.remove(file_path)
                     else:
-                        return Response({'count':0, 'msg':'Files Not Exist', 'data':[]}, status=status.HTTP_200_OK)
-                return Response({'count':len(file_names), 'msg':'Files Removed', 'data':[file_names]}, status=status.HTTP_200_OK) 
+                        return Response({'count': 0, 'msg': 'Files Not Exist', 'data': []}, status=status.HTTP_200_OK)
+                return Response({'count': len(file_names), 'msg': 'Files Removed', 'data': file_names}, status=status.HTTP_200_OK)
             else:
-                return Response({'count':len(files), 'msg':'No Files Selected', 'data':[]}, status=status.HTTP_400_BAD_REQUEST)  
+                return Response({'count': 0, 'msg': 'No Files Selected', 'data': []}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            media_folder = settings.MEDIA_ROOT
-            if not os.path.exists(media_folder):
-                os.makedirs(media_folder)                
+            if not os.path.exists(target_folder):
+                os.makedirs(target_folder)
+
             if len(files) != 0:
                 uploaded_files = []
                 for file in files:
                     file_uuid = uuid.uuid4().hex[:6]
                     file_name, file_extension = os.path.splitext(file.name.replace(' ', '_'))
                     unique_file_name = f"{file_name}_{file_uuid}{file_extension}"
-                    file_path = os.path.join(settings.MEDIA_ROOT, unique_file_name)
+                    file_path = os.path.join(target_folder, unique_file_name)
                     with open(file_path, 'wb+') as destination:
                         for chunk in file.chunks():
                             destination.write(chunk)
-                    full_path = get_full_path(request,unique_file_name)
+                    full_path = get_full_path(request, folder_name, unique_file_name, subfolder_name)
                     uploaded_files.append({
                         'file_size': file.size,
                         'attachment_name': file.name,
-                        'attachment_path':unique_file_name ,
-                        'full_path' : full_path})
+                        'attachment_path': unique_file_name,
+                        'full_path': full_path
+                    })
                 return Response({'count': len(files), 'msg': 'Files Uploaded Successfully', 'data': uploaded_files}, status=status.HTTP_201_CREATED)
             else:
-                return Response({'count':len(files), 'msg':'No Files uploaded', 'data':[]}, status=status.HTTP_400_BAD_REQUEST) 
+                return Response({'count': 0, 'msg': 'No Files uploaded', 'data': []}, status=status.HTTP_400_BAD_REQUEST)
 
 class CountryViewSet(viewsets.ModelViewSet):
     queryset = Country.objects.all()
