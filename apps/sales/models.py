@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
-from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions
+from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses
 from apps.products.models import Products
 from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable
 from config.utils_methods import OrderNumberMixin
@@ -140,6 +140,16 @@ class SaleInvoiceOrders(OrderNumberMixin):
     def __str__(self):
         return str(self.sale_invoice_id)
     
+    def save(self, *args, **kwargs):
+    # Example of overriding save to set default values or perform calculations
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+    
+    # Perform any calculations here if needed
+    # self.total_amount = self.calculate_total_amount()
+
+        super().save(*args, **kwargs)
+    
 class PaymentTransactions(models.Model): #required fields are updated
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
@@ -236,6 +246,16 @@ class SaleReturnOrders(OrderNumberMixin):
     def __str__(self):
         return str(self.sale_return_id)
     
+    def save(self, *args, **kwargs):
+    # Example of overriding save to set default values or perform calculations
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+    
+    # Perform any calculations here if needed
+    # self.total_amount = self.calculate_total_amount()
+
+        super().save(*args, **kwargs)
+    
 class SaleReturnItems(models.Model):
     sale_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, db_column='sale_return_id')
@@ -280,7 +300,7 @@ class OrderShipments(OrderNumberMixin):
     destination = models.CharField(max_length=255, null=True, default=None)
     shipping_mode_id = models.ForeignKey('masters.ShippingModes', on_delete=models.CASCADE, db_column='shipping_mode_id', null=True, default=None)
     shipping_company_id = models.ForeignKey('masters.ShippingCompanies', on_delete=models.CASCADE, db_column='shipping_company_id', null=True, default=None)
-    shipping_tracking_no = models.CharField(max_length=20, unique=True, default='')
+    shipping_tracking_no = models.CharField(max_length=20, default='')
     order_no_prefix = 'SHIP'
     order_no_field = 'shipping_tracking_no'
     shipping_date = models.DateField()
