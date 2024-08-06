@@ -1231,7 +1231,7 @@ CREATE TABLE IF NOT EXISTS order_shipments (
     destination VARCHAR(255),
     shipping_mode_id CHAR(36),
     shipping_company_id CHAR(36),
-    shipping_tracking_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: SHIP-2406-00001
+    shipping_tracking_no VARCHAR(20) NOT NULL,  -- ex pattern: SHIP-2406-00001
     shipping_date DATE NOT NULL,
     shipping_charges DECIMAL(10, 2),
     vehicle_vessel VARCHAR(255),
