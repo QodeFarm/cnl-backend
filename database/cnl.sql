@@ -1656,12 +1656,12 @@ CREATE TABLE IF NOT EXISTS leads (
    email VARCHAR(255) NOT NULL,
    phone VARCHAR(20),
    lead_status_id CHAR(36) NOT NULL,
-   sales_rep_id CHAR(36) NOT NULL,
+   assignee_id CHAR(36) NOT NULL,
    score INT DEFAULT 0,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    FOREIGN KEY (lead_status_id) REFERENCES lead_statuses(lead_status_id),
-   FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
+   FOREIGN KEY (assignee_id) REFERENCES employees(employee_id)
 );
 
 
