@@ -90,11 +90,11 @@ class SaleOrderFilter(filters.FilterSet):
 
 #==========================common-utility-function===================================
 
-import datetime
-from django.utils import timezone
-from datetime import date, datetime, timedelta, timezone
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter, DateFilter
-# from dateutil.relativedelta import relativedelta
+from django.utils import timezone
+from django_filters import rest_framework as filters
+import datetime
+from dateutil.relativedelta import relativedelta
 
 PERIOD_NAME_CHOICES = [
     ('today', 'Today'),
@@ -176,6 +176,3 @@ class SaleInvoiceOrdersFilter(FilterSet):
 
         return queryset
     
-    class Meta:
-        model = SaleInvoiceOrders
-        fields =[]
