@@ -54,19 +54,6 @@ class LeadsView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-class LeadAssignmentsView(viewsets.ModelViewSet):
-    queryset = LeadAssignments.objects.all()
-    serializer_class = LeadAssignmentsSerializer
-
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-
 class LeadInteractionsView(viewsets.ModelViewSet):
     queryset = LeadInteractions.objects.all()
     serializer_class = LeadInteractionsSerializer
@@ -124,7 +111,7 @@ class LeadsViewSet(APIView):
 
     def retrieve(self, request, *args, **kwargs):
         """
-        Retrieves a lead and its related data (items, attachments, and shipments).
+        Retrieves a lead and its related data (assignment_history, and Interaction).
         """
         try:
             pk = kwargs.get('pk')
@@ -136,22 +123,17 @@ class LeadsViewSet(APIView):
             lead = get_object_or_404(Leads, pk=pk)
             lead_serializer = LeadsSerializer(lead)
 
-            # Retrieve assignment_data
-            assignment_data = self.get_related_data(LeadAssignments, LeadAssignmentsSerializer, 'lead_id', pk)
-            assignment_data = assignment_data[0] if assignment_data else {}
-
             # Retrieve assignment_history_data
             assignment_history_data = self.get_related_data(LeadAssignmentHistory, LeadAssignmentHistorySerializer, 'lead_id', pk)
             assignment_history_data = assignment_history_data if assignment_history_data else []
 
             # Retrieve interaction_data
             interaction_data = self.get_related_data(LeadInteractions, LeadInteractionsSerializer, 'lead_id', pk)
-            interaction_data = interaction_data[0] if interaction_data else {}
+            interaction_data = interaction_data if interaction_data else []
 
             # Customizing the response data
             custom_data = {
                 "lead": lead_serializer.data,
-                "assignment": assignment_data,
                 "assignment_history": assignment_history_data,
                 "interaction":interaction_data
                 }
@@ -184,7 +166,7 @@ class LeadsViewSet(APIView):
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a lead and its related attachments and shipments.
+        Handles the deletion of a lead and its related assignments and interactions.
         """
         try:
             # Get the Leads instance
@@ -224,7 +206,7 @@ class LeadsViewSet(APIView):
         """
         errors = {}        
 
-        # Vlidated Leads Data
+        # Validate Leads Data
         lead_data = given_data.pop('lead', None)  # parent_data
         if lead_data:
             lead_error = validate_payload_data(self, lead_data, LeadsSerializer)
@@ -246,27 +228,10 @@ class LeadsViewSet(APIView):
             if lead_error:
                 errors["lead"] = lead_error
 
-        # Vlidated LeadAssignments Data
-        assignment_data = given_data.pop('assignment', None)
-        if assignment_data:
-            assignment_error = validate_multiple_data(self, assignment_data, LeadAssignmentsSerializer, ['lead_id'])
-            if assignment_error:
-                errors["assignment"] = assignment_error
-
-        # Vlidated LeadInteractions Data
-        interaction_data = given_data.pop('interaction', None)
-        if interaction_data:
-            interaction_error = validate_multiple_data(self, interaction_data, LeadInteractionsSerializer, ['lead_id'])
-            if interaction_error:
-                errors["interaction"] = interaction_error
-
         # Ensure mandatory data is present
         if not lead_data:
             logger.error("Lead data is mandatory but not provided.")
             return build_response(0, "Lead data is mandatory", [], status.HTTP_400_BAD_REQUEST)
-        
-        if lead_data and interaction_data and not assignment_data: 
-            return build_response(0, "without assignment no interaction is possible", [], status.HTTP_400_BAD_REQUEST)
 
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
@@ -279,9 +244,8 @@ class LeadsViewSet(APIView):
         # Hence the data is validated , further it can be created.
         custom_data = {
             'lead':{},
-            'assignment':{},
             'assignment_history':[],
-            'interaction':{}
+            'interaction':[]
             }
 
         # Create Leads Data
@@ -289,32 +253,16 @@ class LeadsViewSet(APIView):
         new_lead_data = new_lead_data[0]
         custom_data["lead"] = new_lead_data
         lead_id = new_lead_data.get("lead_id", None)  # Fetch lead_id from mew instance
+        assignee_id = new_lead_data.get("assignee_id", None)  # Fetch lead_id from mew instance
         logger.info('Leads - created*')
 
-        # Create LeadAssignments Data
-        if assignment_data:
-            update_fields = {'lead_id': lead_id}
-            assignments_data = generic_data_creation(self, [assignment_data], LeadAssignmentsSerializer, update_fields)
-            assignments_data = assignments_data[0] if assignments_data else {}
-            custom_data["assignment"] = assignments_data
-            sales_rep_id = assignment_data.get("sales_rep_id", None)  # Fetch sales_rep_id
-            logger.info('LeadAssignments - created*')
-
-            # Create LeadAssignmentHistory Data if LeadAssignments is present
-            assignment_history = {}
-            update_fields = {'lead_id': lead_id, 'sales_rep_id': sales_rep_id}
-            assignments_history = generic_data_creation(self, [assignment_history], LeadAssignmentHistorySerializer, update_fields)
-            assignments_history = assignments_history if assignments_history else []
-            custom_data["assignment_history"] = assignments_history
-            logger.info('LeadAssignmentHistory - created*')
-
-            # Create LeadInteractions Data if LeadAssignments is present (if no assignment then no interaction)
-            if interaction_data:
-                update_fields = {'lead_id': lead_id}
-                interactions_data = generic_data_creation(self, [interaction_data], LeadInteractionsSerializer, update_fields)
-                interactions_data = interactions_data[0] if interactions_data else {}
-                custom_data["interaction"] = interactions_data
-                logger.info('LeadAssignmentHistory - created*')
+        #create History for Lead with assignemnt date as current and leave the end date as null.
+        update_fields = {'lead_id':lead_id, 'assignee_id':assignee_id}
+        assignment_history = {}
+        assignments_history = generic_data_creation(self, [assignment_history], LeadAssignmentHistorySerializer, update_fields)
+        assignments_history = assignments_history if assignments_history else []
+        custom_data["assignment_history"] = assignments_history
+        logger.info('LeadAssignmentHistory - created*')
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
@@ -343,36 +291,12 @@ class LeadsViewSet(APIView):
             if lead_error:
                 errors["lead"] = lead_error
 
-        # Validate LeadAssignments Data
-        assignment_data = given_data.pop('assignment', None)
-        exclude_fields = ['lead_id']
-        if assignment_data:
-            assignment_data['lead_id'] = pk
-            assignment_error = validate_multiple_data(self, [assignment_data], LeadAssignmentsSerializer, exclude_fields)
-            if assignment_error:
-                errors["assignment"] = assignment_error
-
-        # Validate LeadAssignmentHistory Data
-        assignment_history_data = given_data.pop('assignment_history', None)
-        if assignment_history_data:
-            for data in assignment_history_data:
-                data['lead_id'] = pk
-            exclude_fields = ['lead_id','sales_rep_id']
-            history_error = validate_multiple_data(self, assignment_history_data, LeadAssignmentHistorySerializer, exclude_fields)
-            if history_error:
-                errors["assignment_history"] = history_error
-
         # Validate LeadInteractions Data
         interaction_data = given_data.pop('interaction', None)
         if interaction_data:
-            interaction_data['lead_id'] = pk
-            interaction = validate_multiple_data(self, [interaction_data], LeadInteractionsSerializer, exclude_fields)
+            interaction = validate_multiple_data(self, interaction_data, LeadInteractionsSerializer, exclude_fields=['lead_id','interaction_type_id'])
             if interaction:
                 errors["interaction"] = interaction
-
-        # Ensure mandatory data is present
-        if lead_data and interaction_data and not assignment_data: 
-            return build_response(0, "without assignment no interaction is possible", [], status.HTTP_400_BAD_REQUEST)        
 
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
@@ -380,9 +304,8 @@ class LeadsViewSet(APIView):
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
         custom_data = {
             'lead':{},
-            'assignment':{},
             'assignment_history':[],
-            'interaction':{},
+            'interaction':[],
             }
         
         '''
@@ -405,61 +328,46 @@ class LeadsViewSet(APIView):
             assignment_history = {}
             assignments_history = generic_data_creation(self, [assignment_history], LeadAssignmentHistorySerializer, update_fields)
             assignments_history = assignments_history if assignments_history else []
-            logger.info('LeadAssignmentHistory - created*')        
+            logger.info('LeadAssignmentHistory - created*')
 
-        # create assignment_history_data when 'LeadAssignments' data is added in PUT method
-        if assignment_data:
-                '''
-                Creates very first new instance in 'LeadAssignmentHistory' if new assignment is placed
-                verify if any previous instance is present with current "lead_id", if not present then create new instance in 'LeadAssignmentHistory'
-                '''
-                if not LeadAssignmentHistory.objects.filter(lead_id=pk):
-                    if not assignment_history_data:
-                        update_fields = {'lead_id': pk, 'sales_rep_id': assignment_data.get('sales_rep_id')}
-                        create_new_history(self, update_fields)
-                else:
-                    '''
-                    This Else block performs updation of end date in case of 'sales_rep_id' and 'lead_status_id' is changed.
-                    (detects changes in 'LeadAssignments' and 'Lead'  payload)
-                    Adds new record in 'LeadAssignmentHistory' for newly selected 'sales_rep_id' in 'LeadAssignments'
-                    by leaving end date as null.
-                    '''
+        if lead_data:
+            '''
+            This block performs updation of end date in case of 'assignee_id' and 'lead_status_id' is changed.
+            (detects changes in 'Leads' payload)
+            Adds new record in 'LeadAssignmentHistory' if 'assignee_id' in 'Leads' is changed
+            by leaving end date as null.
+            Updates old record in 'LeadAssignmentHistory' if 'lead_status_id' in 'Leads' is changed
+            by adding end date
+            '''
+            # Fetch last record in 'Leads' | generally one recrd exists with one 'lead_id' (current Lead pk)
+            lead_data_set = Leads.objects.filter(pk=pk).last()  # take the last instance in Lead data
+            if lead_data_set is not None:
+                previous_lead_status_id = str(lead_data_set.lead_status_id_id)
+                current_lead_status_id = lead_data.get('lead_status_id')
 
-                    # Fetch last record in 'Leads' | generally one recrd exists with one 'lead_id' (current Lead pk)
-                    lead_data_set = Leads.objects.filter(pk=pk).last()  # take the last instance in Lead data
-                    if lead_data_set is not None:
-                        previous_lead_status_id = str(lead_data_set.lead_status_id_id)
-                        current_lead_status_id = lead_data.get('lead_status_id')
-                        if previous_lead_status_id != current_lead_status_id: # if 'lead_status_id' change is detected
-                            logger.info("'lead_status_id' is changed**")
-                            save_assignments_history_with_end_date(self)
+                previous_assignee_id = str(lead_data_set.assignee_id_id)
+                current_assignee_id = lead_data.get('assignee_id')
 
-                    # Fetch last record in 'LeadAssignments' | generally one recrd exists with one 'lead_id'
-                    data_set = LeadAssignments.objects.filter(lead_id=pk).order_by('created_at').last()
-                    if data_set is not None:
-                        previous_sales_rep_id = str(data_set.sales_rep_id_id)
-                        current_sales_rep_id = assignment_data.get('sales_rep_id')    
-                        if previous_sales_rep_id != current_sales_rep_id: # if 'sales_rep_id' change is detected
-                            logger.info("'sales_rep_id' is changed**")
-                            save_assignments_history_with_end_date(self)
-                            update_fields = {'lead_id': pk, 'sales_rep_id': current_sales_rep_id}
-                            create_new_history(self, update_fields)
+                if previous_lead_status_id != current_lead_status_id: # if 'lead_status_id' change is detected
+                    logger.info("'lead_status_id' is changed**")
+                    save_assignments_history_with_end_date(self)
+
+                if previous_assignee_id != current_assignee_id: # if 'assignee_id' change is detected
+                    logger.info("'assignee_id' is changed**")
+                    save_assignments_history_with_end_date(self)
+                    update_fields = {'lead_id': pk, 'assignee_id': current_assignee_id}
+                    create_new_history(self, update_fields)
 
         # update 'Leads'
         if lead_data:
             leaddata = update_multi_instances(self, pk, lead_data, Leads, LeadsSerializer,[], main_model_related_field='lead_id', current_model_pk_field='lead_id')
             custom_data["lead"] = leaddata[0]
 
-        # Update the 'LeadAssignments'
-        update_fields = {'lead_id': pk}
-        assignmentdata = update_multi_instances(self, pk, assignment_data, LeadAssignments, LeadAssignmentsSerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='assignment_id')
-        if assignmentdata:
-            custom_data["assignment"] = assignmentdata[0]
-
         # Update the 'LeadInteractions'
+        update_fields = {'lead_id': pk, 'assignee_id': lead_data.get('assignee_id')}
         interactiondata = update_multi_instances(self, pk, interaction_data, LeadInteractions, LeadInteractionsSerializer, update_fields, main_model_related_field='lead_id', current_model_pk_field='interaction_id')
         if interactiondata:
-            custom_data["interaction"] = interactiondata[0]
+            custom_data["interaction"] = interactiondata
 
         # Send the History_data to output response
         history_data = LeadAssignmentHistory.objects.filter(lead_id=pk).order_by('created_at').last()
@@ -468,4 +376,3 @@ class LeadsViewSet(APIView):
             custom_data["assignment_history"] = [serializer.data]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-
