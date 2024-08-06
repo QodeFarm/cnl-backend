@@ -8,7 +8,9 @@ from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
-
+from django_filters.rest_framework import DjangoFilterBackend # type: ignore
+from rest_framework.filters import OrderingFilter
+from .filters import SaleInvoiceOrdersFilter
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
 from .serializers import *
@@ -92,10 +94,12 @@ class SaleOrderItemsView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-
 class SaleInvoiceOrdersView(viewsets.ModelViewSet):
     queryset = SaleInvoiceOrders.objects.all()
     serializer_class = SaleInvoiceOrdersSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SaleInvoiceOrdersFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -105,8 +109,7 @@ class SaleInvoiceOrdersView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
-
+    
 class SaleReturnOrdersView(viewsets.ModelViewSet):
     queryset = SaleReturnOrders.objects.all()
     serializer_class = SaleReturnOrdersSerializer
@@ -561,6 +564,12 @@ class SaleInvoiceOrdersViewSet(APIView):
              
             logger.info("Retrieving all sale invoice orders")
             queryset = SaleInvoiceOrders.objects.all()
+
+            # Apply filters manually
+            filterset = SaleInvoiceOrdersFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
             serializer = SaleInvoiceOrdersSerializer(queryset, many=True)
             logger.info("sale order invoice data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
