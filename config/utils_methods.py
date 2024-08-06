@@ -15,6 +15,8 @@ import json
 from django.utils import timezone
 from django.db import models
 from django.core.cache import cache
+from config.settings import  MEDIA_URL
+
 
 
 # Set up basic configuration for logging
@@ -421,9 +423,6 @@ def validate_order_type(data, error_list, model_name,look_up=None):
                 error_list.append({look_up:["Invalid order type."]})
 
 
-#================================================================================================================================================
-#===========================================CHETAN'S METHOD============================================================================
-#================================================================================================================================================
 def validate_uuid(uuid_to_test, version=4):
     try:
         uuid_obj = uuid.UUID(uuid_to_test, version=version)
@@ -431,5 +430,7 @@ def validate_uuid(uuid_to_test, version=4):
         raise ValidationError("Invalid UUID")
     return uuid_obj
 
-
+def get_full_path(request, unique_file_name):
+    host = request.get_host()
+    return f'http://{host}{MEDIA_URL}{unique_file_name}'
         
