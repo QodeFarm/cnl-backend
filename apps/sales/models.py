@@ -168,7 +168,7 @@ class PaymentTransactions(models.Model): #required fields are updated
 
 class SaleInvoiceItems(models.Model): #required fields are updated
     sale_invoice_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id',null=True, default=None )
+    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
     print_name = models.CharField(max_length=255, null=True, default=None)
@@ -190,7 +190,7 @@ class SaleInvoiceItems(models.Model): #required fields are updated
 
 class SaleReturnOrders(OrderNumberMixin):
     sale_return_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
+    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id', null=True, default=None )
     BILL_TYPE_CHOICES = [('CASH', 'Cash'),('CREDIT', 'Credit'),('OTHERS', 'Others'),]
     bill_type = models.CharField(max_length=6, choices=BILL_TYPE_CHOICES)  
     return_date = models.DateField()
