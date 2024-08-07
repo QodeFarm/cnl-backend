@@ -35,6 +35,7 @@ class SaleOrderSerializer(serializers.ModelSerializer):
     payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
     sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
     
     class Meta:
         model = SaleOrder
