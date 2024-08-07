@@ -139,14 +139,14 @@ class productsViewSet(viewsets.ModelViewSet):
             response = super().create(request, *args, **kwargs)
             result = Response({
                 'count': '1',
-                'msg': 'Success! Your user account has been created. Please check your mailbox',
+                'msg': 'Success',
                 'data': [response.data]
             }, status=status.HTTP_201_CREATED)
         
         except ValidationError as e:
             result = Response({
                 'count': '1',
-                'msg': 'User creation failed due to validation errors.',
+                'msg': 'creation failed due to validation errors.',
                 'data': [e.detail]
             }, status=status.HTTP_400_BAD_REQUEST)
         
