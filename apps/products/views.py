@@ -126,7 +126,31 @@ class productsViewSet(viewsets.ModelViewSet):
         return result
         
     def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
+        # Check if profile_picture_url is in data and it's a list
+        if 'picture' in request.data and isinstance(request.data['picture'], list):
+            # Assuming the first item in the list contains the attachment data
+            attachment_data_list = request.data['picture']
+            if attachment_data_list:
+                first_attachment = attachment_data_list[0]
+                request.data['picture'] = first_attachment.get('attachment_path', None)
+        
+        try:
+            # Call the superclass's create method
+            response = super().create(request, *args, **kwargs)
+            result = Response({
+                'count': '1',
+                'msg': 'Success',
+                'data': [response.data]
+            }, status=status.HTTP_201_CREATED)
+        
+        except ValidationError as e:
+            result = Response({
+                'count': '1',
+                'msg': 'creation failed due to validation errors.',
+                'data': [e.detail]
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return result
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
