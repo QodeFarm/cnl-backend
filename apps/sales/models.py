@@ -53,6 +53,11 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     
     class Meta:
         db_table = saleorders
+        
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
 
 class SalesPriceList(models.Model): #required fields are updated
     sales_price_list_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -140,15 +145,6 @@ class SaleInvoiceOrders(OrderNumberMixin):
     def __str__(self):
         return str(self.sale_invoice_id)
     
-    def save(self, *args, **kwargs):
-    # Example of overriding save to set default values or perform calculations
-        if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
-    
-    # Perform any calculations here if needed
-    # self.total_amount = self.calculate_total_amount()
-
-        super().save(*args, **kwargs)
     
 class PaymentTransactions(models.Model): #required fields are updated
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -245,16 +241,6 @@ class SaleReturnOrders(OrderNumberMixin):
 
     def __str__(self):
         return str(self.sale_return_id)
-    
-    def save(self, *args, **kwargs):
-    # Example of overriding save to set default values or perform calculations
-        if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
-    
-    # Perform any calculations here if needed
-    # self.total_amount = self.calculate_total_amount()
-
-        super().save(*args, **kwargs)
     
 class SaleReturnItems(models.Model):
     sale_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
