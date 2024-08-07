@@ -120,7 +120,7 @@ class ProductPurchaseGlSerializer(serializers.ModelSerializer):
 class ModproductsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Products
-        fields = ['product_id','name']
+        fields = ['product_id','name', 'code']
 
 class productsSerializer(serializers.ModelSerializer):
     product_group = ModProductGroupsSerializer(source='product_group_id',read_only=True)
