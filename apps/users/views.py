@@ -16,7 +16,7 @@ from rest_framework import viewsets
 from rest_framework import status
 import json
 import uuid
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 
 class UserRoleViewSet(viewsets.ModelViewSet):
@@ -159,17 +159,19 @@ def get_tokens_for_user(user):
     profile_picture_url = None
     if user.profile_picture_url:
         profile_picture_url = user.profile_picture_url.url
-
-    roles_id = UserRoles.objects.filter(
-        user_id=user.user_id).values_list('role_id', flat=True)
-    role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
-    role_permissions_json = RolePermissionsSerializer(
-        role_permissions_id, many=True)
-    Final_data = json.dumps(role_permissions_json.data,
-                            default=str).replace("\\", "")
-    role_permissions = json.loads(Final_data)
-    role_permissions = role_permissions[0]
-    remove_fields(role_permissions)
+    try:
+        roles_id = UserRoles.objects.filter(
+            user_id=user.user_id).values_list('role_id', flat=True)
+        role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
+        role_permissions_json = RolePermissionsSerializer(
+            role_permissions_id, many=True)
+        Final_data = json.dumps(role_permissions_json.data,
+                                default=str).replace("\\", "")
+        role_permissions = json.loads(Final_data)
+        role_permissions = role_permissions[0]
+        remove_fields(role_permissions)
+    except (ObjectDoesNotExist, IndexError, KeyError) as e:
+        role_permissions = "Role not assigned yet"
 
     return {
         'username': user.username,
@@ -197,7 +199,7 @@ class UserLoginView(APIView):
         serializer.is_valid(raise_exception=True)
         username = serializer.data.get('username')
         password = serializer.data.get('password')
-        user = authenticate(username=username, password=password)
+        user = CustomUserBackend.authenticate(username=username, password=password)
         if user is not None:
             token = get_tokens_for_user(user)
             return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
@@ -404,3 +406,35 @@ class CreateUserView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+#--------------===================================-------Log In 2.0
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth import authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from apps.users.backends import CustomUserBackend
+
+# def get_tokens_for_user(user):
+#     refresh = RefreshToken.for_user(user)
+#     return {
+#         'refresh': str(refresh),
+#         'access': str(refresh.access_token),
+#     }
+
+
+# class LogInView(APIView):
+#     def post(self, request):
+#         serializer = LogInSerializer(data=request.data)
+#         if serializer.is_valid():
+#             username = serializer.validated_data['username']
+#             password = serializer.validated_data['password']
+#             user = CustomUserBackend.authenticate(username = username, password = password)
+#             if user is not None:
+#                 tokens = get_tokens_for_user(user)
+#                 return Response({
+#                     'message': 'Login successful',
+#                     'tokens': tokens
+#                 }, status=status.HTTP_200_OK)
+#             else:
+#                 return Response({'message': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+#         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

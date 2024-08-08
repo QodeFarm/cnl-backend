@@ -210,6 +210,8 @@ EMAIL_HOST_USER = "qodefarm7@gmail.com"
 EMAIL_HOST_PASSWORD= "osap irhp jqzl ehre" 
 
 
+AUTHENTICATION_BACKENDS = ['apps.users.backends.CustomUserBackend', ]
+
 REST_FRAMEWORK = {    
     #'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),  #For Securing API Endpoint
     'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',
