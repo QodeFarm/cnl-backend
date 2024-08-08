@@ -14,9 +14,10 @@ from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
 from rest_framework import status
+from django.utils import timezone  
 import json
 import uuid
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 
 class UserRoleViewSet(viewsets.ModelViewSet):
@@ -31,17 +32,6 @@ class UserRoleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
-
-class GetUserDataViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = GetUserDataSerializer
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
 
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -83,8 +73,7 @@ class ModulesViewSet(viewsets.ModelViewSet):
             data = ModulesOptionsSerializer.get_modules_sections(modules)
             result = Response(data, status=status.HTTP_200_OK)
         else:
-            result = list_all_objects(self, request, *args, **kwargs)
-        
+            result = list_all_objects(self, request, *args, **kwargs)        
         return result
 
     def create(self, request, *args, **kwargs):
@@ -151,26 +140,27 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
 
 # ==================================================================================================
 # Creating tokens manually
-
-
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
 
     profile_picture_url = None
     if user.profile_picture_url:
-        profile_picture_url = user.profile_picture_url.url
+        profile_picture_url = user.profile_picture_url  #removed '.url' cause now profile_picture_url became charfield
 
-    roles_id = UserRoles.objects.filter(
-        user_id=user.user_id).values_list('role_id', flat=True)
-    role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
-    role_permissions_json = RolePermissionsSerializer(
-        role_permissions_id, many=True)
-    Final_data = json.dumps(role_permissions_json.data,
-                            default=str).replace("\\", "")
-    role_permissions = json.loads(Final_data)
-    role_permissions = role_permissions[0]
-    remove_fields(role_permissions)
+    try:
+        roles_id = UserRoles.objects.filter(
+            user_id=user.user_id).values_list('role_id', flat=True)
+        role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
+        role_permissions_json = RolePermissionsSerializer(
+            role_permissions_id, many=True)
+        Final_data = json.dumps(role_permissions_json.data,
+                                default=str).replace("\\", "")
+        role_permissions = json.loads(Final_data)
+        role_permissions = role_permissions[0]
+        remove_fields(role_permissions)
 
+    except (ObjectDoesNotExist, IndexError, KeyError) as e:
+            role_permissions = "Role not assigned yet"
     return {
         'username': user.username,
         'first_name': user.first_name,
@@ -183,12 +173,9 @@ def get_tokens_for_user(user):
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
         'role_permissions': role_permissions
-        # 'type' : type(role_permissions)
     }
 
 # login View
-
-
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -199,15 +186,15 @@ class UserLoginView(APIView):
         password = serializer.data.get('password')
         user = authenticate(username=username, password=password)
         if user is not None:
+            user.last_login = timezone.now()
+            user.save()
             token = get_tokens_for_user(user)
-            return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
+            return build_response(1, 'Login Success', [token] , status.HTTP_200_OK)
         else:
-            return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_404_NOT_FOUND)
+            return build_response(1, 'Username or Password is not valid', [] , status.HTTP_404_NOT_FOUND)
 
 # ==================================================================================================
 # change known Password view
-
-
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -215,12 +202,10 @@ class UserChangePasswordView(APIView):
         serializer = UserChangePasswordSerializer(
             data=request.data, context={'user': request.user})
         serializer.is_valid(raise_exception=True)
-        return Response({'count': '1', 'msg': 'Password Changed Successfully', 'data': []}, status=status.HTTP_200_OK)
+        return build_response(1, 'Password Changed Successfully', [] , status.HTTP_200_OK)
 
 # =================================================================================================
 # Forgot Password
-
-
 @permission_classes([AllowAny])
 class SendPasswordResetEmailView(APIView):
     renderer_classes = [UserRenderer]
@@ -228,8 +213,7 @@ class SendPasswordResetEmailView(APIView):
     def post(self, request, format=None):
         serializer = SendPasswordResetEmailSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        return Response({'count': '1', 'msg': 'Password Reset Link Send. Please Check Your Email', 'data': []}, status=status.HTTP_200_OK)
-
+        return build_response(1, 'Password Reset Link Send. Please Check Your Email', [] , status.HTTP_200_OK)
 
 @permission_classes([AllowAny])
 class UserPasswordResetView(APIView):
@@ -239,13 +223,17 @@ class UserPasswordResetView(APIView):
         serializer = UserPasswordResetSerializer(
             data=request.data, context={'uid': uid, 'token': token})
         serializer.is_valid(raise_exception=True)
-        return Response({'count': '1', 'msg': 'Password Reset Successfully', 'data': []}, status=status.HTTP_200_OK)
+        return build_response(1, 'Password Reset Successfully', [] , status.HTTP_200_OK)   
 
 # =================================================================================================
-
-
 class CustomUserCreateViewSet(DjoserUserViewSet):
-    def create(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):        
+        if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
+        # Assuming the first item in the list contains the attachment data
+            attachment_data_list = request.data['profile_picture_url']
+            if attachment_data_list:
+                first_attachment = attachment_data_list[0]
+                request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
         try:
             response = super().create(request, *args, **kwargs)
             custom_response_data = {
@@ -260,11 +248,56 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
                 'msg': 'User creation failed due to validation errors.',
                 'data': [e.detail]
             }
-            return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
+            return Response(error_response_data, status=status.HTTP_201_CREATED)
+        
+# ++==================================CODE with GET, GET ALL, UPDATE, DELETE Methods fro USER:========+++++++++++++++++++++++++++++++++++++++
+class UserUpdateView(APIView):
+    
+    def get(self, request, user_id=None):
+        """
+        Retrieve a specific user if user_id is provided, otherwise retrieve all users.
+        """
+        if user_id:
+            user = get_object_or_404(User, user_id=user_id)
+            serializer = GetUserDataSerializer(user)
+            return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+        else:
+            users = User.objects.all()
+            serializer = GetUserDataSerializer(users, many=True)
+            return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+
+    def put(self, request, user_id):
+        """
+        Update user data for a specific user identified by user_id.
+        """
+        user = get_object_or_404(User, user_id=user_id)
+        
+        if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
+            # Assuming the first item in the list contains the attachment data
+            attachment_data_list = request.data['profile_picture_url']
+            if attachment_data_list:
+                first_attachment = attachment_data_list[0]
+                request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
+
+        # Serialize the user data
+        serializer = GetUserDataSerializer(user, data=request.data, partial=True)
+        
+        # Validate and save the updated user data
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, "User Data Updated Successfully!", serializer.data, status.HTTP_200_OK)
+        
+        return build_response(1, serializer.errors, [] , status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, user_id):
+        """
+        Delete a specific user identified by user_id.
+        """
+        user = get_object_or_404(User, user_id=user_id)
+        user.delete()
+        return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
 
 # =================================================================================================
-
-
 class CustomUserActivationViewSet(DjoserUserViewSet):
     @action(["post"], detail=False)
     def activation(self, request, *args, **kwargs):
