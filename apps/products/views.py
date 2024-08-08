@@ -137,11 +137,7 @@ class productsViewSet(viewsets.ModelViewSet):
         try:
             # Call the superclass's create method
             response = super().create(request, *args, **kwargs)
-            result = Response({
-                'count': '1',
-                'msg': 'Success',
-                'data': [response.data]
-            }, status=status.HTTP_201_CREATED)
+            return build_response(1, "Record created successfully", response, status.HTTP_201_CREATED)        
         
         except ValidationError as e:
             result = Response({
@@ -153,7 +149,30 @@ class productsViewSet(viewsets.ModelViewSet):
         return result
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
+        product_id = kwargs.get('pk')
+
+        request_product_id = request.data.get('product_id')
+        print("Product ID from request data: ", request_product_id)
+
+        if request_product_id == product_id:
+            if 'picture' in request.data and isinstance(request.data['picture'], list):
+                attachment_data_list = request.data['picture']
+                if attachment_data_list:
+                    first_attachment = attachment_data_list[0]
+                    request.data['picture'] = first_attachment.get('attachment_path', None)
+                    print("Updated picture path: ", request.data['picture'])
+            
+            try:
+                instance = self.get_object() 
+                response = super().update(request, *args, **kwargs)
+                
+                return build_response(1, "Updated Successfully", response.data, status.HTTP_200_OK) 
+            
+            except ValidationError as e:
+                return build_response(1, "Update failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST) 
+        
+        else:
+            return build_response(0, "Product ID does not match.", [], status.HTTP_400_BAD_REQUEST) 
     
 class ProductItemBalanceViewSet(viewsets.ModelViewSet):
     queryset = ProductItemBalance.objects.all()
