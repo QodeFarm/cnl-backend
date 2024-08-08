@@ -236,17 +236,7 @@ class Products(OrderNumberMixin):
         db_table = productstable
 
     def __str__(self):
-        return f"{self.product_id} {self.name}"
-
-    # @receiver(pre_delete, sender='products.products')
-    # def delete_branches_picture(sender, instance, **kwargs):
-    #     if instance.picture and instance.picture.name:
-    #         file_path = instance.picture.path
-    #         if os.path.exists(file_path):
-    #             os.remove(file_path)
-    #             picture_dir = os.path.dirname(file_path)
-    #             if not os.listdir(picture_dir):
-    #                 os.rmdir(picture_dir)   
+        return f"{self.product_id} {self.name}"   
 
 class ProductItemBalance(models.Model):
     product_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
