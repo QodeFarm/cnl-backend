@@ -135,18 +135,10 @@ class productsViewSet(viewsets.ModelViewSet):
                 request.data['picture'] = first_attachment.get('attachment_path', None)
         
         try:
-            # Call the superclass's create method
-            response = super().create(request, *args, **kwargs)
-            return build_response(1, "Record created successfully", response, status.HTTP_201_CREATED)        
+            return create_instance(self, request, *args, **kwargs)
         
         except ValidationError as e:
-            result = Response({
-                'count': '1',
-                'msg': 'creation failed due to validation errors.',
-                'data': [e.detail]
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        return result
+            return build_response(1, "Update failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST) 
 
     def update(self, request, *args, **kwargs):
         product_id = kwargs.get('pk')
@@ -163,10 +155,7 @@ class productsViewSet(viewsets.ModelViewSet):
                     print("Updated picture path: ", request.data['picture'])
             
             try:
-                instance = self.get_object() 
-                response = super().update(request, *args, **kwargs)
-                
-                return build_response(1, "Updated Successfully", response.data, status.HTTP_200_OK) 
+                return update_instance(self, request, *args, **kwargs) 
             
             except ValidationError as e:
                 return build_response(1, "Update failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST) 
