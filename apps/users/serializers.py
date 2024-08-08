@@ -120,29 +120,6 @@ class CustomUserCreateSerializer(BaseUserCreateSerializer):
         model = User
         fields = '__all__'
 
-    '''CURD Operations For Profile Picture'''
-    def create(self, validated_data):
-            profile_picture_url = validated_data.pop('profile_picture_url', None)
-            instance = super().create(validated_data)
-            if profile_picture_url:
-                instance.profile_picture_url = profile_picture_url
-                instance.save()
-            return instance
-    
-    def update(self, instance, validated_data):
-        profile_picture_url = validated_data.pop('profile_picture_url', None)
-        if profile_picture_url:
-            # Delete the previous picture file and its directory if they exist
-            if instance.profile_picture_url:
-                picture_path = instance.profile_picture_url.path
-                if os.path.exists(picture_path):
-                    os.remove(picture_path)
-                    picture_dir = os.path.dirname(picture_path)
-                    if not os.listdir(picture_dir):
-                        os.rmdir(picture_dir)
-            instance.profile_picture_url = profile_picture_url
-            instance.save()
-        return super().update(instance, validated_data)
 #=================================================================================================
 #login serializer
 class UserLoginSerializer(serializers.ModelSerializer):
@@ -243,3 +220,32 @@ class ModulesOptionsSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+    
+#==============================================Create_user 2.0
+from rest_framework import serializers
+from .models import User
+from django.contrib.auth.hashers import make_password
+
+class UserSerializer(serializers.ModelSerializer):
+    confirm_password = serializers.CharField(max_length=255, style={'input_type':'password'}, write_only=True)
+
+    class Meta:
+        model = User
+        fields = '__all__'
+        extra_kwargs = {
+            'password': {'write_only': True}
+        }
+
+    def validate(self, data):
+        password = data.get('password')
+        confirm_password = data.pop('confirm_password', None)
+        
+        # Ensure the password and confirm_password fields match
+        if password != confirm_password:
+            raise serializers.ValidationError("Password and Confirm Password do not match.")
+        return data
+
+    def create(self, validated_data):
+        # Hash the password before saving the user instance
+        validated_data['password'] = make_password(validated_data['password'])
+        return super().create(validated_data)

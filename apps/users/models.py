@@ -65,27 +65,6 @@ class ModuleSections(models.Model):
     def __str__(self):
         return f"{self.section_id}.{self.section_name}"
 
-class UserManager(BaseUserManager):
-    '''Creating User'''
-    def create_user(self, email, username, password = None, **extra_fields):
-        if not email:
-            raise ValueError("The Email Field Must be set")        
-        email = self.normalize_email(email)
-        user = self.model(
-        email = email,
-        username = username,
-        **extra_fields)
-        user.set_password(password)
-        user.save(using=self._db)
-        return user
-    
-    def create_superuser(self, username, email, password=None, **extra_fields):
-        user = self.create_user(username, email, password=password, **extra_fields)
-        user.is_active = True
-        user.is_staff = True
-        user.is_admin = True
-        user.save(using=self._db)
-        return user
 
 def profile_picture(instance, filename):
     '''Uploading Profile Picture'''
@@ -98,7 +77,7 @@ def profile_picture(instance, filename):
     return f"users/{original_filename}_{unique_id}{file_extension}"
 
 #====
-class User(AbstractBaseUser):
+class User(models.Model):
     GENDER_CHOICES = [('Male', 'Male'),('Female', 'Female'),('Other', 'Other'),('Prefer Not to Say', 'Prefer Not to Say')]
     TITLE_CHOICES = [('Mr.', 'Mr.'),('Ms.', 'Ms.')]
     profile_picture_url = models.ImageField(max_length=255, null = True, default=None,  upload_to=profile_picture) 
@@ -119,40 +98,21 @@ class User(AbstractBaseUser):
     is_active = models.BooleanField(default=True)
     first_name = models.CharField(max_length=255)
     last_login = models.DateTimeField()
+    password = models.CharField(max_length=20)
+
      
     branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id')
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
 
-    objects = UserManager()
+   
     
     class Meta:
         db_table = userstable
 
-    USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id'] 
+    # USERNAME_FIELD = 'username'
+    # REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'password'] 
 
-    def __str__(self):
-        return self.username
-
-    def get_full_name(self):
-        return f"{self.first_name} {self.last_name} "
-
-    def has_perm(self, perm, obj=None):
-        "Does the user have a specific permission?"
-        # Simplest possible answer: Yes, always
-        return self.is_admin
-
-    def has_module_perms(self, app_label):
-        "Does the user have permissions to view the app `app_label`?"
-        # Simplest possible answer: Yes, always
-        return True
-
-    @property
-    def is_staff(self):
-        "Is the user a member of staff?"
-        # Simplest possible answer: All admins are staff
-        return self.is_admin
-    
+      
     @receiver(pre_delete, sender='users.User')
     def delete_user_picture(sender, instance, **kwargs):
         if instance.profile_picture_url and instance.profile_picture_url.name:
