@@ -153,7 +153,46 @@ class productsViewSet(viewsets.ModelViewSet):
         return result
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
+        product_id = kwargs.get('pk')
+
+        request_product_id = request.data.get('product_id')
+        print("Product ID from request data: ", request_product_id)
+
+        result = None
+
+        if request_product_id == product_id:
+            if 'picture' in request.data and isinstance(request.data['picture'], list):
+                attachment_data_list = request.data['picture']
+                if attachment_data_list:
+                    first_attachment = attachment_data_list[0]
+                    request.data['picture'] = first_attachment.get('attachment_path', None)
+                    print("Updated picture path: ", request.data['picture'])
+            
+            try:
+                instance = self.get_object() 
+                response = super().update(request, *args, **kwargs)
+                
+                result = Response({
+                    'count': '1',
+                    'msg': 'Updated Successfully',
+                    'data': [response.data]
+                }, status=status.HTTP_200_OK)
+            
+            except ValidationError as e:
+                result = Response({
+                    'count': '1',
+                    'msg': 'Update failed due to validation errors.',
+                    'data': [e.detail]
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        else:
+            result = Response({
+                'count': '0',
+                'msg': 'Product ID does not match.',
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return result
     
 class ProductItemBalanceViewSet(viewsets.ModelViewSet):
     queryset = ProductItemBalance.objects.all()
