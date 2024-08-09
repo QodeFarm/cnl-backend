@@ -2,7 +2,7 @@ from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, Us
 from django.utils.encoding import smart_str, force_bytes, DjangoUnicodeDecodeError
 from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from apps.company.serializers import ModBranchesSerializer
+from apps.company.serializers import ModBranchesSerializer, ModCompaniesSerializer
 from apps.masters.serializers import ModStatusesSerializer
 from rest_framework import serializers
 from .utils import Utils
@@ -107,12 +107,15 @@ class RolePermissionsSerializer(serializers.ModelSerializer):
         model = RolePermissions
         fields = '__all__'
 
+#UserSerializer for GET, GETL ALL, UPDATE, DELETE Methods 
 class GetUserDataSerializer(serializers.ModelSerializer):
     branch = ModBranchesSerializer(source='branch_id', read_only = True)
     status = ModStatusesSerializer(source='status_id', read_only = True)
+    role = ModRoleSerializer(source='role_id', read_only = True)
+    company = ModCompaniesSerializer(source='company_id', read_only = True)
     class Meta:
         model = User
-        fields = ['email', 'user_id','username','title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'status_id', 'branch_id', 'branch', 'status']   #if we use here '__all__' then it shows password field also.
+        fields = ['email', 'user_id', 'username', 'title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'branch', 'status', 'role', 'company']   #if we use here '__all__' then it shows password field also.
 #=================================================================================================
 #user create Serializer
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
@@ -120,30 +123,30 @@ class CustomUserCreateSerializer(BaseUserCreateSerializer):
         model = User
         fields = '__all__'
 
-    '''CURD Operations For Profile Picture'''
-    def create(self, validated_data):
-            profile_picture_url = validated_data.pop('profile_picture_url', None)
-            instance = super().create(validated_data)
-            if profile_picture_url:
-                instance.profile_picture_url = profile_picture_url
-                instance.save()
-            return instance
+    # '''CURD Operations For Profile Picture'''
+    # def create(self, validated_data):
+    #         profile_picture_url = validated_data.pop('profile_picture_url', None)
+    #         instance = super().create(validated_data)
+    #         if profile_picture_url:
+    #             instance.profile_picture_url = profile_picture_url
+    #             instance.save()
+    #         return instance
     
-    def update(self, instance, validated_data):
-        profile_picture_url = validated_data.pop('profile_picture_url', None)
-        if profile_picture_url:
-            # Delete the previous picture file and its directory if they exist
-            if instance.profile_picture_url:
-                picture_path = instance.profile_picture_url.path
-                if os.path.exists(picture_path):
-                    os.remove(picture_path)
-                    picture_dir = os.path.dirname(picture_path)
-                    if not os.listdir(picture_dir):
-                        os.rmdir(picture_dir)
-            instance.profile_picture_url = profile_picture_url
-            instance.save()
-        return super().update(instance, validated_data)
-#=================================================================================================
+    # def update(self, instance, validated_data):
+    #     profile_picture_url = validated_data.pop('profile_picture_url', None)
+    #     if profile_picture_url:
+    #         # Delete the previous picture file and its directory if they exist
+    #         if instance.profile_picture_url:
+    #             picture_path = instance.profile_picture_url.path
+    #             if os.path.exists(picture_path):
+    #                 os.remove(picture_path)
+    #                 picture_dir = os.path.dirname(picture_path)
+    #                 if not os.listdir(picture_dir):
+    #                     os.rmdir(picture_dir)
+    #         instance.profile_picture_url = profile_picture_url
+    #         instance.save()
+    #     return super().update(instance, validated_data)
+#===================================================================================================
 #login serializer
 class UserLoginSerializer(serializers.ModelSerializer):
     username = serializers.CharField(max_length=255)

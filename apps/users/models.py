@@ -87,21 +87,21 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-def profile_picture(instance, filename):
-    '''Uploading Profile Picture'''
-    # Get the file extension
-    file_extension = os.path.splitext(filename)[-1]
-    # Generate a unique identifier
-    unique_id = uuid.uuid4().hex[:6]
-    # Construct the filename
-    original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-    return f"users/{original_filename}_{unique_id}{file_extension}"
+# def profile_picture(instance, filename):
+#     '''Uploading Profile Picture'''
+#     # Get the file extension
+#     file_extension = os.path.splitext(filename)[-1]
+#     # Generate a unique identifier
+#     unique_id = uuid.uuid4().hex[:6]
+#     # Construct the filename
+#     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
+#     return f"users/{original_filename}_{unique_id}{file_extension}"
 
 #====
 class User(AbstractBaseUser):
     GENDER_CHOICES = [('Male', 'Male'),('Female', 'Female'),('Other', 'Other'),('Prefer Not to Say', 'Prefer Not to Say')]
     TITLE_CHOICES = [('Mr.', 'Mr.'),('Ms.', 'Ms.')]
-    profile_picture_url = models.ImageField(max_length=255, null = True, default=None,  upload_to=profile_picture) 
+    profile_picture_url = models.CharField(max_length=255, null=True, default=None)
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, default='Prefer Not to Say')
     title = models.CharField(max_length=20, choices=TITLE_CHOICES, default=None)
     username = models.CharField(verbose_name="Username",max_length=255,unique=True) 
@@ -122,6 +122,8 @@ class User(AbstractBaseUser):
      
     branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id')
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
+    role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
+    company_id = models.ForeignKey(Companies, on_delete=models.CASCADE,  db_column = 'company_id')
 
     objects = UserManager()
     
@@ -129,7 +131,7 @@ class User(AbstractBaseUser):
         db_table = userstable
 
     USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id'] 
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id', 'company_id'] 
 
     def __str__(self):
         return self.username
@@ -153,15 +155,15 @@ class User(AbstractBaseUser):
         # Simplest possible answer: All admins are staff
         return self.is_admin
     
-    @receiver(pre_delete, sender='users.User')
-    def delete_user_picture(sender, instance, **kwargs):
-        if instance.profile_picture_url and instance.profile_picture_url.name:
-            file_path = instance.profile_picture_url.path
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                picture_dir = os.path.dirname(file_path)
-                if not os.listdir(picture_dir):
-                    os.rmdir(picture_dir)
+    # @receiver(pre_delete, sender='users.User')
+    # def delete_user_picture(sender, instance, **kwargs):
+    #     if instance.profile_picture_url and instance.profile_picture_url.name:
+    #         file_path = instance.profile_picture_url.path
+    #         if os.path.exists(file_path):
+    #             os.remove(file_path)
+    #             picture_dir = os.path.dirname(file_path)
+    #             if not os.listdir(picture_dir):
+    #                 os.rmdir(picture_dir)
 
 class UserTimeRestrictions(models.Model):
     user_id = models.ForeignKey(User, on_delete=models.CASCADE,  db_column = 'user_id')
