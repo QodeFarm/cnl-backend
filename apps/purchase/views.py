@@ -2,6 +2,7 @@ import logging
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
+from apps.purchase.filters import PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
 from .models import *
 from .serializers import *
 from config.utils_methods import *
@@ -15,6 +16,8 @@ from apps.masters.models import OrderTypes
 from rest_framework.views import APIView
 from django.db import transaction
 from rest_framework.serializers import ValidationError
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,6 +29,9 @@ logger = logging.getLogger(__name__)
 class PurchaseOrdersViewSet(viewsets.ModelViewSet):
     queryset = PurchaseOrders.objects.all()
     serializer_class = PurchaseOrdersSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = PurchaseOrdersFilter
+    ordering_fields = []
  
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -52,6 +58,9 @@ class PurchaseorderItemsViewSet(viewsets.ModelViewSet):
 class PurchaseInvoiceOrdersViewSet(viewsets.ModelViewSet):
     queryset = PurchaseInvoiceOrders.objects.all()
     serializer_class = PurchaseInvoiceOrdersSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = PurchaseInvoiceOrdersFilter
+    ordering_fields = []
  
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -78,6 +87,9 @@ class PurchaseInvoiceItemViewSet(viewsets.ModelViewSet):
 class PurchaseReturnOrdersViewSet(viewsets.ModelViewSet):
     queryset = PurchaseReturnOrders.objects.all()
     serializer_class = PurchaseReturnOrdersSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = PurchaseReturnOrdersFilter
+    ordering_fields = []
  
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -139,6 +151,12 @@ class PurchaseOrderViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
             instance = PurchaseOrders.objects.all()
+
+            # Apply filters manually
+            filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
         except PurchaseOrders.DoesNotExist:
             logger.error("Purchase order does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
@@ -457,6 +475,12 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
             instance = PurchaseInvoiceOrders.objects.all()
+
+            # Apply filters manually
+            filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
         except PurchaseInvoiceOrders.DoesNotExist:
             logger.error("Purchase invoice order does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
@@ -773,6 +797,12 @@ class PurchaseReturnOrderViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
             instance = PurchaseReturnOrders.objects.all()
+
+            # Apply filters manually
+            filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs   
+
         except PurchaseReturnOrders.DoesNotExist:
             logger.error("Purchase return order does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)

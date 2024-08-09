@@ -1,6 +1,5 @@
 from django_filters import rest_framework as filters
-from .models import SaleOrder, SaleInvoiceOrders, SaleReturnOrders
-# from .models import SaleOrder,Invoices,PaymentTransactions,OrderItems,Shipments,SalesPriceList,SaleOrderReturns
+from .models import PurchaseOrders, PurchaseInvoiceOrders, PurchaseReturnOrders
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter, DateFilter
 from django.utils import timezone
@@ -20,21 +19,7 @@ PERIOD_NAME_CHOICES = [
     ('last_year', 'LastYear'),
 ]
 
-class SaleOrderFilter(filters.FilterSet):
-    # order_date = filters.DateFromToRangeFilter()
-    # delivery_date = filters.DateFromToRangeFilter()
-    # created_at = filters.DateFromToRangeFilter()
-    # order_no = filters.CharFilter(lookup_expr='icontains')
-    customer_id = filters.CharFilter(method=filter_uuid)
-    # order_id = filters.CharFilter(method=filter_uuid)
-    # remarks = filters.CharFilter(lookup_expr='icontains')
-    # customer_name = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
-    # sale_type_id = filters.CharFilter(method=filter_uuid)
-    # sales_type_name = filters.CharFilter(field_name='sale_type_id__name', lookup_expr='icontains')
-    # item_value = filters.RangeFilter()
-    # advance_amount = filters.RangeFilter()
-    # doc_amount = filters.RangeFilter()
-
+class PurchaseOrdersFilter(FilterSet):
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
 
@@ -102,12 +87,11 @@ class SaleOrderFilter(filters.FilterSet):
 
         return queryset
     
-
     class Meta:
-        model = SaleOrder
+        model = PurchaseOrders
         fields =[]
 
-class SaleInvoiceOrdersFilter(FilterSet):
+class PurchaseInvoiceOrdersFilter(FilterSet):
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
 
@@ -176,10 +160,10 @@ class SaleInvoiceOrdersFilter(FilterSet):
         return queryset
     
     class Meta:
-        model = SaleInvoiceOrders
+        model = PurchaseInvoiceOrders
         fields =[]
 
-class SaleReturnOrdersFilter(FilterSet):
+class PurchaseReturnOrdersFilter(FilterSet):
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
 
@@ -248,5 +232,5 @@ class SaleReturnOrdersFilter(FilterSet):
         return queryset
     
     class Meta:
-        model = SaleReturnOrders
+        model = PurchaseReturnOrders
         fields =[]
