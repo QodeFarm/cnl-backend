@@ -230,9 +230,10 @@ class SaleOrderViewSet(APIView):
             queryset = SaleOrder.objects.all()
 
             # Apply filters manually
-            filterset = SaleOrderFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+            if request.query_params:
+                filterset = SaleOrderFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs                 
 
             serializer = SaleOrderSerializer(queryset, many=True)
             logger.info("sale order data retrieved successfully.")
@@ -580,9 +581,10 @@ class SaleInvoiceOrdersViewSet(APIView):
             queryset = SaleInvoiceOrders.objects.all()
 
             # Apply filters manually
-            filterset = SaleInvoiceOrdersFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+            if request.query_params:
+                filterset = SaleInvoiceOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
 
             serializer = SaleInvoiceOrdersSerializer(queryset, many=True)
             logger.info("sale order invoice data retrieved successfully.")
@@ -907,9 +909,10 @@ class SaleReturnOrdersViewSet(APIView):
             queryset = SaleReturnOrders.objects.all()
 
             # Apply filters manually
-            filterset = SaleReturnOrdersFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+            if request.query_params:
+                filterset = SaleReturnOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
 
             serializer = SaleReturnOrdersSerializer(queryset, many=True)
             logger.info("sale return order data retrieved successfully.")

@@ -153,9 +153,12 @@ class PurchaseOrderViewSet(APIView):
             instance = PurchaseOrders.objects.all()
 
             # Apply filters manually
-            filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+            if request.query_params:
+                queryset = PurchaseOrders.objects.all()
+                filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    return build_response(queryset.count(), "Success", queryset.values(), status.HTTP_200_OK)
 
         except PurchaseOrders.DoesNotExist:
             logger.error("Purchase order does not exist.")
@@ -163,7 +166,8 @@ class PurchaseOrderViewSet(APIView):
         else:
             serializer = PurchaseOrdersSerializer(instance, many=True)
             logger.info("Purchase order data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return build_response(instance.count(), "Success123", serializer.data, status.HTTP_200_OK)
+        
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -477,9 +481,13 @@ class PurchaseInvoiceOrderViewSet(APIView):
             instance = PurchaseInvoiceOrders.objects.all()
 
             # Apply filters manually
-            filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+            if request.query_params:
+                queryset = PurchaseInvoiceOrders.objects.all()
+                filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    return build_response(queryset.count(), "Success", queryset.values(), status.HTTP_200_OK)
+
 
         except PurchaseInvoiceOrders.DoesNotExist:
             logger.error("Purchase invoice order does not exist.")
@@ -798,10 +806,12 @@ class PurchaseReturnOrderViewSet(APIView):
             
             instance = PurchaseReturnOrders.objects.all()
 
-            # Apply filters manually
-            filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs   
+            if request.query_params:
+                queryset = PurchaseReturnOrders.objects.all()
+                filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    return build_response(queryset.count(), "Success", queryset.values(), status.HTTP_200_OK)
 
         except PurchaseReturnOrders.DoesNotExist:
             logger.error("Purchase return order does not exist.")
