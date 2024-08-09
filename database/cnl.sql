@@ -324,7 +324,7 @@ CREATE TABLE IF NOT EXISTS user_allowed_weekdays (
 
 /* django_admin_log Table */
 -- This table is used for Action Tracking.
-CREATE TABLE django_admin_log (
+CREATE TABLE IF NOT EXISTS django_admin_log (
   id int NOT NULL DEFAULT '0',
   action_time datetime(6) NOT NULL,
   object_id longtext,
@@ -1047,7 +1047,7 @@ CREATE TABLE IF NOT EXISTS sale_invoice_orders(
     sale_invoice_id CHAR(36) PRIMARY KEY,
     bill_type ENUM('CASH', 'CREDIT', 'OTHERS'),
     invoice_date DATE NOT NULL,
-    invoice_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: SO-INV-2406-00001
+    invoice_no VARCHAR(20) UNIQUE NOT NULL, 
     customer_id CHAR(36) NOT NULL,
     gst_type_id CHAR(36),
     email VARCHAR(255),
@@ -1754,3 +1754,80 @@ CREATE TABLE IF NOT EXISTS asset_maintenance (
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    FOREIGN KEY (asset_id) REFERENCES assets(asset_id)
 );
+
+/* ======== Manufacturing/Production ======== */
+
+/* Bill of Materials (BOM) Table */
+-- Stores the list of materials and components required to produce each product.
+CREATE TABLE IF NOT EXISTS bill_of_materials (
+    bom_id CHAR(36) PRIMARY KEY,
+    product_id CHAR(36),
+    component_name VARCHAR(100),
+    quantity_required DECIMAL(10, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+
+/* Production Statuses Table */
+-- Stores possible statuses for production processes.
+CREATE TABLE IF NOT EXISTS production_statuses (
+    status_id CHAR(36) PRIMARY KEY,
+    status_name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Work Orders Table */
+-- Tracks production orders, their statuses, and quantities.
+CREATE TABLE IF NOT EXISTS work_orders (
+    work_order_id CHAR(36) PRIMARY KEY,
+    product_id CHAR(36),
+    quantity DECIMAL(10, 2),
+    status_id CHAR(36),
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (status_id) REFERENCES production_statuses(status_id)
+);
+
+/* Inventory Table */
+-- Manages raw materials, WIP (work in progress), and finished goods.
+CREATE TABLE IF NOT EXISTS inventory (
+    inventory_id CHAR(36) PRIMARY KEY,
+    product_id CHAR(36),
+    quantity DECIMAL(10, 2),
+    location VARCHAR(100),
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+
+/* Machines Table */
+-- Stores information about the machines used in production.
+CREATE TABLE IF NOT EXISTS machines (
+    machine_id CHAR(36) PRIMARY KEY,
+    machine_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    status ENUM('Operational', 'Under Maintenance', 'Out of Service') DEFAULT 'Operational',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Labor Table */
+-- Tracks labor assignments and hours worked on production tasks.
+CREATE TABLE IF NOT EXISTS labor (
+    labor_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36),
+    work_order_id CHAR(36),
+    hours_worked DECIMAL(5, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+);
+
+
+
