@@ -4,7 +4,6 @@ from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name
 
-
 class PurchaseOrdersFilter(filters.FilterSet):
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
