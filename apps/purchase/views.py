@@ -166,7 +166,7 @@ class PurchaseOrderViewSet(APIView):
         else:
             serializer = PurchaseOrdersSerializer(instance, many=True)
             logger.info("Purchase order data retrieved successfully.")
-            return build_response(instance.count(), "Success123", serializer.data, status.HTTP_200_OK)
+            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
         
 
     def retrieve(self, request, *args, **kwargs):
