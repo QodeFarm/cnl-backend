@@ -212,36 +212,44 @@ class CustomerCreateViews(APIView):
     def post(self, request, *args, **kwargs):   #To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
         return self.create(request, *args, **kwargs)
     
-    def create(self, request, *args, **kwargs):
-        # Extracting data from the request
+    def create(self, request, *args, **kwargs):        
         given_data = request.data
+        print("given data : ", given_data)
 
         #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
         """
-        All the data in request will be validated here. it will handle the following errors:
+        All the data in request will be validated here. It will handle the following errors:
         - Invalid data types
         - Invalid foreign keys
-        - nulls in required fields
+        - Nulls in required fields
         """
 
-        # Vlidated SaleOrder Data
-        customer_data = given_data.pop('customer_data', None) # parent_data
+        # Extract customer_data from the request
+        customer_data = given_data.pop('customer_data', None)  # Parent data
+
+        # Validated Customer Data
         if customer_data:
+            # Ensure picture is handled correctly as part of customer_data
+            picture_1 = customer_data['picture'] 
+            first_picture = picture_1[0]
+            picture_path = first_picture.get('attachment_path', None)  
+            customer_data['picture'] = picture_path
+
             customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
 
-        # Vlidated CustomerAttachments Data
+        # Validated CustomerAttachments Data
         attachments_data = given_data.pop('customer_attachments', None)
         if attachments_data:
-            attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers,['customer_id'])
+            attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers, ['customer_id'])
         else:
-            attachment_error = [] # Since 'attachments_data' is optional, so making an error is empty list
+            attachment_error = []  # Since 'attachments_data' is optional, so making an error is an empty list
 
-        # Vlidated SaleOrderItems Data
+        # Validated CustomerAddresses Data
         addresses_data = given_data.pop('customer_addresses', None)
         if addresses_data:
-            addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers,['customer_id'])
+            addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers, ['customer_id'])
         else:
-            addresses_error = [] # Since 'addresses_data' is optional, so making an error is empty list
+            addresses_error = []  # Since 'addresses_data' is optional, so making an error is an empty list
 
         # Ensure mandatory data is present
         if not customer_data or not addresses_data:
@@ -256,22 +264,20 @@ class CustomerCreateViews(APIView):
         if addresses_error:
             errors['customer_addresses'] = addresses_error
         if errors:
-            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
         
         #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
         """
             
-        # Hence the data is validated , further it can be created.
-
         # Create Customer Data
         new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer)
-        customer_id = new_customer_data[0].get("customer_id",None) #Fetch customer_id from mew instance
+        customer_id = new_customer_data[0].get("customer_id", None)  # Fetch customer_id from new instance
         logger.info('Customer - created*')     
 
         # Create CustomerAttachment Data
-        update_fields = {'customer_id':customer_id}
+        update_fields = {'customer_id': customer_id}
         if attachments_data:
             attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields)
             logger.info('CustomerAttachments - created*')
@@ -280,17 +286,20 @@ class CustomerCreateViews(APIView):
             attachments_data = []
 
         # Create CustomerAddress Data
-        update_fields = {'customer_id':customer_id}
+        update_fields = {'customer_id': customer_id}
         addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields)
         logger.info('CustomerAddress - created*')
 
         custom_data = [
-            {"customer_data":new_customer_data[0]},
-            {"customer_attachments":attachments_data},
-            {"customer_addresses":addresses_data}
+            {"customer_data": new_customer_data[0]},
+            {"customer_attachments": attachments_data},
+            {"customer_addresses": addresses_data}
         ]
 
-        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)        
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
+
+      
 
     def put(self, request, pk, *args, **kwargs):
 
@@ -307,6 +316,11 @@ class CustomerCreateViews(APIView):
             # Vlidated Customer Data
             customer_data = given_data.pop('customer_data', None)
             if customer_data:
+                picture_1 = customer_data['picture'] 
+                first_picture = picture_1[0]
+                picture_path = first_picture.get('attachment_path', None)  
+                customer_data['picture'] = picture_path
+                
                 customer_error = validate_payload_data(self, customer_data , CustomerSerializer)
 
             # Vlidated CustomerAttachment Data
@@ -357,3 +371,4 @@ class CustomerCreateViews(APIView):
             ]
 
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
