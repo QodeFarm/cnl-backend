@@ -151,7 +151,7 @@ class productsViewSet(viewsets.ModelViewSet):
                 attachment_data_list = request.data['picture']
                 if attachment_data_list:
                     first_attachment = attachment_data_list[0]
-                    request.data['picture'] = first_attachment.get('attachment_path', None)
+                    request.data['picture'] = first_attachment.put('attachment_path', None)
                     print("Updated picture path: ", request.data['picture'])
             
             try:

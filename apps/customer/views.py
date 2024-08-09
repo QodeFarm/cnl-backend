@@ -299,8 +299,6 @@ class CustomerCreateViews(APIView):
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
 
-      
-
     def put(self, request, pk, *args, **kwargs):
 
             #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
@@ -318,7 +316,7 @@ class CustomerCreateViews(APIView):
             if customer_data:
                 picture_1 = customer_data['picture'] 
                 first_picture = picture_1[0]
-                picture_path = first_picture.get('attachment_path', None)  
+                picture_path = first_picture.put('attachment_path', None)  
                 customer_data['picture'] = picture_path
                 
                 customer_error = validate_payload_data(self, customer_data , CustomerSerializer)

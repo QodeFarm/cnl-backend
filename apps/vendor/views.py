@@ -300,7 +300,7 @@ class VendorViewSet(APIView):
         if vendors_data:
             picture_1 = vendors_data['picture'] 
             first_picture = picture_1[0]
-            picture_path = first_picture.get('attachment_path', None)  
+            picture_path = first_picture.put('attachment_path', None)  
             vendors_data['picture'] = picture_path
             vendors_error = validate_payload_data(self, vendors_data , VendorSerializer)
 
