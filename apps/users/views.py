@@ -1,5 +1,5 @@
 import copy
-from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer
+from .serializers import CustomUserUpdateSerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
 from rest_framework.decorators import permission_classes
@@ -249,7 +249,40 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
                 'data': [e.detail]
             }
             return Response(error_response_data, status=status.HTTP_201_CREATED)
+    
+    def update(self, request, *args, **kwargs):
+        if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
+            attachment_data_list = request.data['profile_picture_url']
+            if attachment_data_list:
+                first_attachment = attachment_data_list[0]
+                request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
         
+        try:
+            # Retrieve the user instance
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+
+            # Use the custom serializer for updates
+            serializer = CustomUserUpdateSerializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+
+            custom_response_data = {
+                'count': '1',
+                'msg': 'Success! Your user account has been updated.',
+                'data': [serializer.data]
+            }
+            return Response(custom_response_data, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            error_response_data = {
+                'count': '1',
+                'msg': 'User update failed due to validation errors.',
+                'data': [e.detail]
+            }
+            return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
+
+        except User.DoesNotExist:
+            return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 # ++==================================CODE with GET, GET ALL, UPDATE, DELETE Methods fro USER:========+++++++++++++++++++++++++++++++++++++++
 class UserUpdateView(APIView):
     

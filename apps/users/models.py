@@ -66,50 +66,37 @@ class ModuleSections(models.Model):
         return f"{self.section_id}.{self.section_name}"
 
 class UserManager(BaseUserManager):
-    '''Creating User'''
-    def create_user(self, email, username, password = None, **extra_fields):
+    def create_user(self, email, username, password=None, **extra_fields):
         if not email:
-            raise ValueError("The Email Field Must be set")        
+            raise ValueError("The Email Field Must be set")
         email = self.normalize_email(email)
         user = self.model(
-        email = email,
-        username = username,
-        **extra_fields)
+            email=email,
+            username=username,
+            **extra_fields
+        )
         user.set_password(password)
         user.save(using=self._db)
         return user
-    
+
     def create_superuser(self, username, email, password=None, **extra_fields):
-        user = self.create_user(username, email, password=password, **extra_fields)
-        user.is_active = True
-        user.is_staff = True
-        user.is_admin = True
-        user.save(using=self._db)
+        # Set any required flags for superusers here if needed
+        user = self.create_user(username, email, password, **extra_fields)
+        # You can set specific flags or permissions for superusers here
         return user
 
-# def profile_picture(instance, filename):
-#     '''Uploading Profile Picture'''
-#     # Get the file extension
-#     file_extension = os.path.splitext(filename)[-1]
-#     # Generate a unique identifier
-#     unique_id = uuid.uuid4().hex[:6]
-#     # Construct the filename
-#     original_filename = os.path.splitext(filename)[0]  # Get the filename without extension
-#     return f"users/{original_filename}_{unique_id}{file_extension}"
-
-#====
 class User(AbstractBaseUser):
-    GENDER_CHOICES = [('Male', 'Male'),('Female', 'Female'),('Other', 'Other'),('Prefer Not to Say', 'Prefer Not to Say')]
-    TITLE_CHOICES = [('Mr.', 'Mr.'),('Ms.', 'Ms.')]
+    GENDER_CHOICES = [('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other'), ('Prefer Not to Say', 'Prefer Not to Say')]
+    TITLE_CHOICES = [('Mr.', 'Mr.'), ('Ms.', 'Ms.')]
     profile_picture_url = models.CharField(max_length=255, null=True, default=None)
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, default='Prefer Not to Say')
     title = models.CharField(max_length=20, choices=TITLE_CHOICES, default=None)
-    username = models.CharField(verbose_name="Username",max_length=255,unique=True) 
+    username = models.CharField(verbose_name="Username", max_length=255, unique=True)
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    last_name = models.CharField(max_length=255, null= True, default=None)
-    timezone = models.CharField(max_length=100, null= True, default=None)
-    language = models.CharField(max_length=10, null= True, default=None)
-    date_of_birth = models.DateField(null= True, default=None)
+    last_name = models.CharField(max_length=255, null=True, default=None)
+    timezone = models.CharField(max_length=100, null=True, default=None)
+    language = models.CharField(max_length=10, null=True, default=None)
+    date_of_birth = models.DateField(null=True, default=None)
     email = models.EmailField(max_length=255, unique=True)
     otp_required = models.BooleanField(default=False)
     mobile= models.CharField(max_length=20, unique=True)
@@ -118,8 +105,7 @@ class User(AbstractBaseUser):
     bio = models.TextField(null= True, default=None)
     is_active = models.BooleanField(default=True)
     first_name = models.CharField(max_length=255)
-    last_login = models.DateTimeField()
-     
+    last_login = models.DateTimeField(null=True, default=None)
     branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id')
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
     role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
@@ -140,21 +126,18 @@ class User(AbstractBaseUser):
         return f"{self.first_name} {self.last_name} "
 
     def has_perm(self, perm, obj=None):
-        "Does the user have a specific permission?"
-        # Simplest possible answer: Yes, always
-        return self.is_admin
-
-    def has_module_perms(self, app_label):
-        "Does the user have permissions to view the app `app_label`?"
-        # Simplest possible answer: Yes, always
+        # Define your custom permission logic here
         return True
 
+    def has_module_perms(self, app_label):
+        # Define your custom module permission logic here
+        return True
+
+    # Optionally remove or customize the is_staff property
+    # If it's not needed, you can safely remove it
     @property
     def is_staff(self):
-        "Is the user a member of staff?"
-        # Simplest possible answer: All admins are staff
-        return self.is_admin
-    
+        return False  # or customize based on your own logic
     # @receiver(pre_delete, sender='users.User')
     # def delete_user_picture(sender, instance, **kwargs):
     #     if instance.profile_picture_url and instance.profile_picture_url.name:

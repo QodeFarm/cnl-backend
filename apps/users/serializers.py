@@ -246,3 +246,19 @@ class ModulesOptionsSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+#==================================================================
+from djoser.serializers import UserSerializer as DjoserUserSerializer
+
+class CustomUserUpdateSerializer(DjoserUserSerializer):
+
+    class Meta:
+        model = User
+        fields = DjoserUserSerializer.Meta.fields 
+
+    def update(self, instance, validated_data):
+        # Update instance fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        instance.save()
+        return instance
