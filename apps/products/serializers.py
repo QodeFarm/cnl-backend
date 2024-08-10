@@ -121,12 +121,22 @@ class ModproductsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Products
         fields = ['product_id','name', 'code']
+        
+#--------------------------------------------------------------
+class PictureSerializer(serializers.Serializer):
+    uid = serializers.CharField(max_length=255)
+    name = serializers.CharField(max_length=255)
+    attachment_name = serializers.CharField(max_length=255)
+    file_size = serializers.IntegerField()
+    attachment_path = serializers.CharField(max_length=255)
+#-------------------------------------------------------------------
 
 class productsSerializer(serializers.ModelSerializer):
     product_group = ModProductGroupsSerializer(source='product_group_id',read_only=True)
     category = ModProductCategoriesSerializer(source='category_id',read_only=True)
     type = ProductTypesSerializer(source='type_id',read_only=True)
     unit_options = UnitOptionsSerializer(source='unit_options_id',read_only=True)
+    picture = PictureSerializer(many=True)
     stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id',read_only=True)
     gst_classification = ModProductGstClassificationsSerializer(source='gst_classification_id',read_only=True)
     sales_gl = ModProductSalesGlSerializer(source='sales_gl_id',read_only=True)

@@ -229,12 +229,6 @@ class CustomerCreateViews(APIView):
 
         # Validated Customer Data
         if customer_data:
-            # Ensure picture is handled correctly as part of customer_data
-            picture_1 = customer_data['picture'] 
-            first_picture = picture_1[0]
-            picture_path = first_picture.get('attachment_path', None)  
-            customer_data['picture'] = picture_path
-
             customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
 
         # Validated CustomerAttachments Data
@@ -313,12 +307,7 @@ class CustomerCreateViews(APIView):
 
             # Vlidated Customer Data
             customer_data = given_data.pop('customer_data', None)
-            if customer_data:
-                picture_1 = customer_data['picture'] 
-                first_picture = picture_1[0]
-                picture_path = first_picture.put('attachment_path', None)  
-                customer_data['picture'] = picture_path
-                
+            if customer_data:                
                 customer_error = validate_payload_data(self, customer_data , CustomerSerializer)
 
             # Vlidated CustomerAttachment Data
