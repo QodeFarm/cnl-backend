@@ -67,7 +67,7 @@ class Customer(models.Model):
     territory_id = models.ForeignKey(Territory, on_delete=models.CASCADE, null=True, default=None, db_column='territory_id')
     customer_category_id = models.ForeignKey(CustomerCategories, on_delete=models.CASCADE, null=True, default=None, db_column='customer_category_id')
     contact_person = models.CharField(max_length=255, null=True, default=None,)
-    picture = models.CharField(max_length=255, default=None, null=True)
+    picture = models.JSONField()
     gst = models.CharField(max_length=50, null=True, default=None)
     registration_date = models.DateField(auto_now_add=True, null=True)
     cin = models.CharField(max_length=50, null=True, default=None)

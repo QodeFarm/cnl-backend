@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import *
+from apps.products.serializers import PictureSerializer
 from apps.masters.serializers import *
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -22,6 +23,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     firm_status = ModFirmStatusesSerializers(source='firm_status_id', read_only=True)
     territory = ModTerritorySerializers(source='territory_id', read_only=True)
+    picture = PictureSerializer(many=True)
     customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
     gst_category = GstCategoriesSerializers(source='gst_category_id', read_only=True)
     payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
