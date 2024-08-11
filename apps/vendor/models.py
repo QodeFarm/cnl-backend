@@ -81,7 +81,7 @@ class Vendor(models.Model):
     territory_id = models.ForeignKey(Territory,  on_delete=models.CASCADE,null=True, default=None, db_column='territory_id')
     vendor_category_id = models.ForeignKey(VendorCategory, on_delete=models.CASCADE, null=True, default=None, db_column='vendor_category_id')
     contact_person = models.CharField(max_length=255, null=True, default=None)
-    picture = JSONField()
+    picture = models.JSONField()
     gst = models.CharField(max_length=255, null=True, default=None)
     registration_date = models.DateField(null=True, default=None)
     cin = models.CharField(max_length=255, null=True, default=None)
