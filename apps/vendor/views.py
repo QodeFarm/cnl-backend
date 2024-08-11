@@ -216,12 +216,20 @@ class VendorViewSet(APIView):
 
         # Vlidated Vendor Data
         vendors_data = given_data.pop('vendor_data', None)
-        if vendors_data:
-            picture_1 = vendors_data['picture'] 
-            first_picture = picture_1[0]
-            picture_path = first_picture.get('attachment_path', None)  
-            vendors_data['picture'] = picture_path
+        if vendors_data:            
+            # Check if 'picture' exists in customer_data and is a list
+            picture_data = vendors_data.get('picture', None)
+            if picture_data:
+                if not isinstance(picture_data, list):
+                    return build_response(0, "'picture' field in customer_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
+
+                for attachment in picture_data:
+                    if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
+                        return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
+            
             vendors_error = validate_payload_data(self, vendors_data , VendorSerializer)
+        else:
+            vendors_error = ["vendors_data is required."]
 
         # Vlidated VendorAttachment Data
         vendor_attachments_data = given_data.pop('vendor_attachments', None)
@@ -298,10 +306,6 @@ class VendorViewSet(APIView):
         # Vlidated Vendor Data
         vendors_data = given_data.pop('vendor_data', None)
         if vendors_data:
-            picture_1 = vendors_data['picture'] 
-            first_picture = picture_1[0]
-            picture_path = first_picture.put('attachment_path', None)  
-            vendors_data['picture'] = picture_path
             vendors_error = validate_payload_data(self, vendors_data , VendorSerializer)
 
         # Vlidated VendorAttachment Data

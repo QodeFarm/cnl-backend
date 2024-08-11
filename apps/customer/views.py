@@ -212,50 +212,48 @@ class CustomerCreateViews(APIView):
     def post(self, request, *args, **kwargs):   #To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
         return self.create(request, *args, **kwargs)
     
-    def create(self, request, *args, **kwargs):        
+    def create(self, request, *args, **kwargs):
         given_data = request.data
-        print("given data : ", given_data)
-
-        #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
-        """
-        All the data in request will be validated here. It will handle the following errors:
-        - Invalid data types
-        - Invalid foreign keys
-        - Nulls in required fields
-        """
+        print("Given data:", given_data)
 
         # Extract customer_data from the request
-        customer_data = given_data.pop('customer_data', None)  # Parent data
+        customer_data = given_data.pop('customer_data', None)
 
-        # Validated Customer Data
+        # Validate customer_data
         if customer_data:
-            # Ensure picture is handled correctly as part of customer_data
-            picture_1 = customer_data['picture'] 
-            first_picture = picture_1[0]
-            picture_path = first_picture.get('attachment_path', None)  
-            customer_data['picture'] = picture_path
+            # Check if 'picture' exists in customer_data and is a list
+            picture_data = customer_data.get('picture', None)
+            if picture_data:
+                if not isinstance(picture_data, list):
+                    return build_response(0, "'picture' field in customer_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
 
+                for attachment in picture_data:
+                    if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
+                        return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Validate the rest of customer_data
             customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
+        else:
+            customer_error = ["customer_data is required."]
 
-        # Validated CustomerAttachments Data
+        # Validate customer_attachments
         attachments_data = given_data.pop('customer_attachments', None)
         if attachments_data:
             attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers, ['customer_id'])
         else:
-            attachment_error = []  # Since 'attachments_data' is optional, so making an error is an empty list
+            attachment_error = []
 
-        # Validated CustomerAddresses Data
+        # Validate customer_addresses
         addresses_data = given_data.pop('customer_addresses', None)
         if addresses_data:
             addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers, ['customer_id'])
         else:
-            addresses_error = []  # Since 'addresses_data' is optional, so making an error is an empty list
+            addresses_error = []
 
-        # Ensure mandatory data is present
         if not customer_data or not addresses_data:
             logger.error("Customers and Customer Addresses are mandatory but not provided.")
             return build_response(0, "Customers and Customer Addresses are mandatory", [], status.HTTP_400_BAD_REQUEST)
-        
+
         errors = {}
         if customer_error:
             errors["customer_data"] = customer_error
@@ -265,16 +263,11 @@ class CustomerCreateViews(APIView):
             errors['customer_addresses'] = addresses_error
         if errors:
             return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
-        
-        #---------------------- D A T A   C R E A T I O N ----------------------------#
-        """
-        After the data is validated, this validated data is created as new instances.
-        """
-            
+
         # Create Customer Data
         new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer)
-        customer_id = new_customer_data[0].get("customer_id", None)  # Fetch customer_id from new instance
-        logger.info('Customer - created*')     
+        customer_id = new_customer_data[0].get("customer_id", None)
+        logger.info('Customer - created*')
 
         # Create CustomerAttachment Data
         update_fields = {'customer_id': customer_id}
@@ -282,7 +275,6 @@ class CustomerCreateViews(APIView):
             attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields)
             logger.info('CustomerAttachments - created*')
         else:
-            # Since CustomerAttachments Data is optional, so making it as an empty data list
             attachments_data = []
 
         # Create CustomerAddress Data
@@ -290,6 +282,7 @@ class CustomerCreateViews(APIView):
         addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields)
         logger.info('CustomerAddress - created*')
 
+        # Build the response with customer_data including picture
         custom_data = [
             {"customer_data": new_customer_data[0]},
             {"customer_attachments": attachments_data},
@@ -297,6 +290,7 @@ class CustomerCreateViews(APIView):
         ]
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
 
 
     def put(self, request, pk, *args, **kwargs):
@@ -313,12 +307,7 @@ class CustomerCreateViews(APIView):
 
             # Vlidated Customer Data
             customer_data = given_data.pop('customer_data', None)
-            if customer_data:
-                picture_1 = customer_data['picture'] 
-                first_picture = picture_1[0]
-                picture_path = first_picture.put('attachment_path', None)  
-                customer_data['picture'] = picture_path
-                
+            if customer_data:                
                 customer_error = validate_payload_data(self, customer_data , CustomerSerializer)
 
             # Vlidated CustomerAttachment Data

@@ -106,6 +106,7 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+
 		
 class productsViewSet(viewsets.ModelViewSet):
     queryset = Products.objects.all()
@@ -124,44 +125,48 @@ class productsViewSet(viewsets.ModelViewSet):
             result = list_all_objects(self, request, *args, **kwargs)
         
         return result
-        
+    
     def create(self, request, *args, **kwargs):
-        # Check if profile_picture_url is in data and it's a list
-        if 'picture' in request.data and isinstance(request.data['picture'], list):
-            # Assuming the first item in the list contains the attachment data
-            attachment_data_list = request.data['picture']
-            if attachment_data_list:
-                first_attachment = attachment_data_list[0]
-                request.data['picture'] = first_attachment.get('attachment_path', None)
-        
-        try:
-            return create_instance(self, request, *args, **kwargs)
-        
-        except ValidationError as e:
-            return build_response(1, "Update failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST) 
-
-    def update(self, request, *args, **kwargs):
-        product_id = kwargs.get('pk')
-
+        # Extract the product ID from the request if needed
         request_product_id = request.data.get('product_id')
         print("Product ID from request data: ", request_product_id)
 
-        if request_product_id == product_id:
-            if 'picture' in request.data and isinstance(request.data['picture'], list):
-                attachment_data_list = request.data['picture']
-                if attachment_data_list:
-                    first_attachment = attachment_data_list[0]
-                    request.data['picture'] = first_attachment.put('attachment_path', None)
-                    print("Updated picture path: ", request.data['picture'])
-            
-            try:
-                return update_instance(self, request, *args, **kwargs) 
-            
-            except ValidationError as e:
-                return build_response(1, "Update failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST) 
-        
+        # Check if 'picture' exists in request data and is a list
+        if 'picture' in request.data and isinstance(request.data['picture'], list):
+            attachment_data_list = request.data['picture']
+            if attachment_data_list:
+                # Ensure all items in the list have the required fields
+                for attachment in attachment_data_list:
+                    if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
+                        return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
+                
+                # Set the picture field in request data as a list of objects
+                request.data['picture'] = attachment_data_list
+                print("Using picture data: ", request.data['picture'])
+            else:
+                # Handle case where 'picture' list is empty
+                return build_response(0, "'picture' list is empty.", [], status.HTTP_400_BAD_REQUEST)
         else:
-            return build_response(0, "Product ID does not match.", [], status.HTTP_400_BAD_REQUEST) 
+            # Handle the case where 'picture' is not provided or not a list
+            return build_response(0, "'picture' field is required and should be a list.", [], status.HTTP_400_BAD_REQUEST)
+
+        # Proceed with creating the instance
+        try:
+            response = super().create(request, *args, **kwargs)
+            
+            # Format the response to include the picture data
+            if isinstance(response.data, dict):
+                picture_data = response.data.get('picture')
+                if picture_data:
+                    response.data['picture'] = picture_data
+            return response
+        
+        except ValidationError as e:
+            return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
     
 class ProductItemBalanceViewSet(viewsets.ModelViewSet):
     queryset = ProductItemBalance.objects.all()
