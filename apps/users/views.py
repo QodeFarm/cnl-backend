@@ -1,4 +1,4 @@
-import copy
+from datetime import timezone
 from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
@@ -15,7 +15,6 @@ from .renderers import UserRenderer
 from rest_framework import viewsets
 from rest_framework import status
 import json
-import uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 
@@ -186,6 +185,8 @@ class UserLoginView(APIView):
         password = serializer.data.get('password')
         user = authenticate(username=username, password=password)
         if user is not None:
+            user.last_login = timezone.now()
+            user.save()
             token = get_tokens_for_user(user)
             return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
         else:
