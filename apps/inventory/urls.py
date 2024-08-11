@@ -5,8 +5,8 @@ from .views  import *
 
 router = routers.DefaultRouter()
 router.register(r'warehouses', WarehousesViewSet)
+router.register(r'warehouse_locations', WarehouseLocationsViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
-    
 ]
