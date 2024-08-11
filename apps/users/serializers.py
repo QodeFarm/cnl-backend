@@ -1,8 +1,8 @@
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from django.utils.encoding import smart_str, force_bytes, DjangoUnicodeDecodeError
-from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
+from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer, UserSerializer as DjoserUserSerializer
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from apps.company.serializers import ModBranchesSerializer
+from apps.company.serializers import ModBranchesSerializer, ModCompaniesSerializer
 from apps.masters.serializers import ModStatusesSerializer
 from rest_framework import serializers
 from .utils import Utils
@@ -110,9 +110,11 @@ class RolePermissionsSerializer(serializers.ModelSerializer):
 class GetUserDataSerializer(serializers.ModelSerializer):
     branch = ModBranchesSerializer(source='branch_id', read_only = True)
     status = ModStatusesSerializer(source='status_id', read_only = True)
+    role = ModRoleSerializer(source='role_id', read_only = True)
+    company = ModCompaniesSerializer(source='company_id', read_only = True)
     class Meta:
         model = User
-        fields = ['email', 'user_id','username','title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'status_id', 'branch_id', 'branch', 'status']   #if we use here '__all__' then it shows password field also.
+        fields = ['email', 'user_id', 'username', 'title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'branch', 'status', 'role', 'company']   #if we use here '__all__' then it shows password field also.
 #=================================================================================================
 #user create Serializer
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
@@ -143,6 +145,19 @@ class CustomUserCreateSerializer(BaseUserCreateSerializer):
             instance.profile_picture_url = profile_picture_url
             instance.save()
         return super().update(instance, validated_data)
+#===================================  USER-UPDATE  ===============================================
+class CustomUserUpdateSerializer(DjoserUserSerializer):
+    class Meta:
+        model = User
+        fields = DjoserUserSerializer.Meta.fields 
+
+    def update(self, instance, validated_data):
+        # Update instance fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        instance.save()
+        return instance
 #=================================================================================================
 #login serializer
 class UserLoginSerializer(serializers.ModelSerializer):

@@ -80,11 +80,9 @@ class UserManager(BaseUserManager):
         return user
     
     def create_superuser(self, username, email, password=None, **extra_fields):
-        user = self.create_user(username, email, password=password, **extra_fields)
-        user.is_active = True
-        user.is_staff = True
-        user.is_admin = True
-        user.save(using=self._db)
+        # Set any required flags for superusers here if needed
+        user = self.create_user(username, email, password, **extra_fields)
+        # You can set specific flags or permissions for superusers here
         return user
 
 def profile_picture(instance, filename):
@@ -118,10 +116,11 @@ class User(AbstractBaseUser):
     bio = models.TextField(null= True, default=None)
     is_active = models.BooleanField(default=True)
     first_name = models.CharField(max_length=255)
-    last_login = models.DateTimeField()
-     
+    last_login = models.DateTimeField(null=True, default=None)
     branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id')
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
+    role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
+    company_id = models.ForeignKey(Companies, on_delete=models.CASCADE,  db_column = 'company_id')
 
     objects = UserManager()
     
@@ -129,7 +128,7 @@ class User(AbstractBaseUser):
         db_table = userstable
 
     USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id'] 
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id', 'company_id'] 
 
     def __str__(self):
         return self.username
@@ -138,20 +137,18 @@ class User(AbstractBaseUser):
         return f"{self.first_name} {self.last_name} "
 
     def has_perm(self, perm, obj=None):
-        "Does the user have a specific permission?"
-        # Simplest possible answer: Yes, always
-        return self.is_admin
-
-    def has_module_perms(self, app_label):
-        "Does the user have permissions to view the app `app_label`?"
-        # Simplest possible answer: Yes, always
+        # Define your custom permission logic here
         return True
 
+    def has_module_perms(self, app_label):
+        # Define your custom module permission logic here
+        return True
+
+    # Optionally remove or customize the is_staff property
+    # If it's not needed, you can safely remove it
     @property
     def is_staff(self):
-        "Is the user a member of staff?"
-        # Simplest possible answer: All admins are staff
-        return self.is_admin
+        return False  # or customize based on your own logic
     
     @receiver(pre_delete, sender='users.User')
     def delete_user_picture(sender, instance, **kwargs):

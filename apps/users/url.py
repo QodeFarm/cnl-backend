@@ -2,7 +2,7 @@ from django.urls import path
 from django.contrib.auth import get_user_model
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt import views as jwtview
-from apps.users.views import RolePermissionsCreateView, CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, GetUserDataViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet
+from apps.users.views import UserUpdateView, RolePermissionsCreateView, CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, GetUserDataViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet
 
 router = DefaultRouter()
 
@@ -28,7 +28,9 @@ urlpatterns = [
     path('reset_password_email/', SendPasswordResetEmailView.as_view(), name='reset_password_email'),
     path('activation/<uid>/<token>/', CustomUserActivationViewSet.as_view({'post': 'activation'}), name='activation'),
     path('role_permissions/', RolePermissionsCreateView.as_view(), name='load-role-permissions'),
-    path('role_permissions/<uuid:role_id>/', RolePermissionsCreateView.as_view(), name='load-role-permissions')
+    path('role_permissions/<uuid:role_id>/', RolePermissionsCreateView.as_view(), name='load-role-permissions'),
+    path('user/<uuid:user_id>/', UserUpdateView.as_view(), name='load-role-permissions'),
+    path('user/', UserUpdateView.as_view(), name='load-role-permissions')
 
 ]
 urlpatterns  += router.urls
