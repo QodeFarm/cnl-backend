@@ -1,4 +1,4 @@
-import copy
+from datetime import timezone
 from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
@@ -15,7 +15,6 @@ from .renderers import UserRenderer
 from rest_framework import viewsets
 from rest_framework import status
 import json
-import uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 
@@ -31,17 +30,6 @@ class UserRoleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
-
-class GetUserDataViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = GetUserDataSerializer
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
 
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -149,10 +137,7 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-# ==================================================================================================
-# Creating tokens manually
-
-
+#====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
 
@@ -187,12 +172,9 @@ def get_tokens_for_user(user):
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
         'role_permissions': role_permissions
-        # 'type' : type(role_permissions)
     }
 
-# login View
-
-
+#====================================USER-LOGIN-VIEW=============================================================
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -203,15 +185,14 @@ class UserLoginView(APIView):
         password = serializer.data.get('password')
         user = authenticate(username=username, password=password)
         if user is not None:
+            user.last_login = timezone.now()
+            user.save()
             token = get_tokens_for_user(user)
             return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
         else:
             return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_404_NOT_FOUND)
 
-# ==================================================================================================
-# change known Password view
-
-
+#====================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -221,10 +202,7 @@ class UserChangePasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         return Response({'count': '1', 'msg': 'Password Changed Successfully', 'data': []}, status=status.HTTP_200_OK)
 
-# =================================================================================================
-# Forgot Password
-
-
+#====================================USER-FORGET-PASSWD-VIEW=============================================================
 @permission_classes([AllowAny])
 class SendPasswordResetEmailView(APIView):
     renderer_classes = [UserRenderer]
@@ -246,8 +224,6 @@ class UserPasswordResetView(APIView):
         return Response({'count': '1', 'msg': 'Password Reset Successfully', 'data': []}, status=status.HTTP_200_OK)
 
 # ============================= #USER-CREATE   &    USER-UPDATE#==========================================================
-
-
 class CustomUserCreateViewSet(DjoserUserViewSet):
     def create(self, request, *args, **kwargs):
         # if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
@@ -307,7 +283,7 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
             return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 # =============================USER GET ,  USER GET-All  ,  USER DELETE===================================================
-class UserUpdateView(APIView):    
+class UserManageView(APIView):    
     def get(self, request, user_id=None):
         """
         Retrieve a specific user if user_id is provided, otherwise retrieve all users.
@@ -328,8 +304,8 @@ class UserUpdateView(APIView):
         user = get_object_or_404(User, user_id=user_id)
         user.delete()
         return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
-#=====================================================================================================
 
+#====================================USER-ACTIVATION-VIEW=============================================================
 class CustomUserActivationViewSet(DjoserUserViewSet):
     @action(["post"], detail=False)
     def activation(self, request, *args, **kwargs):
@@ -348,7 +324,8 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
                 'data': [e.detail],
             }
             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
-# ++==================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
+        
+#====================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
 class RolePermissionsCreateView(APIView):
     def post(self, request, *args, **kwargs):
         result = self.create_list_data(request.data)

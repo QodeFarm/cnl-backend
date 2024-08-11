@@ -1,7 +1,6 @@
 from config.utils_variables import rolestable, rolepermissionstable, actionstable, modulestable, modulesections, userstable, usertimerestrictions, userallowedweekdays, userroles
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 from django.db.models.signals import pre_delete
-from apps.company.models import Companies
 from apps.masters.models import Statuses
 from apps.company.models import Branches
 from django.dispatch import receiver
@@ -120,7 +119,6 @@ class User(AbstractBaseUser):
     branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id')
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
     role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
-    company_id = models.ForeignKey(Companies, on_delete=models.CASCADE,  db_column = 'company_id')
 
     objects = UserManager()
     
@@ -128,7 +126,7 @@ class User(AbstractBaseUser):
         db_table = userstable
 
     USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id', 'company_id'] 
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id'] 
 
     def __str__(self):
         return self.username
