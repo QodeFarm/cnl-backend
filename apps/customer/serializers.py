@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import *
+from apps.products.serializers import PictureSerializer
 from apps.masters.serializers import *
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -22,6 +23,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     firm_status = ModFirmStatusesSerializers(source='firm_status_id', read_only=True)
     territory = ModTerritorySerializers(source='territory_id', read_only=True)
+    picture = PictureSerializer(many=True)
     customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
     gst_category = GstCategoriesSerializers(source='gst_category_id', read_only=True)
     payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
@@ -30,29 +32,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = '__all__'  
-        
-    def create(self, validated_data):
-            picture = validated_data.pop('picture', None)
-            instance = super().create(validated_data)
-            if picture:
-                instance.picture = picture
-                instance.save()
-            return instance
-   
-    def update(self, instance, validated_data):
-        picture = validated_data.pop('picture', None)
-        if picture:
-            # Delete the previous picture file and its directory if they exist
-            if instance.picture:
-                picture_path = instance.picture.path
-                if os.path.exists(picture_path):
-                    os.remove(picture_path)
-                    picture_dir = os.path.dirname(picture_path)
-                    if not os.listdir(picture_dir):
-                        os.rmdir(picture_dir)
-            instance.picture = picture
-            instance.save()
-        return super().update(instance, validated_data)      
+           
         
 class ModCustomersSerializer(serializers.ModelSerializer):
     class Meta:

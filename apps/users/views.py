@@ -1,5 +1,5 @@
-import copy
-from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer
+from datetime import timezone
+from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
 from rest_framework.decorators import permission_classes
@@ -15,8 +15,7 @@ from .renderers import UserRenderer
 from rest_framework import viewsets
 from rest_framework import status
 import json
-import uuid
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 
 class UserRoleViewSet(viewsets.ModelViewSet):
@@ -31,17 +30,6 @@ class UserRoleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
-
-class GetUserDataViewSet(viewsets.ModelViewSet):
-    queryset = User.objects.all()
-    serializer_class = GetUserDataSerializer
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
 
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -149,10 +137,7 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-# ==================================================================================================
-# Creating tokens manually
-
-
+#====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
 
@@ -160,16 +145,20 @@ def get_tokens_for_user(user):
     if user.profile_picture_url:
         profile_picture_url = user.profile_picture_url.url
 
-    roles_id = UserRoles.objects.filter(
-        user_id=user.user_id).values_list('role_id', flat=True)
-    role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
-    role_permissions_json = RolePermissionsSerializer(
-        role_permissions_id, many=True)
-    Final_data = json.dumps(role_permissions_json.data,
-                            default=str).replace("\\", "")
-    role_permissions = json.loads(Final_data)
-    role_permissions = role_permissions[0]
-    remove_fields(role_permissions)
+    try:
+        roles_id = UserRoles.objects.filter(
+            user_id=user.user_id).values_list('role_id', flat=True)
+        role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
+        role_permissions_json = RolePermissionsSerializer(
+            role_permissions_id, many=True)
+        Final_data = json.dumps(role_permissions_json.data,
+                                default=str).replace("\\", "")
+        role_permissions = json.loads(Final_data)
+        role_permissions = role_permissions[0]
+        remove_fields(role_permissions)
+
+    except (ObjectDoesNotExist, IndexError, KeyError) as e:
+            role_permissions = "Role not assigned yet"
 
     return {
         'username': user.username,
@@ -183,12 +172,9 @@ def get_tokens_for_user(user):
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
         'role_permissions': role_permissions
-        # 'type' : type(role_permissions)
     }
 
-# login View
-
-
+#====================================USER-LOGIN-VIEW=============================================================
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -199,15 +185,14 @@ class UserLoginView(APIView):
         password = serializer.data.get('password')
         user = authenticate(username=username, password=password)
         if user is not None:
+            user.last_login = timezone.now()
+            user.save()
             token = get_tokens_for_user(user)
             return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
         else:
             return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_404_NOT_FOUND)
 
-# ==================================================================================================
-# change known Password view
-
-
+#====================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -217,10 +202,7 @@ class UserChangePasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         return Response({'count': '1', 'msg': 'Password Changed Successfully', 'data': []}, status=status.HTTP_200_OK)
 
-# =================================================================================================
-# Forgot Password
-
-
+#====================================USER-FORGET-PASSWD-VIEW=============================================================
 @permission_classes([AllowAny])
 class SendPasswordResetEmailView(APIView):
     renderer_classes = [UserRenderer]
@@ -241,11 +223,15 @@ class UserPasswordResetView(APIView):
         serializer.is_valid(raise_exception=True)
         return Response({'count': '1', 'msg': 'Password Reset Successfully', 'data': []}, status=status.HTTP_200_OK)
 
-# =================================================================================================
-
-
+# ============================= #USER-CREATE   &    USER-UPDATE#==========================================================
 class CustomUserCreateViewSet(DjoserUserViewSet):
     def create(self, request, *args, **kwargs):
+        # if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
+        # # Assuming the first item in the list contains the attachment data
+        #     attachment_data_list = request.data['profile_picture_url']
+        #     if attachment_data_list:
+        #         first_attachment = attachment_data_list[0]
+        #         request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
         try:
             response = super().create(request, *args, **kwargs)
             custom_response_data = {
@@ -260,11 +246,66 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
                 'msg': 'User creation failed due to validation errors.',
                 'data': [e.detail]
             }
+            return Response(error_response_data, status=status.HTTP_201_CREATED)
+    
+    def update(self, request, *args, **kwargs):
+        # if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
+        #     attachment_data_list = request.data['profile_picture_url']
+        #     if attachment_data_list:
+        #         first_attachment = attachment_data_list[0]
+        #         request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
+        
+        try:
+            # Retrieve the user instance
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+
+            # Use the custom serializer for updates
+            serializer = CustomUserUpdateSerializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+
+            custom_response_data = {
+                'count': '1',
+                'msg': 'Success! Your user account has been updated.',
+                'data': [serializer.data]
+            }
+            return Response(custom_response_data, status=status.HTTP_200_OK)
+        except ValidationError as e:
+            error_response_data = {
+                'count': '1',
+                'msg': 'User update failed due to validation errors.',
+                'data': [e.detail]
+            }
             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
 
-# =================================================================================================
+        except User.DoesNotExist:
+            return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+# =============================USER GET ,  USER GET-All  ,  USER DELETE===================================================
+class UserManageView(APIView):    
+    def get(self, request, user_id=None):
+        """
+        Retrieve a specific user if user_id is provided, otherwise retrieve all users.
+        """
+        if user_id:
+            user = get_object_or_404(User, user_id=user_id)
+            serializer = GetUserDataSerializer(user)
+            return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+        else:
+            users = User.objects.all()
+            serializer = GetUserDataSerializer(users, many=True)
+            return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
 
+    def delete(self, request, user_id):
+        """
+        Delete a specific user identified by user_id.
+        """
+        user = get_object_or_404(User, user_id=user_id)
+        user.delete()
+        return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
+
+#====================================USER-ACTIVATION-VIEW=============================================================
 class CustomUserActivationViewSet(DjoserUserViewSet):
     @action(["post"], detail=False)
     def activation(self, request, *args, **kwargs):
@@ -283,7 +324,8 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
                 'data': [e.detail],
             }
             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
-# ++==================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
+        
+#====================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
 class RolePermissionsCreateView(APIView):
     def post(self, request, *args, **kwargs):
         result = self.create_list_data(request.data)

@@ -1,6 +1,6 @@
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from django.utils.encoding import smart_str, force_bytes, DjangoUnicodeDecodeError
-from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
+from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer, UserSerializer as DjoserUserSerializer
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from apps.company.serializers import ModBranchesSerializer
 from apps.masters.serializers import ModStatusesSerializer
@@ -110,11 +110,12 @@ class RolePermissionsSerializer(serializers.ModelSerializer):
 class GetUserDataSerializer(serializers.ModelSerializer):
     branch = ModBranchesSerializer(source='branch_id', read_only = True)
     status = ModStatusesSerializer(source='status_id', read_only = True)
+    role = ModRoleSerializer(source='role_id', read_only = True)
     class Meta:
         model = User
-        fields = ['email', 'user_id','username','title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'status_id', 'branch_id', 'branch', 'status']   #if we use here '__all__' then it shows password field also.
-#=================================================================================================
-#user create Serializer
+        fields = ['email', 'user_id', 'username', 'title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'branch', 'status', 'role']   #if we use here '__all__' then it shows password field also.
+
+#====================================USER-CREATE-SERIALIZER=============================================================
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
     class Meta(BaseUserCreateSerializer.Meta):
         model = User
@@ -143,15 +144,29 @@ class CustomUserCreateSerializer(BaseUserCreateSerializer):
             instance.profile_picture_url = profile_picture_url
             instance.save()
         return super().update(instance, validated_data)
-#=================================================================================================
-#login serializer
+    
+#====================================USER-UPDATE-SERIALIZER=============================================================
+class CustomUserUpdateSerializer(DjoserUserSerializer):
+    class Meta:
+        model = User
+        fields = DjoserUserSerializer.Meta.fields 
+
+    def update(self, instance, validated_data):
+        # Update instance fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        instance.save()
+        return instance
+    
+#====================================USER-LOGIN-SERIALIZER=============================================================
 class UserLoginSerializer(serializers.ModelSerializer):
     username = serializers.CharField(max_length=255)
     class Meta:
         model = User
         fields =['username', 'password']
-#=================================================================================================
-#change known Password serializer
+
+#====================================USER-CHANGE-KNOWN-PASSWD-SERIALIZER=============================================================
 class UserChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(max_length=255, style={'input_type': 'password'}, write_only=True)
     password = serializers.CharField(max_length=255, style={'input_type':'password'}, write_only=True)
@@ -176,8 +191,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
         user.save()
         return attrs
 
-#====================================================================================================
-#forgot passswd serializer
+#====================================USER-FORGET-PASSWD-SERIALIZER=============================================================
 class SendPasswordResetEmailSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
     class Meta:
