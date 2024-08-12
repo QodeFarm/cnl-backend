@@ -116,7 +116,7 @@ class User(AbstractBaseUser):
     is_active = models.BooleanField(default=True)
     first_name = models.CharField(max_length=255)
     last_login = models.DateTimeField(null=True, default=None)
-    branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id')
+    branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id', null= True)
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
     role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
 
