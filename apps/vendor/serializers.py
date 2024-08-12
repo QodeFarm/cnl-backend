@@ -77,13 +77,13 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
     vendor_addresses = serializers.SerializerMethodField()
-    vendor_category_id = ModVendorCategorySerializer()
-    ledger_account_id = ModLedgerAccountsSerializers()
+    vendor_category = serializers.SerializerMethodField() 
+    ledger_account = serializers.SerializerMethodField() 
     city = serializers.SerializerMethodField() 
 
     class Meta:
         model = Vendor
-        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category_id', 'ledger_account_id', 'created_at','vendor_addresses'] 
+        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category', 'ledger_account', 'created_at','vendor_addresses'] 
 
     def get_vendor_address_details(self, obj):
         addresses = VendorAddress.objects.filter(vendor_id=obj.vendor_id)
@@ -132,6 +132,16 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
     
     def get_vendor_addresses(self, obj):
         return self.get_vendor_address_details(obj)[3]
+    
+    def get_ledger_account(self, obj):
+        if obj.ledger_account_id:
+            return ModLedgerAccountsSerializers(obj.ledger_account_id).data
+        return None
+    
+    def get_vendor_category(self, obj):
+        if obj.vendor_category_id:
+            return ModVendorCategorySerializer(obj.vendor_category_id).data
+        return None
     
     def get_vendors_summary(vendors):
         serializer = VendorsOptionsSerializer(vendors, many=True)

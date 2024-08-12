@@ -116,39 +116,39 @@ class PurchasePriceListSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class PurchaseOrdersOptionsSerializer(serializers.ModelSerializer):
-    vendor_id = ModVendorSerializer()
-    purchase_type_id = ModPurchaseTypesSerializer()
-    order_status_id = ModOrderStatusesSerializer()
+    vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    purchase_type = ModPurchaseTypesSerializer(source='purchase_type_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
 
     class Meta:
         model = PurchaseOrders
-        fields = ['purchase_order_id', 'order_no', 'order_date', 'tax', 'tax_amount','total_amount', 'vendor_id', 'purchase_type_id', 'order_status_id', 'remarks']
+        fields = ['purchase_order_id', 'order_no', 'order_date', 'tax', 'tax_amount','total_amount', 'vendor', 'purchase_type', 'order_status', 'remarks']
  
     def get_purchase_orders_summary(purchase_orders):
         serializer = PurchaseOrdersOptionsSerializer(purchase_orders, many=True)
         return serializer.data
 
 class PurchaseReturnOrdersOptionsSerializer(serializers.ModelSerializer):
-    vendor_id = ModVendorSerializer()
-    purchase_type_id = ModPurchaseTypesSerializer()
-    order_status_id = ModOrderStatusesSerializer()
+    vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    purchase_type = ModPurchaseTypesSerializer(source='purchase_type_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
 
     class Meta:
         model = PurchaseReturnOrders
-        fields = ['purchase_return_id', 'return_no', 'due_date', 'tax', 'total_amount', 'tax_amount', 'return_reason', 'vendor_id', 'purchase_type_id', 'order_status_id', 'remarks']
+        fields = ['purchase_return_id', 'return_no', 'due_date', 'tax', 'total_amount', 'tax_amount', 'return_reason', 'vendor', 'purchase_type', 'order_status', 'remarks']
     
     def get_purchase_return_orders_summary(purchase_return_orders):
         serializer = PurchaseReturnOrdersOptionsSerializer(purchase_return_orders, many=True)
         return serializer.data
 
 class PurchaseInvoiceOrdersOptionsSerializer(serializers.ModelSerializer):
-    vendor_id = ModVendorSerializer()
-    purchase_type_id = ModPurchaseTypesSerializer()
-    order_status_id = ModOrderStatusesSerializer()
+    vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    purchase_type = ModPurchaseTypesSerializer(source='purchase_type_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
 
     class Meta:
         model = PurchaseInvoiceOrders
-        fields = ['purchase_invoice_id', 'invoice_no', 'invoice_date', 'supplier_invoice_no', 'tax', 'total_amount', 'tax_amount', 'advance_amount', 'vendor_id','purchase_type_id', 'order_status_id', 'remarks']
+        fields = ['purchase_invoice_id', 'invoice_no', 'invoice_date', 'supplier_invoice_no', 'tax', 'total_amount', 'tax_amount', 'advance_amount', 'vendor','purchase_type', 'order_status', 'remarks']
     
     def get_purchase_invoice_orders_summary(purchase_invoice_orders):
         serializer = PurchaseInvoiceOrdersOptionsSerializer(purchase_invoice_orders, many=True)
