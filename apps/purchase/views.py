@@ -154,11 +154,12 @@ class PurchaseOrderViewSet(APIView):
 
             # Apply filters manually
             if request.query_params:
-                queryset = PurchaseOrders.objects.all()
-                filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+                queryset = PurchaseInvoiceOrders.objects.all()
+                filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-                    return build_response(queryset.count(), "Success", queryset.values(), status.HTTP_200_OK)
+                    serializer = PurchaseOrdersOptionsSerializer(queryset, many=True)
+                    return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
 
         except PurchaseOrders.DoesNotExist:
             logger.error("Purchase order does not exist.")
@@ -486,7 +487,8 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-                    return build_response(queryset.count(), "Success", queryset.values(), status.HTTP_200_OK)
+                    serializer = PurchaseInvoiceOrdersOptionsSerializer(queryset, many=True)
+                    return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
 
 
         except PurchaseInvoiceOrders.DoesNotExist:
@@ -805,13 +807,15 @@ class PurchaseReturnOrderViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
             instance = PurchaseReturnOrders.objects.all()
-
+            
+            # Apply filters manually
             if request.query_params:
-                queryset = PurchaseReturnOrders.objects.all()
-                filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
+                queryset = PurchaseInvoiceOrders.objects.all()
+                filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-                    return build_response(queryset.count(), "Success", queryset.values(), status.HTTP_200_OK)
+                    serializer = PurchaseReturnOrdersOptionsSerializer(queryset, many=True)
+                    return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
 
         except PurchaseReturnOrders.DoesNotExist:
             logger.error("Purchase return order does not exist.")
