@@ -82,12 +82,13 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     phone = serializers.SerializerMethodField()
     customer_addresses = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField() 
-    ledger_account_id = ModLedgerAccountsSerializers()
+    ledger_account = serializers.SerializerMethodField()
+
 
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account_id', 'created_at', 'customer_addresses']
+        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
@@ -136,6 +137,11 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
 
     def get_customer_addresses(self, obj):
         return self.get_customer_details(obj)[3]
+    
+    def get_ledger_account(self, obj):
+        if obj.ledger_account_id:
+            return ModLedgerAccountsSerializers(obj.ledger_account_id).data
+        return None
     
         
     def get_customer_summary(customers):
