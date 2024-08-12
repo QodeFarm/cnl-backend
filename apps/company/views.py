@@ -19,9 +19,6 @@ class CompaniesViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
-    # def create(self, request, *args, **kwargs):
-    #     return create_instance(self, request, *args, **kwargs)
-    
     def create(self, request, *args, **kwargs):
         # Check if 'logo' exists in request data and is a list
         if 'logo' in request.data and isinstance(request.data['logo'], list):
@@ -56,8 +53,6 @@ class CompaniesViewSet(viewsets.ModelViewSet):
         except ValidationError as e:
             return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
 
-
-
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
@@ -71,9 +66,6 @@ class BranchesViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
-    # def create(self, request, *args, **kwargs):
-    #     return create_instance(self, request, *args, **kwargs)
-    
     def create(self, request, *args, **kwargs):
         # Check if 'picture' exists in request data and is a list
         if 'picture' in request.data and isinstance(request.data['picture'], list):
@@ -107,7 +99,6 @@ class BranchesViewSet(viewsets.ModelViewSet):
        
         except ValidationError as e:
             return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
-
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
