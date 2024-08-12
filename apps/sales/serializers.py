@@ -134,9 +134,10 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
     amount = serializers.SerializerMethodField()
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
 
+
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'remarks']
+        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'remarks', 'created_at', 'updated_at']
 
     def get_sale_order_details(self, obj):
         sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
@@ -168,7 +169,7 @@ class SaleInvoiceOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleInvoiceOrders
-        fields = ['sale_invoice_id', 'invoice_no',  'invoice_date', 'tax', 'advance_amount', 'total_amount', 'tax_amount', 'customer', 'order_status', 'remarks']
+        fields = ['sale_invoice_id', 'invoice_no',  'invoice_date', 'tax', 'advance_amount', 'total_amount', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at']
 
     def get_sale_invoice_order_summary(sale_invoice_order):
         serializer = SaleInvoiceOrderOptionsSerializer(sale_invoice_order, many=True)
@@ -180,7 +181,7 @@ class SaleReturnOrdersOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleReturnOrders
-        fields = ['sale_return_id', 'return_no', 'return_date', 'tax', 'return_reason', 'total_amount', 'due_date', 'tax_amount', 'customer', 'order_status', 'remarks']
+        fields = ['sale_return_id', 'return_no', 'return_date', 'tax', 'return_reason', 'total_amount', 'due_date', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at']
 
     def get_sale_return_orders_summary(sale_return_order):
         serializer = SaleReturnOrdersOptionsSerializer(sale_return_order, many=True)
