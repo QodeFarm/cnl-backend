@@ -7,6 +7,7 @@ from django.core.files.storage import default_storage
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.exceptions import ValidationError
 from passlib.hash import bcrypt
+from apps.products.serializers import PictureSerializer
 
 class ModCompaniesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,6 +23,8 @@ class CompaniesSerializer(serializers.ModelSerializer):
     city = ModCitySerializer(source='city_id', read_only = True)
     state = ModStateSerializer(source='state_id', read_only = True)
     country = ModCountrySerializer(source='country_id', read_only = True)
+    logo = PictureSerializer(many=True)
+
     class Meta:
         model = Companies
         fields = '__all__'
@@ -56,33 +59,10 @@ class BranchesSerializer(serializers.ModelSerializer):
     city = ModCitySerializer(source='city_id', read_only = True)
     state = ModStateSerializer(source='state_id', read_only = True)
     country = ModCountrySerializer(source='country_id', read_only = True)
-
+    picture = PictureSerializer(many=True)
     class Meta:
         model = Branches
         fields='__all__'
-
-    def create(self, validated_data):
-            picture = validated_data.pop('picture', None)
-            instance = super().create(validated_data)
-            if picture:
-                instance.picture = picture
-                instance.save()
-            return instance
-    
-    def update(self, instance, validated_data):
-        picture = validated_data.pop('picture', None)
-        if picture:
-            # Delete the previous picture file and its directory if they exist
-            if instance.picture:
-                picture_path = instance.picture.path
-                if os.path.exists(picture_path):
-                    os.remove(picture_path)
-                    picture_dir = os.path.dirname(picture_path)
-                    if not os.listdir(picture_dir):
-                        os.rmdir(picture_dir)
-            instance.picture = picture
-            instance.save()
-        return super().update(instance, validated_data)
 
 class BranchBankDetailsSerializer(serializers.ModelSerializer):
     branch = ModBranchesSerializer(source='branch_id', read_only = True)

@@ -23,7 +23,7 @@ class Companies(models.Model):
     code = models.CharField(max_length=100, null=True, default=None)
     num_branches = models.IntegerField(default=0)
     num_employees = models.IntegerField(null=True, default =None)
-    logo = models.ImageField(null=True, upload_to=company_logos, default=None)
+    logo = models.JSONField()
     address = models.CharField(max_length=255, default=None, null=True)
     city_id = models.ForeignKey('masters.City', on_delete=models.CASCADE, db_column = 'city_id')
     state_id = models.ForeignKey('masters.State', on_delete=models.CASCADE, db_column = 'state_id')
@@ -81,15 +81,7 @@ class Companies(models.Model):
     class Meta:
         db_table = companytable
 
-    @receiver(pre_delete, sender='company.Companies')
-    def delete_company_logo(sender, instance, **kwargs):
-        if instance.logo and instance.logo.name:
-            file_path = instance.logo.path
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                logo_dir = os.path.dirname(file_path)
-                if not os.listdir(logo_dir):
-                    os.rmdir(logo_dir)
+    
 
 def branches_picture(instance, filename):
     # Get the file extension
@@ -119,7 +111,7 @@ class Branches(models.Model):
     gstn_password = EncryptedTextField(max_length=255, default=None, null=True)
     other_license_1 = models.CharField(max_length=255, default=None, null=True)
     other_license_2 = models.CharField(max_length=255, default=None, null=True)
-    picture = models.ImageField(max_length=255, default=None, null=True, upload_to=branches_picture) 
+    picture = models.JSONField()
     address = models.CharField(max_length=255, default=None, null=True)
     city_id = models.ForeignKey('masters.City', on_delete=models.CASCADE, db_column = 'city_id')
     state_id = models.ForeignKey('masters.State', on_delete=models.CASCADE, db_column = 'state_id')
@@ -139,16 +131,6 @@ class Branches(models.Model):
     class Meta:
         db_table = branchestable
 
-    @receiver(pre_delete, sender='company.Branches')
-    def delete_branches_picture(sender, instance, **kwargs):
-        if instance.picture and instance.picture.name:
-            file_path = instance.picture.path
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                picture_dir = os.path.dirname(file_path)
-                if not os.listdir(picture_dir):
-                    os.rmdir(picture_dir)
-    
 class BranchBankDetails(models.Model):
     bank_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     branch_id = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column = 'branch_id')
