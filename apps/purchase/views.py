@@ -154,8 +154,8 @@ class PurchaseOrderViewSet(APIView):
 
             # Apply filters manually
             if request.query_params:
-                queryset = PurchaseInvoiceOrders.objects.all()
-                filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
+                queryset = PurchaseOrders.objects.all()
+                filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
                     serializer = PurchaseOrdersOptionsSerializer(queryset, many=True)
@@ -810,8 +810,8 @@ class PurchaseReturnOrderViewSet(APIView):
             
             # Apply filters manually
             if request.query_params:
-                queryset = PurchaseInvoiceOrders.objects.all()
-                filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
+                queryset = PurchaseReturnOrders.objects.all()
+                filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
                     serializer = PurchaseReturnOrdersOptionsSerializer(queryset, many=True)
