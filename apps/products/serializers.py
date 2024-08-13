@@ -156,7 +156,6 @@ class productsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Products
         fields = '__all__'
-        fileds = ['total_product_balance']
 
     def get_total_product_balance(self, obj):
         query_set = ProductItemBalance.objects.filter(product_id=obj.product_id)
