@@ -29,30 +29,6 @@ class CompaniesSerializer(serializers.ModelSerializer):
         model = Companies
         fields = '__all__'
 
-    def create(self, validated_data):
-        logo = validated_data.pop('logo', None)
-        instance = super().create(validated_data)
-        if logo:
-            instance.logo = logo
-            instance.save()
-        return instance
-
-    def update(self, instance, validated_data):
-        logo = validated_data.pop('logo', None)
-        if logo:
-            # Delete the previous logo file and its directory if they exist
-            if instance.logo:
-                logo_path = instance.logo.path
-                if os.path.exists(logo_path):
-                    os.remove(logo_path)
-                    logo_dir = os.path.dirname(logo_path)
-                    if not os.listdir(logo_dir):
-                        os.rmdir(logo_dir)
-            instance.logo = logo
-            instance.save()
-        return super().update(instance, validated_data)
-
-
 class BranchesSerializer(serializers.ModelSerializer): 
     company = ModCompaniesSerializer(source='company_id', read_only = True)
     status = ModStatusesSerializer(source='status_id', read_only = True)
