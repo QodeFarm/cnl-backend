@@ -1,12 +1,14 @@
-from django.utils import timezone
 from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from rest_framework.decorators import permission_classes
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
+from django.shortcuts import get_object_or_404
+from django.db import connection, transaction
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -14,9 +16,8 @@ from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
 from rest_framework import status
+from django.utils import timezone
 import json
-from django.core.exceptions import ValidationError, ObjectDoesNotExist
-from django.shortcuts import get_object_or_404
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -305,9 +306,34 @@ class UserManageView(APIView):
         """
         Delete a specific user identified by user_id.
         """
-        user = get_object_or_404(User, user_id=user_id)
-        user.delete()
-        return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
+        user_id_str = str(user_id).replace("-", "")
+        # user = get_object_or_404(User, user_id=user_id)
+        try:
+        # Start a database transaction
+            with transaction.atomic():
+                # Get the cursor object to execute raw SQL queries
+                with connection.cursor() as cursor:
+                    # Check if the user exists in the database
+                    cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = %s", [user_id_str])
+                    user_exists = cursor.fetchone()[0]
+
+                    if not user_exists:
+                        # If the user does not exist, return a 404 response
+                        return build_response(0, "User not found!", {}, status.HTTP_404_NOT_FOUND)
+
+                    # Execute the deletion query
+                    cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id_str])
+
+                    # Check if the deletion was successful
+                    if cursor.rowcount == 0:
+                        # If no rows were deleted, return an error response
+                        return build_response(0, "Failed to delete the user!", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                    # If successful, return a success response
+                    return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
+
+        except Exception as e:
+            return build_response(0, "An error occurred while deleting the user.", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #====================================USER-ACTIVATION-VIEW=============================================================
 class CustomUserActivationViewSet(DjoserUserViewSet):
