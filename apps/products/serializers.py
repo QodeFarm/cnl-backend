@@ -151,9 +151,20 @@ class productsSerializer(serializers.ModelSerializer):
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
     product_bal = ModProductItemBalanceSerializer(many=True, read_only=True)
+    total_product_balance = serializers.SerializerMethodField()
+    
     class Meta:
         model = Products
         fields = '__all__'
+
+    def get_total_product_balance(self, obj):
+        query_set = ProductItemBalance.objects.filter(product_id=obj.product_id)
+        
+        if query_set:
+            total_product_balance = 0
+            for val in query_set:
+                total_product_balance = val.balance + total_product_balance
+            return total_product_balance
 
 
 class ModProductItemBalanceSerializer(serializers.ModelSerializer):
@@ -174,16 +185,16 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Products
-        fields = ['product_id', 'code', 'name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'print_name', 'hsn_code', 'barcode']
+        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'hsn_code']
 
     def get_product_details(self, obj):
-        balance = ProductItemBalance.objects.filter(product_id=obj.product_id)
-        product_balance = None
-
-        for balances in balance:
-            if product_balance is None:
-                product_balance = balances.balance
-        return product_balance
+        query_set = ProductItemBalance.objects.filter(product_id=obj.product_id)
+        
+        if query_set:
+            product_balance = 0
+            for val in query_set:
+                product_balance = val.balance + product_balance
+            return product_balance
     
     def get_product_balance(self, obj):
         return self.get_product_details(obj)

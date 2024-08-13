@@ -215,6 +215,12 @@ class ProductViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
+            summary = request.query_params.get('summary', 'false').lower() == 'true'
+            if summary:
+                salereturnorders = Products.objects.all()
+                data = ProductOptionsSerializer.get_product_summary(salereturnorders)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)                
+
             logger.info("Retrieving all products")
             queryset = Products.objects.all()
             serializer = productsSerializer(queryset, many=True)
@@ -255,6 +261,8 @@ class ProductViewSet(APIView):
                         warehouse_data = self.get_related_data( WarehouseLocations, WarehouseLocationsSerializer, 'location_id', id)
                         if len(warehouse_data) > 0:
                             warehouse_locations_data.append(warehouse_data[0])
+                else:
+                    warehouse_locations_data = []
 
                 # Customizing the response data
                 custom_data = {
@@ -458,4 +466,36 @@ class ProductViewSet(APIView):
             product_balance_data = product_balance_data if product_balance_data else []
             custom_data['product_item_balance'] = product_balance_data
 
-        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)    
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a lead and its related assignments and interactions.
+        """
+        try:
+
+            ids_list = []
+            item_instances = ProductItemBalance.objects.filter(product_id=pk)
+            if item_instances:
+                for id in item_instances:
+                    ids_list.append(id.location_id_id)
+            if ids_list:
+                for id in ids_list:
+                    if id:
+                        instance = WarehouseLocations.objects.get(location_id=id)
+                        instance.delete()
+                        logger.info(f"WarehouseLocation instances with pk={id} deleted successfully")
+
+            # delete the main instance
+            instance = Products.objects.get(pk=pk) # Get the Products instance
+            instance.delete() # Delete the main Products instance
+            logger.info(f"Products with ID {pk} deleted successfully.")
+
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except Products.DoesNotExist:
+            logger.warning(f"Products with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting Leads with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR) 
