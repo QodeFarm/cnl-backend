@@ -935,6 +935,16 @@ CREATE TABLE IF NOT EXISTS warehouses (
 	FOREIGN KEY (country_id) REFERENCES country(country_id)
 );
 
+CREATE TABLE IF NOT EXISTS warehouse_locations (
+    location_id CHAR(36) PRIMARY KEY,
+    warehouse_id CHAR(36) NOT NULL,
+    location_name VARCHAR(255) NOT NULL,
+    description VARCHAR(512),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
+);
+
 /* GST Types Table */
 -- Stores information about different types of GST.
 CREATE TABLE IF NOT EXISTS gst_types (
@@ -1589,11 +1599,10 @@ CREATE TABLE IF NOT EXISTS product_item_balance (
     product_id CHAR(36) NOT NULL,
     balance INT NOT NULL DEFAULT 0,
     location_id CHAR(36),
-    warehouse_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
+    FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
 );
 
 /* ======== HRMS Management ======== */
@@ -1687,13 +1696,13 @@ CREATE TABLE IF NOT EXISTS lead_interactions (
 CREATE TABLE IF NOT EXISTS lead_assignment_history (
    history_id CHAR(36) PRIMARY KEY,
    lead_id CHAR(36) NOT NULL,
-   sales_rep_id CHAR(36) NOT NULL,
+   assignee_id CHAR(36) NOT NULL,
    assignment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    end_date TIMESTAMP NULL,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    FOREIGN KEY (lead_id) REFERENCES leads(lead_id),
-   FOREIGN KEY (sales_rep_id) REFERENCES employees(employee_id)
+   FOREIGN KEY (assignee_id) REFERENCES employees(employee_id)
 );
 
 /* ======== Asset Management ======== */
