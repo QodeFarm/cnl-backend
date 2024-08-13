@@ -147,7 +147,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
     
     def save(self, *args, **kwargs):
         if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='In Progress')[0]
         super().save(*args, **kwargs)
     
     
