@@ -157,9 +157,6 @@ class productsViewSet(viewsets.ModelViewSet):
             else:
                 # Handle case where 'picture' list is empty
                 return build_response(0, "'picture' list is empty.", [], status.HTTP_400_BAD_REQUEST)
-        else:
-            # Handle the case where 'picture' is not provided or not a list
-            return build_response(0, "'picture' field is required and should be a list.", [], status.HTTP_400_BAD_REQUEST)
 
         # Proceed with creating the instance
         try:
@@ -219,13 +216,13 @@ class ProductViewSet(APIView):
             if summary:
                 salereturnorders = Products.objects.all()
                 data = ProductOptionsSerializer.get_product_summary(salereturnorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)                
-
-            logger.info("Retrieving all products")
-            queryset = Products.objects.all()
-            serializer = productsSerializer(queryset, many=True)
-            logger.info("product data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                return build_response(0, "Success", data, status.HTTP_200_OK)
+            else:
+                logger.info("Retrieving all products")
+                queryset = Products.objects.all()
+                serializer = productsSerializer(queryset, many=True)
+                logger.info("product data retrieved successfully.")
+                return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -404,6 +401,10 @@ class ProductViewSet(APIView):
         # Validate products Data
         products_data = given_data.pop('products', None)  # parent_data
         if products_data:
+            # Handle picture field in update
+            if 'picture' in products_data and isinstance(products_data['picture'], list):
+                products_data['picture'] = products_data['picture'][0] if products_data['picture'] else None
+                
             products_data['product_id'] = pk
             order_error = validate_multiple_data(self, products_data, productsSerializer, [])
             if order_error:
