@@ -367,6 +367,12 @@ class RolePermissionsCreateView(APIView):
   
 
     def create_list_data(self, data):
+        role_id = data[0].get('role_id')
+        deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
+        #Check if deletion was successful
+        if deleted_count == 0:
+            return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
+        
         created_records = []
         for item in data:
             module_id = item.get('module_id')
@@ -429,22 +435,22 @@ class RolePermissionsCreateView(APIView):
         
         return build_response(deleted_count, f"{deleted_count} records deleted",  [], status.HTTP_204_NO_CONTENT)
     
-
-    def put(self, request, role_id, *args, **kwargs):
-        # Delete existing records for the given role_id
-        deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
+    # This is redundant code will needed in future.
+    # def put(self, request, role_id, *args, **kwargs):
+    #     # Delete existing records for the given role_id
+    #     deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
         
-        # Check if deletion was successful
-        if deleted_count == 0:
-            return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
+    #     # Check if deletion was successful
+    #     if deleted_count == 0:
+    #         return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
 
-        # Create new records
-        result = self.create_list_data(request.data)
-        if isinstance(result, Response):
-            return result
+    #     # Create new records
+    #     result = self.create_list_data(request.data)
+    #     if isinstance(result, Response):
+    #         return result
         
-        serializer = RolePermissionsSerializer(result, many=True)
-        return build_response(len(result), "Record created successfully", serializer.data, status.HTTP_201_CREATED)
+    #     serializer = RolePermissionsSerializer(result, many=True)
+    #     return build_response(len(result), "Record created successfully", serializer.data, status.HTTP_201_CREATED)
 
      # Query the RolePermissions table for the given role_id
     def get(self, request, role_id, *args, **kwargs):
