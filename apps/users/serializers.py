@@ -8,6 +8,7 @@ from rest_framework import serializers
 from .utils import Utils
 from .passwdgen import *
 import os
+from apps.products.serializers import PictureSerializer
 from config.utils_variables import baseurl
 #=========================MOD_SERIALIZATION=========================
 class ModRoleSerializer(serializers.ModelSerializer):
@@ -118,33 +119,10 @@ class GetUserDataSerializer(serializers.ModelSerializer):
 #====================================USER-CREATE-SERIALIZER=============================================================
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
     class Meta(BaseUserCreateSerializer.Meta):
+        profile_picture_url = PictureSerializer(many=True)
         model = User
         fields = '__all__'
 
-    '''CURD Operations For Profile Picture'''
-    def create(self, validated_data):
-            profile_picture_url = validated_data.pop('profile_picture_url', None)
-            instance = super().create(validated_data)
-            if profile_picture_url:
-                instance.profile_picture_url = profile_picture_url
-                instance.save()
-            return instance
-    
-    def update(self, instance, validated_data):
-        profile_picture_url = validated_data.pop('profile_picture_url', None)
-        if profile_picture_url:
-            # Delete the previous picture file and its directory if they exist
-            if instance.profile_picture_url:
-                picture_path = instance.profile_picture_url.path
-                if os.path.exists(picture_path):
-                    os.remove(picture_path)
-                    picture_dir = os.path.dirname(picture_path)
-                    if not os.listdir(picture_dir):
-                        os.rmdir(picture_dir)
-            instance.profile_picture_url = profile_picture_url
-            instance.save()
-        return super().update(instance, validated_data)
-    
 #====================================USER-UPDATE-SERIALIZER=============================================================
 class CustomUserUpdateSerializer(DjoserUserSerializer):
     class Meta:

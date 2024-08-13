@@ -50,6 +50,11 @@ class PurchaseOrders(OrderNumberMixin):
 
     def __str__(self):
         return f"{self.purchase_order_id}"
+    
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
 
 class PurchaseorderItems(models.Model):
     purchase_order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -120,6 +125,11 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     def __str__(self):
         return f"{self.purchase_invoice_id}"
     
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
+    
 
 class PurchaseInvoiceItem(models.Model):
     purchase_invoice_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -186,6 +196,11 @@ class PurchaseReturnOrders(OrderNumberMixin):
 
     def __str__(self):
         return f"{self.purchase_return_id}"
+    
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
 
 class PurchaseReturnItems(models.Model):
     purchase_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

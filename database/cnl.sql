@@ -91,7 +91,7 @@ CREATE TABLE IF NOT EXISTS companies (
     code VARCHAR(50),
     num_branches INT DEFAULT 0,
     num_employees INT,
-    logo VARCHAR(255), -- URL to logo image stored externally
+    logo JSON DEFAULT NULL, -- URL to logo image stored externally
     address VARCHAR(255),
     city_id CHAR(36) NOT NULL,
 	state_id CHAR(36) NOT NULL,
@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS branches (
     gstn_password VARCHAR(255),
     other_license_1 VARCHAR(255),
     other_license_2 VARCHAR(255),
-    picture VARCHAR(255),
+    picture JSON DEFAULT NULL,
     address VARCHAR(255),
     city_id CHAR(36) NOT NULL,
 	state_id CHAR(36) NOT NULL,

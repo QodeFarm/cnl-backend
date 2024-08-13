@@ -235,7 +235,7 @@ class SaleOrderViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs                 
 
-            serializer = SaleOrderSerializer(queryset, many=True)
+            serializer = SaleOrderOptionsSerializer(queryset, many=True)
             logger.info("sale order data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
 
@@ -586,7 +586,7 @@ class SaleInvoiceOrdersViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs 
 
-            serializer = SaleInvoiceOrdersSerializer(queryset, many=True)
+            serializer = SaleInvoiceOrderOptionsSerializer(queryset, many=True)
             logger.info("sale order invoice data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
  
@@ -914,7 +914,7 @@ class SaleReturnOrdersViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs 
 
-            serializer = SaleReturnOrdersSerializer(queryset, many=True)
+            serializer = SaleReturnOrdersOptionsSerializer(queryset, many=True)
             logger.info("sale return order data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
  

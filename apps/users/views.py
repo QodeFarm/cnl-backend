@@ -1,4 +1,4 @@
-from datetime import timezone
+from django.utils import timezone
 from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
@@ -143,7 +143,7 @@ def get_tokens_for_user(user):
 
     profile_picture_url = None
     if user.profile_picture_url:
-        profile_picture_url = user.profile_picture_url.url
+        profile_picture_url = user.profile_picture_url
 
     try:
         roles_id = UserRoles.objects.filter(
@@ -226,35 +226,39 @@ class UserPasswordResetView(APIView):
 # ============================= #USER-CREATE   &    USER-UPDATE#==========================================================
 class CustomUserCreateViewSet(DjoserUserViewSet):
     def create(self, request, *args, **kwargs):
-        # if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
-        # # Assuming the first item in the list contains the attachment data
-        #     attachment_data_list = request.data['profile_picture_url']
-        #     if attachment_data_list:
-        #         first_attachment = attachment_data_list[0]
-        #         request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
+        if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
+            attachment_data_list = request.data['profile_picture_url']
+            if attachment_data_list:
+                # Ensure all items in the list have the required fields
+                for attachment in attachment_data_list:
+                    if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
+                        return build_response(0, "Missing required fields in some profile_picture_url data.", [], status.HTTP_400_BAD_REQUEST)
+               
+                # Set the profile_picture_url field in request data as a list of objects
+                request.data['profile_picture_url'] = attachment_data_list
+                print("Using profile_picture_url data: ", request.data['profile_picture_url'])
+            else:
+                # Handle case where 'profile_picture_url' list is empty
+                return build_response(0, "'profile_picture_url' list is empty.", [], status.HTTP_400_BAD_REQUEST)
+        else:
+            # Handle the case where 'profile_picture_url' is not provided or not a list
+            return build_response(0, "'profile_picture_url' field is required and should be a list.", [], status.HTTP_400_BAD_REQUEST)
+ 
+        # Proceed with creating the instance
         try:
             response = super().create(request, *args, **kwargs)
-            custom_response_data = {
-                'count': '1',
-                'msg': 'Success! Your user account has been created. Please check your mailbox',
-                'data': [response.data]
-            }
-            return Response(custom_response_data, status=status.HTTP_201_CREATED)
+           
+            # Format the response to include the profile_picture_url data
+            if isinstance(response.data, dict):
+                picture_data = response.data.get('profile_picture_url')
+                if picture_data:
+                    response.data['profile_picture_url'] = picture_data
+            return response
+       
         except ValidationError as e:
-            error_response_data = {
-                'count': '1',
-                'msg': 'User creation failed due to validation errors.',
-                'data': [e.detail]
-            }
-            return Response(error_response_data, status=status.HTTP_201_CREATED)
+            return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
     
     def update(self, request, *args, **kwargs):
-        # if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
-        #     attachment_data_list = request.data['profile_picture_url']
-        #     if attachment_data_list:
-        #         first_attachment = attachment_data_list[0]
-        #         request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
-        
         try:
             # Retrieve the user instance
             partial = kwargs.pop('partial', False)

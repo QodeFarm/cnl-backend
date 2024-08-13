@@ -145,6 +145,11 @@ class SaleInvoiceOrders(OrderNumberMixin):
     def __str__(self):
         return str(self.sale_invoice_id)
     
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='In Progress')[0]
+        super().save(*args, **kwargs)
+    
     
 class PaymentTransactions(models.Model): #required fields are updated
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -241,6 +246,11 @@ class SaleReturnOrders(OrderNumberMixin):
 
     def __str__(self):
         return str(self.sale_return_id)
+    
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
     
 class SaleReturnItems(models.Model):
     sale_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
