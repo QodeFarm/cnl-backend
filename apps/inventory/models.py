@@ -2,6 +2,7 @@ from django.db import models
 from config.utils_methods import *
 from config.utils_variables import warehouselocations, warehousestable
 import uuid
+
 # Create your models here.
 class Warehouses(models.Model):
     warehouse_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -24,12 +25,12 @@ class Warehouses(models.Model):
         db_table = warehousestable
 
     def __str__(self):
-        return f"{self.warehouse_id} {self.name}"
+        return f"{self.name}"
     
 class WarehouseLocations(models.Model):
     location_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     location_name = models.CharField(max_length=255)
-    warehouse_id = models.ForeignKey(Warehouses, on_delete=models.CASCADE, null=True, default=None, db_column='warehouse_id', related_name='item_bal')
+    warehouse_id = models.ForeignKey(Warehouses, on_delete=models.CASCADE, db_column='warehouse_id', related_name='item_bal')
     description = models.CharField(max_length=255, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

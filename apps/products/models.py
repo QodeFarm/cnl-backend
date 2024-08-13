@@ -2,7 +2,7 @@ import os,uuid
 from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import pre_delete
-from apps.inventory.models import Warehouses
+from apps.inventory.models import WarehouseLocations, Warehouses
 from config.utils_methods import *
 from config.utils_variables import *
 from config.utils_methods import OrderNumberMixin
@@ -197,8 +197,8 @@ class Products(OrderNumberMixin):
     stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, db_column = 'stock_unit_id')
     print_barcode = models.BooleanField(null=True, default=None)
     gst_classification_id = models.ForeignKey(ProductGstClassifications, on_delete=models.CASCADE, null=True, default=None, db_column = 'gst_classification_id')
-    # picture = models.CharField(max_length=255, default=None, null=True)
-    picture = models.JSONField()
+    picture = models.CharField(max_length=255, default=None, null=True)
+    picture = models.JSONField(null=True, default=None)
     sales_description = models.TextField(null=True, default=None)
     sales_gl_id = models.ForeignKey(ProductSalesGl, on_delete=models.CASCADE, db_column = 'sales_gl_id')
     mrp = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
@@ -237,19 +237,19 @@ class Products(OrderNumberMixin):
         db_table = productstable
 
     def __str__(self):
-        return f"{self.product_id} {self.name}"   
+        return f"{self.name}"   
 
 class ProductItemBalance(models.Model):
     product_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id')
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id', related_name= 'product_bal')
     balance = models.IntegerField(default=0)
-    location_id= models.CharField(max_length=36)
-    warehouse_id = models.ForeignKey(Warehouses, on_delete=models.CASCADE, null=True, default=None, db_column = 'warehouse_id')
+    location_id = models.ForeignKey(WarehouseLocations, on_delete=models.CASCADE, null=True, default=None, db_column = 'location_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = productitembalancetable
+        unique_together = ('product_id', 'location_id')
 
     def __str__(self):
         return f"{self.product_balance_id}"

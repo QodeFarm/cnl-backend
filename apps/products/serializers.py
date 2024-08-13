@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import *
 from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
-from apps.inventory.serializers import ModWarehousesSerializer
+from apps.inventory.serializers import ModWarehouseLocationsSerializer, ModWarehousesSerializer
 
 class ModProductGroupsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -121,6 +121,12 @@ class ModproductsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Products
         fields = ['product_id','name', 'code']
+
+class ModProductItemBalanceSerializer(serializers.ModelSerializer):
+    location = ModWarehouseLocationsSerializer(source='location_id',read_only=True)
+    class Meta:
+        model = ProductItemBalance
+        fields = ['balance','updated_at','location'] 	        
         
 #--------------------------------------------------------------
 class PictureSerializer(serializers.Serializer):
@@ -144,6 +150,7 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
+    product_bal = ModProductItemBalanceSerializer(many=True, read_only=True)
     class Meta:
         model = Products
         fields = '__all__'
@@ -156,7 +163,7 @@ class ModProductItemBalanceSerializer(serializers.ModelSerializer):
 
 class ProductItemBalanceSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id',read_only=True)
-    warehouse = ModWarehousesSerializer(source='warehouse_id',read_only=True)
+    location = ModWarehouseLocationsSerializer(source='location_id',read_only=True)
     class Meta:
         model = ProductItemBalance
         fields = '__all__'
