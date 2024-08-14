@@ -142,7 +142,7 @@ class productsSerializer(serializers.ModelSerializer):
     category = ModProductCategoriesSerializer(source='category_id',read_only=True)
     type = ProductTypesSerializer(source='type_id',read_only=True)
     unit_options = UnitOptionsSerializer(source='unit_options_id',read_only=True)
-    picture = PictureSerializer(many=True)
+    picture = PictureSerializer(required=False, allow_null=True)
     stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id',read_only=True)
     gst_classification = ModProductGstClassificationsSerializer(source='gst_classification_id',read_only=True)
     sales_gl = ModProductSalesGlSerializer(source='sales_gl_id',read_only=True)
@@ -201,8 +201,4 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
  
     def get_product_summary(products):
         serializer = ProductOptionsSerializer(products, many=True)
-        return {
-            "count": len(serializer.data),
-            "msg": "SUCCESS",
-            "data": serializer.data
-        }
+        return serializer.data
