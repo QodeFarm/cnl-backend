@@ -315,6 +315,15 @@ class ProductViewSet(APIView):
         # Validate products Data
         products_data = given_data.pop('products', None)  # parent_data
         if products_data:
+            # Check if 'picture' exists in products_data and is a list
+            picture_data = products_data.get('picture', None)
+            if picture_data:
+                if not isinstance(picture_data, list):
+                    return build_response(0, "'picture' field in products_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
+
+                for attachment in picture_data:
+                    if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
+                        return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
             product_error = validate_payload_data(self, products_data, productsSerializer)
             if product_error:
                 errors["products"] = product_error

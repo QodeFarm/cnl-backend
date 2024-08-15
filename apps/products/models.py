@@ -197,7 +197,6 @@ class Products(OrderNumberMixin):
     stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, db_column = 'stock_unit_id')
     print_barcode = models.BooleanField(null=True, default=None)
     gst_classification_id = models.ForeignKey(ProductGstClassifications, on_delete=models.CASCADE, null=True, default=None, db_column = 'gst_classification_id')
-    picture = models.CharField(max_length=255, default=None, null=True)
     picture = models.JSONField(null=True, default=None)
     sales_description = models.TextField(null=True, default=None)
     sales_gl_id = models.ForeignKey(ProductSalesGl, on_delete=models.CASCADE, db_column = 'sales_gl_id')
