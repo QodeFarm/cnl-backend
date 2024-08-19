@@ -31,6 +31,7 @@ class SaleOrderFilter(filters.FilterSet):
         fields =[]
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
+    customer_id = filters.CharFilter(method=filter_uuid)
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
 
@@ -42,6 +43,7 @@ class SaleInvoiceOrdersFilter(filters.FilterSet):
         fields =[]
 
 class SaleReturnOrdersFilter(filters.FilterSet):
+    customer_id = filters.CharFilter(method=filter_uuid)
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
 
