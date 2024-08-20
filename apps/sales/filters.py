@@ -6,43 +6,32 @@ from django_filters import rest_framework as filters
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name
 
 class SaleOrderFilter(filters.FilterSet):
-    # order_date = filters.DateFromToRangeFilter()
-    # delivery_date = filters.DateFromToRangeFilter()
-    # created_at = filters.DateFromToRangeFilter()
-    # order_no = filters.CharFilter(lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)
     order_status_id = filters.CharFilter(method=filter_uuid)
-    # order_id = filters.CharFilter(method=filter_uuid)
-    # remarks = filters.CharFilter(lookup_expr='icontains')
-    # customer_name = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
-    # sale_type_id = filters.CharFilter(method=filter_uuid)
-    # sales_type_name = filters.CharFilter(field_name='sale_type_id__name', lookup_expr='icontains')
-    # item_value = filters.RangeFilter()
-    # advance_amount = filters.RangeFilter()
-    # doc_amount = filters.RangeFilter()
-
-    period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    created_at = filters.DateFromToRangeFilter()
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
 
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
     
     class Meta:
         model = SaleOrder
-        fields =[]
+        fields = ['customer_id', 'order_status_id', 'period_name', 'created_at', 'status_name']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
     order_status_id = filters.CharFilter(method=filter_uuid)
-    period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    created_at = filters.DateFromToRangeFilter()
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
 
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
     
     class Meta:
         model = SaleInvoiceOrders
-        fields =[]
+        fields =['customer_id', 'order_status_id', 'period_name', 'created_at', 'status_name']
 
 class SaleReturnOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
