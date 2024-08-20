@@ -11,6 +11,7 @@ class SaleOrderFilter(filters.FilterSet):
     # created_at = filters.DateFromToRangeFilter()
     # order_no = filters.CharFilter(lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)
+    order_status_id = filters.CharFilter(method=filter_uuid)
     # order_id = filters.CharFilter(method=filter_uuid)
     # remarks = filters.CharFilter(lookup_expr='icontains')
     # customer_name = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
@@ -32,6 +33,7 @@ class SaleOrderFilter(filters.FilterSet):
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
+    order_status_id = filters.CharFilter(method=filter_uuid)
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
 
