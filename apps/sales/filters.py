@@ -35,12 +35,14 @@ class SaleInvoiceOrdersFilter(filters.FilterSet):
 
 class SaleReturnOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
+    order_status_id = filters.CharFilter(method=filter_uuid)
     period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     created_at = DateFromToRangeFilter()
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
 
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
     
     class Meta:
         model = SaleReturnOrders
-        fields =[]
+        fields =['customer_id', 'order_status_id', 'period_name', 'created_at', 'status_name']
