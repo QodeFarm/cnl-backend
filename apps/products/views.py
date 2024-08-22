@@ -119,7 +119,6 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-		
 class productsViewSet(viewsets.ModelViewSet):
     queryset = Products.objects.all()
     serializer_class = productsSerializer
@@ -174,8 +173,7 @@ class productsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
-    
+  
 class ProductItemBalanceViewSet(viewsets.ModelViewSet):
     queryset = ProductItemBalance.objects.all()
     serializer_class = ProductItemBalanceSerializer
@@ -192,6 +190,44 @@ class ProductItemBalanceViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+class SizeViewSet(viewsets.ModelViewSet):
+    queryset = Size.objects.all()
+    serializer_class = SizeSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)    
+
+class ColorViewSet(viewsets.ModelViewSet):
+    queryset = Color.objects.all()
+    serializer_class = ColorSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)    
+
+class ProductVariationViewSet(viewsets.ModelViewSet):
+    queryset = ProductVariation.objects.all()
+    serializer_class = ProductVariationSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 
 #--------------------P R O D U C T - A P I-----------------------#
 
@@ -214,9 +250,9 @@ class ProductViewSet(APIView):
         try:
             summary = request.query_params.get('summary', 'false').lower() == 'true'
             if summary:
-                salereturnorders = Products.objects.all()
-                data = ProductOptionsSerializer.get_product_summary(salereturnorders)
-                return build_response(0, "Success", data, status.HTTP_200_OK)
+                product = Products.objects.all()
+                data = ProductOptionsSerializer.get_product_summary(product)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
             else:
                 logger.info("Retrieving all products")
                 queryset = Products.objects.all()
@@ -238,34 +274,24 @@ class ProductViewSet(APIView):
                     logger.error("Primary key not provided in request.")
                     return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
 
-                # Retrieve the Leads instance
-                lead = get_object_or_404(Products, pk=pk)
-                products_serializer = productsSerializer(lead)
+                # Retrieve the Products instance
+                product = get_object_or_404(Products, pk=pk)
+                products_serializer = productsSerializer(product)
 
-                # Retrieve product_item_balance
-                product_item_balance_data = self.get_related_data(ProductItemBalance, ProductItemBalanceSerializer, 'product_id', pk)
-                product_item_balance_data = product_item_balance_data if product_item_balance_data else []
-                if product_item_balance_data:
-                    # get all location IDs in loop
-                    location_ids = []
-                    for data in product_item_balance_data:
-                        location_id = data.get('location_id', None)
-                        location_ids.append(location_id)
+                # Retrieve 'product_variations'
+                product_variations_data = self.get_related_data(ProductVariation, ProductVariationSerializer, 'product_id', pk)
+                product_variation_id = None
+                if product_variations_data:
+                    product_variation_id = product_variations_data[0].get('product_variation_id')
 
-                    # Retrieve warehouse_locations
-                    warehouse_locations_data = []
-                    for id in location_ids:
-                        warehouse_data = self.get_related_data( WarehouseLocations, WarehouseLocationsSerializer, 'location_id', id)
-                        if len(warehouse_data) > 0:
-                            warehouse_locations_data.append(warehouse_data[0])
-                else:
-                    warehouse_locations_data = []
+                # Retrieve 'product_item_balance'
+                product_item_balance_data = self.get_related_data(ProductItemBalance, ProductItemBalanceSerializer, 'product_variation_id', product_variation_id)
 
                 # Customizing the response data
                 custom_data = {
                     "products": products_serializer.data,
-                    "product_item_balance":product_item_balance_data,
-                    "warehouse_locations": warehouse_locations_data
+                    "product_variations":product_variations_data[0] if product_variations_data else {},
+                    "product_item_balance": product_item_balance_data if product_item_balance_data else []
                     }
                 logger.info("product and related data retrieved successfully.")
                 return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -294,7 +320,6 @@ class ProductViewSet(APIView):
             return []
 
     # Handling POST requests for creating
-    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
 
@@ -329,27 +354,27 @@ class ProductViewSet(APIView):
                 errors["products"] = product_error
         else:
             logger.error("products data is mandatory but not provided.")
-            return build_response(0, "products data is mandatory", [], status.HTTP_400_BAD_REQUEST)            
+            return build_response(0, "products data is mandatory", [], status.HTTP_400_BAD_REQUEST)
 
-        # Validate warehouse_locations Data
-        warehouse_locations_data = given_data.pop('warehouse_locations', None)
-        if warehouse_locations_data:
-            location_error = validate_multiple_data(self, warehouse_locations_data, WarehouseLocationsSerializer,[])
-            if location_error:
-                errors["warehouse_locations"] = location_error
+        # Validate 'product_variations' data
+        product_variations_data = given_data.pop('product_variations', None)
+        if product_variations_data:
+            variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer, ['product_id'])
+            if variations_error:
+                errors["product_variations"] = variations_error
 
         # Validate product_item_balance Data
         product_item_balance_data = given_data.pop('product_item_balance', None)
         if product_item_balance_data:
-            product_item_error = validate_multiple_data(self, product_item_balance_data, ProductItemBalanceSerializer, ['product_id'])
+            product_item_error = validate_multiple_data(self, product_item_balance_data, ProductItemBalanceSerializer, ['product_variation_id'])
             if product_item_error:
                 errors["product_item_balance"] = product_item_error
 
         if errors:
-            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "ValidationError :", None, status.HTTP_400_BAD_REQUEST, errors=errors)
         logger.info("***Validation Passed***")
 
-        # ---------------------- D A T A   C R E A T I O N ----------------------------#
+        # ---------------------- D A T A   C R E A T I O N ---------------------------- #
         """
         After the data is validated, this validated data is created as new instances.
         """
@@ -357,8 +382,8 @@ class ProductViewSet(APIView):
         # Hence the data is validated , further it can be created.
         custom_data = {
             'products':{},
-            'product_item_balance':[],
-            'warehouse_locations':[]
+            'product_variations':{},
+            'product_item_balance':[]
             }
 
         # Create Products Data
@@ -368,24 +393,21 @@ class ProductViewSet(APIView):
         product_id = new_products_data.get("product_id", None)  # Fetch product_id from mew instance
         logger.info('Products - created*')
 
-        # Create warehouse_locations Data
-        if warehouse_locations_data:
-            warehouse_location_data = generic_data_creation(self, warehouse_locations_data, WarehouseLocationsSerializer)
-            warehouse_location_data = warehouse_location_data[0]
-            custom_data["warehouse_locations"] = warehouse_location_data
-            logger.info('WarehouseLocations - created*')
+        # Create 'product_variations' data
+        if product_variations_data:
+            variations_data = generic_data_creation(self, [product_variations_data], ProductVariationSerializer, {'product_id':product_id})
+            custom_data["product_variations"] = variations_data[0]
+            logger.info('ProductVariation - created*')
 
-            # Get 'location_id' from new 'warehouse_location_data'
-            if warehouse_location_data:
-                location_id = warehouse_location_data.get('location_id')
+            # get 'product_variation_id' from 'product_variations_data'
+            product_variation_id = variations_data[0].get('product_variation_id')
 
-        # Create product_item_balance Data
+        # Create 'product_item_balance' data
         if product_item_balance_data:
-            update_fields = {'product_id':product_id, 'location_id':location_id}
+            update_fields = {'product_variation_id':product_variation_id}
             product_balance_data = generic_data_creation(self, product_item_balance_data, ProductItemBalanceSerializer, update_fields)
             custom_data["product_item_balance"] = product_balance_data
-            logger.info('ProductItemBalance - created*')
-        logger.info("***Creation Completed***")
+            logger.info('ProductItemBalance - created*')            
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
@@ -411,34 +433,31 @@ class ProductViewSet(APIView):
         products_data = given_data.pop('products', None)  # parent_data
         if products_data:
             # Handle picture field in update
-            if 'picture' in products_data and isinstance(products_data['picture'], list):
-                products_data['picture'] = products_data['picture'][0] if products_data['picture'] else None
+            # if 'picture' in products_data and isinstance(products_data['picture'], list):
+            #     products_data['picture'] = products_data['picture'][0] if products_data['picture'] else None
                 
             products_data['product_id'] = pk
-            order_error = validate_multiple_data(self, products_data, productsSerializer, [])
-            if order_error:
-                errors['products'] = order_error
+            products_error = validate_multiple_data(self, products_data, productsSerializer, [])
+            if products_error:
+                errors['products'] = products_error
 
-        # Validate warehouse_locations Data
-        warehouse_locations_data = given_data.pop('warehouse_locations', None)
-        if warehouse_locations_data:
-            location_error = validate_put_method_data(self, warehouse_locations_data, WarehouseLocationsSerializer, [], WarehouseLocations, current_model_pk_field='location_id')
-            if location_error:
-                errors['warehouse_locations'] = location_error
+        # Validate 'product_variations' data
+        product_variations_data = given_data.pop('product_variations', None)
+        if product_variations_data:
+            variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer,['sku','product_id'])
+            if variations_error:
+                errors["product_variations"] = variations_error
 
         # Validate product_item_balance Data
         product_item_balance_data = given_data.pop('product_item_balance', None)
         if product_item_balance_data:
-            exclude_fields = ['product_id']
-            # add product_id
-            for data in product_item_balance_data:
-                if 'product_balance_id' not in data:
-                    data['product_id'] = pk
-
-            product_item_error = validate_put_method_data(self, product_item_balance_data, ProductItemBalanceSerializer, exclude_fields, ProductItemBalance, current_model_pk_field='product_balance_id')
+            product_item_error = validate_multiple_data(self, product_item_balance_data, ProductItemBalanceSerializer, ['product_variation_id'])
             if product_item_error:
-                errors['product_item_balance'] = product_item_error
-        
+                errors["product_item_balance"] = product_item_error
+
+        if not product_variations_data and product_item_balance_data:
+            logger.error("'product_variations' data is mandatory")
+            return build_response(0, "'product_variations' data is mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
@@ -447,35 +466,33 @@ class ProductViewSet(APIView):
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
         custom_data = {
             "products":{},
-            "product_item_balance":[],
-            "warehouse_locations":[]
+            "product_variations":{},
+            "product_item_balance":[]
             }
+        
+        try:
+            # update 'Products'
+            product_data = update_multi_instances(self, pk, products_data, Products, productsSerializer, [], main_model_related_field='product_id', current_model_pk_field='product_id')
+            product_data = product_data[0] if len(product_data)==1 else product_data
+            custom_data['products'] = product_data
 
-        # update Products
-        update_fields = []  # No need to update any fields
-        product_data = update_multi_instances(self, pk, products_data, Products, productsSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_id')
-        product_data = product_data[0] if len(product_data)==1 else product_data
-        custom_data['products'] = product_data
-
-        if warehouse_locations_data:
-            # get pk for 'warehouse_locations' from previous instance
-            for data in warehouse_locations_data:
-                if 'location_id' in data:
-                    warehouse_pk = data.get('location_id',None)
-
-            # Update the 'warehouse_locations'
-            update_fields = {}
-            warehouse_location_data = update_multi_instances(self, warehouse_pk, warehouse_locations_data, WarehouseLocations, WarehouseLocationsSerializer, update_fields, main_model_related_field='location_id', current_model_pk_field='location_id')
-            warehouse_location_data = warehouse_location_data if warehouse_location_data else []
-            custom_data['warehouse_locations'] = warehouse_location_data
-
-        # Update the 'product_item_balance'
-        if product_item_balance_data:
+            # update 'product_variations'
             update_fields = {'product_id':pk}
-            product_balance_data = update_multi_instances(self, pk, product_item_balance_data, ProductItemBalance, ProductItemBalanceSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_balance_id')
-            product_balance_data = product_balance_data if product_balance_data else []
-            custom_data['product_item_balance'] = product_balance_data
+            variations_data = update_multi_instances(self, pk, product_variations_data, ProductVariation, ProductVariationSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_variation_id')
+            variations_data = variations_data[0] if len(variations_data)==1 else {}
+            custom_data['product_variations'] = variations_data
 
+            # get 'product_variation_id' from 'product_variations_data'
+            product_variation_id = variations_data.get('product_variation_id',None)
+
+            # update 'product_item_balance'
+            update_fields = {'product_variation_id':product_variation_id}
+            product_balance_data = update_multi_instances(self, product_variation_id, product_item_balance_data, ProductItemBalance, ProductItemBalanceSerializer, update_fields, main_model_related_field='product_variation_id', current_model_pk_field='product_item_balance_id')
+            product_balance_data = product_balance_data[0] if len(product_balance_data)==1 else product_balance_data
+            custom_data['product_item_balance'] = product_balance_data        
+        except Exception as e:
+            logger.error(f'Error: {e}')
+            return build_response(0, "An error occurred while updating the data. Please try again.", [], status.HTTP_400_BAD_REQUEST)
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
     @transaction.atomic
@@ -484,19 +501,6 @@ class ProductViewSet(APIView):
         Handles the deletion of a lead and its related assignments and interactions.
         """
         try:
-
-            ids_list = []
-            item_instances = ProductItemBalance.objects.filter(product_id=pk)
-            if item_instances:
-                for id in item_instances:
-                    ids_list.append(id.location_id_id)
-            if ids_list:
-                for id in ids_list:
-                    if id:
-                        instance = WarehouseLocations.objects.get(location_id=id)
-                        instance.delete()
-                        logger.info(f"WarehouseLocation instances with pk={id} deleted successfully")
-
             # delete the main instance
             instance = Products.objects.get(pk=pk) # Get the Products instance
             instance.delete() # Delete the main Products instance
