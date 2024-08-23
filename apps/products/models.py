@@ -252,7 +252,7 @@ class Size(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'sizes'    
+        db_table = sizes
 
     def __str__(self):
         return f"{self.size_name} ({self.size_category}, {self.size_system})"
@@ -261,19 +261,15 @@ class Size(models.Model):
 class Color(models.Model):
     color_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     color_name = models.CharField(max_length=50, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)    
 
     class Meta:
-        db_table = 'colors'
+        db_table = colors
 
     def __str__(self):
         return self.color_name
 
-'''
-ProductVariation Table
-Purpose: Represents the various versions of a product, differing by size, color, or other attributes.
-quantity Field: The quantity in this table typically reflects the total available stock for a particular product variation across all locations or warehouses.
-It provides a quick overview of how much of a specific variation (e.g., a "Large Red T-Shirt") is available overall.
-'''
 class ProductVariation(models.Model):
     product_variation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id', related_name='locations')
@@ -286,17 +282,11 @@ class ProductVariation(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'product_variations'
+        db_table = productvariations
 
     def __str__(self):
         return f"{self.product_id.name} - {self.size_id.size_name} - {self.color_id.color_name}"
 
-'''
-ProductItemBalance Table
-Purpose: Tracks the inventory of product variations at specific warehouse locations.
-quantity Field: The quantity here indicates how much of a specific product variation is available at a particular location.
-This allows you to manage and track stock distribution across multiple warehouses or storage locations.
-'''
 class ProductItemBalance(models.Model):
     product_item_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product_variation_id = models.ForeignKey(ProductVariation, on_delete=models.CASCADE, db_column='product_variation_id')
@@ -306,14 +296,7 @@ class ProductItemBalance(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'product_item_balance'
-        # unique_together = ('product_variation_id', 'warehouse_location_id')
+        db_table = productitembalancetable
 
     def __str__(self):
         return f'{self.product_variation_id} - {self.warehouse_location_id}'
-
-'''
-Q) Why Both?
-Product-Level Tracking: The quantity in ProductVariation allows you to quickly understand how much of a product variation you have across all locations.
-Location-Level Tracking: The quantity in ProductItemBalance enables detailed tracking of stock levels at each location,
-    which is crucial for logistics, fulfillment, and warehouse management.'''

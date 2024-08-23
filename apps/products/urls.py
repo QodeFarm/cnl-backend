@@ -14,7 +14,7 @@ router.register(r'products_get', productsViewSet)
 router.register(r'product_item_balance', ProductItemBalanceViewSet)
 router.register(r'sizes', SizeViewSet)
 router.register(r'colors', ColorViewSet)
-router.register(r'product-variations', ProductVariationViewSet)
+router.register(r'product_variations', ProductVariationViewSet)
 
 urlpatterns = [
     path('',include(router.urls)),
