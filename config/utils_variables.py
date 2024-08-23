@@ -23,6 +23,9 @@ productsalesgltable = 'product_sales_gl'
 productpurchasegltable ='product_purchase_gl'
 productstable = 'products'
 productitembalancetable = 'product_item_balance'
+colors = 'colors'
+sizes = 'sizes'
+productvariations = 'product_variations'
 
 #vendor db_tables
 vendorcategory='vendor_category'

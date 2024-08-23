@@ -751,6 +751,61 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id)
 );
 
+/* Sizes Table */
+-- Stores information about different sizes.
+CREATE TABLE IF NOT EXISTS sizes (
+    size_id CHAR(36) PRIMARY KEY,
+    size_name VARCHAR(50),                    -- The name/label of the size (e.g., S, M, L, 10, 42)
+    size_category VARCHAR(100) NOT NULL,      -- Category to which the size applies (e.g., clothing, industrial, food)
+    size_system VARCHAR(50),                  -- Optional: Size system (e.g., US, EU, metric)
+    length DECIMAL(10, 2),                    
+    height DECIMAL(10, 2),                    
+    width DECIMAL(10, 2),                     
+    size_unit VARCHAR(50),                    -- Unit of measurement (e.g., inches, cm, meters)
+    description TEXT,                         -- Additional details or description of the size
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Colors Table */
+-- Stores information about different colors.
+CREATE TABLE IF NOT EXISTS colors (
+    color_id CHAR(36) PRIMARY KEY,
+    color_name VARCHAR(50) NOT NULL UNIQUE
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP    
+);
+
+/* Product_variations Table */
+-- Stores information about product_variations.
+CREATE TABLE IF NOT EXISTS product_variations (
+    product_variation_id CHAR(36) PRIMARY KEY,
+    product_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NOT NULL,
+    color_id CHAR(36) NOT NULL,
+    sku VARCHAR(100) UNIQUE,  -- A stock keeping unit (SKU) is a unique alphanumeric code that retailers use to identify and track products in their inventory
+    price DECIMAL(10, 2) NOT NULL,
+    quantity INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
+);
+
+/* Product_item_balance Table */
+-- Stores information about product_item_balance.
+CREATE TABLE IF NOT EXISTS product_item_balance (
+    product_item_balance_id CHAR(36) PRIMARY KEY,
+    product_variation_id CHAR(36) NOT NULL,
+    warehouse_location_id CHAR(36) NOT NULL,
+    quantity INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
+    FOREIGN KEY (warehouse_location_id) REFERENCES warehouse_locations(location_id)
+);
+
 /* Vendor Category Table */
 -- Stores vendor categories, providing classification for vendors.
 CREATE TABLE IF NOT EXISTS vendor_category (
@@ -1592,18 +1647,6 @@ CREATE TABLE IF NOT EXISTS quick_pack_items (
     FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
 
-/* Product Item Balance Table */
--- Stores the current balance of products.
-CREATE TABLE IF NOT EXISTS product_item_balance (
-    product_balance_id CHAR(36) PRIMARY KEY,
-    product_id CHAR(36) NOT NULL,
-    balance INT NOT NULL DEFAULT 0,
-    location_id CHAR(36),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
-);
 
 /* ======== HRMS Management ======== */
 

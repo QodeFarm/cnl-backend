@@ -1,7 +1,24 @@
 from rest_framework import serializers
 from .models import *
 from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
-from apps.inventory.serializers import ModWarehouseLocationsSerializer, ModWarehousesSerializer
+from apps.inventory.serializers import ModWarehouseLocationsSerializer
+
+
+class ModProductItemBalanceSerializer(serializers.ModelSerializer):
+    warehouse_location = ModWarehouseLocationsSerializer(source='warehouse_location_id',read_only=True)
+    class Meta:
+        model = ProductItemBalance
+        fields = '__all__'
+
+    def get_locations(self, obj):
+        product_variations = ProductVariation.objects.filter(product_id=obj.product_id).values_list('product_variation_id', flat=True)
+        query_set = ProductItemBalance.objects.filter(product_variation_id__in=product_variations)
+        return ProductItemBalanceSerializer(query_set, many=True).data
+
+class ModProductVariationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductVariation
+        fields = ['product_variation_id']
 
 class ModProductGroupsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -36,8 +53,6 @@ class ProductGroupsSerializer(serializers.ModelSerializer):
             instance.save()
         return super().update(instance, validated_data)
 
-
-
 class ModProductCategoriesSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductCategories
@@ -71,8 +86,6 @@ class ProductCategoriesSerializer(serializers.ModelSerializer):
             instance.save()
         return super().update(instance, validated_data)
 
-
-
 class ModProductStockUnitsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductStockUnits
@@ -84,7 +97,6 @@ class ProductStockUnitsSerializer(serializers.ModelSerializer):
         model = ProductStockUnits
         fields = '__all__'
 
-
 class ModProductGstClassificationsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductGstClassifications
@@ -95,7 +107,6 @@ class ProductGstClassificationsSerializer(serializers.ModelSerializer):
         model = ProductGstClassifications
         fields = '__all__'
 
-
 class ModProductSalesGlSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSalesGl
@@ -105,7 +116,6 @@ class ProductSalesGlSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductSalesGl
         fields = '__all__'
-
 
 class ModProductPurchaseGlSerializer(serializers.ModelSerializer):
     class Meta:
@@ -122,12 +132,6 @@ class ModproductsSerializer(serializers.ModelSerializer):
         model = Products
         fields = ['product_id','name', 'code']
 
-class ModProductItemBalanceSerializer(serializers.ModelSerializer):
-    location = ModWarehouseLocationsSerializer(source='location_id',read_only=True)
-    class Meta:
-        model = ProductItemBalance
-        fields = ['balance','updated_at','location'] 	        
-        
 #--------------------------------------------------------------
 class PictureSerializer(serializers.Serializer):
     uid = serializers.CharField(max_length=255)
@@ -150,7 +154,7 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
-    product_bal = ModProductItemBalanceSerializer(many=True, read_only=True)
+    locations = serializers.SerializerMethodField()
     total_product_balance = serializers.SerializerMethodField()
     
     class Meta:
@@ -158,23 +162,18 @@ class productsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def get_total_product_balance(self, obj):
-        query_set = ProductItemBalance.objects.filter(product_id=obj.product_id)
-        
-        if query_set:
-            total_product_balance = 0
-            for val in query_set:
-                total_product_balance = val.balance + total_product_balance
-            return total_product_balance
-
-
-class ModProductItemBalanceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ProductItemBalance
-        fields = ['product_balance_id','balance','location_id']
+        product_variations = ProductVariation.objects.filter(product_id=obj.product_id).values_list('product_variation_id', flat=True)
+        query_set = ProductItemBalance.objects.filter(product_variation_id__in=product_variations)
+        total_product_balance = query_set.aggregate(total_balance=models.Sum('quantity'))['total_balance']
+        return total_product_balance if total_product_balance else 0
+    
+    def get_locations(self, obj):
+        product_variations = ProductVariation.objects.filter(product_id=obj.product_id).values_list('product_variation_id', flat=True)
+        query_set = ProductItemBalance.objects.filter(product_variation_id__in=product_variations)
+        return ProductItemBalanceSerializer(query_set, many=True).data
 
 class ProductItemBalanceSerializer(serializers.ModelSerializer):
-    product = ModproductsSerializer(source='product_id',read_only=True)
-    location = ModWarehouseLocationsSerializer(source='location_id',read_only=True)
+    warehouse_location = ModWarehouseLocationsSerializer(source='warehouse_location_id',read_only=True)
     class Meta:
         model = ProductItemBalance
         fields = '__all__'
@@ -188,17 +187,30 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
         fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'hsn_code']
 
     def get_product_details(self, obj):
-        query_set = ProductItemBalance.objects.filter(product_id=obj.product_id)
-        
-        if query_set:
-            product_balance = 0
-            for val in query_set:
-                product_balance = val.balance + product_balance
-            return product_balance
-    
+        return productsSerializer().get_total_product_balance(obj)
+
     def get_product_balance(self, obj):
         return self.get_product_details(obj)
  
     def get_product_summary(products):
         serializer = ProductOptionsSerializer(products, many=True)
         return serializer.data
+
+class SizeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Size
+        fields = '__all__'
+
+class ColorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Color
+        fields = '__all__'
+
+class ProductVariationSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id',read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)
+
+    class Meta:
+        model = ProductVariation
+        fields = '__all__'	
