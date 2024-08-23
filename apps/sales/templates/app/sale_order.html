@@ -1,134 +1,131 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<style>
-table {
-  font-family: arial, sans-serif;
-  border-collapse: collapse;
-  width: 100%;
-}
-
-td, th {
-  border: 1px solid #dddddd;
-  text-align: left;
-  padding: 8px;
-}
-
-tr:nth-child(even) {
-  background-color: #dddddd;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Order</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .header, .footer {
+            width: 100%;
+            text-align: center;
+            position: fixed;
+        }
+        .header {
+            top: 0px;
+        }
+        .footer {
+            bottom: 0px;
+        }
+        .main-content {
+            margin-top: 100px;
+        }
+        table {
+            width: 100%; /* Adjust the width of the table */
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        table, th, td {
+            border: 1px solid black;
+        }
+        th, td {
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #87CEEB; /* Sky blue color for table header */
+        }
+        .total-row {
+            font-weight: bold;
+        }
+        .right {
+            text-align: right;
+        }
+        /* Additional styles to ensure content fits within the table */
+        th.description, td.description {
+            width: 30%; /* Increase width for the description column */
+            word-wrap: break-word; /* Ensures long text wraps within the cell */
+        }
+    </style>
 </head>
 <body>
+    <div class="header">
+        <h1>SALES ORDER</h1>
+        <p>Original For Recipient</p>
+    </div>
+    
+    <div class="main-content">
+        <table>
+            <tr>
+                <td><strong>Customer Billing Detail</strong></td>
+                <td><strong>SO No.:</strong> {{ so_number }}</td>
+                <td><strong>SO Date:</strong> {{ so_date }}</td>
+            </tr>
+            <tr>
+                <td>
+                    <strong>{{ customer_name }}</strong><br>
+                    {{ customer_address }}<br>
+                    <strong>GSTIN/UIN:</strong> {{ customer_gstin }}
+                </td>
+                <td><strong>Mobile:</strong> {{ customer_mobile }}</td>
+                <td><strong>Destination:</strong> {{ destination }}</td>
+            </tr>
+            <tr>
+                <td colspan="2"><strong>Email:</strong> {{ customer_email }}</td>
+            </tr>
+        </table>
 
-<h2>SALES ORDER</h2>
-<p>Phone No: 919948001000 | Email: narayananbkr@gmail.com</p>
-<p align="right">Original For Recipient</p>
-<br>
-<table>
-  <tr>
-    <th>SO No.</th>
-    <th>SO Date</th>
-    <th>Mobile</th>
-    <th>Destination</th>
-    <th>Reference</th>
-  </tr>
-  <tr>
-    <td>01175/24-25</td>
-    <td>19/08/2024</td>
-    <td>7262083845</td>
-    <td>NELLORE</td>
-    <td>Any</td>
-  </tr>
-</table>
-<br>
+        <table>
+            <thead>
+                <tr>
+                    <th>S No</th>
+                    <th class="description">Description</th>
+                    <th>HSN/SAC</th>
+                    <th>Qty</th>
+                    <th>UOM</th>
+                    <th>Item Rate</th>
+                    <th>Amount</th>
+                    <th>Disc</th>
+                    <th>Taxable</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.s_no }}</td>
+                    <td class="description">{{ item.description }}</td>
+                    <td>{{ item.hsn_sac }}</td>
+                    <td>{{ item.qty }}</td>
+                    <td>{{ item.uom }}</td>
+                    <td>{{ item.item_rate }}</td>
+                    <td>{{ item.amount }}</td>
+                    <td>{{ item.disc }}</td>
+                    <td>{{ item.taxable }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="6">Total</td>
+                    <td class="right">{{ total_amount }}</td>
+                    <td class="right">{{ total_disc }}</td>
+                    <td class="right">{{ total_taxable }}</td>
+                </tr>
+            </tfoot>
+        </table>
+        
 
-<h3>Customer Billing Detail</h3>
-<p>Qodefarm</p>
-<p>NELLORE, Andhra Pradesh India</p>
-<p>GSTIN/UIN:</p>
-<br>
-<table>
-  <tr>
-    <th>S No</th>
-    <th>Description</th>
-    <th>HSN/SAC</th>
-    <th>Qty</th>
-    <th>UOM</th>
-    <th>Item Rate</th>
-    <th>Amount</th>
-    <th>Disc</th>
-    <th>Taxable</th>
-  </tr>
-  <tr>
-    <td>1</td>
-    <td>1/2 KG RUBBER TULIP</td>
-    <td></td>
-    <td>3.00</td>
-    <td>NOS</td>
-    <td>500.00</td>
-    <td>1,500.00</td>
-    <td>-10.00</td>
-    <td>1,490.00</td>
-  </tr>
-</table>
-<br>
-<table>
-  <tr>
-    <th colspan="6">Total</th>
-    <th>1,500.00</th>
-    <th></th>
-    <th>1,490.00</th>
-  </tr>
-  <tr>
-    <td colspan="6"></td>
-    <th>Sub Total</th>
-    <th>1,500.00</th>
-    <th></th>
-  </tr>
-  <tr>
-    <td colspan="6"></td>
-    <th>Discount Amt</th>
-    <th>-10.00</th>
-    <th></th>
-  </tr>
-  <tr>
-    <td colspan="6"></td>
-    <th>Round Off</th>
-    <th>0.00</th>
-    <th></th>
-  </tr>
-  <tr>
-    <td colspan="6"></td>
-    <th>Bill Total</th>
-    <th>1,490.00</th>
-    <th></th>
-  </tr>
-  <tr>
-    <td colspan="6"></td>
-    <th>Party Old Balance</th>
-    <th></th>
-    <th></th>
-  </tr>
-  <tr>
-    <td colspan="6"></td>
-    <th>Net Total</th>
-    <th></th>
-    <th></th>
-  </tr>
-</table>
-<br>
-<p>Bill Amount In Words: INR One Thousand Four Hundred Ninety Only</p>
-<p>Tax Amount In Words: INR One Thousand Four Hundred Ninety Only</p>
-<p>Remark: 01175/24-25</p>
-<br>
+        <p><strong>Bill Amount In Words:</strong> {{ bill_amount_in_words }}</p>
+        <p><strong>Tax Amount In Words:</strong> {{ tax_amount_in_words }}</p>
+        <p><strong>Remarks:</strong> {{ remarks }}</p>
+    </div>
 
-<p>Declaration:</p>
-<p>We declare that this invoice shows the actual price of the goods/services described and that all particulars are
-true and correct.</p>
-
-<p align="right">Authorised Signatory</p>
-<p align="right">Page: 1/1</p>
-
+    <div class="footer">
+        <p>Declaration: We declare that this invoice shows the actual price of the goods/services described and that all particulars are true and correct.</p>
+        <p>Authorised Signatory</p>
+    </div>
 </body>
 </html>
