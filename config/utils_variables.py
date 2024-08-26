@@ -135,3 +135,11 @@ leadassignmenthistory = 'lead_assignment_history'
 designations = 'designations'
 departments = 'departments'
 employees = 'employees'
+
+# Production
+billofmaterials = 'bill_of_materials'
+productionstatuses = 'production_statuses'
+workorders = 'work_orders'
+inventory = 'inventory'
+machines = 'machines'
+labor = 'labor'

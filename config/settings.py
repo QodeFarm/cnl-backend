@@ -80,6 +80,7 @@ INSTALLED_APPS = [
     'apps.leads',
     'apps.hrms',
     'apps.assets',
+    'apps.production',
 ]
 
 MIDDLEWARE = [
