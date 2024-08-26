@@ -30,7 +30,7 @@ class Warehouses(models.Model):
 class WarehouseLocations(models.Model):
     location_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     location_name = models.CharField(max_length=255)
-    warehouse_id = models.ForeignKey(Warehouses, on_delete=models.CASCADE, db_column='warehouse_id', related_name='item_bal')
+    warehouse_id = models.ForeignKey(Warehouses, on_delete=models.CASCADE, db_column='warehouse_id')
     description = models.CharField(max_length=255, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
