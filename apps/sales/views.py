@@ -15,6 +15,20 @@ from apps.masters.models import OrderTypes
 from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django_filters.rest_framework import DjangoFilterBackend  # type: ignore
 from rest_framework.filters import OrderingFilter
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from django.http import Http404
+from .models import SaleOrder 
+from django.core.mail import EmailMessage
+from config.settings import MEDIA_ROOT, MEDIA_URL
+import json
+import os
+from num2words import num2words # type: ignore
+from apps.sales.utils import sales_order_rcpt_word_docx as wd
+import shutil
+
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
@@ -1453,93 +1467,55 @@ class QuickPackCreateViewSet(APIView):
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
 #================================================================================================================================
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.template.loader import render_to_string
-from django.shortcuts import get_object_or_404
-from django.http import Http404
-from .models import SaleOrder  # Adjust the import based on your model structure
-from django.shortcuts import render
-from io import BytesIO
-from django.http import HttpResponse
-from django.template.loader import get_template
-from django.views import View
-from xhtml2pdf import pisa # type: ignore
-from django.core.mail import EmailMessage
-import json
-import os
-import re
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-from num2words import num2words # type: ignore
-
-
-def render_to_pdf(template_src, context_dict={}):
-    # Load the template and render it with context data
-    template = get_template(template_src)
-    html = template.render(context_dict)
+def save_sales_order_pdf_to_media(product_data, cust_data):
+    # Generate the PDF file
+    pdf_file_path = wd.create_sales_order_doc(product_data, cust_data)
     
-    # Set up the result buffer for the PDF
-    result = BytesIO()
+    # Define the directory where the file will be saved
+    sales_order_dir = os.path.join(MEDIA_ROOT, 'sales order rcpt')
 
-    # Define custom PDF page settings within the HTML
-    pdf_page_settings = """
-    <style>
-        @page {
-            size: A4; /* You can also use 'Letter' or other size */
-            margin: 1cm; /* Top, right, bottom, left margins */
-            @frame footer {
-                -pdf-frame-content: footerContent;
-                top: 10mm;
-                margin-left: 5mm;
-                margin-right: 5mm;
-                height: 5mm;
-                display: block;
-            }
-        }
+    # Create the directory if it doesn't exist
+    if not os.path.exists(sales_order_dir):
+        os.makedirs(sales_order_dir)
+
+    # Define the new file path in the media directory
+    new_file_path = os.path.join(sales_order_dir, os.path.basename(pdf_file_path))
+    
+    # Move the PDF file to the new directory
+    shutil.move(pdf_file_path, new_file_path)
+
+    # Return the relative path to the file (relative to MEDIA_ROOT)
+    relative_file_path = os.path.join('sales order rcpt', os.path.basename(pdf_file_path))
+    return relative_file_path
+
+def extract_product_data(data):
+    product_data = []
+    
+    for index, item in enumerate(data, start=1):
+        sale_order_item = item['sale_order_item_id']
+        product = item['product']
+        unit_options = item['unit_options']
         
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 12pt;
-            line-height: 1.6;
-        }
-    </style>
-    """
-
-    # Append the page settings to the HTML content
-    html = pdf_page_settings + html
-
-    # Create the PDF
-    pdf = pisa.pisaDocument(BytesIO(html.encode("utf-8")), result)
-
-    # Check for errors and return the PDF as an HTTP response
-    if not pdf.err:
-        return HttpResponse(result.getvalue(), content_type='application/pdf')
-
-    # In case of error, return None
-    return None
-
-
-def save_pdf_to_media(pdf_content, filename):
-    """ Save the PDF to Django’s media folder. """
-    file_path = os.path.join('Sale_order_PDF', filename)  # Create a subfolder named 'Sale_order_PDF' in media
-    file_content = ContentFile(pdf_content)
-    file_url = default_storage.save(file_path, file_content)
-    return default_storage.url(file_url)
-
-
-def get_phone_from_billing_address(data):
-    billing_address = data.get('billing_address', '')
+        product_name = product['name']
+        quantity = item['quantity']
+        unit_name = unit_options['unit_name']
+        rate = item['rate']
+        amount = item['amount']
+        discount = item['discount']
+        tax = item['tax']
+        
+        product_data.append([
+            str(index),  # Index number
+            product_name, 
+            quantity, 
+            unit_name, 
+            rate, 
+            amount, 
+            discount, 
+            tax
+        ])
     
-    # Regular expression to match phone numbers
-    phone_pattern = r'Phone:\s*(\d+)'
-    match = re.search(phone_pattern, billing_address)
-    
-    if match:
-        return match.group(1)
-    return None
-
+    return product_data
 
 class SaleOrderPDFView(APIView):
     def post(self, request, **kwargs):
@@ -1570,59 +1546,64 @@ class SaleOrderPDFView(APIView):
             #extracting phone number from cust_address
             customer_id = list(SaleOrder.objects.filter(**{'sale_order_id': pk}).values_list('customer_id', flat=True))
             filter_kwargs = {"customer_id" : customer_id[0], "address_type": "Billing"}
+            city = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id
             phone = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone
+            
 
-            #extracting total amount 
+            #Calculate total amount 
             totle_amt = 0
             for amount in items_data:
-                int_amt = float(amount['amount'])
-                totle_amt = totle_amt + int_amt
+                flt_amt = float(amount['amount'])
+                totle_amt = totle_amt + flt_amt
+
+            #Calculate total Qty 
+            totle_qty = 0
+            for qty in items_data:
+                flt_qty = float(qty['quantity'])
+                totle_qty = totle_qty + flt_qty
+
+            #Calculate total tax 
+            totle_txbl_amt = 0
+            for tax in items_data:
+                int_tcbl_amt = float(tax['tax'])
+                totle_txbl_amt = totle_txbl_amt + int_tcbl_amt
+
+            #Calculate total Descount 
+            totle_disc_amt = 0
+            for disc in items_data:
+                int_tcbl_amt = float(disc['discount'])
+                totle_disc_amt = totle_disc_amt + int_tcbl_amt
 
             #Converting amount in words 
             bill_amount_in_words = num2words(totle_amt)
 
-            items_data_processed = [
-                {
-                    's_no': idx + 1,
-                    'description': item['product']['name'],
-                    'hsn_sac': item['product'].get('code', 'N/A'),
-                    'qty': item['quantity'],
-                    'uom': item.get('uom', 'N/A'),
-                    'item_rate': item['rate'],
-                    'amount': item['amount'],
-                    'disc': item['discount'],
-                    'taxable': item['tax']
-                }
-                for idx, item in enumerate(items_data)
-            ]
-            
-            HTML_data = {
-                'customer_name': sale_order_data['customer']['name'],
-                'customer_email': sale_order_data['email'],
-                'customer_mobile': phone,
-                'so_date': sale_order_data['order_date'],
-                'so_number': sale_order_data['order_no'],
-                'items': items_data_processed,  # Pass processed items data to the template
-                'bill_amount_in_words': bill_amount_in_words,
-                'tax_amount_in_words': bill_amount_in_words,
-                'remarks': sale_order_data['order_no'],
-                'destination': shipments_data.get('destination', 'N/A')
+            product_data = extract_product_data(items_data)
+                        
+            Cust_data = {
+            "{{so_no}}": sale_order_data['order_no'],
+            "{{so_date}}": sale_order_data['order_date'],
+            "{{cust_name}}": sale_order_data['customer']['name'],
+            "{{phone}}": str(phone),
+            "{{dest}}": shipments_data.get('destination', 'N/A'),
+            "{{qty_ttl}}": str(totle_qty),
+            "{{amt_ttl}}": str(totle_amt),
+            "{{txbl_ttl}}": str(totle_txbl_amt),
+            "{{discount}}": str(totle_disc_amt),
+            "{{Rnd_off}}": "0.00",
+            "{{Net_Ttl}}": "0.00",
+            "{{Party_Old_B}}": "0.00",
+            "{{Bill_amt_wd}}": bill_amount_in_words,
+            "{{Tax_amt_wd}}": bill_amount_in_words,
+            "{{address}}" : str(city),
             }
 
-            # print("HTML_data==>", HTML_data)
-            
-            pdf_response = render_to_pdf('app/sale_order.html', HTML_data)
-
-            # Save the PDF to the media folder
-            pdf_filename = 'sales_order_receipt.pdf'
-             # Extract PDF content as bytes
-            pdf_content = pdf_response.getvalue()
-            pdf_url = save_pdf_to_media(pdf_content, pdf_filename)
-
+            relative_pdf_path = save_sales_order_pdf_to_media(product_data, Cust_data) #This path is used for sending PDF thr Email
+            cdn_path = os.path.join(MEDIA_URL, relative_pdf_path)  #This path is used for sending PDF thr Wati
+                                    
             if flag == 'email':
-                res = self.send_pdf_via_email(sale_order_data['email'], pdf_content)
+                res = send_pdf_via_email(sale_order_data['email'], relative_pdf_path)
             elif flag == 'whatsapp':
-                res = self.send_whatsapp_message_via_wati(phone, pdf_url)
+                res = send_whatsapp_message_via_wati(phone, cdn_path)
 
         except Http404:
             logger.error("Sale order with pk %s does not exist.", pk)
@@ -1630,7 +1611,7 @@ class SaleOrderPDFView(APIView):
         except Exception as e:
             logger.exception("An error occurred while retrieving sale order with pk %s: %s", pk, str(e))
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        
         return build_response(1, res, [], status.HTTP_200_OK)
         
 
@@ -1650,52 +1631,61 @@ class SaleOrderPDFView(APIView):
                 return []
             
 
-    def send_pdf_via_email(self, to_email, pdf):
-        """ Send the generated PDF as an email attachment. """
-        subject = 'Your Sales Order Receipt'
-        body = 'Please find attached your sales order receipt.'
-        email = EmailMessage(subject, body, to=[to_email])
-        
-        # Attach the PDF to the email
-        email.attach('sales_order_receipt.pdf', pdf, 'application/pdf')
-        
-        # Send the email
-        email.send()
+def send_pdf_via_email(to_email, pdf_relative_path):
+    """Send the generated PDF as an email attachment."""
+    
+    # Construct the full path to the PDF file
+    pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
+    
+    subject = 'Your Sales Order Receipt'
+    body = 'Please find attached your sales order receipt.'
+    email = EmailMessage(subject, body, to=[to_email])
 
-        return "PDF sent via email successfully."
+    # Ensure the PDF file exists before attempting to open it
+    if not os.path.exists(pdf_full_path):
+        raise FileNotFoundError(f"The file {pdf_full_path} does not exist.")
+
+    # Read the PDF file from the provided full path
+    with open(pdf_full_path, 'rb') as pdf_file:
+        email.attach('sales_order_receipt.pdf', pdf_file.read(), 'application/pdf')
+    
+    # Send the email
+    email.send()
+
+    return "Sales order PDF saved and emailed successfully."
 
 
-    def send_whatsapp_message_via_wati(self, to_number, file_url):
-        """ Send the PDF file as a WhatsApp message using WATI API. """
-        result = ""
-        # Construct the full path to the file using MEDIA_ROOT
-        full_file_path = os.path.join(settings.MEDIA_ROOT, file_url.replace(settings.MEDIA_URL, ''))
-        # Ensure the file exists
-        if not os.path.exists(full_file_path):
-            return (f"File not found: {full_file_path}")            
-        
-        url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
-        
-        headers = {
-        'accept': '*/*',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJkZGFkMGI3OS0wOTI5LTRlN2EtYTZjNi1mODhmYWUwMDViNDAiLCJ1bmlxdWVfbmFtZSI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsIm5hbWVpZCI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsImVtYWlsIjoicnVkaHJhaW5kdXN0cmllcy5ubHJAZ21haWwuY29tIiwiYXV0aF90aW1lIjoiMDgvMjMvMjAyNCAwNTozNTozMCIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJ0ZW5hbnRfaWQiOiIzMTIxNzIiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.viHuj05mTnctNiYRWakVRJLBsK5io7oCl2xzIWQp9rA',
+def send_whatsapp_message_via_wati(to_number, file_url):
+    """ Send the PDF file as a WhatsApp message using WATI API. """
+    result = ""
+    # Construct the full path to the file using MEDIA_ROOT
+    full_file_path = os.path.join(settings.MEDIA_ROOT, file_url.replace(settings.MEDIA_URL, ''))
+    # Ensure the file exists
+    if not os.path.exists(full_file_path):
+        return (f"File not found: {full_file_path}")            
+    
+    url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
+    
+    headers = {
+    'accept': '*/*',
+    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMzMyNWFmNC0wNDE2LTQzYTQtOTcwNi00MGYxZDViZTM0MGQiLCJ1bmlxdWVfbmFtZSI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsIm5hbWVpZCI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsImVtYWlsIjoicnVkaHJhaW5kdXN0cmllcy5ubHJAZ21haWwuY29tIiwiYXV0aF90aW1lIjoiMDgvMjYvMjAyNCAwNjowMzozNSIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJ0ZW5hbnRfaWQiOiIzMTIxNzIiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.qFA42Ze-itghM2LXR5sZ-P9BJB84iD3oXqk5olG_kX8',
+    }
+
+    # Open the file and attach it to the request
+    with open(full_file_path, 'rb') as file:
+        files = {
+            'file': (os.path.basename(full_file_path), file, 'application/pdf'),
         }
+        response = requests.post(url, headers=headers, files=files)
 
-        # Open the file and attach it to the request
-        with open(full_file_path, 'rb') as file:
-            files = {
-                'file': (os.path.basename(full_file_path), file, 'application/pdf'),
-            }
-            response = requests.post(url, headers=headers, files=files)
+        # Convert the response text to a Python dictionary
+    response_data = json.loads(response.text) 
 
-         # Convert the response text to a Python dictionary
-        response_data = json.loads(response.text) 
-
-        if response_data.get("result") == True:
-            result = "PDF sent via WhatsApp successfully."
-            return result
-        else:
-            result = response_data.get('info')
-            return result
+    if response_data.get("result") == True:
+        result = "PDF sent via WhatsApp successfully."
+        return result
+    else:
+        result = response_data.get('info')
+        return result
 
 
