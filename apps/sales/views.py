@@ -25,8 +25,7 @@ from django.core.mail import EmailMessage
 from config.settings import MEDIA_ROOT, MEDIA_URL
 import json
 import os
-from num2words import num2words # type: ignore
-from apps.sales.utils import sales_order_rcpt_word_docx as wd
+from apps.sales.utils import sales_order_rcpt_word_docx as wd, convert_amount_into_words as ca
 import shutil
 
 
@@ -1549,33 +1548,19 @@ class SaleOrderPDFView(APIView):
             city = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id
             phone = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone
             
+            total_amt = 0
+            total_qty = 0
+            total_txbl_amt = 0
+            total_disc_amt = 0
 
-            #Calculate total amount 
-            totle_amt = 0
-            for amount in items_data:
-                flt_amt = float(amount['amount'])
-                totle_amt = totle_amt + flt_amt
-
-            #Calculate total Qty 
-            totle_qty = 0
-            for qty in items_data:
-                flt_qty = float(qty['quantity'])
-                totle_qty = totle_qty + flt_qty
-
-            #Calculate total tax 
-            totle_txbl_amt = 0
-            for tax in items_data:
-                int_tcbl_amt = float(tax['tax'])
-                totle_txbl_amt = totle_txbl_amt + int_tcbl_amt
-
-            #Calculate total Descount 
-            totle_disc_amt = 0
-            for disc in items_data:
-                int_tcbl_amt = float(disc['discount'])
-                totle_disc_amt = totle_disc_amt + int_tcbl_amt
-
+            for item in items_data:
+                total_amt += float(item['amount'])
+                total_qty += float(item['quantity'])
+                total_txbl_amt += float(item['tax'])
+                total_disc_amt += float(item['discount'])
+            
             #Converting amount in words 
-            bill_amount_in_words = num2words(totle_amt)
+            bill_amount_in_words = ca.convert_amount_to_words(total_amt)
 
             product_data = extract_product_data(items_data)
                         
@@ -1585,10 +1570,10 @@ class SaleOrderPDFView(APIView):
             "{{cust_name}}": sale_order_data['customer']['name'],
             "{{phone}}": str(phone),
             "{{dest}}": shipments_data.get('destination', 'N/A'),
-            "{{qty_ttl}}": str(totle_qty),
-            "{{amt_ttl}}": str(totle_amt),
-            "{{txbl_ttl}}": str(totle_txbl_amt),
-            "{{discount}}": str(totle_disc_amt),
+            "{{qty_ttl}}": str(total_qty),
+            "{{amt_ttl}}": str(total_amt),
+            "{{txbl_ttl}}": str(total_txbl_amt),
+            "{{discount}}": str(total_disc_amt),
             "{{Rnd_off}}": "0.00",
             "{{Net_Ttl}}": "0.00",
             "{{Party_Old_B}}": "0.00",
