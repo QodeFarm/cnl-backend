@@ -1,8 +1,10 @@
+import logging
 from rest_framework import serializers
 from .models import *
 from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
 from apps.inventory.serializers import ModWarehouseLocationsSerializer
 
+logger = logging.getLogger(__name__)
 
 class ModProductItemBalanceSerializer(serializers.ModelSerializer):
     warehouse_location = ModWarehouseLocationsSerializer(source='warehouse_location_id',read_only=True)
@@ -214,3 +216,12 @@ class ProductVariationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariation
         fields = '__all__'	
+
+    # def validate_sku(self, value):
+    #     # Add your validation logic here
+    #     logger.debug("Validating SKU: %s", value)
+    #     print("Entering validate_sku method")  # Check if the method is being reached
+    #     print("Validating SKU:", value)
+    #     if ProductVariation.objects.filter(sku=value).exists():
+    #         raise serializers.ValidationError("SKU must be unique.")
+    #     return value
