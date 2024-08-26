@@ -54,6 +54,7 @@ urlpatterns = [
     path('api/v1/alignbooks/', include('apps.alignbook.url')),
     path('api/v1/tasks/', include('apps.tasks.urls')),
     path('api/v1/assets/', include('apps.assets.urls')),
+    path('api/v1/production/', include('apps.production.urls')),
     path('', api_links, name='api_links'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]
