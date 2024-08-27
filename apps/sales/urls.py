@@ -18,6 +18,9 @@ router.register(r'order_attachements', OrderAttachmentsView)
 router.register(r'order_shipments', OrderShipmentsView)
 router.register(r'quick_packs_get', QuickPacksView)
 router.register(r'quick_pack_items_get', QuickPacksItemsView)
+router.register(r'workflows', WorkflowViewSet)
+router.register(r'workflow_stages', WorkflowStageViewSet)
+
 
 urlpatterns = [
     path('',include(router.urls)),
@@ -29,5 +32,6 @@ urlpatterns = [
     path('sale_return_order/<str:pk>/', SaleReturnOrdersViewSet.as_view(), name='sales-return-orders-detail-update-delete'),
     path('quick_pack/', QuickPackCreateViewSet.as_view(), name='quickpack-list-create'),
     path('quick_pack/<str:pk>/', QuickPackCreateViewSet.as_view(), name='quickpack-detail-update-delete'),
+    path('sale_order/<uuid:pk>/workflow_pipeline/', ProgressWorkflowView.as_view(), name='workflow-pipeline'),
 
 ]

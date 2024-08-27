@@ -211,3 +211,13 @@ class QuickPackItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuickPackItems
         fields = '__all__'
+
+class WorkflowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Workflow
+        fields = '__all__'
+
+class WorkflowStageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WorkflowStage
+        fields = '__all__'
