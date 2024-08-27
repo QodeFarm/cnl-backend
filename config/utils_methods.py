@@ -15,7 +15,10 @@ import json
 from django.utils import timezone
 from django.db import models
 from django.core.cache import cache
-
+import requests
+from django.core.mail import EmailMessage
+from config.settings import MEDIA_ROOT, MEDIA_URL
+import os
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -431,5 +434,77 @@ def validate_uuid(uuid_to_test, version=4):
         raise ValidationError("Invalid UUID")
     return uuid_obj
 
+def get_related_data(model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.",
+                        model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
+                            model.__name__, filter_field, filter_value, str(e))
+            return []
 
-        
+     
+def send_pdf_via_email(to_email, pdf_relative_path):
+    """Send the generated PDF as an email attachment."""
+    
+    # Construct the full path to the PDF file
+    pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
+    
+    subject = 'Your Sales Order Receipt'
+    body = 'Please find attached your sales order receipt.'
+    email = EmailMessage(subject, body, to=[to_email])
+
+    # Ensure the PDF file exists before attempting to open it
+    if not os.path.exists(pdf_full_path):
+        raise FileNotFoundError(f"The file {pdf_full_path} does not exist.")
+
+    # Read the PDF file from the provided full path
+    with open(pdf_full_path, 'rb') as pdf_file:
+        email.attach('sales_order_receipt.pdf', pdf_file.read(), 'application/pdf')
+    
+    # Send the email
+    email.send()
+
+    return "Sales order PDF saved and emailed successfully."
+
+
+def send_whatsapp_message_via_wati(to_number, file_url):
+    """ Send the PDF file as a WhatsApp message using WATI API. """
+    result = ""
+    # Construct the full path to the file using MEDIA_ROOT
+    full_file_path = os.path.join(MEDIA_ROOT, file_url.replace(MEDIA_URL, ''))
+    # Ensure the file exists
+    if not os.path.exists(full_file_path):
+        return (f"File not found: {full_file_path}")            
+    
+    url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
+    
+    headers = {
+    'accept': '*/*',
+    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMzMyNWFmNC0wNDE2LTQzYTQtOTcwNi00MGYxZDViZTM0MGQiLCJ1bmlxdWVfbmFtZSI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsIm5hbWVpZCI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsImVtYWlsIjoicnVkaHJhaW5kdXN0cmllcy5ubHJAZ21haWwuY29tIiwiYXV0aF90aW1lIjoiMDgvMjYvMjAyNCAwNjowMzozNSIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJ0ZW5hbnRfaWQiOiIzMTIxNzIiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.qFA42Ze-itghM2LXR5sZ-P9BJB84iD3oXqk5olG_kX8',
+    }
+
+    # Open the file and attach it to the request
+    with open(full_file_path, 'rb') as file:
+        files = {
+            'file': (os.path.basename(full_file_path), file, 'application/pdf'),
+        }
+        response = requests.post(url, headers=headers, files=files)
+
+        # Convert the response text to a Python dictionary
+    response_data = json.loads(response.text) 
+
+    if response_data.get("result") == True:
+        result = "PDF sent via WhatsApp successfully."
+        return result
+    else:
+        result = response_data.get('info')
+        return result
+
+    

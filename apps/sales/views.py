@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
 from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import send_pdf_via_email, send_whatsapp_message_via_wati, get_related_data, update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django_filters.rest_framework import DjangoFilterBackend  # type: ignore
 from rest_framework.filters import OrderingFilter
 from rest_framework.views import APIView
@@ -21,7 +21,6 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from .models import SaleOrder 
-from django.core.mail import EmailMessage
 from config.settings import MEDIA_ROOT, MEDIA_URL
 import json
 import os
@@ -1519,7 +1518,7 @@ def extract_product_data(data):
 class SaleOrderPDFView(APIView):
     def post(self, request, **kwargs):
         """ Retrieves a sale order and its related data. """
-        res = ""
+        PDF_Send_Response = ""
         try:
             flag = request.data.get('flag')
             pk = kwargs.get('pk')
@@ -1532,11 +1531,9 @@ class SaleOrderPDFView(APIView):
             sale_order_serializer = SaleOrderSerializer(sale_order)
 
             # Retrieve related data
-            items_data = self.get_related_data(
+            items_data = get_related_data(
                 SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
-            attachments_data = self.get_related_data(
-                OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
-            shipments_data = self.get_related_data(
+            shipments_data = get_related_data(
                 OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
             shipments_data = shipments_data[0] if len(shipments_data) > 0 else {}
 
@@ -1547,7 +1544,8 @@ class SaleOrderPDFView(APIView):
             filter_kwargs = {"customer_id" : customer_id[0], "address_type": "Billing"}
             city = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id
             phone = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone
-            
+            email =  sale_order_data['email']
+
             total_amt = 0
             total_qty = 0
             total_txbl_amt = 0
@@ -1586,9 +1584,9 @@ class SaleOrderPDFView(APIView):
             cdn_path = os.path.join(MEDIA_URL, relative_pdf_path)  #This path is used for sending PDF thr Wati
                                     
             if flag == 'email':
-                res = send_pdf_via_email(sale_order_data['email'], relative_pdf_path)
+                PDF_Send_Response = send_pdf_via_email(email, relative_pdf_path)
             elif flag == 'whatsapp':
-                res = send_whatsapp_message_via_wati(phone, cdn_path)
+                PDF_Send_Response = send_whatsapp_message_via_wati(phone, cdn_path)
 
         except Http404:
             logger.error("Sale order with pk %s does not exist.", pk)
@@ -1597,80 +1595,5 @@ class SaleOrderPDFView(APIView):
             logger.exception("An error occurred while retrieving sale order with pk %s: %s", pk, str(e))
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        return build_response(1, res, [], status.HTTP_200_OK)
-        
-
-    def get_related_data(self, model, serializer_class, filter_field, filter_value):
-            """
-            Retrieves related data for a given model, serializer, and filter field.
-            """
-            try:
-                related_data = model.objects.filter(**{filter_field: filter_value})
-                serializer = serializer_class(related_data, many=True)
-                logger.debug("Retrieved related data for model %s with filter %s=%s.",
-                            model.__name__, filter_field, filter_value)
-                return serializer.data
-            except Exception as e:
-                logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
-                                model.__name__, filter_field, filter_value, str(e))
-                return []
-            
-
-def send_pdf_via_email(to_email, pdf_relative_path):
-    """Send the generated PDF as an email attachment."""
-    
-    # Construct the full path to the PDF file
-    pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
-    
-    subject = 'Your Sales Order Receipt'
-    body = 'Please find attached your sales order receipt.'
-    email = EmailMessage(subject, body, to=[to_email])
-
-    # Ensure the PDF file exists before attempting to open it
-    if not os.path.exists(pdf_full_path):
-        raise FileNotFoundError(f"The file {pdf_full_path} does not exist.")
-
-    # Read the PDF file from the provided full path
-    with open(pdf_full_path, 'rb') as pdf_file:
-        email.attach('sales_order_receipt.pdf', pdf_file.read(), 'application/pdf')
-    
-    # Send the email
-    email.send()
-
-    return "Sales order PDF saved and emailed successfully."
-
-
-def send_whatsapp_message_via_wati(to_number, file_url):
-    """ Send the PDF file as a WhatsApp message using WATI API. """
-    result = ""
-    # Construct the full path to the file using MEDIA_ROOT
-    full_file_path = os.path.join(settings.MEDIA_ROOT, file_url.replace(settings.MEDIA_URL, ''))
-    # Ensure the file exists
-    if not os.path.exists(full_file_path):
-        return (f"File not found: {full_file_path}")            
-    
-    url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
-    
-    headers = {
-    'accept': '*/*',
-    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMzMyNWFmNC0wNDE2LTQzYTQtOTcwNi00MGYxZDViZTM0MGQiLCJ1bmlxdWVfbmFtZSI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsIm5hbWVpZCI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsImVtYWlsIjoicnVkaHJhaW5kdXN0cmllcy5ubHJAZ21haWwuY29tIiwiYXV0aF90aW1lIjoiMDgvMjYvMjAyNCAwNjowMzozNSIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJ0ZW5hbnRfaWQiOiIzMTIxNzIiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.qFA42Ze-itghM2LXR5sZ-P9BJB84iD3oXqk5olG_kX8',
-    }
-
-    # Open the file and attach it to the request
-    with open(full_file_path, 'rb') as file:
-        files = {
-            'file': (os.path.basename(full_file_path), file, 'application/pdf'),
-        }
-        response = requests.post(url, headers=headers, files=files)
-
-        # Convert the response text to a Python dictionary
-    response_data = json.loads(response.text) 
-
-    if response_data.get("result") == True:
-        result = "PDF sent via WhatsApp successfully."
-        return result
-    else:
-        result = response_data.get('info')
-        return result
-
-
+        return build_response(1, PDF_Send_Response, [], status.HTTP_200_OK) 
+ 
