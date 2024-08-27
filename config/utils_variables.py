@@ -143,3 +143,7 @@ workorders = 'work_orders'
 inventory = 'inventory'
 machines = 'machines'
 labor = 'labor'
+
+#workflow tables
+workflow = 'workflows'
+workflowstages = 'workflow_stages'

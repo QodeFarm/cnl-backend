@@ -1627,4 +1627,87 @@ class SaleOrderPDFView(APIView):
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return build_response(1, PDF_Send_Response, [], status.HTTP_200_OK) 
- 
+
+      
+class WorkflowViewSet(viewsets.ModelViewSet):
+    queryset = Workflow.objects.all()
+    serializer_class = WorkflowSerializer
+
+    def list(self, request, *args, **kwargs):
+        """
+        Override the list method to customize the response format.
+        """
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        response_data = {
+            "count": queryset.count(),
+            "message": "Success",
+            "data": serializer.data
+        }
+        return Response(response_data)
+
+
+class WorkflowStageViewSet(viewsets.ModelViewSet):
+    queryset = WorkflowStage.objects.all()
+    serializer_class = WorkflowStageSerializer
+
+    def list(self, request, *args, **kwargs):
+        """
+        Override the list method to customize the response format.
+        """
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+
+        response_data = {
+            "count": queryset.count(),
+            "message": "Success",
+            "data": serializer.data
+        }
+        return Response(response_data)
+
+class ProgressWorkflowView(APIView):
+    """
+    API view to progress the workflow of a specific SaleOrder to the next stage.
+    This view is used to update the flow_status of a sale order, moving it from one stage to the next within its defined workflow.
+    """
+
+    def post(self, request, pk, format=None):
+        """
+        Handle POST requests to progress the workflow of the specified SaleOrder.
+        
+        Parameters:
+        - request: The HTTP request object.
+        - pk: The primary key of the SaleOrder to be updated.
+        - format: An optional format specifier for content negotiation.
+
+        Returns:
+        - Custom JSON structure with 'count', 'message', and 'data'.
+        """
+        try:
+            # Attempt to retrieve the SaleOrder by its primary key (pk)
+            sale_order = SaleOrder.objects.get(pk=pk)
+
+            # Try to progress the workflow to the next stage
+            if sale_order.progress_workflow():
+                response_data = {
+                    "count": 1,
+                    "message": "Success",
+                    "data": {"status": "Flow status updated successfully."}
+                }
+                return Response(response_data, status=status.HTTP_200_OK)
+            else:
+                response_data = {
+                    "count": 1,
+                    "message": "Success",
+                    "data": {"status": "No further stages. Workflow is complete."}
+                }
+                return Response(response_data, status=status.HTTP_200_OK)
+        except SaleOrder.DoesNotExist:
+            response_data = {
+                "count": 0,
+                "message": "SaleOrder not found.",
+                "data": None
+            }
+            return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+
