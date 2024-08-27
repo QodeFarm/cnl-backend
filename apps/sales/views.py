@@ -1490,29 +1490,24 @@ def extract_product_data(data):
     product_data = []
     
     for index, item in enumerate(data, start=1):
-        sale_order_item = item['sale_order_item_id']
         product = item['product']
-        unit_options = item['unit_options']
-        
+        unit_options = item['unit_options']        
         product_name = product['name']
         quantity = item['quantity']
         unit_name = unit_options['unit_name']
         rate = item['rate']
         amount = item['amount']
         discount = item['discount']
-        tax = item['tax']
+        tax = str(item['tax'] if item['tax'] is not None else 0)
+
+        # if item['tax']  == None:
+        #     tax = str(0)
+        # else:
+        #     tax = str(item['tax']) if item['tax'] is not None else 0
         
         product_data.append([
-            str(index),  # Index number
-            product_name, 
-            quantity, 
-            unit_name, 
-            rate, 
-            amount, 
-            discount, 
-            tax
-        ])
-    
+            str(index), product_name, quantity, unit_name, rate, amount, discount, tax])
+
     return product_data
 
 class SaleOrderPDFView(APIView):
@@ -1526,58 +1521,94 @@ class SaleOrderPDFView(APIView):
                 logger.error("Primary key not provided in request.")
                 return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
 
-            # Retrieve the SaleOrder instance
-            sale_order = get_object_or_404(SaleOrder, pk=pk)
-            sale_order_serializer = SaleOrderSerializer(sale_order)
+            try:
+                obj = get_object_or_404(SaleOrder, pk=pk)
+                sale_order_serializer = SaleOrderSerializer(obj)
+                # Retrieve related data
+                items_data = get_related_data(
+                    SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
+                shipments_data = get_related_data(
+                    OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+                shipments_data = shipments_data[0] if len(shipments_data) > 0 else {}
 
-            # Retrieve related data
-            items_data = get_related_data(
-                SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
-            shipments_data = get_related_data(
-                OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-            shipments_data = shipments_data[0] if len(shipments_data) > 0 else {}
+                customer_data_for_cust_data = sale_order_serializer.data
 
-            sale_order_data = sale_order_serializer.data
+                #extracting phone number from cust_address
+                customer_id = list(SaleOrder.objects.filter(**{'sale_order_id': pk}).values_list('customer_id', flat=True))
+                number_lbl = "SO No. " 
+                number_value =  customer_data_for_cust_data['order_no']
+                date_lbl = "SO Date "   
+                date_value =   customer_data_for_cust_data['order_date']
+                Doc_Header = "SALES ORDER"
+                net_value = "0.0"
+                net_lbl = "Net  Total" 
+                
+            except Http404:
+                
+                try:
+                    obj = get_object_or_404(SaleInvoiceOrders, pk=pk)
+                    sales_invoice_serializer = SaleInvoiceOrdersSerializer(obj)
+                    customer_data_for_cust_data = sales_invoice_serializer.data
 
-            #extracting phone number from cust_address
-            customer_id = list(SaleOrder.objects.filter(**{'sale_order_id': pk}).values_list('customer_id', flat=True))
+                    # Retrieve related data
+                    items_data = get_related_data(SaleInvoiceItems, SaleInvoiceItemsSerializer, 'sale_invoice_id', pk)
+                    shipments_data = get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+                    shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+
+                    #extracting city, phone number, country from cust_address
+                    customer_id = list(SaleInvoiceOrders.objects.filter(**{'sale_invoice_id': pk}).values_list('customer_id', flat=True))
+                    number_lbl = "Quotation No. "
+                    number_value  =  customer_data_for_cust_data['invoice_no']
+                    date_lbl = "Quote Date "   
+                    date_value =   customer_data_for_cust_data['invoice_date']
+                    Doc_Header = "SALES QUOTATION"
+                    net_value = "0.0"
+                    net_lbl = "Net Amount"
+                    
+                except Http404:
+                    return "ID not found in either model!"
+   
+
             filter_kwargs = {"customer_id" : customer_id[0], "address_type": "Billing"}
-            city = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id
-            phone = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone
-            email =  sale_order_data['email']
+            city = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id)
+            country = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].country_id)
+            phone = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone)
+            dest = str(shipments_data.get('destination', 'N/A'))
+            email =  customer_data_for_cust_data['email']
 
-            total_amt = 0
-            total_qty = 0
-            total_txbl_amt = 0
-            total_disc_amt = 0
-
+            total_amt = total_qty = total_txbl_amt = total_disc_amt = 0
             for item in items_data:
-                total_amt += float(item['amount'])
-                total_qty += float(item['quantity'])
-                total_txbl_amt += float(item['tax'])
-                total_disc_amt += float(item['discount'])
-            
-            #Converting amount in words 
-            bill_amount_in_words = ca.convert_amount_to_words(total_amt)
+                total_amt +=  float(item['amount']) if item['amount'] is not None else 0
+                total_qty +=  float(item['quantity']) if item['quantity'] is not None else 0
+                total_disc_amt += float(item['discount']) if item['discount'] is not None else 0
+                total_txbl_amt += float(item['tax']) if item['tax'] is not None else 0
 
+
+            bill_amount_in_words = ca.convert_amount_to_words(total_amt)
+            
             product_data = extract_product_data(items_data)
-                        
+                              
             Cust_data = {
-            "{{so_no}}": sale_order_data['order_no'],
-            "{{so_date}}": sale_order_data['order_date'],
-            "{{cust_name}}": sale_order_data['customer']['name'],
-            "{{phone}}": str(phone),
-            "{{dest}}": shipments_data.get('destination', 'N/A'),
-            "{{qty_ttl}}": str(total_qty),
-            "{{amt_ttl}}": str(total_amt),
+            "{{number_lbl}}": number_lbl,
+            "{{number_value}}": number_value,
+            "{{date_lbl}}": date_lbl,
+            "{{date_value}}": date_value,
+            "{{cust_name}}": customer_data_for_cust_data['customer']['name'],
+            "{{phone}}": phone,
+            "{{dest}}": dest,
+            "{{qty_ttl}}":  str(total_qty),
+            "{{amt_ttl}}":  str(total_amt),
             "{{txbl_ttl}}": str(total_txbl_amt),
             "{{discount}}": str(total_disc_amt),
             "{{Rnd_off}}": "0.00",
-            "{{Net_Ttl}}": "0.00",
+            "{{Net_lbl}}" : (net_lbl),
+            "{{Net_Ttl}}": (net_value),
             "{{Party_Old_B}}": "0.00",
             "{{Bill_amt_wd}}": bill_amount_in_words,
             "{{Tax_amt_wd}}": bill_amount_in_words,
-            "{{address}}" : str(city),
+            "{{address}}" : (city),
+            "{{country}}" : (country),
+            "{{Doc Header}}": Doc_Header
             }
 
             relative_pdf_path = save_sales_order_pdf_to_media(product_data, Cust_data) #This path is used for sending PDF thr Email

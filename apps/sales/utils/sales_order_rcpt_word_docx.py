@@ -92,7 +92,8 @@ def create_sales_order_doc(product_data, Cust_data):
     section.page_width = new_width
     section.page_height = new_height
 
-    heading = doc.add_heading('SALES ORDER', level=1)
+    header_text = Cust_data.get('{{Doc Header}}')
+    heading = doc.add_heading(header_text, level=1)
     heading.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
     run = heading.runs[0]
     run.font.size = Pt(24)
@@ -100,9 +101,18 @@ def create_sales_order_doc(product_data, Cust_data):
     run.font.color.rgb = RGBColor(0, 0, 0)
     heading.paragraph_format.space_before = Pt(0)  # Reduce space before the heading
     heading.paragraph_format.space_after = Pt(0)  # Set the space after the first heading to 0
+   
+    doc.add_paragraph('')
+    doc.add_paragraph('')
 
-    doc.add_paragraph('')
-    doc.add_paragraph('')
+    # Add "BILL OF SUPPLY" below the header if the header is "SALES QUOTATION"
+    if header_text == "SALES QUOTATION":
+        subheading = doc.add_paragraph("BILL OF SUPPLY")
+        subheading.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        subheading_run = subheading.runs[0]
+        subheading_run.bold = True
+        subheading_run.font.size = Pt(12)
+        subheading_run.font.color.rgb = RGBColor(0, 0, 0)
 
     def create_table_with_columns(num_columns, table_name, cell_names=None, bg_color=None, specific_row_height=None):
         table = doc.add_table(rows=1, cols=num_columns)
@@ -124,13 +134,18 @@ def create_sales_order_doc(product_data, Cust_data):
 
     # Example usage:
     s_no_str, description_str, qty_str, uom_str, item_rate_str, amount_str, disc_str, taxable_str = format_additional_data(product_data)
-    t1 = create_table_with_columns(3, "t1", cell_names=["Customer Billing Detail", "SO No: {{so_no}}", "SO Date: {{so_date}}"], bg_color="87CEFA")
-    t2 = create_table_with_columns(2, "t2", cell_names=["{{cust_name}}"'\n' "{{address}}", "Phone : {{phone}}" '\n' "Destination : {{dest}}"], specific_row_height=0.5)
+    t1 = create_table_with_columns(3, "t1", cell_names=["Customer Billing Detail", "{{number_lbl}} {{number_value}}", "{{date_lbl}} {{date_value}}"], bg_color="87CEFA")
+    t2 = create_table_with_columns(2, "t2", cell_names=["{{cust_name}}"'\n' "{{address}}  {{country}}", "Phone : {{phone}}" '\n' "Destination : {{dest}}"], specific_row_height=0.5)
     t3 = create_table_with_columns(8, "t3", cell_names=["S No", "Description", "Qty", "UOM", "Item Rate", "Amount", "Disc", "Taxable"], bg_color="87CEFA")
     t4 = create_table_with_columns(8, "t4", cell_names=[s_no_str, description_str, qty_str, uom_str, item_rate_str, amount_str, disc_str, taxable_str], specific_row_height=0.9)
     t5 = create_table_with_columns(8, "t5", cell_names=["", "Total", "{{qty_ttl}}", "", "", "{{amt_ttl}}", "", "{{txbl_ttl}}"], bg_color="87CEFA")
-    t6 = create_table_with_columns(2, "t6", cell_names=['\n' "Bill Amount In Words : {{Bill_amt_wd}}" '\n''\n' "Tax Amount In Words : {{Tax_amt_wd}}" '\n''\n' "Remark : {{so_no}}" '\n', "Sub Total:"'                                                            '"{{amt_ttl}}" '\n' "Discount Amt:"'                                                    '"{{discount}}" '\n' "Round Off:"'                                                            '"{{Rnd_off}}" '\n' "Bill Total:"'                                                             '"{{txbl_ttl}}" '\n' "------------------------------------------------------------------------------------" '\n' "Party Old Balance:"'                                            '"{{Party_Old_B}}" '\n'  "------------------------------------------------------------------------------------" '\n' "Net Total:"'                                                              '"{{Net_Ttl}}"'\n' ], specific_row_height=0.5)
+    t6 = create_table_with_columns(2, "t6", cell_names=['\n' "Bill Amount In Words : {{Bill_amt_wd}}" '\n''\n' "Tax Amount In Words : {{Tax_amt_wd}}" '\n''\n' "Remark : {{number_value}}" '\n', "Sub Total:"'                                                            '"{{amt_ttl}}" '\n' "Discount Amt:"'                                                    '"{{discount}}" '\n' "Round Off:"'                                                            '"{{Rnd_off}}" '\n' "Bill Total:"'                                                             '"{{txbl_ttl}}" '\n' "------------------------------------------------------------------------------------" '\n' "Party Old Balance:"'                                            '"{{Party_Old_B}}" '\n'  "------------------------------------------------------------------------------------" '\n' "{{Net_lbl}}:    "'                                                     '"{{Net_Ttl}}"'\n' ], specific_row_height=0.5)
     t7 = create_table_with_columns(1, "t7", cell_names=["\n" "Declaration: " '\n' "We declare that this invoice shows the actual price of the goods/services described and"  '\n' "that all particulars are true and correct."'\n' 'Original For Recipient' '\t''\t''\t''\t''\t''\t''\t''\t''\t''\t''\t''\t''\t' "Authorised Signatory" '\n'], specific_row_height=0.5)
+
+    # adjust_specific_cell_width(t1, "Customer Billing Detail", 2)
+    adjust_specific_cell_width(t1, "{{number_lbl}} {{number_value}}", 3)
+    adjust_specific_cell_width(t1, "{{date_lbl}} {{date_value}}", 1)
+    
 
     # Adjust the width of cells in table t3
     adjust_specific_cell_width(t3, "S No", 0.1)
@@ -162,8 +177,11 @@ def create_sales_order_doc(product_data, Cust_data):
      # Save to specific directory inside MEDIA_ROOT
     output_dir = os.path.join(MEDIA_ROOT, 'sales order rcpt')
     os.makedirs(output_dir, exist_ok=True)  # Ensure directory exists
-
-    final_file_path = os.path.join(output_dir, f'sales_order_rcpt_{unique_code}.docx')
+    
+    if header_text == "SALES QUOTATION":
+        final_file_path = os.path.join(output_dir, f'sales_Invoice_rcpt_{unique_code}.docx')
+    else:  
+        final_file_path = os.path.join(output_dir, f'sales_Order_rcpt_{unique_code}.docx')
     doc.save(final_file_path)
 
     # Convert the Word document to PDF and return the PDF file path
