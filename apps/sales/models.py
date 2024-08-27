@@ -28,7 +28,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         ]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
     flow_status = models.CharField(max_length=255, null=True, default=None)
-    workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id')
+    workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id',null=True, default=None )
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, null=True, default=None, db_column='customer_address_id')
     remarks = models.TextField(null=True, default=None)
     payment_term_id = models.ForeignKey(CustomerPaymentTerms, on_delete=models.CASCADE, null=True, default=None, db_column='payment_term_id')
