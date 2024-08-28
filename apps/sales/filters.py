@@ -9,6 +9,7 @@ class SaleOrderFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
     order_status_id = filters.CharFilter(method=filter_uuid)
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    flow_status = filters.CharFilter(field_name='flow_status', lookup_expr='iexact')
     created_at = filters.DateFromToRangeFilter()
     status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
 
