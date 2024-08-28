@@ -420,6 +420,19 @@ def validate_order_type(data, error_list, model_name,look_up=None):
             else:
                 error_list.append({look_up:["Invalid order type."]})
 
+def get_related_data(model, serializer_class, filter_field, filter_value):
+    """
+    Retrieves related data for a given model, serializer, and filter field.
+    """
+    try:
+        related_data = model.objects.filter(**{filter_field: filter_value})
+        serializer = serializer_class(related_data, many=True)
+        logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
+        return serializer.data
+    except Exception as e:
+        logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
+        return []
+
 
 #================================================================================================================================================
 #===========================================CHETAN'S METHOD============================================================================
