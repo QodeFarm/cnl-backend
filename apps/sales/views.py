@@ -12,7 +12,7 @@ from rest_framework.views import APIView
 from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
 from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import send_pdf_via_email, send_whatsapp_message_via_wati, get_related_data, update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import format_phone_number,send_pdf_via_email, send_whatsapp_message_via_wati, get_related_data, update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django_filters.rest_framework import DjangoFilterBackend  # type: ignore
 from rest_framework.filters import OrderingFilter
 from rest_framework.views import APIView
@@ -1470,7 +1470,7 @@ def save_sales_order_pdf_to_media(product_data, cust_data):
     pdf_file_path = wd.create_sales_order_doc(product_data, cust_data)
     
     # Define the directory where the file will be saved
-    sales_order_dir = os.path.join(MEDIA_ROOT, 'sales order rcpt')
+    sales_order_dir = os.path.join(MEDIA_ROOT, 'sales order receipt')
 
     # Create the directory if it doesn't exist
     if not os.path.exists(sales_order_dir):
@@ -1483,7 +1483,7 @@ def save_sales_order_pdf_to_media(product_data, cust_data):
     shutil.move(pdf_file_path, new_file_path)
 
     # Return the relative path to the file (relative to MEDIA_ROOT)
-    relative_file_path = os.path.join('sales order rcpt', os.path.basename(pdf_file_path))
+    relative_file_path = os.path.join('sales order receipt', os.path.basename(pdf_file_path))
     return relative_file_path
 
 def extract_product_data(data):
@@ -1510,7 +1510,7 @@ def extract_product_data(data):
 
     return product_data
 
-class SaleOrderPDFView(APIView):
+class ReceiptGeneratorView(APIView):
     def post(self, request, **kwargs):
         """ Retrieves a sale order and its related data. """
         PDF_Send_Response = ""
@@ -1572,7 +1572,8 @@ class SaleOrderPDFView(APIView):
             filter_kwargs = {"customer_id" : customer_id[0], "address_type": "Billing"}
             city = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id)
             country = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].country_id)
-            phone = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone)
+            phone_number = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone)
+            phone = format_phone_number(phone_number)
             dest = str(shipments_data.get('destination', 'N/A'))
             email =  customer_data_for_cust_data['email']
 

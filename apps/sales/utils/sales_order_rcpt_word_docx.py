@@ -166,6 +166,7 @@ def create_sales_order_doc(product_data, Cust_data):
                         if key in paragraph.text:
                             paragraph.text = paragraph.text.replace(key, value)
 
+    print()
     # Make content in t1, t3, and t5 bold
     for table in [t1, t3, t5, t6]:
         for row in table.rows:
@@ -175,17 +176,18 @@ def create_sales_order_doc(product_data, Cust_data):
     unique_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
      # Save to specific directory inside MEDIA_ROOT
-    output_dir = os.path.join(MEDIA_ROOT, 'sales order rcpt')
+    output_dir = os.path.join(MEDIA_ROOT, 'sales order receipt')
     os.makedirs(output_dir, exist_ok=True)  # Ensure directory exists
     
     if header_text == "SALES QUOTATION":
-        final_file_path = os.path.join(output_dir, f'sales_Invoice_rcpt_{unique_code}.docx')
+        final_file_path = os.path.join(output_dir, f"{replacements.get('{{cust_name}}')}_sales_Invoice_receipt_{unique_code}.docx")
     else:  
-        final_file_path = os.path.join(output_dir, f'sales_Order_rcpt_{unique_code}.docx')
+        final_file_path = os.path.join(output_dir, f"{replacements.get('{{cust_name}}')}_sales_Order_receipt_{unique_code}.docx")
     doc.save(final_file_path)
 
     # Convert the Word document to PDF and return the PDF file path
     pdf_file_path = convert_docx_to_pdf(final_file_path)
+    os.remove(final_file_path)
     return pdf_file_path
 
 # Method to convert DOCX Into PDF

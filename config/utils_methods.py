@@ -450,6 +450,18 @@ def get_related_data(model, serializer_class, filter_field, filter_value):
             return []
 
      
+def format_phone_number(phone_number):
+    phone_number_str = str(phone_number) 
+    
+    # Check if the phone number length is correct
+    if len(phone_number_str) == 10:
+        return "91" + phone_number_str  #
+    elif len(phone_number_str) == 12 and phone_number_str.startswith("91"):
+        return phone_number_str  
+    else:
+        return "Mobile number has incorrect length"  
+
+
 def send_pdf_via_email(to_email, pdf_relative_path):
     """Send the generated PDF as an email attachment."""
     
