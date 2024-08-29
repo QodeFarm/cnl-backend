@@ -9,7 +9,10 @@ from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
-from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
+ from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
+from .filters import *
+from apps.purchase.models import PurchaseOrders
+from apps.purchase.serializers import PurchaseOrdersSerializer
 from .serializers import *
 from apps.masters.models import OrderTypes
 from config.utils_methods import format_phone_number,send_pdf_via_email, send_whatsapp_message_via_wati, get_related_data, update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
@@ -98,6 +101,8 @@ class SalesPriceListView(viewsets.ModelViewSet):
 class SaleOrderItemsView(viewsets.ModelViewSet):
     queryset = SaleOrderItems.objects.all()
     serializer_class = SaleOrderItemsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SaleOrdersItemsilter
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
