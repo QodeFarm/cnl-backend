@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from .models import SaleOrder, SaleInvoiceOrders, SaleReturnOrders
+from .models import SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReturnOrders
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from django_filters import rest_framework as filters
@@ -47,3 +47,10 @@ class SaleReturnOrdersFilter(filters.FilterSet):
     class Meta:
         model = SaleReturnOrders
         fields =['customer_id', 'order_status_id', 'period_name', 'created_at', 'status_name']
+        
+class SaleOrdersItemsilter(filters.FilterSet):
+    sale_order_id = filters.CharFilter(method=filter_uuid)
+    
+    class Meta:
+        model = SaleOrderItems
+        fields =['sale_order_id']
