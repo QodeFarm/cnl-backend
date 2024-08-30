@@ -1,23 +1,21 @@
+import os
 import logging
-from django.db import transaction
-from django.forms import ValidationError
-from django.http import Http404
-from django.shortcuts import render, get_object_or_404
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.filters import OrderingFilter
-from rest_framework.response import Response
-from rest_framework import viewsets, status
-from rest_framework.serializers import ValidationError
-from uuid import UUID
-from rest_framework.views import APIView
 from .filters import *
-from apps.purchase.models import PurchaseOrders
-from apps.purchase.serializers import PurchaseOrdersSerializer
 from .serializers import *
+from .models import SaleOrder 
+from django.http import Http404
+from rest_framework import status
+from django.db import transaction
+from config.settings import MEDIA_URL
+from rest_framework.views import APIView
 from apps.masters.models import OrderTypes
-from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
-from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
 from rest_framework.filters import OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend  # type: ignore
+from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
+from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
@@ -1456,6 +1454,7 @@ class QuickPackCreateViewSet(APIView):
         ]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
 
 class WorkflowViewSet(viewsets.ModelViewSet):
     queryset = Workflow.objects.all()
@@ -1538,3 +1537,4 @@ class ProgressWorkflowView(APIView):
                 "data": None
             }
             return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+
