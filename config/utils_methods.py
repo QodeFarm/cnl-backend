@@ -1,26 +1,24 @@
 #utils_methods file
-import os
-import uuid
-import json
-import base64
-import shutil
 import logging
-import inflect
-import requests
-from uuid import UUID
-from uuid import uuid4
-from django.db import models
-from django.db.models import Q
-from rest_framework import status
-from django.utils import timezone
-from django.core.cache import cache
-from django.core.mail import EmailMessage
 # from django.forms import ValidationError
-from rest_framework.response import Response
-from config.settings import MEDIA_ROOT, MEDIA_URL
-from apps.masters.utils import receipt_word_docx as wd
 from rest_framework.serializers import ValidationError
-
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import models
+import uuid
+from django.db.models import Q
+from uuid import uuid4
+from uuid import UUID
+import base64
+import os
+import json
+from django.utils import timezone
+from django.db import models
+from django.core.cache import cache
+import requests
+from django.core.mail import EmailMessage
+from config.settings import MEDIA_ROOT, MEDIA_URL
+import os
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -520,6 +518,12 @@ def send_whatsapp_message_via_wati(to_number, file_url):
     else:
         result = response_data.get('info')
         return result
+
+import os
+import shutil
+import inflect
+from config.settings import MEDIA_ROOT
+from apps.sales.utils import sales_order_rcpt_word_docx as wd
 
 
 def convert_amount_to_words(amount):
