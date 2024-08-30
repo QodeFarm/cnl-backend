@@ -483,7 +483,7 @@ def send_pdf_via_email(to_email, pdf_relative_path):
     # Send the email
     email.send()
 
-    return "Sales order PDF saved and emailed successfully."
+    return "PDF sent via Email successfully."
 
 
 def send_whatsapp_message_via_wati(to_number, file_url):

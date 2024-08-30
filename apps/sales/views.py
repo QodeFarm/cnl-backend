@@ -1,34 +1,23 @@
-import logging
-from django.db import transaction
-from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404
-import requests
-from apps.customer.serializers import CustomerAddressesSerializers
-from django_filters.rest_framework import DjangoFilterBackend # type: ignore
-from rest_framework.filters import OrderingFilter
-from rest_framework.response import Response
-from rest_framework import viewsets, status
-from rest_framework.views import APIView
-from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
-from .filters import *
-from apps.purchase.models import PurchaseOrders
-from apps.purchase.serializers import PurchaseOrdersSerializer
-from .serializers import *
-from apps.masters.models import OrderTypes
-from config.utils_methods import format_phone_number,send_pdf_via_email, send_whatsapp_message_via_wati, get_related_data, update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
-from django_filters.rest_framework import DjangoFilterBackend  # type: ignore
-from rest_framework.filters import OrderingFilter
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from django.shortcuts import get_object_or_404
-from django.http import Http404
-from .models import SaleOrder 
-from config.settings import MEDIA_ROOT, MEDIA_URL
-import json
 import os
-from apps.sales.utils.document_generator_methods import save_sales_order_pdf_to_media, extract_product_data, convert_amount_to_words
+import logging
+from .filters import *
+from .serializers import *
+from .models import SaleOrder 
+from django.http import Http404
+from rest_framework import status
+from django.db import transaction
+from config.settings import MEDIA_URL
+from rest_framework.views import APIView
+from apps.masters.models import OrderTypes
 from .utils.docs_variables import doc_data
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from django.shortcuts import get_object_or_404
+from rest_framework.filters import OrderingFilter
+from django_filters.rest_framework import DjangoFilterBackend  # type: ignore
+from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
+from apps.sales.utils.document_generator_methods import save_sales_order_pdf_to_media, extract_product_data, convert_amount_to_words
+from config.utils_methods import format_phone_number,send_pdf_via_email, send_whatsapp_message_via_wati, get_related_data, update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
