@@ -6,6 +6,10 @@ from django.http import Http404
 from django.db import transaction
 from rest_framework import status
 from rest_framework.views import APIView
+from .filters import *
+from apps.purchase.models import PurchaseOrders
+from apps.purchase.serializers import PurchaseOrdersSerializer
+from .serializers import *
 from apps.masters.models import OrderTypes
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -89,6 +93,8 @@ class SalesPriceListView(viewsets.ModelViewSet):
 class SaleOrderItemsView(viewsets.ModelViewSet):
     queryset = SaleOrderItems.objects.all()
     serializer_class = SaleOrderItemsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SaleOrdersItemsilter
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
