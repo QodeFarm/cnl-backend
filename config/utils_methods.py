@@ -1,25 +1,20 @@
 #utils_methods file
-import os
-import uuid
-import json
-import base64
-import shutil
 import logging
-import inflect
-import requests
-from uuid import UUID
-from uuid import uuid4
-from django.db import models
-from django.db.models import Q
-from rest_framework import status
-from django.utils import timezone
-from django.core.cache import cache
-from django.core.mail import EmailMessage
 # from django.forms import ValidationError
-from rest_framework.response import Response
-from config.settings import MEDIA_ROOT, MEDIA_URL
-from apps.masters.utils import receipt_word_docx as wd
 from rest_framework.serializers import ValidationError
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import models
+import uuid
+from django.db.models import Q
+from uuid import uuid4
+from uuid import UUID
+import base64
+import os
+import json
+from django.utils import timezone
+from django.db import models
+from django.core.cache import cache
 
 
 # Set up basic configuration for logging
@@ -436,190 +431,5 @@ def validate_uuid(uuid_to_test, version=4):
         raise ValidationError("Invalid UUID")
     return uuid_obj
 
-def get_related_data(model, serializer_class, filter_field, filter_value):
-        """
-        Retrieves related data for a given model, serializer, and filter field.
-        """
-        try:
-            related_data = model.objects.filter(**{filter_field: filter_value})
-            serializer = serializer_class(related_data, many=True)
-            logger.debug("Retrieved related data for model %s with filter %s=%s.",
-                        model.__name__, filter_field, filter_value)
-            return serializer.data
-        except Exception as e:
-            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
-                            model.__name__, filter_field, filter_value, str(e))
-            return []
 
-     
-def format_phone_number(phone_number):
-    phone_number_str = str(phone_number) 
-    
-    # Check if the phone number length is correct
-    if len(phone_number_str) == 10:
-        return "91" + phone_number_str  #
-    elif len(phone_number_str) == 12 and phone_number_str.startswith("91"):
-        return phone_number_str  
-    else:
-        return "Mobile number has incorrect length"  
-
-
-def send_pdf_via_email(to_email, pdf_relative_path):
-    """Send the generated PDF as an email attachment."""
-    
-    # Construct the full path to the PDF file
-    pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
-    
-    subject = 'Your Sales Order Receipt'
-    body = 'Please find attached your sales order receipt.'
-    email = EmailMessage(subject, body, to=[to_email])
-
-    # Ensure the PDF file exists before attempting to open it
-    if not os.path.exists(pdf_full_path):
-        raise FileNotFoundError(f"The file {pdf_full_path} does not exist.")
-
-    # Read the PDF file from the provided full path
-    with open(pdf_full_path, 'rb') as pdf_file:
-        email.attach('sales_order_receipt.pdf', pdf_file.read(), 'application/pdf')
-    
-    # Send the email
-    email.send()
-
-    return "PDF sent via Email successfully."
-
-
-def send_whatsapp_message_via_wati(to_number, file_url):
-    """ Send the PDF file as a WhatsApp message using WATI API. """
-    result = ""
-    # Construct the full path to the file using MEDIA_ROOT
-    full_file_path = os.path.join(MEDIA_ROOT, file_url.replace(MEDIA_URL, ''))
-    # Ensure the file exists
-    if not os.path.exists(full_file_path):
-        return (f"File not found: {full_file_path}")            
-    
-    url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
-    
-    headers = {
-    'accept': '*/*',
-    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMzMyNWFmNC0wNDE2LTQzYTQtOTcwNi00MGYxZDViZTM0MGQiLCJ1bmlxdWVfbmFtZSI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsIm5hbWVpZCI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsImVtYWlsIjoicnVkaHJhaW5kdXN0cmllcy5ubHJAZ21haWwuY29tIiwiYXV0aF90aW1lIjoiMDgvMjYvMjAyNCAwNjowMzozNSIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJ0ZW5hbnRfaWQiOiIzMTIxNzIiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.qFA42Ze-itghM2LXR5sZ-P9BJB84iD3oXqk5olG_kX8',
-    }
-
-    # Open the file and attach it to the request
-    with open(full_file_path, 'rb') as file:
-        files = {
-            'file': (os.path.basename(full_file_path), file, 'application/pdf'),
-        }
-        response = requests.post(url, headers=headers, files=files)
-
-        # Convert the response text to a Python dictionary
-    response_data = json.loads(response.text) 
-
-    if response_data.get("result") == True:
-        result = "PDF sent via WhatsApp successfully."
-        return result
-    else:
-        result = response_data.get('info')
-        return result
-
-
-def convert_amount_to_words(amount):
-    '''
-This Code convert amount into world.
-Ex. amount = 784365923.04
-    O/P = INR Seventy-Eight Crore Forty-Three Lakh Sixty-Five Thousand Nine Hundred Twenty-Three And Four Paise
--------------For Testing---------------
-# # Example usage:
-# amount = 784365923.04
-# result = convert_amount_to_words(amount)
-# print((result))  
-
-'''
-    # Split amount into rupees and paise
-    amount_parts = str(amount).split(".")
-    
-    # Convert rupees part
-    rupees_part = int(amount_parts[0])
-    
-    # Check if there are paise
-    paise_part = int(amount_parts[1]) if len(amount_parts) > 1 else 0
-    
-    # Convert rupees to words
-    rupees_in_words = convert_rupees_to_indian_words(rupees_part)
-    
-    # Convert paise to words
-    p = inflect.engine()
-    paise_in_words = (
-        p.number_to_words(paise_part).replace(",", "") if paise_part > 0 else "zero"
-    )
-    
-    amt_world = f"{rupees_in_words} and {paise_in_words} paise"
-    return "INR " + amt_world.title() 
-
-def convert_rupees_to_indian_words(number):
-    p = inflect.engine()
-    if number == 0:
-        return "zero rupees"
-    
-    parts = []
-    
-    # Define thresholds and labels
-    units = [
-        (1000000000, "arab"),
-        (10000000, "crore"),
-        (100000, "lakh"),
-        (1000, "thousand"),
-        (100, "hundred")
-    ]
-    
-    for value, name in units:
-        if number >= value:
-            quotient, number = divmod(number, value)
-            parts.append(f"{p.number_to_words(quotient)} {name}")
-    
-    if number > 0:
-        parts.append(p.number_to_words(number))
-    
-    return " ".join(parts)
-
-
-
-def extract_product_data(data):
-    product_data = []
-    
-    for index, item in enumerate(data, start=1):
-        product = item['product']
-        unit_options = item['unit_options']        
-        product_name = product['name']
-        quantity = item['quantity']
-        unit_name = unit_options['unit_name']
-        rate = item['rate']
-        amount = item['amount']
-        discount = item['discount']
-        tax = str(item['tax'] if item['tax'] is not None else 0)
         
-        product_data.append([
-            str(index), product_name, quantity, unit_name, rate, amount, discount, tax])
-
-    return product_data
-
-
-def save_sales_order_pdf_to_media(product_data, cust_data):
-    # Generate the PDF file
-    pdf_file_path = wd.create_sales_order_doc(product_data, cust_data)
-    
-    # Define the directory where the file will be saved
-    sales_order_dir = os.path.join(MEDIA_ROOT, 'sales order receipt')
-
-    # Create the directory if it doesn't exist
-    if not os.path.exists(sales_order_dir):
-        os.makedirs(sales_order_dir)
-
-    # Define the new file path in the media directory
-    new_file_path = os.path.join(sales_order_dir, os.path.basename(pdf_file_path))
-    
-    # Move the PDF file to the new directory
-    shutil.move(pdf_file_path, new_file_path)
-
-    # Return the relative path to the file (relative to MEDIA_ROOT)
-    relative_file_path = os.path.join('sales order receipt', os.path.basename(pdf_file_path))
-    return relative_file_path
