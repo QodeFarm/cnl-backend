@@ -1,6 +1,5 @@
 import uuid
 from django.db import models
-from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses
 from apps.products.models import Products
