@@ -166,7 +166,6 @@ def create_sales_order_doc(product_data, Cust_data):
                         if key in paragraph.text:
                             paragraph.text = paragraph.text.replace(key, value)
 
-    print()
     # Make content in t1, t3, and t5 bold
     for table in [t1, t3, t5, t6]:
         for row in table.rows:

@@ -525,3 +525,113 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+
+#================================================================================================================================
+from .utils.docs_variables import doc_data
+from config.utils_methods import convert_amount_to_words, extract_product_data, save_sales_order_pdf_to_media, format_phone_number,send_pdf_via_email, send_whatsapp_message_via_wati, get_related_data
+from django.http import Http404
+from django.shortcuts import get_object_or_404
+from apps.customer.models import CustomerAddresses
+
+class DocumentGeneratorView(APIView):
+    def post(self, request, **kwargs):
+        """ Retrieves a sale order and its related data. """
+
+        try:
+            flag = request.data.get('flag')
+            pk = kwargs.get('pk')
+            document_type = kwargs.get('document_type')
+
+            # Get the relevant data from the doc_data dictionary
+            model_data = doc_data.get(document_type)
+            if model_data:
+                Model = model_data.get('Model')
+                Serializer = model_data.get('Serializer')
+                Item_Model = model_data.get('Item_Model')
+                Items_Serializer = model_data.get('Items_Serializer')
+                Item_Model_PK = model_data.get('Item_Model_PK')
+                Related_Model = model_data.get('Related_Model')
+                Related_Serializer = model_data.get('Related_Serializer')
+                Related_filter_field = model_data.get('Related_filter_field')
+                number_lbl = model_data.get('number_lbl')
+                date_lbl = model_data.get('date_lbl')
+                Doc_Header = model_data.get('Doc_Header')
+                net_lbl = model_data.get('net_lbl')
+                number_value = model_data.get('number_value')
+                date_value = model_data.get('date_value')
+
+            obj = get_object_or_404(Model, pk=pk)
+            customer_data_for_cust_data = Serializer(obj).data
+            # Retrieve related data
+            items_data = get_related_data(Item_Model, Items_Serializer, Item_Model_PK, pk)
+            related_data = get_related_data(Related_Model, Related_Serializer, Related_filter_field, pk)
+            related_data = related_data[0] if len(related_data) > 0 else {}
+
+            # extracting phone number from cust_address
+            customer_id = list(Model.objects.filter(**{Item_Model_PK : pk}).values_list('customer_id', flat=True))
+            
+
+            filter_kwargs = {"customer_id": customer_id[0], "address_type": "Billing"}
+            city = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id)
+            country = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].country_id)
+            phone_number = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone)
+            phone = format_phone_number(phone_number)
+            dest = str(related_data.get('destination', 'N/A'))
+            email = customer_data_for_cust_data['email']
+
+            total_amt = total_qty = total_txbl_amt = total_disc_amt = 0.0
+            for item in items_data:
+                total_amt += float(item['amount']) if item['amount'] is not None else 0
+                total_qty += float(item['quantity']) if item['quantity'] is not None else 0
+                total_disc_amt += float(item['discount']) if item['discount'] is not None else 0
+                total_txbl_amt += float(item['tax']) if item['tax'] is not None else 0
+
+            net_value = "0.0"
+
+            bill_amount_in_words = convert_amount_to_words(total_amt)
+
+            product_data = extract_product_data(items_data)
+
+            Cust_data = {
+                "{{number_lbl}}": number_lbl,
+                "{{number_value}}": customer_data_for_cust_data[number_value],
+                "{{date_lbl}}": date_lbl,
+                "{{date_value}}": customer_data_for_cust_data[date_value],
+                "{{cust_name}}": customer_data_for_cust_data['customer']['name'],
+                "{{phone}}": phone,
+                "{{dest}}": dest,
+                "{{qty_ttl}}":  str(total_qty),
+                "{{amt_ttl}}":  str(total_amt),
+                "{{txbl_ttl}}": str(total_txbl_amt),
+                "{{discount}}": str(total_disc_amt),
+                "{{Rnd_off}}": "0.0",
+                "{{Net_lbl}}": (net_lbl),
+                "{{Net_Ttl}}": (net_value),
+                "{{Party_Old_B}}": "0.0",
+                "{{Bill_amt_wd}}": bill_amount_in_words,
+                "{{Tax_amt_wd}}": bill_amount_in_words,
+                "{{address}}": (city),
+                "{{country}}": (country),
+                "{{Doc Header}}": Doc_Header
+            }
+
+            relative_pdf_path = save_sales_order_pdf_to_media(
+                product_data, Cust_data)  # This path is used for sending PDF thr Email
+            # This path is used for sending PDF thr Wati
+            cdn_path = os.path.join(MEDIA_URL, relative_pdf_path)
+
+            if flag == 'email':
+                PDF_Send_Response = send_pdf_via_email(email, relative_pdf_path)
+            elif flag == 'whatsapp':
+                PDF_Send_Response = send_whatsapp_message_via_wati(phone, cdn_path)
+
+        except Http404:
+            logger.error("pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception("An error occurred while retrieving pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return build_response(1, PDF_Send_Response, [], status.HTTP_200_OK)
+
+      
