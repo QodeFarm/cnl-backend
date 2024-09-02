@@ -1462,18 +1462,13 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     serializer_class = WorkflowSerializer
 
     def list(self, request, *args, **kwargs):
-        """
-        Override the list method to customize the response format.
-        """
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
+        return list_all_objects(self, request, *args, **kwargs)
 
-        response_data = {
-            "count": queryset.count(),
-            "message": "Success",
-            "data": serializer.data
-        }
-        return Response(response_data)
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 
 
 class WorkflowStageViewSet(viewsets.ModelViewSet):
@@ -1481,19 +1476,27 @@ class WorkflowStageViewSet(viewsets.ModelViewSet):
     serializer_class = WorkflowStageSerializer
 
     def list(self, request, *args, **kwargs):
-        """
-        Override the list method to customize the response format.
-        """
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
+        return list_all_objects(self, request, *args, **kwargs)
 
-        response_data = {
-            "count": queryset.count(),
-            "message": "Success",
-            "data": serializer.data
-        }
-        return Response(response_data)
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
 
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+class SaleReceiptViewSet(viewsets.ModelViewSet):
+    queryset = SaleReceipt.objects.all()
+    serializer_class = SaleReceiptSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
 class ProgressWorkflowView(APIView):
     """
     API view to progress the workflow of a specific SaleOrder to the next stage.
