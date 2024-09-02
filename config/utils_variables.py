@@ -157,8 +157,3 @@ default_workflow_stages = {
     2: 'dispatch',
     3: 'invoice'
 }
-
-# Accessing values
-first_stage = default_workflow_stages[1]  # 'sale_order'
-second_stage = default_workflow_stages[2]  # 'dispatch'
-third_stage = default_workflow_stages[3]  # 'invoice'

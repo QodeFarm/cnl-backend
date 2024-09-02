@@ -71,34 +71,44 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         if not self.flow_status:
             if self.workflow_id.name == default_workflow_name:
                 # Hardcode the flow status based on the predefined stages
-                self.flow_status = default_workflow_stages[1]  # 'sale_order'
+                self.flow_status = default_workflow_stages[1]  # Dispatch Ready
             else:
-                # Dynamically set flow status based on the second stage of the selected workflow
-                stages = WorkflowStage.objects.filter(
-                    workflow_id=self.workflow_id
-                ).order_by('stage_order')
+                # Dynamically set flow status based on the stage with order 2
+                second_stage = WorkflowStage.objects.filter(
+                    workflow_id=self.workflow_id,
+                    stage_order=2
+                ).first()
 
-                if stages.count() > 1:
-                    # Set to the second stage (index 1)
-                    self.flow_status = stages[1].stage_name
-                elif stages.exists():
-                    # Fallback to the first stage if only one stage exists
-                    self.flow_status = stages.first().stage_name
+                if second_stage:
+                    self.flow_status = second_stage.stage_name
+                else:
+                    # Fallback to the first stage if stage_order 2 doesn't exist
+                    first_stage = WorkflowStage.objects.filter(
+                        workflow_id=self.workflow_id,
+                        stage_order=1
+                    ).first()
+                    if first_stage:
+                        self.flow_status = first_stage.stage_name
 
         # Call the original save() method to handle the rest
         super().save(*args, **kwargs)
-
-
 
 
     def progress_workflow(self):
         logger = logging.getLogger(__name__)
 
         # Handle progress for default workflow
-        if self.workflow_id and self.workflow_id.name == default_workflow_name:
-            current_stage_index = default_workflow_stages.index(self.flow_status)
-            if current_stage_index + 1 < len(default_workflow_stages):
-                self.flow_status = default_workflow_stages[current_stage_index + 1]
+        if self.workflow_id.name == default_workflow_name:
+            # Find the current stage key based on the current flow status
+            current_stage_key = None
+            for key, value in default_workflow_stages.items():
+                if value == self.flow_status:
+                    current_stage_key = key
+                    break
+            
+            if current_stage_key is not None and current_stage_key + 1 in default_workflow_stages:
+                # Move to the next stage
+                self.flow_status = default_workflow_stages[current_stage_key + 1]
                 self.save()
                 logger.info(f"SaleOrder {self.sale_order_id} moved to stage: {self.flow_status}")
                 return True
@@ -129,6 +139,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             else:
                 logger.warning(f"SaleOrder {self.sale_order_id} could not find current stage in workflow.")
                 return False
+
 
 
 
@@ -455,6 +466,7 @@ class SaleReceipt(models.Model):
     sale_invoice_id = models.ForeignKey('SaleInvoiceOrders', on_delete=models.CASCADE, db_column='sale_invoice_id')
     receipt_name = models.CharField(max_length=255)
     description = models.CharField(max_length=1024, null=True, default=None)
+    receipt_path = models.JSONField(null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

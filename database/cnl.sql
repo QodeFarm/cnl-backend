@@ -1911,6 +1911,7 @@ CREATE TABLE IF NOT EXISTS sale_receipts (
     sale_invoice_id CHAR(36) NOT NULL,
     receipt_name VARCHAR(255) NOT NULL,
     description VARCHAR(1024),
+    receipt_path JSON DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id)
