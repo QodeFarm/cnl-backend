@@ -1884,5 +1884,37 @@ CREATE TABLE IF NOT EXISTS labor (
     FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 );
 
+/* Workflows Table */
+-- Stores details about different workflows used in the ERP system.
+CREATE TABLE workflows (
+    workflow_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
 
+/* Workflow Stages Table */
+-- Defines stages within each workflow, including the order of the stages.
+CREATE TABLE workflow_stages (
+    stage_id CHAR(36) PRIMARY KEY,    
+    workflow_id CHAR(36) NOT NULL,
+    stage_name VARCHAR(255) NOT NULL,
+    stage_order INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id)
+);
+
+/* Sale Receipts Table */
+-- Stores receipts associated with sale invoices.
+CREATE TABLE IF NOT EXISTS sale_receipts (
+    sale_receipt_id CHAR(36) PRIMARY KEY,
+    sale_invoice_id CHAR(36) NOT NULL,
+    receipt_name VARCHAR(255) NOT NULL,
+    description VARCHAR(1024),
+    receipt_path JSON DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id)
+);
 

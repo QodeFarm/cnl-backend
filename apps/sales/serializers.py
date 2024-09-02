@@ -221,3 +221,8 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkflowStage
         fields = '__all__'
+
+class SaleReceiptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SaleReceipt
+        fields = '__all__'
