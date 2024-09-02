@@ -1884,24 +1884,25 @@ CREATE TABLE IF NOT EXISTS labor (
     FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 );
 
-CREATE TABLE workflow_stages (
-  stage_id char(36) NOT NULL,
-  workflow_id char(36) NOT NULL,
-  stage_name varchar(255) NOT NULL,
-  stage_order int NOT NULL,
-  created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (stage_id),
-  KEY workflow_id (workflow_id),
-  CONSTRAINT workflow_stages_ibfk_1 FOREIGN KEY (workflow_id) REFERENCES workflows (workflow_id)
-);
- 
+/* Workflows Table */
+-- Stores details about different workflows used in the ERP system.
 CREATE TABLE workflows (
-  workflow_id char(36) NOT NULL,
-  name varchar(255) NOT NULL,
-  created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (workflow_id)
+    workflow_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Workflow Stages Table */
+-- Defines stages within each workflow, including the order of the stages.
+CREATE TABLE workflow_stages (
+    stage_id CHAR(36) PRIMARY KEY,    
+    workflow_id CHAR(36) NOT NULL,
+    stage_name VARCHAR(255) NOT NULL,
+    stage_order INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id)
 );
 
 /* Sale Receipts Table */
