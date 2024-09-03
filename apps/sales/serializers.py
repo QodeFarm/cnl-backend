@@ -221,3 +221,10 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkflowStage
         fields = '__all__'
+
+class SaleReceiptSerializer(serializers.ModelSerializer):
+    invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+    
+    class Meta:
+        model = SaleReceipt
+        fields = '__all__'

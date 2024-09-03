@@ -54,7 +54,7 @@ orderattachmentstable = 'order_attachments'
 ordershipmentstable = 'order_shipments'
 quickpackitems = 'quick_pack_items'
 quickpacks = 'quick_packs'
-
+salereceipts = 'sale_receipts'
 #inventory db_tables
 warehousestable ='warehouses'
 
@@ -147,3 +147,13 @@ labor = 'labor'
 #workflow tables
 workflow = 'workflows'
 workflowstages = 'workflow_stages'
+
+#Define default work flow name
+default_workflow_name = 'sales'
+
+# Define the stages for the default workflow
+default_workflow_stages = {
+    1: 'sale_order',
+    2: 'dispatch',
+    3: 'invoice'
+}

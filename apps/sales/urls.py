@@ -20,7 +20,7 @@ router.register(r'quick_packs_get', QuickPacksView)
 router.register(r'quick_pack_items_get', QuickPacksItemsView)
 router.register(r'workflows', WorkflowViewSet)
 router.register(r'workflow_stages', WorkflowStageViewSet)
-
+router.register(r'sale_receipts', SaleReceiptViewSet)
 
 urlpatterns = [
     path('',include(router.urls)),

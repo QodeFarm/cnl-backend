@@ -1,13 +1,19 @@
-import os
 import logging
-from .filters import *
-from .serializers import *
-from .models import SaleOrder 
-from django.http import Http404
-from rest_framework import status
 from django.db import transaction
-from config.settings import MEDIA_URL
+from django.forms import ValidationError
+from django.http import Http404
+from django.shortcuts import render, get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
+from rest_framework.response import Response
+from rest_framework import viewsets, status
+from rest_framework.serializers import ValidationError
+from uuid import UUID
 from rest_framework.views import APIView
+from .filters import *
+from apps.purchase.models import PurchaseOrders
+from apps.purchase.serializers import PurchaseOrdersSerializer
+from .serializers import *
 from apps.masters.models import OrderTypes
 from .utils.docs_variables import doc_data
 from rest_framework import viewsets, status
@@ -1564,18 +1570,13 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     serializer_class = WorkflowSerializer
 
     def list(self, request, *args, **kwargs):
-        """
-        Override the list method to customize the response format.
-        """
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
+        return list_all_objects(self, request, *args, **kwargs)
 
-        response_data = {
-            "count": queryset.count(),
-            "message": "Success",
-            "data": serializer.data
-        }
-        return Response(response_data)
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 
 
 class WorkflowStageViewSet(viewsets.ModelViewSet):
@@ -1583,19 +1584,27 @@ class WorkflowStageViewSet(viewsets.ModelViewSet):
     serializer_class = WorkflowStageSerializer
 
     def list(self, request, *args, **kwargs):
-        """
-        Override the list method to customize the response format.
-        """
-        queryset = self.get_queryset()
-        serializer = self.get_serializer(queryset, many=True)
+        return list_all_objects(self, request, *args, **kwargs)
 
-        response_data = {
-            "count": queryset.count(),
-            "message": "Success",
-            "data": serializer.data
-        }
-        return Response(response_data)
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
 
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+class SaleReceiptViewSet(viewsets.ModelViewSet):
+    queryset = SaleReceipt.objects.all()
+    serializer_class = SaleReceiptSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
 class ProgressWorkflowView(APIView):
     """
     API view to progress the workflow of a specific SaleOrder to the next stage.
@@ -1640,4 +1649,3 @@ class ProgressWorkflowView(APIView):
                 "data": None
             }
             return Response(response_data, status=status.HTTP_404_NOT_FOUND)
-
