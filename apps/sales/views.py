@@ -1695,7 +1695,190 @@ class SaleReceiptCreateViewSet(APIView):
         # Update the 'LeadInteractions'
         update_fields = {'sale_receipt_id': pk}
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-    
+
+class WorkflowCreateViewSet(APIView):
+    """
+    API ViewSet for handling workflow creation and related data.
+    """
+
+    def get_object(self, pk):
+        try:
+            return Workflow.objects.get(pk=pk)
+        except Workflow.DoesNotExist:
+            logger.warning(f"Workflow with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            return self.retrieve(request, *args, **kwargs)
+        try:
+            logger.info("Retrieving all workflows")
+            queryset = Workflow.objects.all()
+            serializer = WorkflowSerializer(queryset, many=True)
+            logger.info("Workflow data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a workflow and its related workflow_stages.
+        """
+        pk = kwargs.get('pk')
+        if not pk:
+            logger.error("Primary key not provided in request.")
+            return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Retrieve the Workflow instance
+            workflow = get_object_or_404(Workflow, pk=pk)
+            workflow_serializer = WorkflowSerializer(workflow)
+
+            # Retrieve associated workflow_stages
+            workflow_stages = WorkflowStage.objects.filter(workflow_id=pk)
+            workflow_stages_serializer = WorkflowStageSerializer(workflow_stages, many=True)
+
+            # Customizing the response data
+            custom_data = {
+                "workflow": workflow_serializer.data,
+                "workflow_stages": workflow_stages_serializer.data,
+            }
+            logger.info("Workflow and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+        except Http404:
+            logger.error(f"Workflow with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(f"An error occurred while retrieving workflow with ID {pk}: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a workflow and its related workflow_stages.
+        """
+        try:
+            # Get the Workflow instance
+            instance = Workflow.objects.get(pk=pk)
+            instance.delete()
+
+            logger.info(f"Workflow with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except Workflow.DoesNotExist:
+            logger.warning(f"Workflow with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting Workflow with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        given_data = request.data
+
+        # Extract and validate workflow data if provided
+        workflow_data = given_data.get('workflow')
+        workflow_instance = None
+        if workflow_data:
+            # Create a new workflow
+            workflow_serializer = WorkflowSerializer(data=workflow_data)
+            if not workflow_serializer.is_valid():
+                return build_response(0, "ValidationError", workflow_serializer.errors, status.HTTP_400_BAD_REQUEST)
+            workflow_instance = workflow_serializer.save()
+
+        if not workflow_instance:
+            return build_response(0, "Workflow data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        # Handle workflow_stage data if provided
+        workflow_stage_data_list = given_data.get('workflow_stages')
+        workflow_stage_instances = []
+        if workflow_stage_data_list and isinstance(workflow_stage_data_list, list):
+            for workflow_stage_data in workflow_stage_data_list:
+                # Override the workflow ID in each stage with the newly created workflow's ID
+                workflow_stage_data['workflow'] = workflow_instance.pk
+                workflow_stage_serializer = WorkflowStageSerializer(data=workflow_stage_data)
+                if not workflow_stage_serializer.is_valid():
+                    return build_response(0, "ValidationError", workflow_stage_serializer.errors, status.HTTP_400_BAD_REQUEST)
+                workflow_stage_instance = workflow_stage_serializer.save()
+                workflow_stage_instances.append(workflow_stage_instance)
+
+        # Prepare response data
+        workflow_data_response = WorkflowSerializer(workflow_instance).data
+        workflow_stage_data_response = WorkflowStageSerializer(workflow_stage_instances, many=True).data
+
+        return build_response(1, "Record created successfully", {
+            'workflow': workflow_data_response,
+            'workflow_stages': workflow_stage_data_response
+        }, status.HTTP_201_CREATED)
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+        given_data = request.data
+        errors = {}
+
+        # Update the Workflow Data
+        workflow_data = given_data.get('workflow')
+        if workflow_data:
+            workflow_instance = Workflow.objects.get(pk=pk)
+            workflow_serializer = WorkflowSerializer(workflow_instance, data=workflow_data, partial=True)
+            if not workflow_serializer.is_valid():
+                errors["workflow"] = workflow_serializer.errors
+            else:
+                workflow_serializer.save()
+
+        # Handle Workflow Stages
+        workflow_stage_data_list = given_data.get('workflow_stages')
+        existing_stage_ids = set()
+
+        if workflow_stage_data_list and isinstance(workflow_stage_data_list, list):
+            for workflow_stage_data in workflow_stage_data_list:
+                stage_id = workflow_stage_data.get('stage_id')
+                if stage_id:
+                    # Update existing stage by ID
+                    try:
+                        stage_instance = WorkflowStage.objects.get(pk=stage_id, workflow_id=pk)
+                        workflow_stage_serializer = WorkflowStageSerializer(stage_instance, data=workflow_stage_data, partial=True)
+                        existing_stage_ids.add(stage_id)
+                    except WorkflowStage.DoesNotExist:
+                        return build_response(0, f"WorkflowStage with ID {stage_id} does not exist for this workflow.", [], status.HTTP_400_BAD_REQUEST)
+                else:
+                    # Try to find a matching stage by stage_name and stage_order
+                    try:
+                        stage_instance = WorkflowStage.objects.get(stage_name=workflow_stage_data['stage_name'], stage_order=workflow_stage_data['stage_order'], workflow_id=pk)
+                        workflow_stage_serializer = WorkflowStageSerializer(stage_instance, data=workflow_stage_data, partial=True)
+                        existing_stage_ids.add(stage_instance.stage_id)
+                    except WorkflowStage.DoesNotExist:
+                        # Create a new WorkflowStage if no match is found
+                        workflow_stage_data['workflow'] = pk
+                        workflow_stage_serializer = WorkflowStageSerializer(data=workflow_stage_data)
+                        if workflow_stage_serializer.is_valid():
+                            workflow_stage_instance = workflow_stage_serializer.save()
+                            existing_stage_ids.add(workflow_stage_instance.stage_id)
+                        else:
+                            errors["workflow_stage"] = workflow_stage_serializer.errors
+
+        # Optionally, remove any stages that were not in the update request
+        WorkflowStage.objects.filter(workflow_id=pk).exclude(stage_id__in=existing_stage_ids).delete()
+
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Prepare the response data
+        workflow_data_response = WorkflowSerializer(Workflow.objects.get(pk=pk)).data
+        workflow_stage_data_response = WorkflowStageSerializer(WorkflowStage.objects.filter(workflow_id=pk), many=True).data
+
+        return build_response(1, "Records updated successfully", {
+            'workflow': workflow_data_response,
+            'workflow_stages': workflow_stage_data_response
+        }, status.HTTP_200_OK)
+
+
 class WorkflowViewSet(viewsets.ModelViewSet):
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
