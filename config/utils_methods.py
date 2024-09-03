@@ -604,6 +604,8 @@ def extract_product_data(data):
         product_data.append([
             str(index), product_name, quantity, unit_name, rate, amount, discount, tax])
 
+        # Add an empty line (empty list or list with empty strings)
+        product_data.append([''] * 8)
     return product_data
 
 

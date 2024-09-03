@@ -1,17 +1,16 @@
-from docx import Document
-from docx.shared import Inches, Pt
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
-from docx.oxml import OxmlElement
-from docx.oxml.ns import qn
-from docx.shared import RGBColor
+import os
 import random
 import string
-import os
-import win32com.client as win32
-import pythoncom  # Import this to manage COM initialization
-import os
-import win32com.client as win32
+import platform
+import subprocess
+from docx import Document
+from docx.oxml.ns import qn
+from docx.shared import RGBColor
+from docx.oxml import OxmlElement
+from docx.shared import Inches, Pt
 from config.settings import MEDIA_ROOT
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+
 
 def set_row_height(row, height_in_inches):
     """Set the height of a row."""
@@ -22,8 +21,11 @@ def set_row_height(row, height_in_inches):
     trPr.append(trHeight)
 
 def set_cell_width(cell, width_in_inches):
-    """Set the width of a cell."""
+    """Set the width of a cell using standard python-docx features."""
+    # Set the width of the cell
     cell.width = Inches(width_in_inches)
+    
+    # Apply width to cell using the table cell properties (tcPr) for better compatibility
     tc = cell._element
     tcPr = tc.get_or_add_tcPr()
     tcW = OxmlElement('w:tcW')
@@ -32,17 +34,16 @@ def set_cell_width(cell, width_in_inches):
     tcPr.append(tcW)
 
 def adjust_specific_cell_width(table, cell_name, new_width_in_inches):
-    """Adjust the width of a specific cell in the table."""
+    """Adjust the width of a specific cell in the table by searching for the cell's text."""
     cell_found = False
-    for i, cell in enumerate(table.rows[0].cells):
-        if cell.text == cell_name:
+    for cell in table.rows[0].cells:
+        if cell.text.strip() == cell_name:
             set_cell_width(cell, new_width_in_inches)
             cell_found = True
             break
 
     if not cell_found:
         print(f"Cell '{cell_name}' not found in the table.")
-        return
 
 def make_cell_bold(cell):
     """Make the content of a cell bold."""
@@ -89,8 +90,8 @@ def create_sales_order_doc(product_data, Cust_data):
     section = doc.sections[0]
     section.orientation = WD_PARAGRAPH_ALIGNMENT.CENTER
     new_width, new_height = section.page_height, section.page_width
-    section.page_width = new_width
-    section.page_height = new_height
+    section.page_width = Inches(14.54)
+    section.page_height = Inches(11.69)
 
     header_text = Cust_data.get('{{Doc Header}}')
     heading = doc.add_heading(header_text, level=1)
@@ -166,8 +167,7 @@ def create_sales_order_doc(product_data, Cust_data):
                         if key in paragraph.text:
                             paragraph.text = paragraph.text.replace(key, value)
 
-    print()
-    # Make content in t1, t3, and t5 bold
+     # Make content in t1, t3, and t5 bold
     for table in [t1, t3, t5, t6]:
         for row in table.rows:
             for cell in row.cells:
@@ -190,34 +190,73 @@ def create_sales_order_doc(product_data, Cust_data):
     os.remove(final_file_path)
     return pdf_file_path
 
-# Method to convert DOCX Into PDF
-def convert_docx_to_pdf(docx_file_path):
-    """Convert a Word document to PDF using win32com.client."""
-    # Initialize the COM library
-    pythoncom.CoInitialize()
+
+    # """Convert a Word document to PDF using win32com.client."""
+    # # Initialize the COM library
+    # pythoncom.CoInitialize()
     
-    try:
-        word = win32.Dispatch('Word.Application')
+    # try:
+    #     word = win32.Dispatch('Word.Application')
 
-        # Use absolute path to ensure Word can find the file
-        docx_full_path = os.path.abspath(docx_file_path)
+    #     # Use absolute path to ensure Word can find the file
+    #     docx_full_path = os.path.abspath(docx_file_path)
 
-        doc = word.Documents.Open(docx_full_path)
+    #     doc = word.Documents.Open(docx_full_path)
 
-        # Generate unique PDF file path to avoid overwriting
-        pdf_file_path = os.path.splitext(docx_full_path)[0] + ".pdf"
-        pdf_counter = 1
-        while os.path.exists(pdf_file_path):
-            pdf_file_path = os.path.splitext(docx_full_path)[0] + f"_{pdf_counter}.pdf"
-            pdf_counter += 1
+    #     # Generate unique PDF file path to avoid overwriting
+    #     pdf_file_path = os.path.splitext(docx_full_path)[0] + ".pdf"
+    #     pdf_counter = 1
+    #     while os.path.exists(pdf_file_path):
+    #         pdf_file_path = os.path.splitext(docx_full_path)[0] + f"_{pdf_counter}.pdf"
+    #         pdf_counter += 1
 
-        # Save the document as a PDF
-        doc.SaveAs(os.path.abspath(pdf_file_path), FileFormat=17)
-        doc.Close()
-        word.Quit()
+    #     # Save the document as a PDF
+    #     doc.SaveAs(os.path.abspath(pdf_file_path), FileFormat=17)
+    #     doc.Close()
+    #     word.Quit()
 
-    finally:
-        # Uninitialize the COM library
-        pythoncom.CoUninitialize()
+    # finally:
+    #     # Uninitialize the COM library
+    #     pythoncom.CoUninitialize()
+
+
+
+def convert_docx_to_pdf(docx_file_path):
+    """Convert a Word document to PDF using platform-specific methods."""
+    
+    # Ensure the DOCX file exists
+    if not os.path.exists(docx_file_path):
+        raise FileNotFoundError(f"The file {docx_file_path} does not exist.")
+    
+    # Define the output directory where the PDF should be saved
+    output_dir = os.path.join(MEDIA_ROOT, 'sales order receipt')
+
+    # Ensure the output directory exists; if not, create it
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Generate the PDF file path in the output directory
+    pdf_file_name = os.path.splitext(os.path.basename(docx_file_path))[0] + ".pdf"
+    pdf_file_path = os.path.join(output_dir, pdf_file_name)
+    
+    # Detect the operating system
+    current_os = platform.system()
+    
+    if current_os == 'Windows':
+        # On Windows, use LibreOffice (ensure path is correct)
+        libreoffice_path = r"C:\Program Files\LibreOffice\program\soffice.exe"  # Update if necessary
+        
+        # Run LibreOffice in headless mode to convert DOCX to PDF
+        subprocess.run([libreoffice_path, '--headless', '--convert-to', 'pdf', docx_file_path, '--outdir', output_dir], check=True)
+    
+    elif current_os == 'Linux':
+        # On Linux/Ubuntu, use LibreOffice (assumes it's in the PATH)
+        subprocess.run(['libreoffice', '--headless', '--convert-to', 'pdf', docx_file_path, '--outdir', output_dir], check=True)
+    
+    else:
+        raise RuntimeError(f"Unsupported operating system: {current_os}")
+    
+    # Check if the PDF was created
+    if not os.path.exists(pdf_file_path):
+        raise RuntimeError(f"Failed to convert {docx_file_path} to PDF.")
     
     return pdf_file_path
