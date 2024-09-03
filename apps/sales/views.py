@@ -1,4 +1,5 @@
 import logging
+import os
 from django.db import transaction
 from django.forms import ValidationError
 from django.http import Http404
@@ -14,6 +15,7 @@ from .filters import *
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
 from .serializers import *
+from config.settings import MEDIA_ROOT,MEDIA_URL
 from apps.masters.models import OrderTypes
 from .utils.docs_variables import doc_data
 from rest_framework import viewsets, status
