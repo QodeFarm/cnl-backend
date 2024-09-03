@@ -4,7 +4,7 @@ from django.db import transaction
 from django.forms import ValidationError
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
-from django_filters.rest_framework import DjangoFilterBackend
+from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 from rest_framework import viewsets, status
