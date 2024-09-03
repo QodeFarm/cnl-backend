@@ -1457,6 +1457,245 @@ class QuickPackCreateViewSet(APIView):
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
+class SaleReceiptCreateViewSet(APIView):
+    """
+    API ViewSet for handling Lead creation and related data.
+    """
+
+    def get_object(self, pk):
+        try:
+            return SaleReceipt.objects.get(pk=pk)
+        except SaleReceipt.DoesNotExist:
+            logger.warning(f"SaleReceipt with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
+        try:
+            logger.info("Retrieving all sale_receipt")
+            queryset = SaleReceipt.objects.all()
+            serializer = SaleReceiptSerializer(queryset, many=True)
+            logger.info("sale_receipt data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a sale_receipt and its related data (assignment_history, and Interaction).
+        """
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the SaleReceipt instance
+            sale_receipt = get_object_or_404(SaleReceipt, pk=pk)
+            sale_receipt_serializer = SaleReceiptSerializer(sale_receipt)
+
+            # # Retrieve assignment_history_data
+            # assignment_history_data = self.get_related_data(LeadAssignmentHistory, LeadAssignmentHistorySerializer, 'sale_receipt_id', pk)
+            # assignment_history_data = assignment_history_data if assignment_history_data else []
+
+            # # Retrieve interaction_data
+            # interaction_data = self.get_related_data(LeadInteractions, LeadInteractionsSerializer, 'sale_receipt_id', pk)
+            # interaction_data = interaction_data if interaction_data else []
+
+            # Customizing the response data
+            custom_data = {
+                "sale_receipt": sale_receipt_serializer.data
+                }
+            logger.info("sale_receipt and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+        except Http404:
+            logger.error("Lead record with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(
+                "An error occurred while retrieving sale_receipt with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.",
+                         model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
+                             model.__name__, filter_field, filter_value, str(e))
+            return []
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a sale_receipt and its related assignments and interactions.
+        """
+        try:
+            # Get the SaleReceipt instance
+            instance = SaleReceipt.objects.get(pk=pk)
+
+            # Delete the main SaleReceipt instance
+            '''
+            All related instances will be deleted when parent record is deleted. all child models have foreignkey relation with parent table
+            '''
+            instance.delete()
+
+            logger.info(f"SaleReceipt with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except SaleReceipt.DoesNotExist:
+            logger.warning(f"SaleReceipt with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting SaleReceipt with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        # Extracting data from the request
+        given_data = request.data
+
+        # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        errors = {}        
+
+        # Validate SaleReceipt Data
+        sale_receipt_data = given_data.pop('sale_receipt', None)  # parent_data
+        if sale_receipt_data:
+            sale_receipt_error = validate_payload_data(self, sale_receipt_data, SaleReceiptSerializer)
+
+            if sale_receipt_error:
+                errors["sale_receipt"] = sale_receipt_error
+
+        # Ensure mandatory data is present
+        if not sale_receipt_data:
+            logger.error("Lead data is mandatory but not provided.")
+            return build_response(0, "Lead data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data is created as new instances.
+        """
+
+        # Hence the data is validated , further it can be created.
+        custom_data = {
+            'sale_receipt':{}
+            }
+
+        # Create SaleReceipt Data
+        new_sale_receipt_data = generic_data_creation(self, [sale_receipt_data], SaleReceiptSerializer)
+        new_sale_receipt_data = new_sale_receipt_data[0]
+        custom_data["sale_receipt"] = new_sale_receipt_data
+        sale_receipt_id = new_sale_receipt_data.get("sale_receipt_id", None)  # Fetch sale_receipt_id from mew instance
+        logger.info('SaleReceipt - created*')
+
+        #create History for Lead with assignemnt date as current and leave the end date as null.
+        update_fields = {'sale_receipt_id':sale_receipt_id}
+
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+    
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+
+        # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+        errors = {}
+
+        # Validate SaleReceipt Data
+        sale_receipt_data = given_data.pop('sale_receipt', None)  # parent_data
+        if sale_receipt_data:
+            sale_receipt_data['sale_receipt_id'] = pk
+            sale_receipt_error = validate_multiple_data(self, [sale_receipt_data], SaleReceiptSerializer, [])
+            if sale_receipt_error:
+                errors["sale_receipt"] = sale_receipt_error
+
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        custom_data = {
+            'sale_receipt':{}
+            }
+        
+        '''
+        This "save_assignments_history_with_end_date" function saves the instance in 'LeadAssignmentHistory' model
+        by updating the end date.
+
+        def save_assignments_history_with_end_date(self):
+            now = datetime.now()
+            end_date = now.strftime('%Y-%m-%d %H:%M:%S')
+            history_data_set = LeadAssignmentHistory.objects.filter(sale_receipt_id=pk).order_by('created_at').last()
+            history_data_set.end_date = end_date # update with end date
+            history_data_set.save() # save the record
+            logger.info(f'last history_id : {history_data_set}')
+
+
+        This "create_new_history" function creates the new instance in 'LeadAssignmentHistory' model
+        with required fields to be updated.
+
+        def create_new_history(self,update_fields):
+            assignment_history = {}
+            assignments_history = generic_data_creation(self, [assignment_history], LeadAssignmentHistorySerializer, update_fields)
+            assignments_history = assignments_history if assignments_history else []
+            logger.info('LeadAssignmentHistory - created*') '''
+
+        if sale_receipt_data:
+            '''
+            This block performs updation of end date in case of 'assignee_id' and 'sale_receipt_id' is changed.
+            (detects changes in 'SaleReceipt' payload)
+            Adds new record in 'LeadAssignmentHistory' if 'assignee_id' in 'SaleReceipt' is changed
+            by leaving end date as null.
+            Updates old record in 'LeadAssignmentHistory' if 'sale_receipt_id' in 'SaleReceipt' is changed
+            by adding end date
+            '''
+            # Fetch last record in 'SaleReceipt' | generally one recrd exists with one 'sale_receipt_id' (current Lead pk)
+            sale_data_set = SaleReceipt.objects.filter(pk=pk).last()  # take the last instance in Lead data
+            if sale_data_set is not None:
+                previous_sale_receipt_id = str(sale_data_set.sale_receipt_id)
+                current_sale_receipt_id = sale_receipt_data.get('sale_receipt_id')
+
+        # update 'SaleReceipt'
+        if sale_receipt_data:
+            salereceiptdata = update_multi_instances(self, pk, sale_receipt_data, SaleReceipt, SaleReceiptSerializer,[], main_model_related_field='sale_receipt_id', current_model_pk_field='sale_receipt_id')
+            custom_data["sale_receipt"] = salereceiptdata[0]
+
+        # Update the 'LeadInteractions'
+        update_fields = {'sale_receipt_id': pk}
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
 class WorkflowViewSet(viewsets.ModelViewSet):
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer

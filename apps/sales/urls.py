@@ -32,6 +32,8 @@ urlpatterns = [
     path('sale_return_order/<str:pk>/', SaleReturnOrdersViewSet.as_view(), name='sales-return-orders-detail-update-delete'),
     path('quick_pack/', QuickPackCreateViewSet.as_view(), name='quickpack-list-create'),
     path('quick_pack/<str:pk>/', QuickPackCreateViewSet.as_view(), name='quickpack-detail-update-delete'),
+    path('sale_reciept/', SaleReceiptCreateViewSet.as_view(), name='salereciept-list-create'),
+    path('sale_reciept/<str:pk>/', SaleReceiptCreateViewSet.as_view(), name='salereciept-detail-update-delete'),
     path('sale_order/<uuid:pk>/workflow_pipeline/', ProgressWorkflowView.as_view(), name='workflow-pipeline'),
 
 ]
