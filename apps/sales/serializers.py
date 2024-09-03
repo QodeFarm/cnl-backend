@@ -18,14 +18,20 @@ class ModSaleReturnOrdersSerializer(serializers.ModelSerializer):
         fields = ['sale_return_id','return_date','return_no']
 
 class ModSaleInvoiceOrdersSerializer(serializers.ModelSerializer):
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
     class Meta:
         model = SaleInvoiceOrders
-        fields = ['sale_invoice_id','invoice_date','invoice_no',]
+        fields = ['sale_invoice_id','invoice_date','invoice_no','customer']
 
 class ModSaleOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleOrderItems
         fields = ['sale_order_item_id','amount']
+
+class ModWorkflowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Workflow
+        fields = ['workflow_id','name']
 # -------------------------------------------------------
 
 class SaleOrderSerializer(serializers.ModelSerializer):
@@ -218,13 +224,14 @@ class WorkflowSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class WorkflowStageSerializer(serializers.ModelSerializer):
+    workflow = ModWorkflowSerializer(source='workflow_id', read_only=True)
     class Meta:
         model = WorkflowStage
         fields = '__all__'
 
 class SaleReceiptSerializer(serializers.ModelSerializer):
-    invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
-    
+    sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+
     class Meta:
         model = SaleReceipt
         fields = '__all__'
