@@ -1498,13 +1498,6 @@ class SaleReceiptCreateViewSet(APIView):
             sale_receipt = get_object_or_404(SaleReceipt, pk=pk)
             sale_receipt_serializer = SaleReceiptSerializer(sale_receipt)
 
-            # # Retrieve assignment_history_data
-            # assignment_history_data = self.get_related_data(LeadAssignmentHistory, LeadAssignmentHistorySerializer, 'sale_receipt_id', pk)
-            # assignment_history_data = assignment_history_data if assignment_history_data else []
-
-            # # Retrieve interaction_data
-            # interaction_data = self.get_related_data(LeadInteractions, LeadInteractionsSerializer, 'sale_receipt_id', pk)
-            # interaction_data = interaction_data if interaction_data else []
 
             # Customizing the response data
             custom_data = {
@@ -1650,37 +1643,8 @@ class SaleReceiptCreateViewSet(APIView):
             'sale_receipt':{}
             }
         
-        '''
-        This "save_assignments_history_with_end_date" function saves the instance in 'LeadAssignmentHistory' model
-        by updating the end date.
-
-        def save_assignments_history_with_end_date(self):
-            now = datetime.now()
-            end_date = now.strftime('%Y-%m-%d %H:%M:%S')
-            history_data_set = LeadAssignmentHistory.objects.filter(sale_receipt_id=pk).order_by('created_at').last()
-            history_data_set.end_date = end_date # update with end date
-            history_data_set.save() # save the record
-            logger.info(f'last history_id : {history_data_set}')
-
-
-        This "create_new_history" function creates the new instance in 'LeadAssignmentHistory' model
-        with required fields to be updated.
-
-        def create_new_history(self,update_fields):
-            assignment_history = {}
-            assignments_history = generic_data_creation(self, [assignment_history], LeadAssignmentHistorySerializer, update_fields)
-            assignments_history = assignments_history if assignments_history else []
-            logger.info('LeadAssignmentHistory - created*') '''
 
         if sale_receipt_data:
-            '''
-            This block performs updation of end date in case of 'assignee_id' and 'sale_receipt_id' is changed.
-            (detects changes in 'SaleReceipt' payload)
-            Adds new record in 'LeadAssignmentHistory' if 'assignee_id' in 'SaleReceipt' is changed
-            by leaving end date as null.
-            Updates old record in 'LeadAssignmentHistory' if 'sale_receipt_id' in 'SaleReceipt' is changed
-            by adding end date
-            '''
             # Fetch last record in 'SaleReceipt' | generally one recrd exists with one 'sale_receipt_id' (current Lead pk)
             sale_data_set = SaleReceipt.objects.filter(pk=pk).last()  # take the last instance in Lead data
             if sale_data_set is not None:
