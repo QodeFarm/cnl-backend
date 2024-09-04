@@ -4,12 +4,15 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework import viewsets,status
+from apps.tasks.filters import TasksFilter
 from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances
 from apps.tasks.serializers import TasksSerializer,TaskCommentsSerializer,TaskAttachmentsSerializer,TaskHistorySerializer
 from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
 import logging
 from apps.masters.models import Statuses
 from apps.masters.serializers import ModStatusesSerializer
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -21,6 +24,9 @@ logger = logging.getLogger(__name__)
 class TasksViewSet(viewsets.ModelViewSet):
     queryset = Tasks.objects.all()
     serializer_class = TasksSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = TasksFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

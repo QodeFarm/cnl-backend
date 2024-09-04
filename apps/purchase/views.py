@@ -143,7 +143,7 @@ class PurchaseOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase order summary")
                 purchaseorders = PurchaseOrders.objects.all()
@@ -472,7 +472,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase Invoice orders summary")
                 purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all()
@@ -799,7 +799,7 @@ class PurchaseReturnOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase return orders summary")
                 purchasereturnorders = PurchaseReturnOrders.objects.all()
