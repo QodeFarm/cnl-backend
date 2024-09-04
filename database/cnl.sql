@@ -1918,7 +1918,7 @@ CREATE TABLE IF NOT EXISTS sale_receipts (
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id)
 );
 
-/* ======== Manufacturing/Production ======== */
+/* ======== FINANCE ======== */
 
 /* Bank Accounts Table */
 -- Stores details of bank accounts linked to the system.
