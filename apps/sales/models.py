@@ -448,7 +448,7 @@ class Workflow(models.Model):
 
 class WorkflowStage(models.Model):
     stage_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    workflow = models.ForeignKey(Workflow, on_delete=models.CASCADE, related_name='stages')
+    workflow_id = models.ForeignKey(Workflow, on_delete=models.CASCADE, db_column='workflow_id')
     stage_name = models.CharField(max_length=255)
     stage_order = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
