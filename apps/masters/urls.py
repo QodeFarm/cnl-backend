@@ -39,4 +39,6 @@ urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),
     path('generate_order_no/', generate_order_number_view, name='generate_order_no'),
+    path('invoice_doc/<int:invoice_id>/pdf/', generate_invoice_pdf, name='invoice_pdf'),
+
 ]

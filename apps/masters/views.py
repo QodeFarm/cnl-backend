@@ -525,3 +525,24 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+#========================================================================
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from weasyprint import HTML # type: ignore
+from .models import Invoice  # Adjust the import according to your app structure
+
+def generate_invoice_pdf(request, invoice_id):
+    # Retrieve the invoice data
+    invoice = Invoice.objects.get(id=invoice_id)
+    
+    # Render the HTML template with the invoice data
+    html_content = render_to_string('invoice_template.html', {'invoice': invoice})
+
+    # Convert the HTML to PDF
+    pdf_file = HTML(string=html_content).write_pdf()
+
+    # Create a response with the PDF as an attachment
+    response = HttpResponse(pdf_file, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="invoice_{invoice.id}.pdf"'
+
+    return response
