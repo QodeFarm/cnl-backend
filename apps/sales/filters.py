@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 import json
 from django.core.exceptions import ValidationError
 
+
 class SaleOrderFilter(filters.FilterSet):
     order_no = filters.CharFilter(lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)
