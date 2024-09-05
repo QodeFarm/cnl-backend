@@ -99,8 +99,6 @@ def apply_sorting(self, queryset):
 
             if field in self.filters:
                 field_name = self.filters[field].field_name
-                print("field_name11=", field_name)
-
 
                 if direction.upper() == 'DESC':
                     field_name = f'-{field_name}'
@@ -119,24 +117,9 @@ def apply_sorting(self, queryset):
             logger.error(f"Sorting error: {e}")
             raise
 
-    # else:
-    #     default_field = list(self.filters.keys())[0]
-    #     field_name = f'-{self.filters[default_field].field_name}'
-
-    # logger.debug(f"Sorting by field: {field_name}")
-    # return queryset.order_by(field_name)
-
     else:
-        print("No sort_param provided. Default sorting applied.")
-        print(f"self.filters: {self.filters}")  # To check the content of self.filters
-
-        if self.filters:
-            default_field = list(self.filters.keys())[0]
-            field_name = self.filters[default_field].field_name
-            field_name = f'-{field_name}'
-            print("Default field_name =", field_name)
-        else:
-            raise ValueError("No filters available to apply default sorting.")
+        default_field = list(self.filters.keys())[0]
+        field_name = f'-{self.filters[default_field].field_name}'
 
     logger.debug(f"Sorting by field: {field_name}")
     return queryset.order_by(field_name)
@@ -152,7 +135,6 @@ def filter_by_pagination(queryset, page, limit):
     logger.debug(f"Paginated queryset from {start} to {end}: {paginated_queryset.query}")
 
     total_count = queryset.count()
-    print("total_count =", total_count)
     logger.debug(f"Total records in the database: {total_count}")
 
     return paginated_queryset, total_count
