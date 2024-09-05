@@ -221,7 +221,7 @@ class SaleOrderViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving Sale order summary")
                 saleorders = SaleOrder.objects.all()
@@ -572,7 +572,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale invoice order summary")
                 saleinvoiceorder = SaleInvoiceOrders.objects.all()
@@ -900,7 +900,7 @@ class SaleReturnOrdersViewSet(APIView):
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale return orders summary")
                 salereturnorders = SaleReturnOrders.objects.all()

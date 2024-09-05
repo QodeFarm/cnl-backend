@@ -1,7 +1,10 @@
 from rest_framework import viewsets
+from apps.hrms.filters import EmployeesFilter
 from .models import *
 from .serializers import *
 from config.utils_methods import list_all_objects, create_instance, update_instance
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
 
 class DesignationsView(viewsets.ModelViewSet):
     queryset = Designations.objects.all()
@@ -32,6 +35,9 @@ class DepartmentsView(viewsets.ModelViewSet):
 class EmployeesView(viewsets.ModelViewSet):
     queryset = Employees.objects.all()
     serializer_class = EmployeesSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = EmployeesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
