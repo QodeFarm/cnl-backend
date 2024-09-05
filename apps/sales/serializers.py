@@ -18,14 +18,20 @@ class ModSaleReturnOrdersSerializer(serializers.ModelSerializer):
         fields = ['sale_return_id','return_date','return_no']
 
 class ModSaleInvoiceOrdersSerializer(serializers.ModelSerializer):
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
     class Meta:
         model = SaleInvoiceOrders
-        fields = ['sale_invoice_id','invoice_date','invoice_no',]
+        fields = ['sale_invoice_id','invoice_date','invoice_no','customer']
 
 class ModSaleOrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleOrderItems
         fields = ['sale_order_item_id','amount']
+
+class ModWorkflowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Workflow
+        fields = ['workflow_id','name']
 # -------------------------------------------------------
 
 class SaleOrderSerializer(serializers.ModelSerializer):
@@ -137,7 +143,7 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'flow_status', 'remarks', 'created_at', 'updated_at']
 
     def get_sale_order_details(self, obj):
         sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
@@ -210,4 +216,22 @@ class QuickPackItemSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = QuickPackItems
+        fields = '__all__'
+
+class WorkflowSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Workflow
+        fields = '__all__'
+
+class WorkflowStageSerializer(serializers.ModelSerializer):
+    workflow = ModWorkflowSerializer(source='workflow_id', read_only=True)
+    class Meta:
+        model = WorkflowStage
+        fields = '__all__'
+
+class SaleReceiptSerializer(serializers.ModelSerializer):
+    sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+
+    class Meta:
+        model = SaleReceipt
         fields = '__all__'

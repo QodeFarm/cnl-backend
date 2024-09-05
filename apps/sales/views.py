@@ -10,7 +10,7 @@ from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
-from .filters import SaleOrderFilter, SaleInvoiceOrdersFilter, SaleReturnOrdersFilter
+from .filters import *
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
 from .serializers import *
@@ -89,6 +89,8 @@ class SalesPriceListView(viewsets.ModelViewSet):
 class SaleOrderItemsView(viewsets.ModelViewSet):
     queryset = SaleOrderItems.objects.all()
     serializer_class = SaleOrderItemsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SaleOrdersItemsilter
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -219,7 +221,7 @@ class SaleOrderViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving Sale order summary")
                 saleorders = SaleOrder.objects.all()
@@ -570,7 +572,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale invoice order summary")
                 saleinvoiceorder = SaleInvoiceOrders.objects.all()
@@ -898,7 +900,7 @@ class SaleReturnOrdersViewSet(APIView):
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale return orders summary")
                 salereturnorders = SaleReturnOrders.objects.all()
@@ -1454,3 +1456,474 @@ class QuickPackCreateViewSet(APIView):
         ]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+class SaleReceiptCreateViewSet(APIView):
+    """
+    API ViewSet for handling Lead creation and related data.
+    """
+
+    def get_object(self, pk):
+        try:
+            return SaleReceipt.objects.get(pk=pk)
+        except SaleReceipt.DoesNotExist:
+            logger.warning(f"SaleReceipt with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
+        try:
+            logger.info("Retrieving all sale_receipt")
+            queryset = SaleReceipt.objects.all()
+            serializer = SaleReceiptSerializer(queryset, many=True)
+            logger.info("sale_receipt data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a sale_receipt and its related data (assignment_history, and Interaction).
+        """
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the SaleReceipt instance
+            sale_receipt = get_object_or_404(SaleReceipt, pk=pk)
+            sale_receipt_serializer = SaleReceiptSerializer(sale_receipt)
+
+
+            # Customizing the response data
+            custom_data = {
+                "sale_receipt": sale_receipt_serializer.data
+                }
+            logger.info("sale_receipt and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+        except Http404:
+            logger.error("Lead record with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(
+                "An error occurred while retrieving sale_receipt with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.",
+                         model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
+                             model.__name__, filter_field, filter_value, str(e))
+            return []
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a sale_receipt and its related assignments and interactions.
+        """
+        try:
+            # Get the SaleReceipt instance
+            instance = SaleReceipt.objects.get(pk=pk)
+
+            # Delete the main SaleReceipt instance
+            '''
+            All related instances will be deleted when parent record is deleted. all child models have foreignkey relation with parent table
+            '''
+            instance.delete()
+
+            logger.info(f"SaleReceipt with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except SaleReceipt.DoesNotExist:
+            logger.warning(f"SaleReceipt with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting SaleReceipt with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        # Extracting data from the request
+        given_data = request.data
+
+        # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        errors = {}        
+
+        # Validate SaleReceipt Data
+        sale_receipt_data = given_data.pop('sale_receipt', None)  # parent_data
+        if sale_receipt_data:
+            sale_receipt_error = validate_payload_data(self, sale_receipt_data, SaleReceiptSerializer)
+
+            if sale_receipt_error:
+                errors["sale_receipt"] = sale_receipt_error
+
+        # Ensure mandatory data is present
+        if not sale_receipt_data:
+            logger.error("Lead data is mandatory but not provided.")
+            return build_response(0, "Lead data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data is created as new instances.
+        """
+
+        # Hence the data is validated , further it can be created.
+        custom_data = {
+            'sale_receipt':{}
+            }
+
+        # Create SaleReceipt Data
+        new_sale_receipt_data = generic_data_creation(self, [sale_receipt_data], SaleReceiptSerializer)
+        new_sale_receipt_data = new_sale_receipt_data[0]
+        custom_data["sale_receipt"] = new_sale_receipt_data
+        sale_receipt_id = new_sale_receipt_data.get("sale_receipt_id", None)  # Fetch sale_receipt_id from mew instance
+        logger.info('SaleReceipt - created*')
+
+        #create History for Lead with assignemnt date as current and leave the end date as null.
+        update_fields = {'sale_receipt_id':sale_receipt_id}
+
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+    
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+
+        # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+        errors = {}
+
+        # Validate SaleReceipt Data
+        sale_receipt_data = given_data.pop('sale_receipt', None)  # parent_data
+        if sale_receipt_data:
+            sale_receipt_data['sale_receipt_id'] = pk
+            sale_receipt_error = validate_multiple_data(self, [sale_receipt_data], SaleReceiptSerializer, [])
+            if sale_receipt_error:
+                errors["sale_receipt"] = sale_receipt_error
+
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        custom_data = {
+            'sale_receipt':{}
+            }
+        
+
+        if sale_receipt_data:
+            # Fetch last record in 'SaleReceipt' | generally one recrd exists with one 'sale_receipt_id' (current Lead pk)
+            sale_data_set = SaleReceipt.objects.filter(pk=pk).last()  # take the last instance in Lead data
+            if sale_data_set is not None:
+                previous_sale_receipt_id = str(sale_data_set.sale_receipt_id)
+                current_sale_receipt_id = sale_receipt_data.get('sale_receipt_id')
+
+        # update 'SaleReceipt'
+        if sale_receipt_data:
+            salereceiptdata = update_multi_instances(self, pk, sale_receipt_data, SaleReceipt, SaleReceiptSerializer,[], main_model_related_field='sale_receipt_id', current_model_pk_field='sale_receipt_id')
+            custom_data["sale_receipt"] = salereceiptdata[0]
+
+        # Update the 'LeadInteractions'
+        update_fields = {'sale_receipt_id': pk}
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+class WorkflowCreateViewSet(APIView):
+    """
+    API ViewSet for handling workflow creation and related data.
+    """
+
+    def get_object(self, pk):
+        try:
+            return Workflow.objects.get(pk=pk)
+        except Workflow.DoesNotExist:
+            logger.warning(f"Workflow with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            return self.retrieve(request, *args, **kwargs)
+        try:
+            logger.info("Retrieving all workflows")
+            queryset = Workflow.objects.all()
+            serializer = WorkflowSerializer(queryset, many=True)
+            logger.info("Workflow data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a workflow and its related workflow_stages.
+        """
+        pk = kwargs.get('pk')
+        if not pk:
+            logger.error("Primary key not provided in request.")
+            return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # Retrieve the Workflow instance
+            workflow = get_object_or_404(Workflow, pk=pk)
+            workflow_serializer = WorkflowSerializer(workflow)
+
+            # Retrieve associated workflow_stages
+            workflow_stages = WorkflowStage.objects.filter(workflow_id=pk)
+            workflow_stages_serializer = WorkflowStageSerializer(workflow_stages, many=True)
+
+            # Customizing the response data
+            custom_data = {
+                "workflow": workflow_serializer.data,
+                "workflow_stages": workflow_stages_serializer.data,
+            }
+            logger.info("Workflow and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+        except Http404:
+            logger.error(f"Workflow with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(f"An error occurred while retrieving workflow with ID {pk}: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a workflow and its related workflow_stages.
+        """
+        try:
+            # Get the Workflow instance
+            instance = Workflow.objects.get(pk=pk)
+            instance.delete()
+
+            logger.info(f"Workflow with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except Workflow.DoesNotExist:
+            logger.warning(f"Workflow with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting Workflow with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        given_data = request.data
+
+        # Extract and validate workflow data if provided
+        workflow_data = given_data.get('workflow')
+        workflow_instance = None
+        if workflow_data:
+            # Create a new workflow
+            workflow_serializer = WorkflowSerializer(data=workflow_data)
+            if not workflow_serializer.is_valid():
+                return build_response(0, "ValidationError", workflow_serializer.errors, status.HTTP_400_BAD_REQUEST)
+            workflow_instance = workflow_serializer.save()
+
+        if not workflow_instance:
+            return build_response(0, "Workflow data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        # Handle workflow_stage data if provided
+        workflow_stage_data_list = given_data.get('workflow_stages')
+        workflow_stage_instances = []
+        if workflow_stage_data_list and isinstance(workflow_stage_data_list, list):
+            for workflow_stage_data in workflow_stage_data_list:
+                # Override the workflow ID in each stage with the newly created workflow's ID
+                workflow_stage_data['workflow'] = workflow_instance.pk
+                workflow_stage_serializer = WorkflowStageSerializer(data=workflow_stage_data)
+                if not workflow_stage_serializer.is_valid():
+                    return build_response(0, "ValidationError", workflow_stage_serializer.errors, status.HTTP_400_BAD_REQUEST)
+                workflow_stage_instance = workflow_stage_serializer.save()
+                workflow_stage_instances.append(workflow_stage_instance)
+
+        # Prepare response data
+        workflow_data_response = WorkflowSerializer(workflow_instance).data
+        workflow_stage_data_response = WorkflowStageSerializer(workflow_stage_instances, many=True).data
+
+        return build_response(1, "Record created successfully", {
+            'workflow': workflow_data_response,
+            'workflow_stages': workflow_stage_data_response
+        }, status.HTTP_201_CREATED)
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+        given_data = request.data
+        errors = {}
+
+        # Update the Workflow Data
+        workflow_data = given_data.get('workflow')
+        if workflow_data:
+            workflow_instance = Workflow.objects.get(pk=pk)
+            workflow_serializer = WorkflowSerializer(workflow_instance, data=workflow_data, partial=True)
+            if not workflow_serializer.is_valid():
+                errors["workflow"] = workflow_serializer.errors
+            else:
+                workflow_serializer.save()
+
+        # Handle Workflow Stages
+        workflow_stage_data_list = given_data.get('workflow_stages')
+        existing_stage_ids = set()
+
+        if workflow_stage_data_list and isinstance(workflow_stage_data_list, list):
+            for workflow_stage_data in workflow_stage_data_list:
+                stage_id = workflow_stage_data.get('stage_id')
+                if stage_id:
+                    # Update existing stage by ID
+                    try:
+                        stage_instance = WorkflowStage.objects.get(pk=stage_id, workflow_id=pk)
+                        workflow_stage_serializer = WorkflowStageSerializer(stage_instance, data=workflow_stage_data, partial=True)
+                        existing_stage_ids.add(stage_id)
+                    except WorkflowStage.DoesNotExist:
+                        return build_response(0, f"WorkflowStage with ID {stage_id} does not exist for this workflow.", [], status.HTTP_400_BAD_REQUEST)
+                else:
+                    # Try to find a matching stage by stage_name and stage_order
+                    try:
+                        stage_instance = WorkflowStage.objects.get(stage_name=workflow_stage_data['stage_name'], stage_order=workflow_stage_data['stage_order'], workflow_id=pk)
+                        workflow_stage_serializer = WorkflowStageSerializer(stage_instance, data=workflow_stage_data, partial=True)
+                        existing_stage_ids.add(stage_instance.stage_id)
+                    except WorkflowStage.DoesNotExist:
+                        # Create a new WorkflowStage if no match is found
+                        workflow_stage_data['workflow'] = pk
+                        workflow_stage_serializer = WorkflowStageSerializer(data=workflow_stage_data)
+                        if workflow_stage_serializer.is_valid():
+                            workflow_stage_instance = workflow_stage_serializer.save()
+                            existing_stage_ids.add(workflow_stage_instance.stage_id)
+                        else:
+                            errors["workflow_stage"] = workflow_stage_serializer.errors
+
+        # Optionally, remove any stages that were not in the update request
+        WorkflowStage.objects.filter(workflow_id=pk).exclude(stage_id__in=existing_stage_ids).delete()
+
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Prepare the response data
+        workflow_data_response = WorkflowSerializer(Workflow.objects.get(pk=pk)).data
+        workflow_stage_data_response = WorkflowStageSerializer(WorkflowStage.objects.filter(workflow_id=pk), many=True).data
+
+        return build_response(1, "Records updated successfully", {
+            'workflow': workflow_data_response,
+            'workflow_stages': workflow_stage_data_response
+        }, status.HTTP_200_OK)
+
+
+class WorkflowViewSet(viewsets.ModelViewSet):
+    queryset = Workflow.objects.all()
+    serializer_class = WorkflowSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+
+class WorkflowStageViewSet(viewsets.ModelViewSet):
+    queryset = WorkflowStage.objects.all()
+    serializer_class = WorkflowStageSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+class SaleReceiptViewSet(viewsets.ModelViewSet):
+    queryset = SaleReceipt.objects.all()
+    serializer_class = SaleReceiptSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class ProgressWorkflowView(APIView):
+    """
+    API view to progress the workflow of a specific SaleOrder to the next stage.
+    This view is used to update the flow_status of a sale order, moving it from one stage to the next within its defined workflow.
+    """
+
+    def post(self, request, pk, format=None):
+        """
+        Handle POST requests to progress the workflow of the specified SaleOrder.
+        
+        Parameters:
+        - request: The HTTP request object.
+        - pk: The primary key of the SaleOrder to be updated.
+        - format: An optional format specifier for content negotiation.
+
+        Returns:
+        - Custom JSON structure with 'count', 'message', and 'data'.
+        """
+        try:
+            # Attempt to retrieve the SaleOrder by its primary key (pk)
+            sale_order = SaleOrder.objects.get(pk=pk)
+
+            # Try to progress the workflow to the next stage
+            if sale_order.progress_workflow():
+                response_data = {
+                    "count": 1,
+                    "message": "Success",
+                    "data": {"status": "Flow status updated successfully."}
+                }
+                return Response(response_data, status=status.HTTP_200_OK)
+            else:
+                response_data = {
+                    "count": 1,
+                    "message": "Success",
+                    "data": {"status": "No further stages. Workflow is complete."}
+                }
+                return Response(response_data, status=status.HTTP_200_OK)
+        except SaleOrder.DoesNotExist:
+            response_data = {
+                "count": 0,
+                "message": "SaleOrder not found.",
+                "data": None
+            }
+            return Response(response_data, status=status.HTTP_404_NOT_FOUND)

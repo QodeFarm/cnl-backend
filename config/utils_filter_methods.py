@@ -1,3 +1,6 @@
+import logging
+from django.db.models import Q
+logger = logging.getLogger(__name__)
 from django.utils import timezone
 import datetime
 
@@ -77,3 +80,85 @@ def filter_by_period_name(self, queryset, name, value):
             queryset = queryset.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
 
         return queryset
+
+#=====================filter for page-limit-sort-search=======================================
+
+def apply_sorting(self, queryset):
+    sort_param = self.data.get('sort[0]')
+    logger.debug(f"Sorting parameter: {sort_param}")
+
+    if sort_param:
+        try:
+            sort_fields = sort_param.split(',')
+            logger.debug(f"Sort fields: {sort_fields}")
+
+            if len(sort_fields) != 2:
+                raise ValueError("Sort parameter should be in the format 'field,DIRECTION'.")
+
+            field, direction = sort_fields
+
+            if field in self.filters:
+                field_name = self.filters[field].field_name
+
+                if direction.upper() == 'DESC':
+                    field_name = f'-{field_name}'
+                elif direction.upper() == 'ASC':
+                    field_name = field_name
+                else:
+                    raise ValueError("Invalid sorting direction.")
+
+                logger.debug(f"Sorting by field: {field_name} ({direction})")
+                queryset = queryset.order_by(field_name)
+                logger.debug(f"Ordered queryset: {queryset.query}")
+            else:
+                raise ValueError(f"Field '{field}' is not a valid filter field.")
+
+        except ValueError as e:
+            logger.error(f"Sorting error: {e}")
+            raise
+
+    else:
+        default_field = list(self.filters.keys())[0]
+        field_name = f'-{self.filters[default_field].field_name}'
+
+    logger.debug(f"Sorting by field: {field_name}")
+    return queryset.order_by(field_name)
+
+def filter_by_pagination(queryset, page, limit):
+    logger.debug(f"Pagination - page: {page}, limit: {limit}")
+
+    start = (page - 1) * limit
+    end = start + limit
+
+    # Apply slicing to the QuerySet to get the paginated results
+    paginated_queryset = queryset[start:end]
+    logger.debug(f"Paginated queryset from {start} to {end}: {paginated_queryset.query}")
+
+    total_count = queryset.count()
+    logger.debug(f"Total records in the database: {total_count}")
+
+    return paginated_queryset, total_count
+
+
+def search_queryset(queryset, search_params, filter_set):
+    if search_params:
+        search_query = Q()
+        
+        # Loop through the search parameters
+        for param in search_params:
+            for key, value in param.items():
+                # Check if the key exists in the filter set
+                if key in filter_set.filters:
+                    # Get the actual field name in the model
+                    field_name = filter_set.filters[key].field_name
+                    # Build the Q object for filtering
+                    search_query |= Q(**{f"{field_name}__icontains": value})
+                else:
+                    logger.warning(f"Field {key} not in filter fields; skipping.")
+        
+        # Apply the search query to the queryset
+        queryset = queryset.filter(search_query)
+    
+    return queryset
+
+#=====================filter for page-limit-sort-search=======================================

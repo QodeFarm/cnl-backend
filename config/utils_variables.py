@@ -54,7 +54,7 @@ orderattachmentstable = 'order_attachments'
 ordershipmentstable = 'order_shipments'
 quickpackitems = 'quick_pack_items'
 quickpacks = 'quick_packs'
-
+salereceipts = 'sale_receipts'
 #inventory db_tables
 warehousestable ='warehouses'
 
@@ -142,8 +142,26 @@ productionstatuses = 'production_statuses'
 workorders = 'work_orders'
 inventory = 'inventory'
 machines = 'machines'
+<<<<<<< HEAD
 productionworkers = 'production_workers'
 rawmaterials = 'raw_materials'
 workorderstages = 'work_order_stages'
 defaultmachinery = 'default_machinery'
 workordermachines = 'work_order_machines'
+=======
+labor = 'labor'
+
+#workflow tables
+workflow = 'workflows'
+workflowstages = 'workflow_stages'
+
+#Define default work flow name
+default_workflow_name = 'sales'
+
+# Define the stages for the default workflow
+default_workflow_stages = {
+    1: 'sale_order',
+    2: 'dispatch',
+    3: 'invoice'
+}
+>>>>>>> 1dbdf72c8f0ee77b150cca5fb24aec18baac9967

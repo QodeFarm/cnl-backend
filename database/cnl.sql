@@ -1904,3 +1904,164 @@ FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
 FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 );
 
+/* Workflows Table */
+-- Stores details about different workflows used in the ERP system.
+CREATE TABLE workflows (
+    workflow_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Workflow Stages Table */
+-- Defines stages within each workflow, including the order of the stages.
+CREATE TABLE workflow_stages (
+    stage_id CHAR(36) PRIMARY KEY,    
+    workflow_id CHAR(36) NOT NULL,
+    stage_name VARCHAR(255) NOT NULL,
+    stage_order INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id)
+);
+
+/* Sale Receipts Table */
+-- Stores receipts associated with sale invoices.
+CREATE TABLE IF NOT EXISTS sale_receipts (
+    sale_receipt_id CHAR(36) PRIMARY KEY,
+    sale_invoice_id CHAR(36) NOT NULL,
+    receipt_name VARCHAR(255) NOT NULL,
+    description VARCHAR(1024),
+    receipt_path JSON DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id)
+);
+
+/* ======== FINANCE ======== */
+
+/* Bank Accounts Table */
+-- Stores details of bank accounts linked to the system.
+CREATE TABLE IF NOT EXISTS bank_accounts (
+    bank_account_id CHAR(36) PRIMARY KEY,
+    account_name VARCHAR(100) NOT NULL,
+    account_number VARCHAR(50) UNIQUE NOT NULL,
+    bank_name VARCHAR(100) NOT NULL,
+    branch_name VARCHAR(100),
+    account_type ENUM('Savings', 'Current') NOT NULL,
+    balance DECIMAL(15, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Chart of Accounts Table */
+-- Manages the financial accounts and their hierarchy.
+CREATE TABLE IF NOT EXISTS chart_of_accounts (
+    account_id CHAR(36) PRIMARY KEY,
+    account_code VARCHAR(20) UNIQUE NOT NULL,
+    account_name VARCHAR(100) NOT NULL,
+    account_type ENUM('Asset', 'Liability', 'Equity', 'Revenue', 'Expense') NOT NULL,
+    parent_account_id CHAR(36) NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    bank_account_id CHAR(36) NULL,  -- Link to bank accounts if applicable
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_account_id) REFERENCES chart_of_accounts(account_id),
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(bank_account_id) -- Optional
+);
+
+/* Journal Entries Table */
+-- Records the general journal entries for financial transactions.
+CREATE TABLE IF NOT EXISTS journal_entries (
+    journal_entry_id CHAR(36) PRIMARY KEY,
+    entry_date DATE NOT NULL,
+    reference VARCHAR(100),
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Journal Entry Lines Table */
+-- Stores individual debit and credit lines associated with journal entries.
+CREATE TABLE IF NOT EXISTS journal_entry_lines (
+    journal_entry_line_id CHAR(36) PRIMARY KEY,
+    journal_entry_id CHAR(36),
+    account_id CHAR(36),
+    debit DECIMAL(15, 2) DEFAULT 0.00,
+    credit DECIMAL(15, 2) DEFAULT 0.00,
+    description VARCHAR(1024),
+    FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(journal_entry_id),
+    FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id)
+);
+
+/* Payment Transactions Table */
+-- Manages the payments made against invoices and their details.
+CREATE TABLE IF NOT EXISTS payment_transactions (
+    payment_id CHAR(36) PRIMARY KEY,
+    invoice_id CHAR(36) NOT NULL,
+    invoice_type ENUM('Sale', 'Purchase') NOT NULL,
+    payment_date DATE NOT NULL,
+    payment_method ENUM('Cash', 'Bank Transfer', 'Credit Card', 'Cheque') NOT NULL,
+    payment_status ENUM('Pending', 'Completed', 'Failed') NOT NULL DEFAULT 'Pending',
+    amount DECIMAL(15, 2) NOT NULL,
+    reference_number VARCHAR(100),
+    notes VARCHAR(512),
+    currency VARCHAR(10),
+    transaction_type ENUM('Credit', 'Debit') NOT NULL DEFAULT 'Credit',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
+    FOREIGN KEY (invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id)
+);
+
+/* Tax Configurations Table */
+-- Stores the tax rates and types for financial transactions.
+CREATE TABLE IF NOT EXISTS tax_configurations (
+    tax_id CHAR(36) PRIMARY KEY,
+    tax_name VARCHAR(100) NOT NULL,
+    tax_rate DECIMAL(5, 2) NOT NULL,
+    tax_type ENUM('Percentage', 'Fixed') NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Budgets Table */
+-- Stores budget allocations and expenditures for accounts.
+CREATE TABLE IF NOT EXISTS budgets (
+    budget_id CHAR(36) PRIMARY KEY,
+    account_id CHAR(36),
+    fiscal_year YEAR NOT NULL,
+    allocated_amount DECIMAL(15, 2) NOT NULL,
+    spent_amount DECIMAL(15, 2) DEFAULT 0.00,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id)
+);
+
+/* Expense Claims Table */
+-- Manages the expense claims submitted by employees.
+CREATE TABLE IF NOT EXISTS expense_claims (
+    expense_claim_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36),
+    claim_date DATE NOT NULL,
+    description VARCHAR(1024),
+    total_amount DECIMAL(15, 2) NOT NULL,
+    status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+/* Financial Reports Table */
+-- Stores the generated financial reports and their details.
+CREATE TABLE IF NOT EXISTS financial_reports (
+    report_id CHAR(36) PRIMARY KEY,
+    report_name VARCHAR(100) NOT NULL,
+    report_type ENUM('Balance Sheet', 'Profit & Loss', 'Cash Flow', 'Trial Balance') NOT NULL,
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    file_path VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
