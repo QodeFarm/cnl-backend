@@ -8,10 +8,10 @@ from reportlab.platypus.flowables import Flowable
 
 
 
-def create_table_1(sno, sdate):
+def DocDetails(sno_lbl, sno, sdate_lbl, sdate):
     col_widths = [3.3*inch, 3.4*inch, 3.3*inch]
     table_data_1 = [
-        ['Customer Billing Detail', f'SO No. {sno}', f'SO Date {sdate}'],
+        ['Customer Billing Detail', f'{sno_lbl} : {sno}', f'{sdate_lbl} : {sdate}'],
     ]
     
     table = Table(table_data_1, colWidths=col_widths)
@@ -28,7 +28,7 @@ def create_table_1(sno, sdate):
     ]))
     return table
 
-def create_table_2(cust_name, city, country, phone, destination):
+def CustomerDetails(cust_name, city, country, phone, destination):
     style_normal = getSampleStyleSheet()['Normal']
     table_data_2 = [[f"{cust_name} \n{city} {country}",f"Phone: {phone} \nDestination:   {destination}"]]
     table_2_col_widths = [5*inch, 5*inch]
@@ -48,7 +48,7 @@ def create_table_2(cust_name, city, country, phone, destination):
     ]))
     return table
 
-def create_table_3(data):
+def ProductDetails(data):
     style_normal = getSampleStyleSheet()['Normal']
     tbl_3_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
     table_3_heading = [["Idx", "Product", "Qty", "Unit Name", "Rate", "Amount", "Discount", "Tax"]]
@@ -84,7 +84,7 @@ def create_table_3(data):
     ]))
     return table
 
-def create_table_4(ttl_Qty, ttl_Amount, ttl_Tax):
+def ProductTotalDetails(ttl_Qty, ttl_Amount, ttl_Tax):
     table_4_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
     table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount,' ',ttl_Tax]]
     
@@ -104,7 +104,7 @@ def create_table_4(ttl_Qty, ttl_Amount, ttl_Tax):
     ]))
     return table
 
-def create_table_5(Bill_Amount_In_Words, Tax_Amount_In_Words, Remark, Sub_Total, Discount_Amt, Round_Off, Bill_Total, Party_Old_Balance,  Net_Total):
+def ProductTotalDetailsInWords(Bill_Amount_In_Words, Tax_Amount_In_Words, Remark, Sub_Total, Discount_Amt, Round_Off, Bill_Total, Party_Old_Balance,  Net_Total):
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']
     
@@ -132,7 +132,7 @@ def create_table_5(Bill_Amount_In_Words, Tax_Amount_In_Words, Remark, Sub_Total,
     ]))
     return table
 
-def create_table_6():
+def Declaration():
     table_data_6 = [['Declaration:' '\n' 'We declare that this invoice shows the actual price of the goods/services' '\n' 'described and that all particulars are true and correct.' '\n' 'Original For Recipient', 'Authorised Signatory']]
     table_6_col_widths = [5*inch, 5*inch]
     

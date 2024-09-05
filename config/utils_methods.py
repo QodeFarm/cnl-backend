@@ -15,6 +15,11 @@ import json
 from django.utils import timezone
 from django.db import models
 from django.core.cache import cache
+from django.core.mail import EmailMessage
+from config.settings import MEDIA_ROOT, MEDIA_URL
+import requests
+import os
+import inflect
 
 
 # Set up basic configuration for logging
@@ -431,8 +436,7 @@ def validate_uuid(uuid_to_test, version=4):
         raise ValidationError("Invalid UUID")
     return uuid_obj
 
-
-        
+       
 
 def get_related_data(model, serializer_class, filter_field, filter_value):
         """
@@ -461,7 +465,7 @@ def format_phone_number(phone_number):
     else:
         return "Mobile number has incorrect length"  
 
-from django.core.mail import EmailMessage
+
 def send_pdf_via_email(to_email, pdf_relative_path):
     """Send the generated PDF as an email attachment."""
     
@@ -485,9 +489,6 @@ def send_pdf_via_email(to_email, pdf_relative_path):
 
     return "PDF sent via Email successfully."
 
-
-from config.settings import MEDIA_ROOT, MEDIA_URL
-import requests
 
 def send_whatsapp_message_via_wati(to_number, file_url):
     """ Send the PDF file as a WhatsApp message using WATI API. """
@@ -521,13 +522,6 @@ def send_whatsapp_message_via_wati(to_number, file_url):
     else:
         result = response_data.get('info')
         return result
-
-import os
-import shutil
-import inflect
-from config.settings import MEDIA_ROOT
-# from apps.sales.utils import sales_order_rcpt_word_docx as wd
-
 
 def convert_amount_to_words(amount):
     '''
@@ -608,25 +602,3 @@ def extract_product_data(data):
             str(index), product_name, quantity, unit_name, rate, amount, discount, tax])
 
     return product_data
-
-
-# def save_sales_order_pdf_to_media(product_data, cust_data):
-#     # Generate the PDF file
-#     pdf_file_path = wd.create_sales_order_doc(product_data, cust_data)
-    
-#     # Define the directory where the file will be saved
-#     sales_order_dir = os.path.join(MEDIA_ROOT, 'sales order receipt')
-
-#     # Create the directory if it doesn't exist
-#     if not os.path.exists(sales_order_dir):
-#         os.makedirs(sales_order_dir)
-
-#     # Define the new file path in the media directory
-#     new_file_path = os.path.join(sales_order_dir, os.path.basename(pdf_file_path))
-    
-#     # Move the PDF file to the new directory
-#     shutil.move(pdf_file_path, new_file_path)
-
-#     # Return the relative path to the file (relative to MEDIA_ROOT)
-#     relative_file_path = os.path.join('sales order receipt', os.path.basename(pdf_file_path))
-#     return relative_file_path
