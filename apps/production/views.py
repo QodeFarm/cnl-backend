@@ -254,7 +254,7 @@ class WorkOrderAPIView(APIView):
         # Validated WorkOrder Data
         work_order_data = given_data.pop('work_order', None) # parent_data
         if work_order_data:
-            work_order_error = validate_payload_data(self, work_order_data , WorkOrderSerializer)
+            work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer, ['status_id'])
 
         # Validated BillOfMaterial Data
         bom_data = given_data.pop('bom', None)
@@ -310,17 +310,22 @@ class WorkOrderAPIView(APIView):
 
         # Hence the data is validated , further it can be created.
 
+        # get default status_id
+        try:
+            status_name = ProductionStatus.objects.get(status_name='work in progress')
+            status_id = status_name.status_id
+        except ProductionStatus.DoesNotExist:
+            return build_response(0, "No matching status found.", status.HTTP_400_BAD_REQUEST)
+
         # Create WorkOrder Data
-        order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer)
+        update_fields = {'status_id': status_id}
+        order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, update_fields)
         new_work_order_data = order_data[0]
         work_order_id = new_work_order_data.get("work_order_id",None) #Fetch work_order_id from mew instance
         logger.info('WorkOrder - created*')
-
-        # Get 'product_id' from WorkOrder
-        product_id = work_order_data.get('product_id',None)
-
+ 
         # Create BillOfMaterials Data
-        update_fields = {'order_id': work_order_id, 'product_id':product_id}
+        update_fields = {'order_id': work_order_id}
         bom_data = generic_data_creation(self, bom_data, BillOfMaterialsSerializer, update_fields)
         logger.info('BillOfMaterials - created*')
 
@@ -421,7 +426,7 @@ class WorkOrderAPIView(APIView):
         product_id = work_order_data.get('product_id',None)            
 
         # Update the 'BillOfMaterials'
-        update_fields = {'product_id':product_id, 'order_id':pk}
+        update_fields = {'order_id':pk}
         bom_data = update_multi_instances(self, pk, bom_data, BillOfMaterials, BillOfMaterialsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='bom_id')
 
         # Update the 'WorkOrderMachineSerializer'

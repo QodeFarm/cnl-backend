@@ -1836,15 +1836,14 @@ CREATE TABLE IF NOT EXISTS work_order_stages (
 -- Stores the list of materials and components required to produce each product.
 CREATE TABLE bill_of_materials (
   bom_id CHAR(36) PRIMARY KEY,
-  product_id char(36),
-  raw_material_id char(36),
-  quantity_required decimal(10,2),
-  order_id char(36),
+  product_id CHAR(36),
+  component_name VARCHAR(100),
+  quantity_required DECIMAL(10,2),
+  order_id CHAR(36),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (bom_id),
-  FOREIGN KEY (product_id) REFERENCES products (product_id),
-  FOREIGN KEY (raw_material_id) REFERENCES raw_materials (raw_material_id));
+  FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
 
 /* Production Statuses Table */
 -- Stores possible statuses for production processes.

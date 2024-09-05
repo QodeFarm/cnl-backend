@@ -23,7 +23,7 @@ class RawMaterial(models.Model):
 class BillOfMaterials(models.Model): # verified
     bom_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product_id = models.ForeignKey(Products, on_delete=models.SET_NULL, null=True, db_column='product_id')
-    raw_material_id = models.ForeignKey(RawMaterial, on_delete=models.SET_NULL, null=True, db_column='raw_material_id')
+    component_name = models.CharField(max_length=100, null=True, default=None)
     quantity_required = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
     order_id = models.CharField(max_length=36, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
