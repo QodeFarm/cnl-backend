@@ -32,6 +32,20 @@ def doc_heading(file_path, doc_header):
 
     # Add a spacer
     elements.append(Spacer(1, 12))
+    
+    sub_header = 'BILL OF SUPPLY'
+    if doc_header == "SALES QUOTATION":
+         # Modify the heading style to be bold
+        sub_style_heading = ParagraphStyle(
+        name='Heading1',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
+        fontSize=10,                # You can adjust the font size if needed
+        alignment=1,                # Center align the text (0=left, 1=center, 2=right)
+        )
+    
+        # Add a bold heading
+        elements.append(Paragraph(sub_header, sub_style_heading))
 
     return elements, doc
 

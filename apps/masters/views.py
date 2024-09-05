@@ -607,34 +607,6 @@ class DocumentGeneratorView(APIView):
             
             elements, doc = doc_heading(file_path, doc_header)
             
-            # elements = []
-
-            # # Custom page size (11 inches wide, 10.5 inches high)
-            # page_width = 11 * inch
-            # page_height = 10.5 * inch
-
-            # # Create the PDF document
-            # doc = SimpleDocTemplate(file_path, pagesize=(page_width, page_height))
-            
-            # # Get the default styles
-            # styles = getSampleStyleSheet()
-            
-            # # Modify the heading style to be bold
-            # style_heading = ParagraphStyle(
-            #     name='Heading1',
-            #     parent=styles['Heading1'],
-            #     fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
-            #     fontSize=16,                # You can adjust the font size if needed
-            #     spaceAfter=12,              # Adjust space after heading if needed
-            #     alignment=1,                # Center align the text (0=left, 1=center, 2=right)
-            # )
-           
-            # # Add a bold heading
-            # elements.append(Paragraph(doc_header, style_heading))
-
-            # # Add a spacer
-            # elements.append(Spacer(1, 12))
-            
             elements.append(doc_details(number_lbl , customer_data_for_cust_data[number_value], date_lbl, customer_data_for_cust_data[date_value]))
             
             elements.append(customer_details(customer_data_for_cust_data['customer']['name'], city, country, phone, dest))
