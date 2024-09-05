@@ -1,5 +1,5 @@
 from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,send_pdf_via_email, get_related_data, list_all_objects, create_instance, update_instance, build_response
-from apps.masters.utils.table_defination import DocDetails, CustomerDetails, ProductDetails, ProductTotalDetails, ProductTotalDetailsInWords,Declaration
+from apps.masters.utils.table_defination import doc_heading, doc_details, declaration, customer_details, product_details, product_total_details, product_total_details_inwords
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
@@ -595,27 +595,6 @@ class DocumentGeneratorView(APIView):
 
             product_data = extract_product_data(items_data)
 
-            cust_data = {
-                "{{number_value}}": customer_data_for_cust_data[number_value],
-                "{{date_value}}": customer_data_for_cust_data[date_value],
-                "{{cust_name}}": customer_data_for_cust_data['customer']['name'],
-                "{{phone}}": phone,
-                "{{dest}}": dest,
-                "{{qty_ttl}}":  (total_qty),
-                "{{amt_ttl}}":  (total_amt),
-                "{{txbl_ttl}}": (total_txbl_amt),
-                "{{discount}}": (total_disc_amt),
-                "{{Rnd_off}}": "0.0",
-                "{{Net_lbl}}": (net_lbl),
-                "{{Net_Ttl}}": (net_value),
-                "{{Party_Old_B}}": "0.0",
-                "{{Bill_amt_wd}}": bill_amount_in_words,
-                "{{Tax_amt_wd}}": bill_amount_in_words,
-                "{{address}}": (city),
-                "{{country}}": (country),
-                "{{doc header}}": doc_header
-            }
-
             # Generate a random filename
             unique_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '.pdf'
             doc_name = doc_header + '_' + unique_code
@@ -625,45 +604,48 @@ class DocumentGeneratorView(APIView):
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
   #=======================================ReportLab Code Started============================          
-            elements = []
-
-            # Custom page size (11 inches wide, 10.5 inches high)
-            page_width = 11 * inch
-            page_height = 10.5 * inch
-
-            # Create the PDF document
-            doc = SimpleDocTemplate(file_path, pagesize=(page_width, page_height))
             
-            # Get the default styles
-            styles = getSampleStyleSheet()
+            elements, doc = doc_heading(file_path, doc_header)
             
-            # Modify the heading style to be bold
-            style_heading = ParagraphStyle(
-                name='Heading1',
-                parent=styles['Heading1'],
-                fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
-                fontSize=16,                # You can adjust the font size if needed
-                spaceAfter=12,              # Adjust space after heading if needed
-                alignment=1,                # Center align the text (0=left, 1=center, 2=right)
-            )
+            # elements = []
+
+            # # Custom page size (11 inches wide, 10.5 inches high)
+            # page_width = 11 * inch
+            # page_height = 10.5 * inch
+
+            # # Create the PDF document
+            # doc = SimpleDocTemplate(file_path, pagesize=(page_width, page_height))
+            
+            # # Get the default styles
+            # styles = getSampleStyleSheet()
+            
+            # # Modify the heading style to be bold
+            # style_heading = ParagraphStyle(
+            #     name='Heading1',
+            #     parent=styles['Heading1'],
+            #     fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
+            #     fontSize=16,                # You can adjust the font size if needed
+            #     spaceAfter=12,              # Adjust space after heading if needed
+            #     alignment=1,                # Center align the text (0=left, 1=center, 2=right)
+            # )
            
-            # Add a bold heading
-            elements.append(Paragraph(doc_header, style_heading))
+            # # Add a bold heading
+            # elements.append(Paragraph(doc_header, style_heading))
 
-            # Add a spacer
-            elements.append(Spacer(1, 12))
+            # # Add a spacer
+            # elements.append(Spacer(1, 12))
             
-            elements.append(DocDetails(number_lbl , customer_data_for_cust_data[number_value], date_lbl, customer_data_for_cust_data[date_value]))
+            elements.append(doc_details(number_lbl , customer_data_for_cust_data[number_value], date_lbl, customer_data_for_cust_data[date_value]))
             
-            elements.append(CustomerDetails(customer_data_for_cust_data['customer']['name'], city, country, phone, dest))
+            elements.append(customer_details(customer_data_for_cust_data['customer']['name'], city, country, phone, dest))
 
-            elements.append(ProductDetails(product_data))
+            elements.append(product_details(product_data))
 
-            elements.append(ProductTotalDetails(total_qty, total_amt, total_txbl_amt))
+            elements.append(product_total_details(total_qty, total_amt, total_txbl_amt))
 
-            elements.append(ProductTotalDetailsInWords(bill_amount_in_words, bill_amount_in_words, customer_data_for_cust_data[number_value], total_qty, total_disc_amt, round_0ff, total_txbl_amt, party_old_balance, net_value))
+            elements.append(product_total_details_inwords(bill_amount_in_words, bill_amount_in_words, customer_data_for_cust_data[number_value], total_qty, total_disc_amt, round_0ff, total_txbl_amt, party_old_balance, net_lbl,net_value))
 
-            elements.append(Declaration())
+            elements.append(declaration())
 
             # Build the PDF
             doc.build(elements)
@@ -671,7 +653,8 @@ class DocumentGeneratorView(APIView):
  
             # Return the relative path to the file (relative to MEDIA_ROOT)
             relative_file_path = os.path.join('doc_generater', os.path.basename(doc_name))
-
+            # cdn_path = os.path.join(MEDIA_URL, relative_file_path)
+            # print(cdn_path)
             
             if flag == 'email':
                 pdf_send_response = send_pdf_via_email(email, relative_file_path)

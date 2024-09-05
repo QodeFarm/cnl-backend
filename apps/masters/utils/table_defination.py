@@ -1,14 +1,42 @@
 from reportlab.lib.pagesizes import inch
 from reportlab.lib import colors
-from reportlab.platypus import Table, TableStyle, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus.flowables import Flowable
 
+def doc_heading(file_path, doc_header):
+    elements = []
+
+    # Custom page size (11 inches wide, 10.5 inches high)
+    page_width = 11 * inch
+    page_height = 10.5 * inch
+
+    # Create the PDF document
+    doc = SimpleDocTemplate(file_path, pagesize=(page_width, page_height))
+    
+    # Get the default styles
+    styles = getSampleStyleSheet()
+    
+    # Modify the heading style to be bold
+    style_heading = ParagraphStyle(
+        name='Heading1',
+        parent=styles['Heading1'],
+        fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
+        fontSize=16,                # You can adjust the font size if needed
+        spaceAfter=12,              # Adjust space after heading if needed
+        alignment=1,                # Center align the text (0=left, 1=center, 2=right)
+    )
+    
+    # Add a bold heading
+    elements.append(Paragraph(doc_header, style_heading))
+
+    # Add a spacer
+    elements.append(Spacer(1, 12))
+
+    return elements, doc
 
 
-
-
-def DocDetails(sno_lbl, sno, sdate_lbl, sdate):
+def doc_details(sno_lbl, sno, sdate_lbl, sdate):
     col_widths = [3.3*inch, 3.4*inch, 3.3*inch]
     table_data_1 = [
         ['Customer Billing Detail', f'{sno_lbl} : {sno}', f'{sdate_lbl} : {sdate}'],
@@ -28,7 +56,7 @@ def DocDetails(sno_lbl, sno, sdate_lbl, sdate):
     ]))
     return table
 
-def CustomerDetails(cust_name, city, country, phone, destination):
+def customer_details(cust_name, city, country, phone, destination):
     style_normal = getSampleStyleSheet()['Normal']
     table_data_2 = [[f"{cust_name} \n{city} {country}",f"Phone: {phone} \nDestination:   {destination}"]]
     table_2_col_widths = [5*inch, 5*inch]
@@ -48,7 +76,7 @@ def CustomerDetails(cust_name, city, country, phone, destination):
     ]))
     return table
 
-def ProductDetails(data):
+def product_details(data):
     style_normal = getSampleStyleSheet()['Normal']
     tbl_3_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
     table_3_heading = [["Idx", "Product", "Qty", "Unit Name", "Rate", "Amount", "Discount", "Tax"]]
@@ -84,7 +112,7 @@ def ProductDetails(data):
     ]))
     return table
 
-def ProductTotalDetails(ttl_Qty, ttl_Amount, ttl_Tax):
+def product_total_details(ttl_Qty, ttl_Amount, ttl_Tax):
     table_4_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
     table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount,' ',ttl_Tax]]
     
@@ -104,13 +132,13 @@ def ProductTotalDetails(ttl_Qty, ttl_Amount, ttl_Tax):
     ]))
     return table
 
-def ProductTotalDetailsInWords(Bill_Amount_In_Words, Tax_Amount_In_Words, Remark, Sub_Total, Discount_Amt, Round_Off, Bill_Total, Party_Old_Balance,  Net_Total):
+def product_total_details_inwords(Bill_Amount_In_Words, Tax_Amount_In_Words, Remark, Sub_Total, Discount_Amt, Round_Off, Bill_Total, Party_Old_Balance, net_lbl, Net_Total):
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']
     
     # Create Paragraph objects for each cell to enable text wrapping
     bill_amount_paragraph = Paragraph(f"Bill Amount In Words: {Bill_Amount_In_Words}<br/>Tax Amount In Words: {Tax_Amount_In_Words}<br/>Remark: {Remark}", normal_style)
-    financials_paragraph = Paragraph(f"Sub Total: {Sub_Total}<br/>Discount Amt: {Discount_Amt}<br/>Round Off: {Round_Off}<br/>Bill Total: {Bill_Total}<br/>Party Old Balance: {Party_Old_Balance}<br/>Net Total: {Net_Total}", normal_style)
+    financials_paragraph = Paragraph(f"Sub Total: {Sub_Total}<br/>Discount Amt: {Discount_Amt}<br/>Round Off: {Round_Off}<br/>Bill Total: {Bill_Total}<br/>Party Old Balance: {Party_Old_Balance}<br/>{net_lbl} : {Net_Total}", normal_style)
     
     # Table data with Paragraph objects
     table_data_5 = [
@@ -132,7 +160,7 @@ def ProductTotalDetailsInWords(Bill_Amount_In_Words, Tax_Amount_In_Words, Remark
     ]))
     return table
 
-def Declaration():
+def declaration():
     table_data_6 = [['Declaration:' '\n' 'We declare that this invoice shows the actual price of the goods/services' '\n' 'described and that all particulars are true and correct.' '\n' 'Original For Recipient', 'Authorised Signatory']]
     table_6_col_widths = [5*inch, 5*inch]
     
