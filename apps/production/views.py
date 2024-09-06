@@ -311,15 +311,17 @@ class WorkOrderAPIView(APIView):
         # Hence the data is validated , further it can be created.
 
         # get default status_id
+        '''
         try:
             status_name = ProductionStatus.objects.get(status_name='work in progress')
             status_id = status_name.status_id
         except ProductionStatus.DoesNotExist:
             return build_response(0, "No matching status found.", status.HTTP_400_BAD_REQUEST)
+        '''
 
         # Create WorkOrder Data
-        update_fields = {'status_id': status_id}
-        order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, update_fields)
+        # update_fields = {'status_id': status_id}
+        order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, {})
         new_work_order_data = order_data[0]
         work_order_id = new_work_order_data.get("work_order_id",None) #Fetch work_order_id from mew instance
         logger.info('WorkOrder - created*')

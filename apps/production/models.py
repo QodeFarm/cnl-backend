@@ -52,7 +52,7 @@ class WorkOrder(models.Model):
     work_order_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     quantity = models.DecimalField(max_digits=10, decimal_places=2)
-    status_id = models.ForeignKey(ProductionStatus, on_delete=models.CASCADE, db_column='status_id')
+    status_id = models.ForeignKey(ProductionStatus, on_delete=models.CASCADE, null=True, default=None, db_column='status_id')
     start_date = models.DateField(null=True, default=None)
     end_date = models.DateField(null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
