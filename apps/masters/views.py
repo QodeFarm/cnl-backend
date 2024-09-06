@@ -1,25 +1,17 @@
-from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,send_pdf_via_email, get_related_data, list_all_objects, create_instance, update_instance, build_response
-from apps.masters.utils.table_defination import sale_order_sales_invoice_doc, doc_heading, doc_details, declaration, customer_details, product_details, product_total_details, product_total_details_inwords
-
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
-from apps.customer.models import CustomerAddresses
-from .utils.docs_variables import doc_data
-from reportlab.lib.pagesizes import inch
-from django.http import Http404
-import random
-import string
+from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response
+from apps.masters.utils.table_defination import sale_order_sales_invoice_doc, doc_heading
+from .utils.docs_variables import path_generate, sale_order_sales_invoice_data
 from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from config.utils_methods import *
 from rest_framework import status
 from django.conf import settings
+from django.http import Http404
 from .serializers import *
 from .filters import *
 from .models import *
@@ -546,85 +538,30 @@ class DocumentGeneratorView(APIView):
             flag = request.data.get('flag')
             pk = kwargs.get('pk')
             document_type = kwargs.get('document_type')
-
-            # Get the relevant data from the doc_data dictionary
-            model_data = doc_data.get(document_type)
-            if model_data:
-                model = model_data.get('Model')
-                serializer = model_data.get('Serializer')
-                item_model = model_data.get('Item_Model')
-                items_serializer = model_data.get('Items_Serializer')
-                item_model_pk = model_data.get('Item_Model_PK')
-                related_model = model_data.get('Related_Model')
-                related_serializer = model_data.get('Related_Serializer')
-                related_filter_field = model_data.get('Related_filter_field')
-                number_lbl = model_data.get('number_lbl')
-                date_lbl = model_data.get('date_lbl')
-                doc_header = model_data.get('Doc_Header')
-                net_lbl = model_data.get('net_lbl')
-                number_value = model_data.get('number_value')
-                date_value = model_data.get('date_value')
-
-            obj = get_object_or_404(model, pk=pk)
-            customer_data_for_cust_data = serializer(obj).data
-            # Retrieve related data
-            items_data = get_related_data(item_model, items_serializer, item_model_pk, pk)
-            related_data = get_related_data(related_model, related_serializer, related_filter_field, pk)
-            related_data = related_data[0] if len(related_data) > 0 else {}
-
-            # extracting phone number from cust_address
-            customer_id = list(model.objects.filter(**{item_model_pk : pk}).values_list('customer_id', flat=True))
             
-
-            filter_kwargs = {"customer_id": customer_id[0], "address_type": "Billing"}
-            city = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id)
-            country = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].country_id)
-            phone_number = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone)
-            phone = format_phone_number(phone_number)
-            dest = str(related_data.get('destination', 'N/A'))
-            email = customer_data_for_cust_data['email']
-
-            total_amt = total_qty = total_txbl_amt = total_disc_amt = round_0ff = party_old_balance = net_value = 0.0
-            for item in items_data:
-                total_amt += float(item['amount']) if item['amount'] is not None else 0
-                total_qty += float(item['quantity']) if item['quantity'] is not None else 0
-                total_disc_amt += float(item['discount']) if item['discount'] is not None else 0
-                total_txbl_amt += float(item['tax']) if item['tax'] is not None else 0
-
-            bill_amount_in_words = convert_amount_to_words(total_amt)
-
-            product_data = extract_product_data(items_data)
-
-            # Generate a random filename
-            unique_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '.pdf'
-            doc_name = doc_header + '_' + unique_code
-            # Construct the full file path
-            file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', doc_name)
-            # Ensure that the directory exists
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-  #=======================================ReportLab Code Started============================          
             if document_type == "sale_order" or document_type == "sale_invoice":
-                elements, doc = doc_heading(file_path, doc_header)
+                pdf_data = sale_order_sales_invoice_data(pk, document_type)
+            elif document_type == "purchase_order":
+                print("fghj",document_type, pk)
+                
+            doc_name, file_path, relative_file_path = path_generate(document_type)
+
+#   #=======================================ReportLab Code Started============================          
+            if document_type == "sale_order" or document_type == "sale_invoice":
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'])
                 sale_order_sales_invoice_doc(
-                elements, doc, number_lbl, customer_data_for_cust_data[number_value], date_lbl, customer_data_for_cust_data[date_value],
-                customer_data_for_cust_data['customer']['name'], city, country, phone, dest,
-                product_data,
-                total_qty, total_amt, total_txbl_amt,
-                bill_amount_in_words, total_disc_amt, round_0ff, 
-                party_old_balance, net_lbl, net_value
+                elements, doc, pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'],
+                pdf_data['product_data'],
+                pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
+                pdf_data['bill_amount_in_words'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
+                pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                 )
             elif document_type == "Purchase_order":
                 print("Hii")            
-           
- 
-            # Return the relative path to the file (relative to MEDIA_ROOT)
-            relative_file_path = os.path.join('doc_generater', os.path.basename(doc_name))
-            # cdn_path = os.path.join(MEDIA_URL, relative_file_path)
-            # print(cdn_path)
             
             if flag == 'email':
-                pdf_send_response = send_pdf_via_email(email, relative_file_path)
+                pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path)
             # elif flag == 'whatsapp':
             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
 
