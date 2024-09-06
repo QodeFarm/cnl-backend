@@ -1,5 +1,5 @@
 from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,send_pdf_via_email, get_related_data, list_all_objects, create_instance, update_instance, build_response
-from apps.masters.utils.table_defination import doc_heading, doc_details, declaration, customer_details, product_details, product_total_details, product_total_details_inwords
+from apps.masters.utils.table_defination import sale_order_sales_invoice_doc, doc_heading, doc_details, declaration, customer_details, product_details, product_total_details, product_total_details_inwords
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet,ParagraphStyle
@@ -604,24 +604,19 @@ class DocumentGeneratorView(APIView):
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
   #=======================================ReportLab Code Started============================          
-            
-            elements, doc = doc_heading(file_path, doc_header)
-            
-            elements.append(doc_details(number_lbl , customer_data_for_cust_data[number_value], date_lbl, customer_data_for_cust_data[date_value]))
-            
-            elements.append(customer_details(customer_data_for_cust_data['customer']['name'], city, country, phone, dest))
-
-            elements.append(product_details(product_data))
-
-            elements.append(product_total_details(total_qty, total_amt, total_txbl_amt))
-
-            elements.append(product_total_details_inwords(bill_amount_in_words, bill_amount_in_words, customer_data_for_cust_data[number_value], total_qty, total_disc_amt, round_0ff, total_txbl_amt, party_old_balance, net_lbl,net_value))
-
-            elements.append(declaration())
-
-            # Build the PDF
-            doc.build(elements)
-
+            if document_type == "sale_order" or document_type == "sale_invoice":
+                elements, doc = doc_heading(file_path, doc_header)
+                sale_order_sales_invoice_doc(
+                elements, doc, number_lbl, customer_data_for_cust_data[number_value], date_lbl, customer_data_for_cust_data[date_value],
+                customer_data_for_cust_data['customer']['name'], city, country, phone, dest,
+                product_data,
+                total_qty, total_amt, total_txbl_amt,
+                bill_amount_in_words, total_disc_amt, round_0ff, 
+                party_old_balance, net_lbl, net_value
+                )
+            elif document_type == "Purchase_order":
+                print("Hii")            
+           
  
             # Return the relative path to the file (relative to MEDIA_ROOT)
             relative_file_path = os.path.join('doc_generater', os.path.basename(doc_name))

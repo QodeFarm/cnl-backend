@@ -146,14 +146,13 @@ def product_total_details(ttl_Qty, ttl_Amount, ttl_Tax):
     ]))
     return table
 
-def product_total_details_inwords(Bill_Amount_In_Words, Tax_Amount_In_Words, Remark, Sub_Total, Discount_Amt, Round_Off, Bill_Total, Party_Old_Balance, net_lbl, Net_Total):
+def product_total_details_inwords(Bill_Amount_In_Words, Remark, Sub_Total, Discount_Amt, Round_Off, Bill_Total, Party_Old_Balance, net_lbl, Net_Total):
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']
     
     # Create Paragraph objects for each cell to enable text wrapping
-    bill_amount_paragraph = Paragraph(f"Bill Amount In Words: {Bill_Amount_In_Words}<br/>Tax Amount In Words: {Tax_Amount_In_Words}<br/>Remark: {Remark}", normal_style)
-    financials_paragraph = Paragraph(f"Sub Total: {Sub_Total}<br/>Discount Amt: {Discount_Amt}<br/>Round Off: {Round_Off}<br/>Bill Total: {Bill_Total}<br/>Party Old Balance: {Party_Old_Balance}<br/>{net_lbl} : {Net_Total}", normal_style)
-    
+    bill_amount_paragraph = Paragraph(f"Bill Amount In Words: {Bill_Amount_In_Words}<br/>Tax Amount In Words: {Bill_Amount_In_Words}<br/>Remark: {Remark}", normal_style)
+    financials_paragraph = Paragraph(f"<b>Sub Total: {Sub_Total}<br/>Discount Amt: {Discount_Amt}<br/>Round Off: {Round_Off}<br/>Bill Total: {Bill_Total}<br/>Party Old Balance: {Party_Old_Balance}<br/>{net_lbl} : {Net_Total} </b>", normal_style)
     # Table data with Paragraph objects
     table_data_5 = [
         [bill_amount_paragraph, financials_paragraph]
@@ -195,3 +194,45 @@ def declaration():
     ('BOTTOMPADDING', (0, 0), (-1, 0), 10),       # Padding for the header row
     ]))
     return table
+
+#===================================================Sales_order and Sales_Invoice===================================
+
+def sale_order_sales_invoice_doc(
+    elements, doc, number_lbl, number_value, date_lbl, date_value,
+    customer_name, city, country, phone, dest,
+    product_data,
+    total_qty, total_amt, total_txbl_amt,
+    bill_amount_in_words, total_disc_amt, round_off, 
+    party_old_balance, net_lbl, net_value
+):  
+    
+    # Append document details
+    elements.append(doc_details(
+        number_lbl, number_value, date_lbl, date_value
+    ))
+    
+    # Append customer details
+    elements.append(customer_details(
+        customer_name, city, country, phone, dest
+    ))
+    
+    # Append product details
+    elements.append(product_details(product_data))
+    
+    # Append product total details
+    elements.append(product_total_details(
+        total_qty, total_amt, total_txbl_amt
+    ))
+    
+    # Append product total details in words
+    elements.append(product_total_details_inwords(
+        bill_amount_in_words, number_value,
+        total_qty, total_disc_amt, round_off, total_txbl_amt,
+        party_old_balance, net_lbl, net_value
+    ))
+    
+    # Append declaration
+    elements.append(declaration())
+
+    # Build the PDF
+    doc.build(elements)

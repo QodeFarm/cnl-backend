@@ -39,5 +39,23 @@ doc_data = {
 
                 'number_value': 'invoice_no',
                 'date_value': 'invoice_date',
+            },
+            'asd': {
+                'Model': SaleInvoiceOrders,
+                'Serializer': SaleInvoiceOrdersSerializer,
+                'Item_Model': SaleInvoiceItems,
+                'Items_Serializer': SaleInvoiceItemsSerializer,
+                'Item_Model_PK': 'sale_invoice_id',
+                'Related_Model': OrderShipments,
+                'Related_Serializer': OrderShipmentsSerializer,
+                'Related_filter_field': 'order_id',
+
+                'number_lbl': 'Quotation No.',
+                'date_lbl': 'Quote Date',
+                'Doc_Header': 'SALES QUOTATION',
+                'net_lbl': 'Net Amount',
+
+                'number_value': 'invoice_no',
+                'date_value': 'invoice_date',
             }
         }
