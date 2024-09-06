@@ -142,6 +142,11 @@ productionstatuses = 'production_statuses'
 workorders = 'work_orders'
 inventory = 'inventory'
 machines = 'machines'
+productionworkers = 'production_workers'
+rawmaterials = 'raw_materials'
+workorderstages = 'work_order_stages'
+defaultmachinery = 'default_machinery'
+workordermachines = 'work_order_machines'
 labor = 'labor'
 
 #workflow tables

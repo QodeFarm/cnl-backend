@@ -1811,17 +1811,38 @@ CREATE TABLE IF NOT EXISTS asset_maintenance (
 );
 
 /* ======== Manufacturing/Production ======== */
+CREATE TABLE IF NOT EXISTS raw_materials (
+    raw_material_id  CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS work_order_stages (
+    work_stage_id CHAR(36) PRIMARY KEY,
+    work_order_id CHAR(36),
+    stage_name VARCHAR(255) NOT NULL,
+    stage_description TEXT,
+	stage_start_date DATE,
+	stage_end_date DATE,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+);
 
 /* Bill of Materials (BOM) Table */
 -- Stores the list of materials and components required to produce each product.
-CREATE TABLE IF NOT EXISTS bill_of_materials (
-    bom_id CHAR(36) PRIMARY KEY,
-    product_id CHAR(36),
-    component_name VARCHAR(100),
-    quantity_required DECIMAL(10, 2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+CREATE TABLE bill_of_materials (
+  bom_id CHAR(36) PRIMARY KEY,
+  product_id CHAR(36),
+  component_name VARCHAR(100),
+  quantity_required DECIMAL(10,2),
+  order_id CHAR(36),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
 
 /* Production Statuses Table */
@@ -1849,17 +1870,6 @@ CREATE TABLE IF NOT EXISTS work_orders (
     FOREIGN KEY (status_id) REFERENCES production_statuses(status_id)
 );
 
-/* Inventory Table */
--- Manages raw materials, WIP (work in progress), and finished goods.
-CREATE TABLE IF NOT EXISTS inventory (
-    inventory_id CHAR(36) PRIMARY KEY,
-    product_id CHAR(36),
-    quantity DECIMAL(10, 2),
-    location VARCHAR(100),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
-);
-
 /* Machines Table */
 -- Stores information about the machines used in production.
 CREATE TABLE IF NOT EXISTS machines (
@@ -1871,17 +1881,27 @@ CREATE TABLE IF NOT EXISTS machines (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* Labor Table */
--- Tracks labor assignments and hours worked on production tasks.
-CREATE TABLE IF NOT EXISTS labor (
-    labor_id CHAR(36) PRIMARY KEY,
-    employee_id CHAR(36),
-    work_order_id CHAR(36),
-    hours_worked DECIMAL(5, 2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
-    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+/* Default Machinery Table /
+/ Stores default machinery assigned to each product */
+CREATE TABLE IF NOT EXISTS default_machinery (
+default_machinery_id CHAR(36) PRIMARY KEY,
+product_id CHAR(36),
+machine_id CHAR(36),
+FOREIGN KEY (product_id) REFERENCES products(product_id),
+FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
+
+/* production_workers Table */
+-- Tracks production_workers assignments and hours worked on production tasks.
+CREATE TABLE IF NOT EXISTS production_workers (
+worker_id CHAR(36) PRIMARY KEY,
+employee_id CHAR(36) NOT NULL,
+work_order_id CHAR(36) NOT NULL,
+hours_worked DECIMAL(5, 2),
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 );
 
 /* Workflows Table */
