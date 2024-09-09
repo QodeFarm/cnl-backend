@@ -459,7 +459,6 @@ CREATE TABLE IF NOT EXISTS customers (
     territory_id CHAR(36),
     customer_category_id CHAR(36),
     contact_person VARCHAR(255),
-    --picture VARCHAR(255),
     picture JSON DEFAULT NULL,
     gst VARCHAR(50),
     registration_date DATE,
@@ -771,7 +770,7 @@ CREATE TABLE IF NOT EXISTS sizes (
 -- Stores information about different colors.
 CREATE TABLE IF NOT EXISTS colors (
     color_id CHAR(36) PRIMARY KEY,
-    color_name VARCHAR(50) NOT NULL UNIQUE
+    color_name VARCHAR(50) NOT NULL UNIQUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP    
 );
@@ -795,16 +794,16 @@ CREATE TABLE IF NOT EXISTS product_variations (
 
 /* Product_item_balance Table */
 -- Stores information about product_item_balance.
-CREATE TABLE IF NOT EXISTS product_item_balance (
-    product_item_balance_id CHAR(36) PRIMARY KEY,
-    product_variation_id CHAR(36) NOT NULL,
-    warehouse_location_id CHAR(36) NOT NULL,
-    quantity INT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
-    FOREIGN KEY (warehouse_location_id) REFERENCES warehouse_locations(location_id)
-);
+-- CREATE TABLE IF NOT EXISTS product_item_balance (
+--     product_item_balance_id CHAR(36) PRIMARY KEY,
+--     product_variation_id CHAR(36) NOT NULL,
+--     location_id CHAR(36) NOT NULL,
+--     quantity INT DEFAULT 0,
+--     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--     FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
+--     FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
+-- );
 
 /* Vendor Category Table */
 -- Stores vendor categories, providing classification for vendors.
@@ -859,7 +858,7 @@ CREATE TABLE IF NOT EXISTS vendor (
     territory_id CHAR(36),
     vendor_category_id CHAR(36),
     contact_person VARCHAR(255),
-    --picture VARCHAR(255),
+    
     picture JSON DEFAULT NULL,
     gst VARCHAR(255),
     registration_date DATE,
@@ -1044,6 +1043,13 @@ CREATE TABLE IF NOT EXISTS order_statuses (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS return_options (
+    return_option_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 /* Sales Order Table */
 -- Stores information about sales orders.
 CREATE TABLE IF NOT EXISTS sale_orders(
@@ -1188,6 +1194,7 @@ CREATE TABLE IF NOT EXISTS sale_return_orders(
     return_date DATE NOT NULL,
     return_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: SR-2406-00001
     customer_id CHAR(36) NOT NULL,
+    return_option_id CHAR(36),
     gst_type_id CHAR(36),
     email VARCHAR(255),
     ref_no VARCHAR(255),
@@ -1221,6 +1228,7 @@ CREATE TABLE IF NOT EXISTS sale_return_orders(
     sale_invoice_id CHAR(36),
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (return_option_id) REFERENCES return_options(return_option_id),
     FOREIGN KEY (customer_address_id) REFERENCES customer_addresses(customer_address_id),
     FOREIGN KEY (payment_term_id) REFERENCES customer_payment_terms(payment_term_id),
     FOREIGN KEY (order_salesman_id) REFERENCES orders_salesman(order_salesman_id),
@@ -1812,9 +1820,9 @@ CREATE TABLE IF NOT EXISTS asset_maintenance (
 
 /* ======== Manufacturing/Production ======== */
 CREATE TABLE IF NOT EXISTS raw_materials (
-    raw_material_id  CHAR(36) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
+   raw_material_id  CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   description TEXT,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

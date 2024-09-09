@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
-from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer
+from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers
 from apps.products.serializers import ModProductGroupsSerializer, ModproductsSerializer
 from .models import *
 from django.conf import settings
@@ -104,6 +104,7 @@ class SaleReturnOrdersSerializer(serializers.ModelSerializer):
     payment_link_type = ModPaymentLinkTypesSerializer(source='payment_link_type_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
     sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+    return_option = ReturnOptionsSerializers(source='return_option_id', read_only=True)
 
     class Meta:
         model = SaleReturnOrders
