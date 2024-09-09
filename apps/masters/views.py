@@ -670,3 +670,15 @@ class DocumentGeneratorView(APIView):
 
         return build_response(1, pdf_send_response , [], status.HTTP_200_OK)
 
+class ReturnOptionsViewset(viewsets.ModelViewSet):
+    queryset = ReturnOptions.objects.all()
+    serializer_class = ReturnOptionsSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)

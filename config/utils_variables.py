@@ -109,6 +109,7 @@ paymentlinktable = 'payment_link_types'
 orderstatusestable = 'order_statuses'
 ordertypestable = 'order_types'
 taskprioritiestable ='task_priorities'
+returnoptions = 'return_options'
 
 #Authentication db_tables
 userstable = 'users'

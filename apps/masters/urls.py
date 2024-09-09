@@ -34,6 +34,7 @@ router.register(r'order_status', OrderStatusesView)
 router.register(r'order_types', OrderTypesView)
 
 router.register(r'task_priorities', TaskPrioritiesViewSet)
+router.register(r'return_options', ReturnOptionsViewset)
 
 urlpatterns = [
     path('', include(router.urls)),
