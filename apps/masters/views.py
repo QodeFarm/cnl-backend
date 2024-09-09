@@ -1,6 +1,7 @@
+from django.shortcuts import get_object_or_404
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response
-from apps.masters.utils.table_defination import sale_order_sales_invoice_doc, doc_heading
-from .utils.docs_variables import path_generate, sale_order_sales_invoice_data
+from apps.masters.utils.table_defination import purchase_order_doc, sale_order_sales_invoice_doc, doc_heading
+from .utils.docs_variables import path_generate, purchase_order_data, sale_order_sales_invoice_data
 from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
@@ -530,6 +531,15 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 
 #===============================================PDF_creation================================
 
+from apps.purchase.models import PurchaseOrders, PurchaseorderItems 
+from apps.purchase.serializers import PurchaseOrdersSerializer, PurchaseorderItemsSerializer
+from apps.sales.models import OrderAttachments, OrderShipments
+from apps.sales.serializers import OrderAttachmentsSerializer, OrderShipmentsSerializer
+from apps.company.models import Companies
+from apps.company.serializers import CompaniesSerializer
+from config.utils_methods import get_related_data
+from .utils.docs_variables import doc_data
+
 class DocumentGeneratorView(APIView):
     def post(self, request, **kwargs):
         """ Retrieves a sale order and its related data. """
@@ -542,28 +552,41 @@ class DocumentGeneratorView(APIView):
             if document_type == "sale_order" or document_type == "sale_invoice":
                 pdf_data = sale_order_sales_invoice_data(pk, document_type)
             elif document_type == "purchase_order":
-                print("fghj",document_type, pk)
+                pdf_data = purchase_order_data(pk, document_type)
                 
-            doc_name, file_path, relative_file_path = path_generate(document_type)
 
+            doc_name, file_path, relative_file_path = path_generate(document_type)
+            
 #   #=======================================ReportLab Code Started============================          
             if document_type == "sale_order" or document_type == "sale_invoice":
-                elements, doc = doc_heading(file_path, pdf_data['doc_header'])
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
                 sale_order_sales_invoice_doc(
-                elements, doc, pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                elements, doc, 
+                pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
                 pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'],
                 pdf_data['product_data'],
                 pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
                 pdf_data['bill_amount_in_words'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
                 pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                 )
-            elif document_type == "Purchase_order":
-                print("Hii")            
+            elif document_type == "purchase_order":
+                sub_heading = [pdf_data['comp_name'], pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']]
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_heading)
+                purchase_order_doc(elements, doc, 
+                                   pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                                   pdf_data['customer_name'], pdf_data['v_billing_address'], pdf_data['v_shipping_address_lbl'],  pdf_data['v_shipping_address'],
+                                   pdf_data['product_data'],
+                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
+                                   pdf_data['destination'], pdf_data['shipping_mode_name'], pdf_data['port_of_landing'], pdf_data['port_of_discharge'],
+                                   pdf_data['comp_name'],
+                                   pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'],  pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
+                                   pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']
+                                   )
             
             if flag == 'email':
                 pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path)
-            # elif flag == 'whatsapp':
-            #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
+#             # elif flag == 'whatsapp':
+#             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
 
         except Http404:
             logger.error("pk %s does not exist.", pk)
