@@ -77,11 +77,7 @@ def doc_heading(file_path, doc_header, sub_header):
         # Add a spacer
         elements.append(Spacer(1, 18))
 
-
         main_heading(doc_header)
-
-        
-
 
     return elements, doc
 

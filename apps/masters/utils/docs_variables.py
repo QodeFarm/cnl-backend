@@ -5,14 +5,14 @@ from django.conf import settings
 from django.shortcuts import get_object_or_404
 from apps.sales.models import SaleOrder, SaleOrderItems, SaleInvoiceOrders,SaleInvoiceItems, OrderShipments
 from apps.sales.serializers import SaleOrderSerializer, SaleOrderItemsSerializer,SaleInvoiceOrdersSerializer, SaleInvoiceItemsSerializer, OrderShipmentsSerializer
-from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,send_pdf_via_email, get_related_data
+from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,get_related_data
 from apps.customer.models import CustomerAddresses
 from apps.purchase.models import PurchaseOrders, PurchaseorderItems
 from  apps.purchase.serializers import PurchaseOrdersSerializer, PurchaseorderItemsSerializer
 from apps.company.models import Companies
 from apps.company.serializers import CompaniesSerializer
-from apps.sales.models import OrderAttachments, OrderShipments
-from apps.sales.serializers import OrderAttachmentsSerializer, OrderShipmentsSerializer
+from apps.sales.models import OrderShipments
+from apps.sales.serializers import OrderShipmentsSerializer
 from apps.vendor.models import VendorAddress
 
 
@@ -75,7 +75,7 @@ doc_data = {
             }
         }
 
-
+from apps.masters.utils.table_defination import purchase_order_doc
 def purchase_order_data(pk, document_type):
       #Companies Details
         company = Companies.objects.all()
@@ -92,21 +92,18 @@ def purchase_order_data(pk, document_type):
             related_model = model_data.get('Related_Model')
             related_serializer = model_data.get('Related_Serializer')
             related_filter_field = model_data.get('Related_filter_field')
-            number_value =  model_data.get('number_value')
-            date_value = model_data.get('date_value')
-
-        # Retrieve the PurchaseOrders instance
-        purchase_order = get_object_or_404(model, pk=pk)
         
-        vendor = PurchaseOrdersSerializer(purchase_order).data.get('vendor')
+        # Retrieve the PurchaseOrders instance
+        purchase_order = get_object_or_404(model, pk=pk)        
+        
          # for extracting phone number, email from vendor_id
         vendor_id = list(model.objects.filter(**{item_model_pk : pk}).values_list('vendor_id', flat=True))
         filter_kwargs = {"vendor_id": vendor_id[0], "address_type": "Billing"}
         phone_number = str(list(VendorAddress.objects.filter(**filter_kwargs))[0].phone)
         email = (list(VendorAddress.objects.filter(**filter_kwargs))[0].email)
         phone = format_phone_number(phone_number)
-        # dest = str(related_data.get('destination', 'N/A'))
-                 
+
+        vendor = PurchaseOrdersSerializer(purchase_order).data.get('vendor')      
         billing_address =  PurchaseOrdersSerializer(purchase_order).data.get('billing_address')
         shipping_address =  PurchaseOrdersSerializer(purchase_order).data.get('shipping_address')
         order_no =  PurchaseOrdersSerializer(purchase_order).data.get('order_no')
@@ -128,7 +125,7 @@ def purchase_order_data(pk, document_type):
 
         product_data = extract_product_data(items_data)
        
-        return {
+        return  {
                 'cust_bill_dtl' : 'Vendor Name & Address ',
                 'comp_name' : comp_data[0].get('name'),
                 'comp_address' : comp_data[0].get('address'),

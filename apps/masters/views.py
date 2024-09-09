@@ -1,4 +1,3 @@
-from django.shortcuts import get_object_or_404
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response
 from apps.masters.utils.table_defination import purchase_order_doc, sale_order_sales_invoice_doc, doc_heading
 from .utils.docs_variables import path_generate, purchase_order_data, sale_order_sales_invoice_data
@@ -530,16 +529,6 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 #===============================================PDF_creation================================
-
-from apps.purchase.models import PurchaseOrders, PurchaseorderItems 
-from apps.purchase.serializers import PurchaseOrdersSerializer, PurchaseorderItemsSerializer
-from apps.sales.models import OrderAttachments, OrderShipments
-from apps.sales.serializers import OrderAttachmentsSerializer, OrderShipmentsSerializer
-from apps.company.models import Companies
-from apps.company.serializers import CompaniesSerializer
-from config.utils_methods import get_related_data
-from .utils.docs_variables import doc_data
-
 class DocumentGeneratorView(APIView):
     def post(self, request, **kwargs):
         """ Retrieves a sale order and its related data. """
@@ -548,17 +537,11 @@ class DocumentGeneratorView(APIView):
             flag = request.data.get('flag')
             pk = kwargs.get('pk')
             document_type = kwargs.get('document_type')
-            
-            if document_type == "sale_order" or document_type == "sale_invoice":
-                pdf_data = sale_order_sales_invoice_data(pk, document_type)
-            elif document_type == "purchase_order":
-                pdf_data = purchase_order_data(pk, document_type)
-                
-
             doc_name, file_path, relative_file_path = path_generate(document_type)
             
 #   #=======================================ReportLab Code Started============================          
             if document_type == "sale_order" or document_type == "sale_invoice":
+                pdf_data = sale_order_sales_invoice_data(pk, document_type)
                 elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
                 sale_order_sales_invoice_doc(
                 elements, doc, 
@@ -570,6 +553,7 @@ class DocumentGeneratorView(APIView):
                 pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                 )
             elif document_type == "purchase_order":
+                pdf_data = purchase_order_data(pk, document_type)
                 sub_heading = [pdf_data['comp_name'], pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']]
                 elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_heading)
                 purchase_order_doc(elements, doc, 
