@@ -424,3 +424,15 @@ class TaskPriorities(models.Model):
     
     class Meta:
         db_table = taskprioritiestable
+
+class ReturnOptions(models.Model):
+    return_option_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        db_table = returnoptions

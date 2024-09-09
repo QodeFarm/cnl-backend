@@ -2,7 +2,7 @@ import uuid
 from django.db import models
 from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
-from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses
+from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions
 from apps.products.models import Products
 from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages
 from config.utils_methods import OrderNumberMixin
@@ -293,6 +293,7 @@ class SaleReturnOrders(OrderNumberMixin):
     order_no_prefix = 'SR'
     order_no_field = 'return_no'
     customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
+    return_option_id = models.ForeignKey(ReturnOptions, on_delete=models.CASCADE, null=True, db_column='return_option_id')
     gst_type_id = models.ForeignKey('masters.GstTypes', on_delete=models.CASCADE, db_column='gst_type_id', null=True, default=None)
     email = models.EmailField(max_length=255, null=True, default=None)
     ref_no = models.CharField(max_length=255, null=True, default=None)

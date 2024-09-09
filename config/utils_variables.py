@@ -109,6 +109,7 @@ paymentlinktable = 'payment_link_types'
 orderstatusestable = 'order_statuses'
 ordertypestable = 'order_types'
 taskprioritiestable ='task_priorities'
+returnoptions = 'return_options'
 
 #Authentication db_tables
 userstable = 'users'
@@ -142,6 +143,11 @@ productionstatuses = 'production_statuses'
 workorders = 'work_orders'
 inventory = 'inventory'
 machines = 'machines'
+productionworkers = 'production_workers'
+rawmaterials = 'raw_materials'
+workorderstages = 'work_order_stages'
+defaultmachinery = 'default_machinery'
+workordermachines = 'work_order_machines'
 labor = 'labor'
 
 #workflow tables
