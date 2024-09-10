@@ -42,6 +42,7 @@ class SaleOrderSerializer(serializers.ModelSerializer):
     sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    workflow = ModWorkflowSerializer(source='workflow_id',read_only=True)
     
     class Meta:
         model = SaleOrder
