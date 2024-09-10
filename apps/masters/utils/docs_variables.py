@@ -75,7 +75,6 @@ doc_data = {
             }
         }
 
-from apps.masters.utils.table_defination import purchase_order_doc
 def purchase_order_data(pk, document_type):
       #Companies Details
         company = Companies.objects.all()
@@ -108,6 +107,7 @@ def purchase_order_data(pk, document_type):
         shipping_address =  PurchaseOrdersSerializer(purchase_order).data.get('shipping_address')
         order_no =  PurchaseOrdersSerializer(purchase_order).data.get('order_no')
         order_date =  PurchaseOrdersSerializer(purchase_order).data.get('order_date')
+        tax_type = PurchaseOrdersSerializer(purchase_order).data.get('tax')
 
         
         # Retrieve related data
@@ -141,6 +141,7 @@ def purchase_order_data(pk, document_type):
                 'net_lbl' : model_data.get('net_lbl'),
                 'net_value' :  total_amt,
                 
+                'tax_type' : tax_type,
                 'v_billing_address' : billing_address,
                 'v_shipping_address_lbl' :'Delivery Address',
                 'v_shipping_address' : shipping_address,

@@ -450,23 +450,6 @@ def validate_uuid(uuid_to_test, version=4):
     return uuid_obj
 
        
-
-def get_related_data(model, serializer_class, filter_field, filter_value):
-        """
-        Retrieves related data for a given model, serializer, and filter field.
-        """
-        try:
-            related_data = model.objects.filter(**{filter_field: filter_value})
-            serializer = serializer_class(related_data, many=True)
-            logger.debug("Retrieved related data for model %s with filter %s=%s.",
-                        model.__name__, filter_field, filter_value)
-            return serializer.data
-        except Exception as e:
-            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
-                            model.__name__, filter_field, filter_value, str(e))
-            return []
-
-     
 def format_phone_number(phone_number):
     phone_number_str = str(phone_number) 
     

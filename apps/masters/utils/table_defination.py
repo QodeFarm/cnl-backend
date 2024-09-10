@@ -228,9 +228,9 @@ def declaration():
     return table
 
 #====PURCHASE ORDER RELATED TBL
-def shipping_details(destination, shipping_mode_name, port_of_landing, port_of_discharge, sdate):
+def shipping_details(destination, tax_type,  shipping_mode_name, port_of_landing, port_of_discharge, sdate):
     style_normal = getSampleStyleSheet()['Normal']
-    shipping_details_table_data = [[f"Destination: {destination} \nShipping Mode :{shipping_mode_name} \nPort of Loading: {port_of_landing}  \nPort of Discharge: {port_of_discharge}",f"Tax Preference:  \nRef Date : {sdate}  \n   \n   \n "]]
+    shipping_details_table_data = [[f"Destination: {destination} \nShipping Mode :{shipping_mode_name} \nPort of Loading: {port_of_landing}  \nPort of Discharge: {port_of_discharge}",f"Tax Preference: {tax_type} \nRef Date : {sdate}  \n   \n   \n "]]
     shipping_details_table_col_widths = [5*inch, 5*inch]
     
     table = Table(shipping_details_table_data, colWidths=shipping_details_table_col_widths)
@@ -426,7 +426,7 @@ def purchase_order_doc(
          customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address,
          product_data,
          total_qty, total_amt, total_txbl_amt,
-         destination, shipping_mode_name, port_of_landing, port_of_discharge,
+         destination,tax_type, shipping_mode_name, port_of_landing, port_of_discharge,
          comp_name,
          shipping_company_name, shipping_tracking_no , vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight,
          comp_address, comp_phone, comp_email,
@@ -443,7 +443,7 @@ def purchase_order_doc(
     ))
     
     elements.append(shipping_details(
-        destination, shipping_mode_name, port_of_landing, port_of_discharge, date_value
+        destination, tax_type,  shipping_mode_name, port_of_landing, port_of_discharge, date_value
     ))
 
     # Append product details

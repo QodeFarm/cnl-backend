@@ -544,14 +544,14 @@ class DocumentGeneratorView(APIView):
                 pdf_data = sale_order_sales_invoice_data(pk, document_type)
                 elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
                 sale_order_sales_invoice_doc(
-                elements, doc, 
-                pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
-                pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'],
-                pdf_data['product_data'],
-                pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
-                pdf_data['bill_amount_in_words'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
-                pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
-                )
+                                   elements, doc, 
+                                   pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                                   pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'],
+                                   pdf_data['product_data'],
+                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
+                                   pdf_data['bill_amount_in_words'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
+                                )
             elif document_type == "purchase_order":
                 pdf_data = purchase_order_data(pk, document_type)
                 sub_heading = [pdf_data['comp_name'], pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']]
@@ -561,12 +561,12 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['customer_name'], pdf_data['v_billing_address'], pdf_data['v_shipping_address_lbl'],  pdf_data['v_shipping_address'],
                                    pdf_data['product_data'],
                                    pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
-                                   pdf_data['destination'], pdf_data['shipping_mode_name'], pdf_data['port_of_landing'], pdf_data['port_of_discharge'],
+                                   pdf_data['destination'], pdf_data['tax_type'], pdf_data['shipping_mode_name'], pdf_data['port_of_landing'], pdf_data['port_of_discharge'],
                                    pdf_data['comp_name'],
                                    pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'],  pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
                                    pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']
-                                   )
-            
+                                )
+                            
             if flag == 'email':
                 pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path)
 #             # elif flag == 'whatsapp':
