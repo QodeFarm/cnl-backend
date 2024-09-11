@@ -595,6 +595,6 @@ def extract_product_data(data):
         tax = (item['tax'] if item['tax'] is not None else 0)
         
         product_data.append([
-            str(index), product_name, quantity, unit_name, rate, amount, discount, tax])
+            index, product_name, quantity, unit_name, rate, amount, discount, tax])
 
     return product_data

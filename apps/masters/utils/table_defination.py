@@ -24,15 +24,12 @@ def doc_heading(file_path, doc_header, sub_header):
             parent=styles['Heading1'],
             fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
             fontSize=16,                # You can adjust the font size if needed
-            spaceAfter=12,              # Adjust space after heading if needed
+            spaceAfter=3,              # Adjust space after heading if needed
             alignment=1,                # Center align the text (0=left, 1=center, 2=right)
         )
         
         # Add a bold heading
         elements.append(Paragraph(doc_header, style_heading))
-
-        # Add a spacer
-        elements.append(Spacer(1, 12))
 
     if doc_header == "SALES ORDER":
         main_heading(doc_header)
@@ -49,7 +46,7 @@ def doc_heading(file_path, doc_header, sub_header):
         )    
         # Add a bold heading
         elements.append(Paragraph(sub_header, sub_style_heading))
-    elif doc_header == "Purchase Bill":
+    elif doc_header == "Purchase Bill" or doc_header == "Purchase Return":
         # Define styles
         styles = getSampleStyleSheet()
         bold_style = ParagraphStyle(
@@ -73,7 +70,7 @@ def doc_heading(file_path, doc_header, sub_header):
         elements.append(Spacer(1, 2))
         elements.append(Paragraph(sub_header[1], normal_style))
         elements.append(Spacer(1, 1))
-        elements.append(Paragraph(sub_header[2] + ' | ' + sub_header[3], normal_style))
+        elements.append(Paragraph('Phone No: ' + sub_header[2] + ' | ' + 'Email: ' + sub_header[3], normal_style))
         # Add a spacer
         elements.append(Spacer(1, 18))
 
@@ -158,9 +155,9 @@ def product_details(data):
     ]))
     return table
 
-def product_total_details(ttl_Qty, ttl_Amount, ttl_Tax):
+def product_total_details(ttl_Qty, ttl_Amount,total_disc, ttl_Tax):
     table_4_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
-    table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount,' ',ttl_Tax]]
+    table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount, total_disc, ttl_Tax]]
     
     table = Table(table_4_heading, colWidths=table_4_col_widths)
     table.setStyle(TableStyle([
@@ -278,13 +275,13 @@ def vendor_details(customer_name, v_billing_address, v_shipping_address_lbl, v_s
     ]))
     return table
 
-def narration_and_total(comp_name, sdate, total_amt):
+def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt):
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']   
 
     # Create Paragraph objects for each cell with proper HTML-like tags
-    narration_paragraph = Paragraph(f"Narration : Being Goods Purchase From {comp_name }  { sdate}", normal_style)
-    total_paragraph = Paragraph(f"<b> Sub Total : {total_amt}<br/>Bill Total : {total_amt}<br/> </b>", normal_style)
+    narration_paragraph = Paragraph(f"<b>Narration :</b> Being Goods Purchase From {comp_name }  { sdate}", normal_style)
+    total_paragraph = Paragraph(f"<b> Sub Total : {total_sub_amt}<br/>Bill Total : {total_bill_amt}<br/> </b>", normal_style)
     # Table data with Paragraph objects
     vendor_table_data_2 = [
         [narration_paragraph, total_paragraph]
@@ -372,7 +369,7 @@ def comp_address_last_tbl(comp_address, comp_phone, comp_email):
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'), # Use bold font for all text
         ('FONTSIZE', (0, 0), (-1, -1), 8),               # Set font size
         ('GRID', (0, 0), (-1, -1), 1, colors.black),      # Add border around all cells
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),          # Padding for all cells
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),          # Padding for all cells
     ]))
     return table
 
@@ -403,7 +400,7 @@ def sale_order_sales_invoice_doc(
     
     # Append product total details
     elements.append(product_total_details(
-        total_qty, total_amt, total_txbl_amt
+        total_qty, total_amt, total_disc_amt,  total_txbl_amt
     ))
     
     # Append product total details in words
@@ -421,11 +418,11 @@ def sale_order_sales_invoice_doc(
 
 
 
-def purchase_order_doc(
+def purchase_doc(
          elements, doc, cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
          customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address,
          product_data,
-         total_qty, total_amt, total_txbl_amt,
+         total_qty, total_amt, total_disc, total_txbl_amt, total_sub_amt, total_bill_amt,
          destination,tax_type, shipping_mode_name, port_of_landing, port_of_discharge,
          comp_name,
          shipping_company_name, shipping_tracking_no , vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight,
@@ -451,11 +448,11 @@ def purchase_order_doc(
 
     # Append product total details
     elements.append(product_total_details(
-        total_qty, total_amt, total_txbl_amt
+        total_qty, total_amt, total_disc, total_txbl_amt
     ))
 
     elements.append(narration_and_total(
-        comp_name, date_value, total_amt
+        comp_name, date_value, total_sub_amt, total_bill_amt
     ))
 
     elements.append(logistics_info(
@@ -468,7 +465,6 @@ def purchase_order_doc(
     elements.append(comp_address_last_tbl(
         comp_address, comp_phone, comp_email
     ))
-
     
     # Build the PDF
     doc.build(elements)
