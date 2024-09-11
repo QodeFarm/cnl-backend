@@ -566,11 +566,11 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'],  pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
                                    pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']
                                 )
-          
-                if flag == 'email':
-                    pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path)
-#             # elif flag == 'whatsapp':
-#             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
+            
+            if flag == 'email':
+                pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path)
+            # elif flag == 'whatsapp':
+            #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
 
         except Http404:
             logger.error("pk %s does not exist.", pk)

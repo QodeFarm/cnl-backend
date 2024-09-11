@@ -1,8 +1,7 @@
-from reportlab.lib.pagesizes import inch
 from reportlab.lib import colors
-from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate, Spacer
+from reportlab.lib.pagesizes import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus.flowables import Flowable
+from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate, Spacer
 
 def doc_heading(file_path, doc_header, sub_header):
     elements = []
@@ -310,7 +309,7 @@ def logistics_info(shipping_company_name, shipping_tracking_no , vehicle_vessel,
 
     # Create Paragraph objects for each cell with proper HTML-like tags
     logistics_info  = Paragraph(f"<b>Logistics Info : </b> <br/> <br/> Shipping Company  : {shipping_company_name} <br/> Tracking No: {shipping_tracking_no} <br/> Vehicle/Vessel No. : {vehicle_vessel}  <br/> No of Packets: {no_of_packets}", normal_style)
-    doc_extra_info = Paragraph(f"<b> Document extra info :</b> <br/> <br/> Shipping Date : {shipping_date} <br/> Charges Paid  {shipping_charges} <br/> Weigh : {weight}", normal_style)
+    doc_extra_info = Paragraph(f"<b> Document extra info :</b> <br/> <br/> Shipping Date : {shipping_date} <br/> Charges Paid  {shipping_charges} <br/> Weight : {weight}", normal_style)
     # Table data with Paragraph objects
     logistics_info_table_data = [
         [logistics_info, doc_extra_info]
@@ -373,9 +372,7 @@ def comp_address_last_tbl(comp_address, comp_phone, comp_email):
     ]))
     return table
 
-#==========
 #===================================================Sales_order and Sales_Invoice===================================
-
 def sale_order_sales_invoice_doc(
     elements, doc,cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
     customer_name, city, country, phone, dest,
@@ -417,7 +414,7 @@ def sale_order_sales_invoice_doc(
     doc.build(elements)
 
 
-
+#===================================================Purchase Doc===================================
 def purchase_doc(
          elements, doc, cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
          customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address,
