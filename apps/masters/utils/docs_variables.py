@@ -89,21 +89,7 @@ doc_data = {
         }
 
 
-def path_generate(document_type):
-    # Generate a random filename
-    unique_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '.pdf'
-    doc_name = document_type + '_' + unique_code
-    # Construct the full file path
-    file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', doc_name)
-    # Ensure that the directory exists
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-    # Return the relative path to the file (relative to MEDIA_ROOT)
-    relative_file_path = os.path.join('doc_generater', os.path.basename(doc_name))
-    # cdn_path = os.path.join(MEDIA_URL, relative_file_path)
-    # print(cdn_path)
-
-    return doc_name, file_path, relative_file_path
 
 
 

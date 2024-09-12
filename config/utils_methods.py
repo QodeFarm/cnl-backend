@@ -18,8 +18,10 @@ from django.core.cache import cache
 from django.core.mail import EmailMessage
 from config.settings import MEDIA_ROOT, MEDIA_URL
 import requests
-import os
 import inflect
+import random
+import string
+from django.conf import settings
 
 
 # Set up basic configuration for logging
@@ -598,3 +600,19 @@ def extract_product_data(data):
             index, product_name, quantity, unit_name, rate, amount, discount, tax])
 
     return product_data
+
+def path_generate(document_type):
+    # Generate a random filename
+    unique_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '.pdf'
+    doc_name = document_type + '_' + unique_code
+    # Construct the full file path
+    file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', doc_name)
+    # Ensure that the directory exists
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # Return the relative path to the file (relative to MEDIA_ROOT)
+    relative_file_path = os.path.join('doc_generater', os.path.basename(doc_name))
+    # cdn_path = os.path.join(MEDIA_URL, relative_file_path)
+    # print(cdn_path)
+
+    return doc_name, file_path, relative_file_path

@@ -1,8 +1,8 @@
-from apps.masters.template.table_defination import *
 from django.shortcuts import get_object_or_404
 from apps.customer.models import CustomerAddresses
-from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,get_related_data
+from apps.masters.template.table_defination import *
 from apps.masters.utils.docs_variables import doc_data
+from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,get_related_data
 
 def sale_order_sales_invoice_data(pk, document_type):
     # Get the relevant data from the doc_data dictionary

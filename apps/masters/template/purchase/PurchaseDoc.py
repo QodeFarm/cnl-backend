@@ -1,10 +1,10 @@
-from apps.masters.template.table_defination import *
 from apps.company.models import Companies
 from apps.vendor.models import VendorAddress
 from django.shortcuts import get_object_or_404
+from apps.masters.template.table_defination import *
+from apps.masters.utils.docs_variables import doc_data
 from apps.company.serializers import CompaniesSerializer
 from config.utils_methods import extract_product_data, format_phone_number,get_related_data
-from apps.masters.utils.docs_variables import doc_data
 
 def purchase_data(pk, document_type):
       #Companies Details
