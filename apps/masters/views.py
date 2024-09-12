@@ -1,5 +1,5 @@
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
-from apps.masters.template.purchase.PurchaseDoc import purchase_doc, purchase_data
+from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
 from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data
 from apps.masters.template.table_defination import doc_heading
 from django_filters.rest_framework import DjangoFilterBackend # type: ignore
