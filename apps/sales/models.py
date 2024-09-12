@@ -65,7 +65,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
 
         # Automatically assign the default workflow if none is selected
         if not self.workflow_id:
-            self.workflow_id = Workflow.objects.get_or_create(name='sale_order')[0]
+            self.workflow_id = Workflow.objects.get_or_create(name=default_workflow_name)[0]
 
         # Check if the workflow is the default one
         if not self.flow_status:
