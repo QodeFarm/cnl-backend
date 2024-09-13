@@ -18,8 +18,10 @@ from django.core.cache import cache
 from django.core.mail import EmailMessage
 from config.settings import MEDIA_ROOT, MEDIA_URL
 import requests
-import os
 import inflect
+import random
+import string
+from django.conf import settings
 
 
 # Set up basic configuration for logging
@@ -425,6 +427,19 @@ def validate_order_type(data, error_list, model_name,look_up=None):
             else:
                 error_list.append({look_up:["Invalid order type."]})
 
+def get_related_data(model, serializer_class, filter_field, filter_value):
+    """
+    Retrieves related data for a given model, serializer, and filter field.
+    """
+    try:
+        related_data = model.objects.filter(**{filter_field: filter_value})
+        serializer = serializer_class(related_data, many=True)
+        logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
+        return serializer.data
+    except Exception as e:
+        logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
+        return []
+
 
 #================================================================================================================================================
 #===========================================CHETAN'S METHOD============================================================================
@@ -437,23 +452,6 @@ def validate_uuid(uuid_to_test, version=4):
     return uuid_obj
 
        
-
-def get_related_data(model, serializer_class, filter_field, filter_value):
-        """
-        Retrieves related data for a given model, serializer, and filter field.
-        """
-        try:
-            related_data = model.objects.filter(**{filter_field: filter_value})
-            serializer = serializer_class(related_data, many=True)
-            logger.debug("Retrieved related data for model %s with filter %s=%s.",
-                        model.__name__, filter_field, filter_value)
-            return serializer.data
-        except Exception as e:
-            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
-                            model.__name__, filter_field, filter_value, str(e))
-            return []
-
-     
 def format_phone_number(phone_number):
     phone_number_str = str(phone_number) 
     
@@ -599,6 +597,22 @@ def extract_product_data(data):
         tax = (item['tax'] if item['tax'] is not None else 0)
         
         product_data.append([
-            str(index), product_name, quantity, unit_name, rate, amount, discount, tax])
+            index, product_name, quantity, unit_name, rate, amount, discount, tax])
 
     return product_data
+
+def path_generate(document_type):
+    # Generate a random filename
+    unique_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '.pdf'
+    doc_name = document_type + '_' + unique_code
+    # Construct the full file path
+    file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', doc_name)
+    # Ensure that the directory exists
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # Return the relative path to the file (relative to MEDIA_ROOT)
+    relative_file_path = os.path.join('doc_generater', os.path.basename(doc_name))
+    # cdn_path = os.path.join(MEDIA_URL, relative_file_path)
+    # print(cdn_path)
+
+    return doc_name, file_path, relative_file_path

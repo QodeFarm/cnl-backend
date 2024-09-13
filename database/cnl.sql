@@ -794,16 +794,16 @@ CREATE TABLE IF NOT EXISTS product_variations (
 
 /* Product_item_balance Table */
 -- Stores information about product_item_balance.
-CREATE TABLE IF NOT EXISTS product_item_balance (
-    product_item_balance_id CHAR(36) PRIMARY KEY,
-    product_variation_id CHAR(36) NOT NULL,
-    warehouse_location_id CHAR(36) NOT NULL,
-    quantity INT DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
-    FOREIGN KEY (warehouse_location_id) REFERENCES warehouse_locations(location_id)
-);
+-- CREATE TABLE IF NOT EXISTS product_item_balance (
+--     product_item_balance_id CHAR(36) PRIMARY KEY,
+--     product_variation_id CHAR(36) NOT NULL,
+--     location_id CHAR(36) NOT NULL,
+--     quantity INT DEFAULT 0,
+--     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+--     FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
+--     FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
+-- );
 
 /* Vendor Category Table */
 -- Stores vendor categories, providing classification for vendors.
@@ -1042,6 +1042,13 @@ CREATE TABLE IF NOT EXISTS order_statuses (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS return_options (
+    return_option_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 /* Sales Order Table */
 -- Stores information about sales orders.
 CREATE TABLE IF NOT EXISTS sale_orders(
@@ -1186,6 +1193,7 @@ CREATE TABLE IF NOT EXISTS sale_return_orders(
     return_date DATE NOT NULL,
     return_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: SR-2406-00001
     customer_id CHAR(36) NOT NULL,
+    return_option_id CHAR(36),
     gst_type_id CHAR(36),
     email VARCHAR(255),
     ref_no VARCHAR(255),
@@ -1219,6 +1227,7 @@ CREATE TABLE IF NOT EXISTS sale_return_orders(
     sale_invoice_id CHAR(36),
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (return_option_id) REFERENCES return_options(return_option_id),
     FOREIGN KEY (customer_address_id) REFERENCES customer_addresses(customer_address_id),
     FOREIGN KEY (payment_term_id) REFERENCES customer_payment_terms(payment_term_id),
     FOREIGN KEY (order_salesman_id) REFERENCES orders_salesman(order_salesman_id),
@@ -1809,17 +1818,38 @@ CREATE TABLE IF NOT EXISTS asset_maintenance (
 );
 
 /* ======== Manufacturing/Production ======== */
+CREATE TABLE IF NOT EXISTS raw_materials (
+   raw_material_id  CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   description TEXT,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS work_order_stages (
+    work_stage_id CHAR(36) PRIMARY KEY,
+    work_order_id CHAR(36),
+    stage_name VARCHAR(255) NOT NULL,
+    stage_description TEXT,
+	stage_start_date DATE,
+	stage_end_date DATE,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+);
 
 /* Bill of Materials (BOM) Table */
 -- Stores the list of materials and components required to produce each product.
-CREATE TABLE IF NOT EXISTS bill_of_materials (
-    bom_id CHAR(36) PRIMARY KEY,
-    product_id CHAR(36),
-    component_name VARCHAR(100),
-    quantity_required DECIMAL(10, 2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+CREATE TABLE bill_of_materials (
+  bom_id CHAR(36) PRIMARY KEY,
+  product_id CHAR(36),
+  component_name VARCHAR(100),
+  quantity_required DECIMAL(10,2),
+  order_id CHAR(36),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
 
 /* Production Statuses Table */
@@ -1847,17 +1877,6 @@ CREATE TABLE IF NOT EXISTS work_orders (
     FOREIGN KEY (status_id) REFERENCES production_statuses(status_id)
 );
 
-/* Inventory Table */
--- Manages raw materials, WIP (work in progress), and finished goods.
-CREATE TABLE IF NOT EXISTS inventory (
-    inventory_id CHAR(36) PRIMARY KEY,
-    product_id CHAR(36),
-    quantity DECIMAL(10, 2),
-    location VARCHAR(100),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
-);
-
 /* Machines Table */
 -- Stores information about the machines used in production.
 CREATE TABLE IF NOT EXISTS machines (
@@ -1869,17 +1888,27 @@ CREATE TABLE IF NOT EXISTS machines (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* Labor Table */
--- Tracks labor assignments and hours worked on production tasks.
-CREATE TABLE IF NOT EXISTS labor (
-    labor_id CHAR(36) PRIMARY KEY,
-    employee_id CHAR(36),
-    work_order_id CHAR(36),
-    hours_worked DECIMAL(5, 2),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
-    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+/* Default Machinery Table /
+/ Stores default machinery assigned to each product */
+CREATE TABLE IF NOT EXISTS default_machinery (
+default_machinery_id CHAR(36) PRIMARY KEY,
+product_id CHAR(36),
+machine_id CHAR(36),
+FOREIGN KEY (product_id) REFERENCES products(product_id),
+FOREIGN KEY (machine_id) REFERENCES machines(machine_id)
+);
+
+/* production_workers Table */
+-- Tracks production_workers assignments and hours worked on production tasks.
+CREATE TABLE IF NOT EXISTS production_workers (
+worker_id CHAR(36) PRIMARY KEY,
+employee_id CHAR(36) NOT NULL,
+work_order_id CHAR(36) NOT NULL,
+hours_worked DECIMAL(5, 2),
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 );
 
 /* Workflows Table */
