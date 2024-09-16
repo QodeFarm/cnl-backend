@@ -2075,7 +2075,7 @@ CREATE TABLE IF NOT EXISTS financial_reports (
 
 /* Sale Credit Notes Table */
 -- Stores credit notes issued to customers for returns or adjustments.
-CREATE TABLE IF NOT EXISTS cnl.sale_credit_notes (
+CREATE TABLE IF NOT EXISTS sale_credit_notes (
     credit_note_id CHAR(36) PRIMARY KEY,
     sale_invoice_id CHAR(36) NOT NULL,
     credit_note_number VARCHAR(100) NOT NULL,
@@ -2093,7 +2093,7 @@ CREATE TABLE IF NOT EXISTS cnl.sale_credit_notes (
 
 /* Sale Credit Note Items Table */
 -- Stores individual items that are part of a sale credit note.
-CREATE TABLE IF NOT EXISTS cnl.sale_credit_note_items (
+CREATE TABLE IF NOT EXISTS sale_credit_note_items (
     credit_note_item_id CHAR(36) PRIMARY KEY,
     credit_note_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
