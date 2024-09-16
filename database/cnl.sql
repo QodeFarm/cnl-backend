@@ -2073,3 +2073,35 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+/* Sale Credit Notes Table */
+-- Stores credit notes issued to customers for returns or adjustments.
+CREATE TABLE IF NOT EXISTS cnl.sale_credit_notes (
+    credit_note_id CHAR(36) PRIMARY KEY,
+    sale_invoice_id CHAR(36) NOT NULL,
+    credit_note_number VARCHAR(100) NOT NULL,
+    credit_date DATE NOT NULL,
+    customer_id CHAR(36) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    reason VARCHAR(1024),
+    order_status_id CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+);
+
+/* Sale Credit Note Items Table */
+-- Stores individual items that are part of a sale credit note.
+CREATE TABLE IF NOT EXISTS cnl.sale_credit_note_items (
+    credit_note_item_id CHAR(36) PRIMARY KEY,
+    credit_note_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    quantity INT NOT NULL,
+    price_per_unit DECIMAL(10,2) NOT NULL,
+    total_price DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (credit_note_id) REFERENCES sale_credit_notes(credit_note_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);

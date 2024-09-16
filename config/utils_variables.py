@@ -57,6 +57,8 @@ quickpacks = 'quick_packs'
 salereceipts = 'sale_receipts'
 #inventory db_tables
 warehousestable ='warehouses'
+salecreditnote = 'sale_credit_notes'
+salecreditnoteitems = 'sale_credit_note_items'
 
 #purchase db_tables
 purchaseorderstable = 'purchase_orders'

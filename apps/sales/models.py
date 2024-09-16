@@ -4,7 +4,7 @@ from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions
 from apps.products.models import Products
-from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages
+from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems
 from config.utils_methods import OrderNumberMixin
 import logging
 
@@ -476,3 +476,37 @@ class SaleReceipt(models.Model):
 
     def __str__(self):
         return self.receipt_name
+    
+class SaleCreditNotes(models.Model):
+    credit_note_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sale_invoice_id = models.ForeignKey('SaleInvoiceOrders', on_delete=models.CASCADE, db_column='sale_invoice_id')
+    credit_note_number = models.CharField(max_length=100, default=None)
+    credit_date = models.DateField(auto_now=True)
+    customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    reason = models.CharField(max_length=1024, null=True, default=None)
+    order_status_id = order_status_id  = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = salecreditnote
+
+    def __str__(self):
+        return self.credit_note_number
+    
+class SaleCreditNoteItems(models.Model):
+    credit_note_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    credit_note_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='credit_note_id')
+    product_id = models.ForeignKey(SaleCreditNotes, on_delete=models.CASCADE, db_column='product_id')
+    quantity = models.IntegerField(default=None)
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = salecreditnoteitems
+
+    def __str__(self):
+        return self.credit_note_item_id
