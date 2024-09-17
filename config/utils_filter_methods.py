@@ -1,3 +1,4 @@
+import json
 import logging
 from django.db.models import Q
 from django.forms import ValidationError
@@ -6,24 +7,6 @@ from rest_framework import status
 logger = logging.getLogger(__name__)
 from django.utils import timezone
 import datetime
-
-#========================Filter Response==================================
-
-def filter_response(count, message, data,page, limit,total_count,status_code):
-    """
-    Builds a standardized API response.
-    """
-    response = {
-        'count': count,
-        'message': message,
-        'data': data,
-        'page': page,
-        'limit': limit,
-        'totalCount': total_count
-    }
-    return Response(response, status=status_code)
-
-#========================Filter Response==================================
 
 PERIOD_NAME_CHOICES = [
     ('today', 'Today'),
@@ -36,7 +19,6 @@ PERIOD_NAME_CHOICES = [
     ('year_to_date', 'YearToDate'),
     ('last_year', 'LastYear'),
 ]
-
 
 def filter_by_period_name(self, queryset, name, value):
         today = timezone.now().date()
@@ -180,4 +162,60 @@ def search_queryset(queryset, search_params, filter_set):
     
     return queryset
 
-#=====================filter for page-limit-sort-search=======================================
+#========================Filter Response==================================
+
+def filter_response(count, message, data,page, limit,total_count,status_code):
+    """
+    Builds a standardized API response.
+    """
+    response = {
+        'count': count,
+        'message': message,
+        'data': data,
+        'page': page,
+        'limit': limit,
+        'totalCount': total_count
+    }
+    return Response(response, status=status_code)
+
+def list_filtered_objects(self, request, model_name,*args, **kwargs):
+    queryset = self.filter_queryset(self.get_queryset())
+    # Pagination handling
+    page = int(request.GET.get('page', 1))
+    limit = int(request.GET.get('limit', 10))
+    total_count = model_name.objects.count()
+    start = (page - 1) * limit
+    end = start + limit
+    paginated_queryset = queryset[start:end]
+    serializer = self.get_serializer(paginated_queryset, many=True)
+    message = "NO RECORDS INSERTED" if not serializer.data else None
+    status_code = status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
+    return filter_response(count=len(paginated_queryset),message=message,data=serializer.data,page=page,limit=limit,total_count=total_count,status_code=status_code)
+
+# def create_filtered_instance(self, request, *args, **kwargs):
+#     serializer = self.get_serializer(data=request.data)
+    
+#     if serializer.is_valid():
+#         serializer.save()
+#         data = serializer.data
+#         return filter_response(count=1,message="Record created successfully",data=data,page=None,limit=None,total_count=None,status_code=status.HTTP_201_CREATED)
+#     else:
+#         errors_str = json.dumps(serializer.errors, indent=2)
+#         logger.error("Serializer validation error: %s", errors_str)
+#         return filter_response(count=0,message="Form validation failed",data=[],page=None,limit=None,total_count=None,status_code=status.HTTP_400_BAD_REQUEST)
+
+# def update_filtered_instance(self, request, *args, **kwargs):
+#     partial = kwargs.pop('partial', False)
+#     instance = self.get_object()
+#     serializer = self.get_serializer(instance, data=request.data, partial=partial)
+    
+#     if serializer.is_valid():
+#         self.perform_update(serializer)
+#         data = serializer.data
+#         return filter_response(count=1,message="Record updated successfully",data=data,page=None,limit=None,total_count=None,status_code=status.HTTP_200_OK)
+#     else:
+#         errors_str = json.dumps(serializer.errors, indent=2)
+#         logger.error("Serializer validation error: %s", errors_str)
+#         return filter_response(count=0,message="Update failed",data=[],page=None,limit=None,total_count=None,status_code=status.HTTP_400_BAD_REQUEST)
+
+#========================Filter Response==================================

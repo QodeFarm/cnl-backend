@@ -249,7 +249,7 @@ class ProductViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get('summary', 'false').lower() == 'true' + '&'
+            summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
             if summary:
                 product = Products.objects.all()
                 data = ProductOptionsSerializer.get_product_summary(product)
