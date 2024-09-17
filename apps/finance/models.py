@@ -1,7 +1,5 @@
 from django.db import models
 import uuid
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 from apps.hrms.models import Employees
 
 # Create your models here.
@@ -27,7 +25,7 @@ class BankAccount(models.Model):
         db_table = 'bank_accounts'
 
     def __str__(self):
-        return f"{self.account_name} - {self.account_number}"
+        return f"{self.bank_name}"
 
 class ChartOfAccounts(models.Model):
     account_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -48,7 +46,7 @@ class ChartOfAccounts(models.Model):
         db_table = 'chart_of_accounts'
 
     def __str__(self):
-        return f"{self.account_name} ({self.account_code})"
+        return f"{self.account_name}"
 
 class JournalEntry(models.Model):
     journal_entry_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -84,7 +82,7 @@ class JournalEntryLines(models.Model):
 class PaymentTransaction(models.Model): # Enhance Later
     payment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     invoice_id = models.CharField(max_length=36, null=False)  # Foreign key will depend on specific implementation
-    invoice_type = models.CharField(
+    order_type = models.CharField(   # order_type
         max_length=10,
         choices=[('Sale', 'Sale'), ('Purchase', 'Purchase')],
         null=False
@@ -200,7 +198,7 @@ class FinancialReport(models.Model):
     ]
     report_type = models.CharField(max_length=20, choices=REPORT_TYPE_CHOICES, null=False)
     generated_at = models.DateTimeField(auto_now_add=True)
-    file_path = models.CharField(max_length=255, null=False)
+    file_path = models.JSONField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

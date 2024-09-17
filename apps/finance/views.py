@@ -240,7 +240,7 @@ class JournalEntryView(APIView):
         errors = {}        
 
         # Validate journal_entry Data
-        journal_entry_data = given_data.pop('journal_entries', None)  # parent_data
+        journal_entry_data = given_data.pop('journal_entry', None)  # parent_data
 
         # Ensure mandatory data is present
         if not journal_entry_data:
@@ -255,7 +255,7 @@ class JournalEntryView(APIView):
         # Validate journal_entry_lines Data
         journal_entry_lines_data = given_data.pop('journal_entry_lines', None)
         if journal_entry_lines_data:
-            lines_error = validate_multiple_data(self, journal_entry_lines_data, JournalEntryLinesSerializer,[])
+            lines_error = validate_multiple_data(self, journal_entry_lines_data, JournalEntryLinesSerializer,['journal_entry_id'])
 
             if lines_error:
                 errors["journal_entry_lines"] = lines_error
@@ -280,10 +280,7 @@ class JournalEntryView(APIView):
         custom_data["journal_entry"] = entry_data
         logger.info('JournalEntry - created*')
 
-        print(entry_data)
-
         journal_entry_id = entry_data.get("journal_entry_id", None)  # Fetch journal_entry_id from mew instance
-        print('ID : ',journal_entry_id)
 
         #create JournalEntryLines
         update_fields = {'journal_entry_id':journal_entry_id}
@@ -354,3 +351,25 @@ class JournalEntryView(APIView):
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
         except Exception:
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+#--------------------------------APIView--------------------------
+from rest_framework.response import Response
+from apps.sales.models import SaleOrder
+from apps.purchase.models import PurchaseOrders
+from apps.sales.serializers import SaleOrderSerializer
+from apps.purchase.serializers import PurchaseOrdersSerializer
+
+class InvoiceListView(APIView):
+    def get(self, request, *args, **kwargs):
+        order_type = request.query_params.get('order_type')
+
+        if order_type == 'Sale':
+            invoices = SaleOrder.objects.all()
+            serializer = SaleOrderSerializer(invoices, many=True)
+        elif order_type == 'Purchase':
+            invoices = PurchaseOrders.objects.all()
+            serializer = PurchaseOrdersSerializer(invoices, many=True)
+        else:
+            return Response({"error": "Invalid order_type"}, status=400)
+
+        return Response(serializer.data, status=200)

@@ -1841,7 +1841,7 @@ CREATE TABLE IF NOT EXISTS work_order_stages (
 
 /* Bill of Materials (BOM) Table */
 -- Stores the list of materials and components required to produce each product.
-CREATE TABLE bill_of_materials (
+CREATE TABLE IF NOT EXISTS bill_of_materials (
   bom_id CHAR(36) PRIMARY KEY,
   product_id CHAR(36),
   component_name VARCHAR(100),
@@ -2027,7 +2027,7 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
 CREATE TABLE IF NOT EXISTS payment_transaction (
     payment_id CHAR(36) PRIMARY KEY,
     invoice_id CHAR(36) NOT NULL,
-    invoice_type ENUM('Sale', 'Purchase') NOT NULL,
+    order_type ENUM('Sale', 'Purchase') NOT NULL,
     payment_date DATE NOT NULL,
     payment_method ENUM('Cash', 'Bank Transfer', 'Credit Card', 'Cheque') NOT NULL,
     payment_status ENUM('Pending', 'Completed', 'Failed') NOT NULL DEFAULT 'Pending',
@@ -2037,9 +2037,7 @@ CREATE TABLE IF NOT EXISTS payment_transaction (
     currency VARCHAR(10),
     transaction_type ENUM('Credit', 'Debit') NOT NULL DEFAULT 'Credit',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id) ON DELETE CASCADE ON UPDATE CASCADE
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 /* Tax Configurations Table */
@@ -2088,7 +2086,7 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     report_name VARCHAR(100) NOT NULL,
     report_type ENUM('Balance Sheet', 'Profit & Loss', 'Cash Flow', 'Trial Balance') NOT NULL,
     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    file_path VARCHAR(255) NOT NULL,
+    file_path JSON NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
