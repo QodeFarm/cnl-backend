@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from .models import SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReturnOrders
+from .models import QuickPacks, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReturnOrders
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from django_filters import rest_framework as filters
@@ -55,14 +55,14 @@ class SaleOrderFilter(filters.FilterSet):
     def filter_by_limit(self, queryset, name, value):
         self.limit = int(value)
         queryset = apply_sorting(self, queryset)
-        paginated_queryset, total_count = filter_by_pagination(queryset, self.page_number, self.limit)
+        paginated_queryset,total_count = filter_by_pagination(queryset, self.page_number, self.limit)
         self.total_count = total_count
         return paginated_queryset
-    
+
     class Meta:
         model = SaleOrder 
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','status_name','created_at','advance_amount','tax','amount','period_name','page','limit','sort','search']
+        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
@@ -113,7 +113,7 @@ class SaleInvoiceOrdersFilter(filters.FilterSet):
     class Meta:
         model = SaleInvoiceOrders
         #do not change "invoice_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['invoice_no','customer_id','customer','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','page','limit','sort','search']
+        fields =['invoice_no','customer_id','customer','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
 
 class SaleReturnOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
@@ -166,7 +166,7 @@ class SaleReturnOrdersFilter(filters.FilterSet):
     class Meta:
         model = SaleReturnOrders
         #do not change "return_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['return_no','return_date','due_date','customer_id','customer','tax', 'tax_amount','total_amount','return_reason','remarks','order_status_id', 'status_name', 'created_at','period_name','page','limit','sort','search']
+        fields =['return_no','return_date','due_date','customer_id','customer','tax', 'tax_amount','total_amount','return_reason','remarks','order_status_id', 'status_name', 'created_at','period_name','search','sort','page','limit']
         
 class SaleOrdersItemsilter(filters.FilterSet):
     sale_order_id = filters.CharFilter(method=filter_uuid)
@@ -174,3 +174,48 @@ class SaleOrdersItemsilter(filters.FilterSet):
     class Meta:
         model = SaleOrderItems
         fields =['sale_order_id']
+
+class QuickPacksFilter(filters.FilterSet):
+    name = filters.CharFilter(lookup_expr='icontains')
+    lot_qty = filters.NumberFilter(field_name='lot_qty', lookup_expr='exact')
+    description = filters.CharFilter(lookup_expr='icontains')
+    active = filters.ChoiceFilter(field_name='active',choices=[('Y', 'Yes'), ('N', 'No')])
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+     
+    def filter_by_search(self, queryset, name, value):
+        try:
+            search_params = json.loads(value)
+            self.search_params = search_params  # Set the search_params as an instance attribute
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding search params: {e}")
+            raise ValidationError("Invalid search parameter format.")
+
+        queryset = search_queryset(queryset, search_params, self)
+        return queryset
+
+    def filter_by_sort(self, queryset, name, value):
+        return apply_sorting(self, queryset)
+
+    def filter_by_page(self, queryset, name, value):
+        self.page_number = int(value)
+        return queryset
+
+    def filter_by_limit(self, queryset, name, value):
+        self.limit = int(value)
+        queryset = apply_sorting(self, queryset)
+        paginated_queryset, total_count = filter_by_pagination(queryset, self.page_number, self.limit)
+        self.total_count = total_count
+        return paginated_queryset
+    
+    class Meta:
+        model = QuickPacks
+        #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['name','lot_qty','description','active','created_at','period_name','search','sort','page','limit']

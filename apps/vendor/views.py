@@ -6,10 +6,18 @@ from django.http import  Http404
 from rest_framework import viewsets,status
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
+
+from apps.vendor.filters import VendorFilter
+from config.utils_filter_methods import filter_response
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorsOptionsSerializer
 from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
+
+from django.http import HttpResponseRedirect
+from urllib.parse import urlencode
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -22,6 +30,9 @@ logger = logging.getLogger(__name__)
 class VendorsView(viewsets.ModelViewSet):
     queryset = Vendor.objects.all()
     serializer_class = VendorSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = VendorFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -86,7 +97,7 @@ class VendorAttachmentView(viewsets.ModelViewSet):
     
 class VendorAddressView(viewsets.ModelViewSet):
     queryset = VendorAddress.objects.all()
-    serializer_class = VendorAddressSerializer   
+    serializer_class = VendorAddressSerializer  
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -113,7 +124,7 @@ class VendorViewSet(APIView):
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true&" 
             if summary:
                 logger.info("Retrieving vendors summary")
                 vendors = Vendor.objects.all()
@@ -122,9 +133,21 @@ class VendorViewSet(APIView):
  
             logger.info("Retrieving all vendors")
             queryset = Vendor.objects.all()
-            serializer = VendorSerializer(queryset, many=True)
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = Vendor.objects.count()
+             
+            # Apply filters manually
+            if request.query_params:
+                filterset = VendorFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+
+            serializer = VendorsOptionsSerializer(queryset, many=True)
             logger.info("vendors data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
  
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")

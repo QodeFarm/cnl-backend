@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework import viewsets,status
 from apps.tasks.filters import TasksFilter
+from config.utils_filter_methods import filter_response
 from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances
 from apps.tasks.serializers import TasksSerializer,TaskCommentsSerializer,TaskAttachmentsSerializer,TaskHistorySerializer
 from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
@@ -95,13 +96,25 @@ class TaskView(APIView):
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             instance = Tasks.objects.all()
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = Tasks.objects.count()
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = TasksFilter(request.GET, instance=instance)
+                if filterset.is_valid():
+                    instance = filterset.qs 
+
         except Tasks.DoesNotExist:
             logger.error("Tasks does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         else:
             serializer = TasksSerializer(instance, many=True)
             logger.info("Tasks data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK) 
+            # return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK) 
+            return filter_response(instance.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 			
     def retrieve(self, request, *args, **kwargs):
         """

@@ -56,4 +56,4 @@ class TasksFilter(filters.FilterSet):
     class Meta:
         model = Tasks
         #do not change "title",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['title','user_id','user','description','priority_id','priority', 'status_id','status','due_date','created_at','period_name','page','limit','sort','search']
+        fields =['title','user_id','user','description','priority_id','priority', 'status_id','status','due_date','created_at','period_name','search','sort','page','limit']

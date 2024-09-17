@@ -59,7 +59,7 @@ class PurchaseOrdersFilter(filters.FilterSet):
     class Meta:
         model = PurchaseOrders
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['order_no','order_date','vendor_id','vendor','purchase_type_id','purchase_type','tax', 'tax_amount','total_amount','remarks','order_status_id','status_name','created_at','period_name','page','limit','sort','search']
+        fields =['order_no','order_date','vendor_id','vendor','purchase_type_id','purchase_type','tax', 'tax_amount','total_amount','remarks','order_status_id','status_name','created_at','period_name','search','sort','page','limit']
 
 class PurchaseInvoiceOrdersFilter(filters.FilterSet):
     vendor_id = filters.CharFilter(method=filter_uuid)
@@ -114,7 +114,7 @@ class PurchaseInvoiceOrdersFilter(filters.FilterSet):
     class Meta:
         model = PurchaseInvoiceOrders
         #do not change "invoice_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['invoice_no','invoice_date','supplier_invoice_no','vendor_id','vendor','purchase_type_id','purchase_type','tax', 'tax_amount','total_amount','advance_amount','remarks','order_status_id','status_name','created_at','period_name','page','limit','sort','search']
+        fields =['invoice_no','invoice_date','supplier_invoice_no','vendor_id','vendor','purchase_type_id','purchase_type','tax', 'tax_amount','total_amount','advance_amount','remarks','order_status_id','status_name','created_at','period_name','search','sort','page','limit']
 
 class PurchaseReturnOrdersFilter(filters.FilterSet):
     vendor_id = filters.CharFilter(method=filter_uuid)
@@ -168,4 +168,4 @@ class PurchaseReturnOrdersFilter(filters.FilterSet):
     class Meta:
         model = PurchaseReturnOrders
         #do not change "return_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['return_no','due_date','vendor_id','vendor','purchase_type_id','purchase_type','order_status_id','status_name','return_reason','tax', 'tax_amount','total_amount','remarks','created_at','period_name','page','limit','sort','search']
+        fields =['return_no','due_date','vendor_id','vendor','purchase_type_id','purchase_type','order_status_id','status_name','return_reason','tax', 'tax_amount','total_amount','remarks','created_at','period_name','search','sort','page','limit']

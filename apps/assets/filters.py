@@ -58,7 +58,7 @@ class AssetsFilter(filters.FilterSet):
     class Meta:
         model = Assets
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','price','purchase_date','asset_category_id','category','unit_options_id', 'unit_options','asset_status_id','status','location_id','location','created_at','period_name','page','limit','sort','search']
+        fields =['name','price','purchase_date','asset_category_id','category','unit_options_id', 'unit_options','asset_status_id','status','location_id','location','created_at','period_name','search','sort','page','limit']
 
 
 class AssetMaintenanceFilter(filters.FilterSet):
@@ -104,5 +104,5 @@ class AssetMaintenanceFilter(filters.FilterSet):
     
     class Meta:
         model = AssetMaintenance
-        #do not change "maintenance_date",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['asset','asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','page','limit','sort','search']
+        #do not change "asset",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['asset','asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','search','sort','page','limit']

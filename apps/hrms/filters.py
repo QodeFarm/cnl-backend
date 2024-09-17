@@ -54,4 +54,4 @@ class EmployeesFilter(filters.FilterSet):
     class Meta:
         model = Employees
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','email','phone','designation_id','designation','department_id', 'department','created_at','period_name','page','limit','sort','search']
+        fields =['name','email','phone','designation_id','designation','department_id', 'department','created_at','period_name','search','sort','page','limit']

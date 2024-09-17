@@ -1,8 +1,29 @@
 import logging
 from django.db.models import Q
+from django.forms import ValidationError
+from rest_framework.response import Response
+from rest_framework import status
 logger = logging.getLogger(__name__)
 from django.utils import timezone
 import datetime
+
+#========================Filter Response==================================
+
+def filter_response(count, message, data,page, limit,total_count,status_code):
+    """
+    Builds a standardized API response.
+    """
+    response = {
+        'count': count,
+        'message': message,
+        'data': data,
+        'page': page,
+        'limit': limit,
+        'totalCount': total_count
+    }
+    return Response(response, status=status_code)
+
+#========================Filter Response==================================
 
 PERIOD_NAME_CHOICES = [
     ('today', 'Today'),
@@ -136,9 +157,7 @@ def filter_by_pagination(queryset, page, limit):
 
     total_count = queryset.count()
     logger.debug(f"Total records in the database: {total_count}")
-
     return paginated_queryset, total_count
-
 
 def search_queryset(queryset, search_params, filter_set):
     if search_params:

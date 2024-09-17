@@ -3,6 +3,7 @@ from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
 from apps.purchase.filters import PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
+from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
 from config.utils_methods import *
@@ -152,6 +153,10 @@ class PurchaseOrderViewSet(APIView):
             
             instance = PurchaseOrders.objects.all()
 
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = PurchaseOrders.objects.count()
+
             # Apply filters manually
             if request.query_params:
                 queryset = PurchaseOrders.objects.all()
@@ -159,7 +164,8 @@ class PurchaseOrderViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs
                     serializer = PurchaseOrdersOptionsSerializer(queryset, many=True)
-                    return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except PurchaseOrders.DoesNotExist:
             logger.error("Purchase order does not exist.")
@@ -481,6 +487,10 @@ class PurchaseInvoiceOrderViewSet(APIView):
             
             instance = PurchaseInvoiceOrders.objects.all()
 
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = PurchaseInvoiceOrders.objects.count()
+
             # Apply filters manually
             if request.query_params:
                 queryset = PurchaseInvoiceOrders.objects.all()
@@ -488,8 +498,8 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs
                     serializer = PurchaseInvoiceOrdersOptionsSerializer(queryset, many=True)
-                    return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except PurchaseInvoiceOrders.DoesNotExist:
             logger.error("Purchase invoice order does not exist.")
@@ -808,6 +818,10 @@ class PurchaseReturnOrderViewSet(APIView):
             
             instance = PurchaseReturnOrders.objects.all()
             
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = PurchaseReturnOrders.objects.count()            
+            
             # Apply filters manually
             if request.query_params:
                 queryset = PurchaseReturnOrders.objects.all()
@@ -815,7 +829,8 @@ class PurchaseReturnOrderViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs
                     serializer = PurchaseReturnOrdersOptionsSerializer(queryset, many=True)
-                    return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except PurchaseReturnOrders.DoesNotExist:
             logger.error("Purchase return order does not exist.")

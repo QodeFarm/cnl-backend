@@ -10,6 +10,8 @@ from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
+
+from config.utils_filter_methods import filter_response
 from .filters import *
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
@@ -179,6 +181,9 @@ class OrderShipmentsView(viewsets.ModelViewSet):
 class QuickPacksView(viewsets.ModelViewSet):
     queryset = QuickPacks.objects.all()
     serializer_class = QuickPackSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = QuickPacksFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -229,17 +234,24 @@ class SaleOrderViewSet(APIView):
                 return Response(data, status=status.HTTP_200_OK)
 
             logger.info("Retrieving all sale order")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+
             queryset = SaleOrder.objects.all()
 
             # Apply filters manually
             if request.query_params:
                 filterset = SaleOrderFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
-                    queryset = filterset.qs                 
+                    queryset = filterset.qs   
 
+            total_count = SaleOrder.objects.count()
+        
             serializer = SaleOrderOptionsSerializer(queryset, many=True)
             logger.info("sale order data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -580,6 +592,10 @@ class SaleInvoiceOrdersViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
             logger.info("Retrieving all sale invoice orders")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+
             queryset = SaleInvoiceOrders.objects.all()
 
             # Apply filters manually
@@ -588,10 +604,13 @@ class SaleInvoiceOrdersViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs 
 
+            total_count = SaleInvoiceOrders.objects.count()
+
             serializer = SaleInvoiceOrderOptionsSerializer(queryset, many=True)
             logger.info("sale order invoice data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
- 
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -908,6 +927,10 @@ class SaleReturnOrdersViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
             logger.info("Retrieving all sale return order")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            
             queryset = SaleReturnOrders.objects.all()
 
             # Apply filters manually
@@ -916,10 +939,13 @@ class SaleReturnOrdersViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs 
 
+            total_count = SaleReturnOrders.objects.count()
+
             serializer = SaleReturnOrdersOptionsSerializer(queryset, many=True)
             logger.info("sale return order data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
- 
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+        
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1252,11 +1278,25 @@ class QuickPackCreateViewSet(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
             logger.info("Retrieving all QuickPacks")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10))   
+
             queryset = QuickPacks.objects.all()
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = QuickPacksFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
+
+            total_count = QuickPacks.objects.count()
+                     
             serializer = QuickPackSerializer(queryset, many=True)
             logger.info("QuickPacks data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
- 
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
