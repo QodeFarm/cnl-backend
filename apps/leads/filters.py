@@ -8,8 +8,6 @@ import logging
 logger = logging.getLogger(__name__)
 import json
 from django.core.exceptions import ValidationError
-from django.db.models import Max
-
 
 class LeadsFilter(filters.FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')

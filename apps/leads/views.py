@@ -5,7 +5,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from apps.leads.filters import LeadsFilter
-from config.utils_filter_methods import apply_sorting, filter_by_pagination, filter_response
+from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
 from config.utils_methods import build_response, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data

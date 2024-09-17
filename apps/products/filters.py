@@ -1,6 +1,5 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter, NumberFilter
 import datetime,django_filters
-from django.utils import timezone
 from .models import ProductGstClassifications, ProductItemBalance, Products
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, apply_sorting, filter_by_pagination, filter_by_period_name, search_queryset
@@ -52,7 +51,6 @@ class ProductsFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
     code = filters.CharFilter(lookup_expr='icontains')
     barcode = filters.CharFilter(lookup_expr='exact')
-    #Foreign key relations or functions
     category_id = filters.CharFilter(method=filter_uuid)
     product_id = filters.CharFilter(method=filter_uuid)
     category_name = CharFilter(field_name='category_id__category_name', lookup_expr='exact')
@@ -62,7 +60,6 @@ class ProductsFilter(FilterSet):
     type_name = CharFilter(field_name='type_id__type_name', lookup_expr='exact')    
     gst_classification_id = filters.CharFilter(method=filter_uuid)
     hsn_or_sac_code = CharFilter(field_name='gst_classification_id__hsn_or_sac_code', lookup_expr='exact')
-    #Date filters - custom methods
     created_at = filters.DateFromToRangeFilter()
     sales_rate = filters.RangeFilter()
     mrp = filters.RangeFilter()
