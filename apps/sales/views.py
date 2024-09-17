@@ -2103,8 +2103,8 @@ class SaleCreditNoteViewset(APIView):
 
 
         custom_data = {
-            "sale_order": new_sale_credit_note_data,
-            "sale_order_items": items_data,
+            "sale_credit_note": new_sale_credit_note_data,
+            "sale_credit_note_items": items_data,
         }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
