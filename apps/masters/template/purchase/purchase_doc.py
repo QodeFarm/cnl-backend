@@ -63,12 +63,6 @@ def purchase_data(pk, document_type):
 
         product_data = extract_product_data(items_data)
 
-        # # Get the 'shipping_mode' dictionary or default to an empty dictionary
-        # shipping_mode = shipments_data.get('shipping_mode', {})
-
-        # # Safely get the 'name' from 'shipping_mode', or return an empty string if 'shipping_mode' is None or 'name' is not found
-        # shipping_mode_name = shipping_mode.get('name', '') if shipping_mode is not None else ''
- 
         return {
                 'cust_bill_dtl' : 'Vendor Name & Address',
                 'comp_name' : comp_data[0].get('name'),
