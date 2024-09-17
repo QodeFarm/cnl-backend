@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
-from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer
+from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers
 from apps.products.serializers import ModProductGroupsSerializer, ModproductsSerializer
 from .models import *
 from django.conf import settings
@@ -42,6 +42,7 @@ class SaleOrderSerializer(serializers.ModelSerializer):
     sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    workflow = ModWorkflowSerializer(source='workflow_id',read_only=True)
     
     class Meta:
         model = SaleOrder
@@ -104,6 +105,7 @@ class SaleReturnOrdersSerializer(serializers.ModelSerializer):
     payment_link_type = ModPaymentLinkTypesSerializer(source='payment_link_type_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
     sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+    return_option = ReturnOptionsSerializers(source='return_option_id', read_only=True)
 
     class Meta:
         model = SaleReturnOrders
@@ -234,4 +236,26 @@ class SaleReceiptSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleReceipt
+        fields = '__all__'
+        
+class SaleCreditNoteSerializers(serializers.ModelSerializer):
+    sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    
+    class Meta:
+        model = SaleCreditNotes
+        fields = '__all__'
+
+class ModSaleCreditNoteSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = SaleCreditNotes
+        fields = ['credit_note_id', 'credit_date', 'total_amount', 'reason']
+        
+class SaleCreditNoteItemsSerializers(serializers.ModelSerializer):
+    credit_note = ModSaleCreditNoteSerializers(source='credit_note_id', read_only=True)
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    
+    class Meta:
+        model = SaleCreditNoteItems
         fields = '__all__'

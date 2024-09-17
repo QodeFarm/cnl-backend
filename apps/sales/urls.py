@@ -21,6 +21,8 @@ router.register(r'quick_pack_items_get', QuickPacksItemsView)
 router.register(r'workflows', WorkflowViewSet)
 router.register(r'workflow_stages', WorkflowStageViewSet)
 router.register(r'sale_receipts', SaleReceiptViewSet)
+router.register(r'sale_credit_note', SaleCreditNoteViews)
+router.register(r'sale_credit_note_item', SaleCreditNoteItemsViews)
 
 urlpatterns = [
     path('',include(router.urls)),
@@ -37,5 +39,7 @@ urlpatterns = [
     path('work_flow/', WorkflowCreateViewSet.as_view(), name='Workflow-list-create'),
     path('work_flow/<str:pk>/', WorkflowCreateViewSet.as_view(), name='Workflow-detail-update-delete'),
     path('sale_order/<uuid:pk>/workflow_pipeline/', ProgressWorkflowView.as_view(), name='workflow-pipeline'),
+    path('sale_credit_notes/', SaleCreditNoteViewset.as_view(), name='sales-credit-notes-list-create'),
+    path('sale_credit_notes/<str:pk>/', SaleCreditNoteViewset.as_view(), name='sales-credit-notes-detail-update-delete')
 
 ]

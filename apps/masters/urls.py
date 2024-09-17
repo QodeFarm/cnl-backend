@@ -34,9 +34,12 @@ router.register(r'order_status', OrderStatusesView)
 router.register(r'order_types', OrderTypesView)
 
 router.register(r'task_priorities', TaskPrioritiesViewSet)
+router.register(r'return_options', ReturnOptionsViewset)
 
 urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),
     path('generate_order_no/', generate_order_number_view, name='generate_order_no'),
+    path('document_generator/<str:pk>/<str:document_type>/', DocumentGeneratorView.as_view(), name='generate-sale-order-pdf'),
+
 ]

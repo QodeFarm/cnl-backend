@@ -57,6 +57,8 @@ quickpacks = 'quick_packs'
 salereceipts = 'sale_receipts'
 #inventory db_tables
 warehousestable ='warehouses'
+salecreditnote = 'sale_credit_notes'
+salecreditnoteitems = 'sale_credit_note_items'
 
 #purchase db_tables
 purchaseorderstable = 'purchase_orders'
@@ -109,6 +111,7 @@ paymentlinktable = 'payment_link_types'
 orderstatusestable = 'order_statuses'
 ordertypestable = 'order_types'
 taskprioritiestable ='task_priorities'
+returnoptions = 'return_options'
 
 #Authentication db_tables
 userstable = 'users'
@@ -142,6 +145,11 @@ productionstatuses = 'production_statuses'
 workorders = 'work_orders'
 inventory = 'inventory'
 machines = 'machines'
+productionworkers = 'production_workers'
+rawmaterials = 'raw_materials'
+workorderstages = 'work_order_stages'
+defaultmachinery = 'default_machinery'
+workordermachines = 'work_order_machines'
 labor = 'labor'
 
 #workflow tables

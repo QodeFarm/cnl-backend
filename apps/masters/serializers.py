@@ -299,3 +299,8 @@ class TaskPrioritiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskPriorities
         fields = '__all__'
+
+class ReturnOptionsSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = ReturnOptions
+        fields = '__all__'
