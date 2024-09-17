@@ -237,3 +237,25 @@ class SaleReceiptSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleReceipt
         fields = '__all__'
+        
+class SaleCreditNoteSerializers(serializers.ModelSerializer):
+    sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    
+    class Meta:
+        model = SaleCreditNotes
+        fields = '__all__'
+
+class ModSaleCreditNoteSerializers(serializers.ModelSerializer):
+    class Meta:
+        model = SaleCreditNotes
+        fields = ['credit_note_id', 'credit_date', 'total_amount', 'reason']
+        
+class SaleCreditNoteItemsSerializers(serializers.ModelSerializer):
+    credit_note = ModSaleCreditNoteSerializers(source='credit_note_id', read_only=True)
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    
+    class Meta:
+        model = SaleCreditNoteItems
+        fields = '__all__'

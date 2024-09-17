@@ -1927,3 +1927,247 @@ class ProgressWorkflowView(APIView):
                 "data": None
             }
             return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+        
+class SaleCreditNoteViews(viewsets.ModelViewSet):
+    queryset = SaleCreditNotes.objects.all()
+    serializer_class = SaleCreditNoteSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class SaleCreditNoteItemsViews(viewsets.ModelViewSet):
+    queryset = SaleCreditNoteItems.objects.all()
+    serializer_class = SaleCreditNoteItemsSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+        
+class SaleCreditNoteViewset(APIView):
+    
+    def get_object(self, pk):
+        try:
+            return SaleCreditNotes.objects.get(pk=pk)
+        except SaleCreditNotes.DoesNotExist:
+            logger.warning(f"salecreditnote with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
+        try:
+            logger.info("Retrieving all salecreditnote")
+            queryset = SaleCreditNotes.objects.all()
+            serializer = SaleCreditNoteSerializers(queryset, many=True)
+            logger.info("salecreditnote data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the SaleOrder instance
+            sale_credit_note = get_object_or_404(SaleOrder, pk=pk)
+            sale_order_serializer = SaleCreditNoteSerializers(sale_credit_note)
+
+            # Retrieve related data
+            credit_items_data = self.get_related_data(
+                SaleCreditNoteItems, SaleCreditNoteItemsSerializers, 'credit_note_id', pk)
+
+            # Customizing the response data
+            custom_data = {
+                "sale_credit_note": sale_order_serializer.data,
+                "sale_credit_note_items": credit_items_data,
+            }
+            logger.info("salecreditnote and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+        except Http404:
+            logger.error("salecreditnote with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(
+                "An error occurred while retrieving salecreditnote with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.",
+                         model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
+                             model.__name__, filter_field, filter_value, str(e))
+            return []
+        
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a sale order and its related attachments and shipments.
+        """
+        try:
+            # Get the SaleCreditNotes instance
+            instance = SaleCreditNotes.objects.get(pk=pk)
+
+            # Delete the main SaleCreditNotes instance
+            instance.delete()
+
+            logger.info(f"SaleCreditNotes with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except SaleCreditNotes.DoesNotExist:
+            logger.warning(f"SaleCreditNotes with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting SaleCreditNotes with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        # Extracting data from the request
+        given_data = request.data
+
+        # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        # Vlidated SaleOrder Data
+        sale_credit_note_data = given_data.pop('sale_credit_note', None)  # parent_data
+        if sale_credit_note_data:
+            credit_note_error = validate_payload_data(
+                self, sale_credit_note_data, SaleCreditNoteSerializers)
+
+        # Vlidated SaleOrderItems Data
+        sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
+        if sale_credit_items_data:
+            item_error = validate_multiple_data(
+                self, sale_credit_items_data, SaleCreditNoteItemsSerializers, ['credit_note_id'])
+
+        # Ensure mandatory data is present
+        if not sale_credit_note_data or not sale_credit_items_data:
+            logger.error(
+                "SaleCreditNote and SaleCreditNote items are mandatory but not provided.")
+            return build_response(0, "SaleCreditNote and SaleCreditNote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if credit_note_error:
+            errors["sale_credit_note"] = credit_note_error
+        if item_error:
+            errors["sale_credit_note_items"] = item_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data is created as new instances.
+        """
+
+        # Hence the data is validated , further it can be created.
+
+        # Create SaleCreditNotes Data
+        new_sale_credit_note_data = generic_data_creation(self, [sale_credit_note_data], SaleCreditNoteSerializers)
+        new_sale_credit_note_data = new_sale_credit_note_data[0]
+        credit_note_id = new_sale_credit_note_data.get("credit_note_id", None)
+        logger.info('SaleCreditNotes - created*')
+
+        # Create SaleCreditNotesItems Data
+        update_fields = {'credit_note_id': credit_note_id}
+        items_data = generic_data_creation(
+            self, sale_credit_items_data, SaleCreditNoteItemsSerializers, update_fields)
+        logger.info('SaleCreditNotesItems - created*')
+
+
+        custom_data = {
+            "sale_credit_note": new_sale_credit_note_data,
+            "sale_credit_note_items": items_data,
+        }
+
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+    
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+
+        # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+
+        # Vlidated SaleOrder Data
+        sale_credit_note_data = given_data.pop('sale_credit_note', None)  # parent_data
+        if sale_credit_note_data:
+            sale_credit_note_data['credit_note_id'] = pk
+            credit_note_error = validate_multiple_data(
+                self, [sale_credit_note_data], SaleCreditNoteSerializers)
+
+        # Vlidated SaleOrderItems Data
+        sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
+        if sale_credit_items_data:
+            exclude_fields = ['credit_note_id']
+            item_error = validate_put_method_data(self, sale_credit_items_data, SaleCreditNoteItemsSerializers,
+                                                  exclude_fields, SaleCreditNoteItems, current_model_pk_field='credit_note_item_id')
+        # Ensure mandatory data is present
+        if not sale_credit_note_data or not sale_credit_items_data:
+            logger.error(
+                "SaleCreditNote and SaleCreditNote items are mandatory but not provided.")
+            return build_response(0, "SaleCreditNote and SaleCreditNote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if credit_note_error:
+            errors["sale_credit_note"] = credit_note_error
+        if item_error:
+            errors["sale_credit_note_items"] = item_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+
+        # update SaleOrder
+        if sale_credit_note_data:
+            update_fields = []  # No need to update any fields
+            salecreditnote_data = update_multi_instances(self, pk, [sale_credit_note_data], SaleCreditNotes, SaleCreditNoteSerializers,
+                                                    update_fields, main_model_related_field='credit_note_id', current_model_pk_field='credit_note_id')
+
+        # Update the 'sale_order_items'
+        update_fields = {'credit_note_id': pk}
+        items_data = update_multi_instances(self, pk, sale_credit_items_data, SaleCreditNoteItems, SaleCreditNoteItemsSerializers,
+                                            update_fields, main_model_related_field='credit_note_id', current_model_pk_field='credit_note_item_id')
+
+        custom_data = {
+            "sale_credit_note": salecreditnote_data[0] if salecreditnote_data else {},
+            "sale_credit_note_items": items_data if items_data else []
+        }
+
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
