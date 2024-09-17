@@ -62,7 +62,13 @@ def purchase_data(pk, document_type):
         total_bill_amt = total_sub_amt + total_txbl_amt #Bill Total is the final amount after adding the fixed tax.
 
         product_data = extract_product_data(items_data)
-       
+
+        # # Get the 'shipping_mode' dictionary or default to an empty dictionary
+        # shipping_mode = shipments_data.get('shipping_mode', {})
+
+        # # Safely get the 'name' from 'shipping_mode', or return an empty string if 'shipping_mode' is None or 'name' is not found
+        # shipping_mode_name = shipping_mode.get('name', '') if shipping_mode is not None else ''
+ 
         return {
                 'cust_bill_dtl' : 'Vendor Name & Address',
                 'comp_name' : comp_data[0].get('name'),
@@ -100,17 +106,17 @@ def purchase_data(pk, document_type):
                 'total_bill_amt' : total_bill_amt,
                 
                 
-                'destination'   : shipments_data.get('destination', ''),
-                'shipping_mode_name' : shipments_data.get('shipping_mode', {}).get('name', ''),
-                'port_of_landing' : shipments_data.get('port_of_landing', ''),
-                'port_of_discharge' : shipments_data.get('port_of_discharge', ''),
-                'shipping_company_name' : shipments_data.get('shipping_company', {}).get('name', ''),
+                'destination'   : shipments_data.get('destination') or '',
+                'shipping_mode_name': (shipments_data.get('shipping_mode') or {}).get('name', ''),
+                'port_of_landing' : shipments_data.get('port_of_landing') or '',
+                'port_of_discharge' :shipments_data.get('port_of_discharge') or '',
+                'shipping_company_name' : (shipments_data.get('shipping_company') or {}).get('name', ''),
                 'shipping_tracking_no' : shipments_data.get('shipping_tracking_no', ''),
-                'vehicle_vessel' : shipments_data.get('vehicle_vessel', ''),
-                'no_of_packets' : shipments_data.get('no_of_packets', ''),
+                'vehicle_vessel' : shipments_data.get('vehicle_vessel') or '', 
+                'no_of_packets' :  shipments_data.get('no_of_packets') or '', 
                 'shipping_date' : shipments_data.get('shipping_date', ''),
                 'shipping_charges' : shipments_data.get('shipping_charges', ''),
-                'weight' : shipments_data.get('weight', '')
+                'weight' :  shipments_data.get('weight') or '', 
 
                 }
 
