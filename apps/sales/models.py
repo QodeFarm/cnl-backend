@@ -477,10 +477,12 @@ class SaleReceipt(models.Model):
     def __str__(self):
         return self.receipt_name
     
-class SaleCreditNotes(models.Model):
+class SaleCreditNotes(OrderNumberMixin):
     credit_note_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_invoice_id = models.ForeignKey('SaleInvoiceOrders', on_delete=models.CASCADE, db_column='sale_invoice_id')
-    credit_note_number = models.CharField(max_length=100, default=None)
+    credit_note_number = models.CharField(max_length=100, unique=True, default='')
+    order_no_prefix = 'CN'
+    order_no_field = 'credit_note_number'
     credit_date = models.DateField(auto_now=True)
     customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
@@ -489,24 +491,31 @@ class SaleCreditNotes(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    def __str__(self):
+        return f'{self.credit_note_number}'
+    
     class Meta:
         db_table = salecreditnote
 
-    def __str__(self):
-        return self.credit_note_number
+    
+    def save(self, *args, **kwargs):
+        # Set default order status if not provided
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
     
 class SaleCreditNoteItems(models.Model):
     credit_note_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    credit_note_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='credit_note_id')
-    product_id = models.ForeignKey(SaleCreditNotes, on_delete=models.CASCADE, db_column='product_id')
+    credit_note_id = models.ForeignKey('SaleCreditNotes', on_delete=models.CASCADE, db_column='credit_note_id')
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     quantity = models.IntegerField(default=None)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+        
+    def __str__(self):
+        return f'{self.credit_note_item_id}'
+    
     
     class Meta:
         db_table = salecreditnoteitems
-
-    def __str__(self):
-        return self.credit_note_item_id
