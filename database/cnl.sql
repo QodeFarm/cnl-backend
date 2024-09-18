@@ -706,7 +706,6 @@ CREATE TABLE IF NOT EXISTS products (
     stock_unit_id CHAR(36) NOT NULL,
 	print_barcode BOOLEAN,
     gst_classification_id CHAR(36),
-    -- picture VARCHAR(255),
     picture JSON DEFAULT NULL,
     sales_description VARCHAR(1024),
     sales_gl_id CHAR(36) NOT NULL,
@@ -794,16 +793,16 @@ CREATE TABLE IF NOT EXISTS product_variations (
 
 /* Product_item_balance Table */
 -- Stores information about product_item_balance.
--- CREATE TABLE IF NOT EXISTS product_item_balance (
---     product_item_balance_id CHAR(36) PRIMARY KEY,
---     product_variation_id CHAR(36) NOT NULL,
---     location_id CHAR(36) NOT NULL,
---     quantity INT DEFAULT 0,
---     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
---     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
---     FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
---     FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
--- );
+CREATE TABLE IF NOT EXISTS product_item_balance (
+    product_item_balance_id CHAR(36) PRIMARY KEY,
+    product_variation_id CHAR(36) NOT NULL,
+    location_id CHAR(36) NOT NULL,
+    quantity INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
+    FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
+);
 
 /* Vendor Category Table */
 -- Stores vendor categories, providing classification for vendors.
