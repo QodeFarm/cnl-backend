@@ -505,7 +505,7 @@ class SaleCreditNotes(OrderNumberMixin):
     
 class SaleCreditNoteItems(models.Model):
     credit_note_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    credit_note_id = models.ForeignKey('SaleCreditNotes', on_delete=models.CASCADE, db_column='credit_note_id')
+    credit_note_id = models.ForeignKey(SaleCreditNotes, on_delete=models.CASCADE, db_column='credit_note_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     quantity = models.IntegerField(default=None)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
