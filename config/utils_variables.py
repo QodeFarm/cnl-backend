@@ -159,6 +159,17 @@ workflowstages = 'workflow_stages'
 #Define default work flow name
 default_workflow_name = 'sales'
 
+# Finance db_tables
+financialreports = 'financial_reports'
+expenseclaims = 'expense_claims'
+budgets = 'budgets'
+taxconfigurations = 'tax_configurations'
+paymenttransaction = 'payment_transaction'
+journalentrylines = 'journal_entry_lines'
+journalentries = 'journal_entries'
+chartofaccounts = 'chart_of_accounts'
+bankaccounts = 'bank_accounts'
+
 # Define the stages for the default workflow
 default_workflow_stages = {
     1: 'sale_order',
