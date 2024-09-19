@@ -796,12 +796,12 @@ CREATE TABLE IF NOT EXISTS product_variations (
 CREATE TABLE IF NOT EXISTS product_item_balance (
     product_item_balance_id CHAR(36) PRIMARY KEY,
     product_variation_id CHAR(36) NOT NULL,
-    location_id CHAR(36) NOT NULL,
+    warehouse_location_id CHAR(36) NOT NULL,
     quantity INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
-    FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
+    FOREIGN KEY (warehouse_location_id) REFERENCES warehouse_locations(location_id)
 );
 
 /* Vendor Category Table */

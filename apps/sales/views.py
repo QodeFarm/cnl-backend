@@ -211,7 +211,8 @@ class SaleCreditNoteViews(viewsets.ModelViewSet):
         return list_all_objects(self, request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
+        response = create_instance(self, request, *args, **kwargs)
+        return response
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
@@ -1964,11 +1965,13 @@ class SaleCreditNoteViewset(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         
     def get(self, request, *args, **kwargs):
+        print("Hello")
         if "pk" in kwargs:
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             logger.info("Retrieving all salecreditnote")
+            print("try block is triggering")
             queryset = SaleCreditNotes.objects.all()
             serializer = SaleCreditNoteSerializers(queryset, many=True)
             logger.info("salecreditnote data retrieved successfully.")
@@ -1986,8 +1989,8 @@ class SaleCreditNoteViewset(APIView):
                 return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
 
             # Retrieve the SaleOrder instance
-            sale_credit_note = get_object_or_404(SaleOrder, pk=pk)
-            sale_order_serializer = SaleCreditNoteSerializers(sale_credit_note)
+            sale_credit_note = get_object_or_404(SaleCreditNotes, pk=pk)
+            sale_credit_note_serializer = SaleCreditNoteSerializers(sale_credit_note)
 
             # Retrieve related data
             credit_items_data = self.get_related_data(
@@ -1995,7 +1998,7 @@ class SaleCreditNoteViewset(APIView):
 
             # Customizing the response data
             custom_data = {
-                "sale_credit_note": sale_order_serializer.data,
+                "sale_credit_note": sale_credit_note_serializer.data,
                 "sale_credit_note_items": credit_items_data,
             }
             logger.info("salecreditnote and related data retrieved successfully.")
