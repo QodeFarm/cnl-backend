@@ -202,6 +202,32 @@ class QuickPacksItemsView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+class SaleCreditNoteViews(viewsets.ModelViewSet):
+    queryset = SaleCreditNotes.objects.all()
+    serializer_class = SaleCreditNoteSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class SaleCreditNoteItemsViews(viewsets.ModelViewSet):
+    queryset = SaleCreditNoteItems.objects.all()
+    serializer_class = SaleCreditNoteItemsSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 
 
 class SaleOrderViewSet(APIView):
@@ -1928,32 +1954,6 @@ class ProgressWorkflowView(APIView):
             }
             return Response(response_data, status=status.HTTP_404_NOT_FOUND)
         
-class SaleCreditNoteViews(viewsets.ModelViewSet):
-    queryset = SaleCreditNotes.objects.all()
-    serializer_class = SaleCreditNoteSerializers
-
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-    
-class SaleCreditNoteItemsViews(viewsets.ModelViewSet):
-    queryset = SaleCreditNoteItems.objects.all()
-    serializer_class = SaleCreditNoteItemsSerializers
-
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-        
 class SaleCreditNoteViewset(APIView):
     
     def get_object(self, pk):
@@ -2052,6 +2052,7 @@ class SaleCreditNoteViewset(APIView):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
+        print("Create is running now:")
         # Extracting data from the request
         given_data = request.data
 
