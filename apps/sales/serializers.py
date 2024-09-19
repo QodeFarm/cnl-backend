@@ -250,7 +250,7 @@ class SaleCreditNoteSerializers(serializers.ModelSerializer):
 class ModSaleCreditNoteSerializers(serializers.ModelSerializer):
     class Meta:
         model = SaleCreditNotes
-        fields = ['credit_note_id', 'credit_date', 'total_amount', 'reason']
+        fields = ['credit_note_id', 'credit_note_number', 'reason']
         
 class SaleCreditNoteItemsSerializers(serializers.ModelSerializer):
     credit_note = ModSaleCreditNoteSerializers(source='credit_note_id', read_only=True)

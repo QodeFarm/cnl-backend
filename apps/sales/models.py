@@ -479,7 +479,7 @@ class SaleReceipt(models.Model):
     
 class SaleCreditNotes(OrderNumberMixin):
     credit_note_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    sale_invoice_id = models.ForeignKey('SaleInvoiceOrders', on_delete=models.CASCADE, db_column='sale_invoice_id')
+    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
     credit_note_number = models.CharField(max_length=100, unique=True, default='')
     order_no_prefix = 'CN'
     order_no_field = 'credit_note_number'
@@ -487,7 +487,7 @@ class SaleCreditNotes(OrderNumberMixin):
     customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
-    order_status_id = order_status_id  = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
+    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, db_column='order_status_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -497,11 +497,6 @@ class SaleCreditNotes(OrderNumberMixin):
     class Meta:
         db_table = salecreditnote
 
-    
-    def save(self, *args, **kwargs):
-        # Set default order status if not provided
-        if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
     
 class SaleCreditNoteItems(models.Model):
     credit_note_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
