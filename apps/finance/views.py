@@ -6,6 +6,10 @@ from django.db import transaction
 from rest_framework import viewsets, status
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
+from apps.sales.models import SaleInvoiceOrders
+from apps.purchase.models import PurchaseInvoiceOrders
+from apps.sales.serializers import SaleInvoiceOrdersSerializer
+from apps.purchase.serializers import PurchaseInvoiceOrdersSerializer
 from config.utils_methods import build_response, generic_data_creation, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
 
 # Set up basic configuration for logging
@@ -352,24 +356,17 @@ class JournalEntryView(APIView):
         except Exception:
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-#--------------------------------APIView--------------------------
-from rest_framework.response import Response
-from apps.sales.models import SaleOrder
-from apps.purchase.models import PurchaseOrders
-from apps.sales.serializers import SaleOrderSerializer
-from apps.purchase.serializers import PurchaseOrdersSerializer
 
 class InvoiceListView(APIView):
     def get(self, request, *args, **kwargs):
         order_type = request.query_params.get('order_type')
 
         if order_type == 'Sale':
-            invoices = SaleOrder.objects.all()
-            serializer = SaleOrderSerializer(invoices, many=True)
+            invoices = SaleInvoiceOrders.objects.all()
+            serializer = SaleInvoiceOrdersSerializer(invoices, many=True)
         elif order_type == 'Purchase':
-            invoices = PurchaseOrders.objects.all()
-            serializer = PurchaseOrdersSerializer(invoices, many=True)
+            invoices = PurchaseInvoiceOrders.objects.all()
+            serializer = PurchaseInvoiceOrdersSerializer(invoices, many=True)
         else:
-            return Response({"error": "Invalid order_type"}, status=400)
-
-        return Response(serializer.data, status=200)
+            return build_response(0, "order_type choice did not match.", [], status.HTTP_400_BAD_REQUEST)
+        return build_response(invoices.count(), "Success.", serializer.data, status.HTTP_200_OK)

@@ -2004,26 +2004,8 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
     FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id)
 );
 
-/* Payment Transactions Table */
--- Manages the payments made against invoices and their details.
-/*CREATE TABLE IF NOT EXISTS payment_transaction (
-    payment_id CHAR(36) PRIMARY KEY,
-    invoice_id CHAR(36) NOT NULL,
-    invoice_type ENUM('Sale', 'Purchase') NOT NULL,
-    payment_date DATE NOT NULL,
-    payment_method ENUM('Cash', 'Bank Transfer', 'Credit Card', 'Cheque') NOT NULL,
-    payment_status ENUM('Pending', 'Completed', 'Failed') NOT NULL DEFAULT 'Pending',
-    amount DECIMAL(15, 2) NOT NULL,
-    reference_number VARCHAR(100),
-    notes VARCHAR(512),
-    currency VARCHAR(10),
-    transaction_type ENUM('Credit', 'Debit') NOT NULL DEFAULT 'Credit',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
-    FOREIGN KEY (invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id)
-);*/
-
+/*payment_transaction table
+ stores transaction details of sales and purchase. */
 CREATE TABLE IF NOT EXISTS payment_transaction (
     payment_id CHAR(36) PRIMARY KEY,
     invoice_id CHAR(36) NOT NULL,

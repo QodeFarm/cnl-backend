@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 from apps.hrms.models import Employees
+from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports
 
 # Create your models here.
 
@@ -22,7 +23,7 @@ class BankAccount(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'bank_accounts'
+        db_table = bankaccounts
 
     def __str__(self):
         return f"{self.bank_name}"
@@ -43,7 +44,7 @@ class ChartOfAccounts(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'chart_of_accounts'
+        db_table = chartofaccounts
 
     def __str__(self):
         return f"{self.account_name}"
@@ -57,7 +58,7 @@ class JournalEntry(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'journal_entries'
+        db_table = journalentries
 
     def __str__(self):
         return f"{self.entry_date} - {self.reference}"
@@ -65,7 +66,7 @@ class JournalEntry(models.Model):
 class JournalEntryLines(models.Model):
     journal_entry_line_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     journal_entry_id = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name='entry_lines', db_column='journal_entry_id')
-    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='journal_entry_lines', db_column='account_id')
+    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, null=True, related_name='journal_entry_lines', db_column='account_id')
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     description = models.CharField(max_length=1024, default=None, null=True)
@@ -73,7 +74,7 @@ class JournalEntryLines(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        db_table = 'journal_entry_lines'
+        db_table = journalentrylines
 
     def __str__(self):
         return f"Line {self.journal_entry_line_id} for Entry {self.journal_entry.journal_entry_id}"
@@ -117,7 +118,7 @@ class PaymentTransaction(models.Model): # Enhance Later
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'payment_transaction'
+        db_table = paymenttransaction
 
     def __str__(self):
         return f"Payment {self.payment_id} for Invoice {self.invoice_id}"
@@ -138,7 +139,7 @@ class TaxConfiguration(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'tax_configurations'
+        db_table = taxconfigurations
 
     def __str__(self):
         return f"{self.tax_name} ({self.tax_rate}{'%' if self.tax_type == 'Percentage' else ''})"
@@ -153,7 +154,7 @@ class Budget(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'budgets'
+        db_table = budgets
 
     def __str__(self):
         return f"Budget for {self.account.account_name} - Fiscal Year {self.fiscal_year}"
@@ -178,7 +179,7 @@ class ExpenseClaim(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'expense_claims'
+        db_table = expenseclaims
 
     def __str__(self):
         return f"Expense Claim {self.expense_claim_id} by Employee {self.employee_id}"
@@ -203,7 +204,7 @@ class FinancialReport(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'financial_reports'
+        db_table = financialreports
 
     def __str__(self):
         return f"Report: {self.report_name} ({self.report_type})"
