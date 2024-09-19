@@ -9,12 +9,9 @@ import json
 from django.core.exceptions import ValidationError
 
 class TasksFilter(filters.FilterSet):
-    user_id = filters.CharFilter(method=filter_uuid)
-    user = filters.CharFilter(field_name='user_id__first_name', lookup_expr='icontains')
-    priority_id = filters.CharFilter(method=filter_uuid)
-    priority = filters.CharFilter(field_name='priority_id__priority_name', lookup_expr='icontains')
-    status_id = filters.CharFilter(method=filter_uuid)
-    status = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
+    user_id = filters.CharFilter(field_name='user_id__first_name', lookup_expr='icontains')
+    priority_id = filters.CharFilter(field_name='priority_id__priority_name', lookup_expr='icontains')
+    status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
     description = filters.CharFilter(field_name='description', lookup_expr='icontains')
     title = filters.CharFilter(lookup_expr='icontains')
     due_date = filters.DateFilter()
@@ -56,4 +53,4 @@ class TasksFilter(filters.FilterSet):
     class Meta:
         model = Tasks
         #do not change "title",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['title','user_id','user','description','priority_id','priority', 'status_id','status','due_date','created_at','period_name','search','sort','page','limit']
+        fields =['title','user_id','description','priority_id','status_id','due_date','created_at','period_name','search','sort','page','limit']

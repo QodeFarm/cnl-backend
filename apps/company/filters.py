@@ -26,12 +26,9 @@ class BranchesFilters(django_filters.FilterSet):
     phone = django_filters.CharFilter(lookup_expr='icontains')
     address = django_filters.CharFilter(lookup_expr='icontains')
     email = django_filters.CharFilter(lookup_expr='icontains')
-    city_id = django_filters.CharFilter(method=filter_uuid)
-    city = django_filters.CharFilter(field_name='city_id__city_name', lookup_expr='exact')
-    state_id = django_filters.CharFilter(method=filter_uuid)
-    state = django_filters.CharFilter(field_name='state_id__state_name', lookup_expr='exact')
-    status_id = django_filters.CharFilter(method=filter_uuid)
-    status = django_filters.CharFilter(field_name='status_id__status_name', lookup_expr='exact')
+    city_id = django_filters.CharFilter(field_name='city_id__city_name', lookup_expr='exact')
+    state_id = django_filters.CharFilter(field_name='state_id__state_name', lookup_expr='exact')
+    status_id = django_filters.CharFilter(field_name='status_id__status_name', lookup_expr='exact')
     country = django_filters.CharFilter(field_name='country_id__country_name', lookup_expr='exact')
     created_at = django_filters.DateFromToRangeFilter()
     period_name = django_filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
@@ -72,7 +69,7 @@ class BranchesFilters(django_filters.FilterSet):
     class Meta:
         model = Branches
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','code','email','phone','address','branch_id','city_id','city','state_id','state','status_id','status','country','created_at','period_name','search','sort','page','limit']
+        fields = ['name','code','email','phone','address','branch_id','city_id','state_id','status_id','country','created_at','period_name','search','sort','page','limit']
 
 class BranchBankDetailsFilters(django_filters.FilterSet):
     bank_detail_id = django_filters.CharFilter(method=filter_uuid)

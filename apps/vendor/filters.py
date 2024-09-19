@@ -12,8 +12,7 @@ from django.core.exceptions import ValidationError
 class VendorFilter(FilterSet): #verified
     name = filters.CharFilter(lookup_expr='icontains')
     gst_no = filters.CharFilter(lookup_expr='icontains')
-    vendor_category_id = filters.CharFilter(method=filter_uuid)
-    vendor_category = filters.CharFilter(field_name='vendor_category_id__name', lookup_expr='icontains')
+    vendor_category_id = filters.CharFilter(field_name='vendor_category_id__name', lookup_expr='icontains')
     ledger_account_id = filters.CharFilter(method=filter_uuid)
     ledger_account = filters.CharFilter(field_name='ledger_account_id__name', lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
@@ -40,7 +39,7 @@ class VendorFilter(FilterSet): #verified
             raise ValidationError("Invalid search parameter format.")
 
         queryset = search_queryset(queryset, search_params, self)
-        return queryset
+        return queryset.distinct()
 
     def filter_by_sort(self, queryset, name, value):
         return apply_sorting(self, queryset)
@@ -52,12 +51,12 @@ class VendorFilter(FilterSet): #verified
     def filter_by_limit(self, queryset, name, value):
         self.limit = int(value)
         queryset = apply_sorting(self, queryset)
-        paginated_queryset, total_count = filter_by_pagination(queryset, self.page_number, self.limit)
+        paginated_queryset, total_count = filter_by_pagination(queryset.distinct(), self.page_number, self.limit)
         self.total_count = total_count
         return paginated_queryset
     
     class Meta:
         model = Vendor
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst_no','vendor_category_id','vendor_category','ledger_account_id','ledger_account','created_at', 'city_id','email', 'phone','period_name','search','sort','page','limit']
+        fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account','created_at', 'city_id','email', 'phone','period_name','search','sort','page','limit']
 

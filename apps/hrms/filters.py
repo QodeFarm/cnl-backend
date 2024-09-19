@@ -9,10 +9,8 @@ import json
 from django.core.exceptions import ValidationError
 
 class EmployeesFilter(filters.FilterSet):
-    designation_id = filters.CharFilter(method=filter_uuid)
-    designation = filters.CharFilter(field_name='designation_id__designation_name', lookup_expr='icontains')
-    department_id = filters.CharFilter(method=filter_uuid)
-    department = filters.CharFilter(field_name='department_id__department_name', lookup_expr='icontains')
+    designation_id = filters.CharFilter(field_name='designation_id__designation_name', lookup_expr='icontains')
+    department_id = filters.CharFilter(field_name='department_id__department_name', lookup_expr='icontains')
     name = filters.CharFilter(lookup_expr='icontains')
     email = filters.CharFilter(lookup_expr='exact')
     phone = filters.CharFilter(lookup_expr='exact')
@@ -54,4 +52,4 @@ class EmployeesFilter(filters.FilterSet):
     class Meta:
         model = Employees
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','email','phone','designation_id','designation','department_id', 'department','created_at','period_name','search','sort','page','limit']
+        fields =['name','email','phone','designation_id','department_id','created_at','period_name','search','sort','page','limit']

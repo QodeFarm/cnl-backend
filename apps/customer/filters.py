@@ -51,10 +51,10 @@ class CustomerFilters(filters.FilterSet):
             raise ValidationError("Invalid search parameter format.")
 
         queryset = search_queryset(queryset, search_params, self)
-        return queryset
+        return queryset.distinct()
 
     def filter_by_sort(self, queryset, name, value):
-        return apply_sorting(self, queryset)
+        return apply_sorting(self, queryset) 
 
     def filter_by_page(self, queryset, name, value):
         self.page_number = int(value)
@@ -63,7 +63,7 @@ class CustomerFilters(filters.FilterSet):
     def filter_by_limit(self, queryset, name, value):
         self.limit = int(value)
         queryset = apply_sorting(self, queryset)
-        paginated_queryset, total_count = filter_by_pagination(queryset, self.page_number, self.limit)
+        paginated_queryset, total_count = filter_by_pagination(queryset.distinct(), self.page_number, self.limit)
         self.total_count = total_count
         return paginated_queryset
     

@@ -9,14 +9,10 @@ import json
 from django.core.exceptions import ValidationError
 
 class AssetsFilter(filters.FilterSet):
-    asset_category_id = filters.CharFilter(method=filter_uuid)
-    category = filters.CharFilter(field_name='asset_category_id__category_name', lookup_expr='icontains')
-    unit_options_id = filters.CharFilter(method=filter_uuid)
-    unit_options = filters.CharFilter(field_name='unit_options_id__unit_name', lookup_expr='icontains')
-    asset_status_id = filters.CharFilter(method=filter_uuid)
-    status= filters.CharFilter(field_name='asset_status_id__status_name', lookup_expr='icontains')
-    location_id = filters.CharFilter(method=filter_uuid)
-    location= filters.CharFilter(field_name='location_id__location_name', lookup_expr='icontains')
+    asset_category_id = filters.CharFilter(field_name='asset_category_id__category_name', lookup_expr='icontains')
+    unit_options_id = filters.CharFilter(field_name='unit_options_id__unit_name', lookup_expr='icontains')
+    asset_status_id= filters.CharFilter(field_name='asset_status_id__status_name', lookup_expr='icontains')
+    location_id= filters.CharFilter(field_name='location_id__location_name', lookup_expr='icontains')
     name = filters.CharFilter(lookup_expr='icontains')
     purchase_date = filters.DateFilter()
     price = DateFromToRangeFilter()
@@ -58,12 +54,11 @@ class AssetsFilter(filters.FilterSet):
     class Meta:
         model = Assets
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','price','purchase_date','asset_category_id','category','unit_options_id', 'unit_options','asset_status_id','status','location_id','location','created_at','period_name','search','sort','page','limit']
+        fields =['name','price','purchase_date','asset_category_id','unit_options_id','asset_status_id','location_id','created_at','period_name','search','sort','page','limit']
 
 
 class AssetMaintenanceFilter(filters.FilterSet):
-    asset_id = filters.CharFilter(method=filter_uuid)
-    asset = filters.CharFilter(field_name='asset_id__name', lookup_expr='icontains')
+    asset_id = filters.CharFilter(field_name='asset_id__name', lookup_expr='icontains')
     maintenance_description = filters.CharFilter(lookup_expr='icontains')
     maintenance_date = filters.DateFilter()
     cost = DateFromToRangeFilter()
@@ -104,5 +99,5 @@ class AssetMaintenanceFilter(filters.FilterSet):
     
     class Meta:
         model = AssetMaintenance
-        #do not change "asset",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['asset','asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','search','sort','page','limit']
+        #do not change "asset_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','search','sort','page','limit']

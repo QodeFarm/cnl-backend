@@ -9,10 +9,8 @@ import json
 from django.core.exceptions import ValidationError
 
 class WarehousesFilter(filters.FilterSet):
-    city_id = filters.CharFilter(method=filter_uuid)
-    city = filters.CharFilter(field_name='city_id__city_name', lookup_expr='icontains')
-    state_id = filters.CharFilter(method=filter_uuid)
-    state = filters.CharFilter(field_name='state_id__state_name', lookup_expr='icontains')
+    city_id = filters.CharFilter(field_name='city_id__city_name', lookup_expr='icontains')
+    state_id = filters.CharFilter(field_name='state_id__state_name', lookup_expr='icontains')
     name = filters.CharFilter(lookup_expr='icontains')
     code = filters.CharFilter(lookup_expr='icontains')
     phone = filters.CharFilter(lookup_expr='exact')
@@ -54,4 +52,4 @@ class WarehousesFilter(filters.FilterSet):
     class Meta:
         model = Warehouses
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','phone','city_id','city','state_id', 'state','created_at','period_name','search','sort','page','limit']
+        fields =['name','code','phone','city_id','state_id','created_at','period_name','search','sort','page','limit']
