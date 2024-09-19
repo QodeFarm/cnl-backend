@@ -18,6 +18,5 @@ router.register(r'financial_reports', FinancialReportViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('journal_entries/', JournalEntryView.as_view(), name='journal_entries-list-create'),
-    path('journal_entries/<str:pk>/', JournalEntryView.as_view(), name='journal_entries-detail-update-delete'),
-    path('invoices/', InvoiceListView.as_view(), name='invoice-list')
+    path('journal_entries/<str:pk>/', JournalEntryView.as_view(), name='journal_entries-detail-update-delete')
 ]
