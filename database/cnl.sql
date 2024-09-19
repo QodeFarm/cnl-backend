@@ -706,7 +706,6 @@ CREATE TABLE IF NOT EXISTS products (
     stock_unit_id CHAR(36) NOT NULL,
 	print_barcode BOOLEAN,
     gst_classification_id CHAR(36),
-    -- picture VARCHAR(255),
     picture JSON DEFAULT NULL,
     sales_description VARCHAR(1024),
     sales_gl_id CHAR(36) NOT NULL,
@@ -754,14 +753,14 @@ CREATE TABLE IF NOT EXISTS products (
 -- Stores information about different sizes.
 CREATE TABLE IF NOT EXISTS sizes (
     size_id CHAR(36) PRIMARY KEY,
-    size_name VARCHAR(50),                    -- The name/label of the size (e.g., S, M, L, 10, 42)
-    size_category VARCHAR(100) NOT NULL,      -- Category to which the size applies (e.g., clothing, industrial, food)
-    size_system VARCHAR(50),                  -- Optional: Size system (e.g., US, EU, metric)
+    size_name VARCHAR(50),
+    size_category VARCHAR(100) NOT NULL,
+    size_system VARCHAR(50),
     length DECIMAL(10, 2),                    
     height DECIMAL(10, 2),                    
     width DECIMAL(10, 2),                     
-    size_unit VARCHAR(50),                    -- Unit of measurement (e.g., inches, cm, meters)
-    description TEXT,                         -- Additional details or description of the size
+    size_unit VARCHAR(50),
+    description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -794,16 +793,16 @@ CREATE TABLE IF NOT EXISTS product_variations (
 
 /* Product_item_balance Table */
 -- Stores information about product_item_balance.
--- CREATE TABLE IF NOT EXISTS product_item_balance (
---     product_item_balance_id CHAR(36) PRIMARY KEY,
---     product_variation_id CHAR(36) NOT NULL,
---     location_id CHAR(36) NOT NULL,
---     quantity INT DEFAULT 0,
---     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
---     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
---     FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
---     FOREIGN KEY (location_id) REFERENCES warehouse_locations(location_id)
--- );
+CREATE TABLE IF NOT EXISTS product_item_balance (
+    product_item_balance_id CHAR(36) PRIMARY KEY,
+    product_variation_id CHAR(36) NOT NULL,
+    warehouse_location_id CHAR(36) NOT NULL,
+    quantity INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
+    FOREIGN KEY (warehouse_location_id) REFERENCES warehouse_locations(location_id)
+);
 
 /* Vendor Category Table */
 -- Stores vendor categories, providing classification for vendors.
@@ -858,7 +857,6 @@ CREATE TABLE IF NOT EXISTS vendor (
     territory_id CHAR(36),
     vendor_category_id CHAR(36),
     contact_person VARCHAR(255),
-    
     picture JSON DEFAULT NULL,
     gst VARCHAR(255),
     registration_date DATE,
@@ -1842,7 +1840,7 @@ CREATE TABLE IF NOT EXISTS work_order_stages (
 
 /* Bill of Materials (BOM) Table */
 -- Stores the list of materials and components required to produce each product.
-CREATE TABLE bill_of_materials (
+CREATE TABLE IF NOT EXISTS bill_of_materials (
   bom_id CHAR(36) PRIMARY KEY,
   product_id CHAR(36),
   component_name VARCHAR(100),
@@ -1914,7 +1912,7 @@ FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 
 /* Workflows Table */
 -- Stores details about different workflows used in the ERP system.
-CREATE TABLE workflows (
+CREATE TABLE IF NOT EXISTS workflows (
     workflow_id CHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1923,7 +1921,7 @@ CREATE TABLE workflows (
 
 /* Workflow Stages Table */
 -- Defines stages within each workflow, including the order of the stages.
-CREATE TABLE workflow_stages (
+CREATE TABLE IF NOT EXISTS workflow_stages (
     stage_id CHAR(36) PRIMARY KEY,    
     workflow_id CHAR(36) NOT NULL,
     stage_name VARCHAR(255) NOT NULL,
@@ -1956,6 +1954,7 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
     account_number VARCHAR(50) UNIQUE NOT NULL,
     bank_name VARCHAR(100) NOT NULL,
     branch_name VARCHAR(100),
+    ifsc_code VARCHAR(100),
     account_type ENUM('Savings', 'Current') NOT NULL,
     balance DECIMAL(15, 2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1998,16 +1997,18 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
     debit DECIMAL(15, 2) DEFAULT 0.00,
     credit DECIMAL(15, 2) DEFAULT 0.00,
     description VARCHAR(1024),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(journal_entry_id),
     FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id)
 );
 
-/* Payment Transactions Table */
--- Manages the payments made against invoices and their details.
-CREATE TABLE IF NOT EXISTS payment_transactions (
+/*payment_transaction table
+ stores transaction details of sales and purchase. */
+CREATE TABLE IF NOT EXISTS payment_transaction (
     payment_id CHAR(36) PRIMARY KEY,
     invoice_id CHAR(36) NOT NULL,
-    invoice_type ENUM('Sale', 'Purchase') NOT NULL,
+    order_type ENUM('Sale', 'Purchase') NOT NULL,
     payment_date DATE NOT NULL,
     payment_method ENUM('Cash', 'Bank Transfer', 'Credit Card', 'Cheque') NOT NULL,
     payment_status ENUM('Pending', 'Completed', 'Failed') NOT NULL DEFAULT 'Pending',
@@ -2017,9 +2018,7 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
     currency VARCHAR(10),
     transaction_type ENUM('Credit', 'Debit') NOT NULL DEFAULT 'Credit',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
-    FOREIGN KEY (invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 /* Tax Configurations Table */
@@ -2068,7 +2067,7 @@ CREATE TABLE IF NOT EXISTS financial_reports (
     report_name VARCHAR(100) NOT NULL,
     report_type ENUM('Balance Sheet', 'Profit & Loss', 'Cash Flow', 'Trial Balance') NOT NULL,
     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    file_path VARCHAR(255) NOT NULL,
+    file_path JSON NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
