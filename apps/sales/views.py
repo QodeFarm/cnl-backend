@@ -2175,3 +2175,14 @@ class SaleCreditNoteViewset(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
+    def patch(self, request, pk, format=None):
+        sale_credit_note = self.get_object(pk)
+        if sale_credit_note is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SaleCreditNoteSerializers(sale_credit_note, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
