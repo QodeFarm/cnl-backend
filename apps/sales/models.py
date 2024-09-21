@@ -47,6 +47,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     vehicle_name = models.CharField(max_length=255, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
     order_status_id  = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
+    sale_return_id = models.ForeignKey('sales.SaleReturnOrders', on_delete=models.CASCADE, null=True, default=None, db_column='sale_return_id')
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -480,6 +481,7 @@ class SaleReceipt(models.Model):
 class SaleCreditNotes(OrderNumberMixin):
     credit_note_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
+    sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, null=True, default=None, db_column='sale_return_id')
     credit_note_number = models.CharField(max_length=100, unique=True, default='')
     order_no_prefix = 'CN'
     order_no_field = 'credit_note_number'
@@ -523,6 +525,7 @@ class SaleCreditNoteItems(models.Model):
 class SaleDebitNotes(OrderNumberMixin):
     debit_note_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
+    sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, null=True, default=None, db_column='sale_return_id')
     debit_note_number = models.CharField(max_length=100, unique=True, default='')
     order_no_prefix = 'DN'
     order_no_field = 'debit_note_number'

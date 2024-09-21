@@ -43,6 +43,7 @@ class SaleOrderSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
     workflow = ModWorkflowSerializer(source='workflow_id',read_only=True)
+    sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
     
     class Meta:
         model = SaleOrder
@@ -242,6 +243,7 @@ class SaleCreditNoteSerializers(serializers.ModelSerializer):
     sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
     
     class Meta:
         model = SaleCreditNotes
@@ -264,6 +266,7 @@ class SaleDebitNoteSerializers(serializers.ModelSerializer):
     sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
     
     class Meta:
         model = SaleDebitNotes
