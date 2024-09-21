@@ -59,6 +59,8 @@ salereceipts = 'sale_receipts'
 warehousestable ='warehouses'
 salecreditnote = 'sale_credit_notes'
 salecreditnoteitems = 'sale_credit_note_items'
+saledebitnote = 'sale_debit_notes'
+saledebitnoteitems = 'sale_debit_note_items'
 
 #purchase db_tables
 purchaseorderstable = 'purchase_orders'
