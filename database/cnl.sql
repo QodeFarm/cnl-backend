@@ -2174,6 +2174,7 @@ CREATE TABLE IF NOT EXISTS custom_field_values (
     FOREIGN KEY (entity_id) REFERENCES entities(entity_id) ON DELETE CASCADE
 );
 
+
 /* Sale Debit Notes Table */
 -- Stores debit notes issued to customers for adjustments such as undercharges or additional fees.
 CREATE TABLE IF NOT EXISTS sale_debit_notes (
@@ -2192,6 +2193,7 @@ CREATE TABLE IF NOT EXISTS sale_debit_notes (
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
 	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
     FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
 );
 
 /* Sale Debit Note Items Table */
