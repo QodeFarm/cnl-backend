@@ -496,6 +496,11 @@ class SaleCreditNotes(OrderNumberMixin):
     
     class Meta:
         db_table = salecreditnote
+        
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
 
     
 class SaleCreditNoteItems(models.Model):
@@ -534,6 +539,11 @@ class SaleDebitNotes(OrderNumberMixin):
     
     class Meta:
         db_table = saledebitnote
+        
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
 
     
 class SaleDebitNoteItems(models.Model):
