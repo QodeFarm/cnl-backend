@@ -1053,7 +1053,7 @@ CREATE TABLE IF NOT EXISTS return_options (
 CREATE TABLE IF NOT EXISTS sale_orders(
     sale_order_id CHAR(36) PRIMARY KEY,
     sale_type_id CHAR(36),
-    order_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: SO-2406-00001
+    order_no VARCHAR(20) UNIQUE NOT NULL,
     order_date DATE NOT NULL,
     customer_id CHAR(36) NOT NULL,
     gst_type_id CHAR(36),
@@ -1077,7 +1077,10 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     doc_amount DECIMAL(18, 2),
     vehicle_name VARCHAR(255),
     total_boxes INT,
+    flow_status VARCHAR(255),
 	order_status_id CHAR(36),
+    workflow_id CHAR(36),
+    sale_return_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1088,7 +1091,9 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     FOREIGN KEY (payment_term_id) REFERENCES customer_payment_terms(payment_term_id),
     FOREIGN KEY (sale_type_id) REFERENCES sale_types(sale_type_id),
     FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id),
-	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id),
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
 );
 
 /* Order Items Table */
@@ -2083,11 +2088,13 @@ CREATE TABLE IF NOT EXISTS sale_credit_notes (
     total_amount DECIMAL(10,2) NOT NULL,
     reason VARCHAR(1024),
     order_status_id CHAR(36),
+    sale_return_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
-	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
 );
 
 /* Sale Credit Note Items Table */
@@ -2117,11 +2124,13 @@ CREATE TABLE IF NOT EXISTS sale_debit_notes (
     total_amount DECIMAL(10,2) NOT NULL,
     reason VARCHAR(1024),
     order_status_id CHAR(36),
+    sale_return_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
-	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
 );
 
 /* Sale Debit Note Items Table */
