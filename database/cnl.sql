@@ -2138,6 +2138,8 @@ CREATE TABLE IF NOT EXISTS custom_field_options (
     option_id CHAR(36) PRIMARY KEY,
     custom_field_id CHAR(36) NOT NULL,
     option_value VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id) ON DELETE CASCADE
 );
 

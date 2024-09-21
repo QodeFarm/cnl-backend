@@ -4,7 +4,7 @@ from .views import FieldTypeViewSet, CustomFieldViewSet, CustomFieldOptionViewSe
 
 router = DefaultRouter()
 router.register(r'fieldtypes', FieldTypeViewSet)
-router.register(r'customfields', CustomFieldViewSet)
+# router.register(r'customfields', CustomFieldViewSet)
 router.register(r'entities', EntitiesViewSet)
 router.register(r'customfieldoptions', CustomFieldOptionViewSet)
 router.register(r'customfieldvalues', CustomFieldValueViewSet)
@@ -12,4 +12,6 @@ router.register(r'customfieldvalues', CustomFieldValueViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('customfieldscreate/', CustomFieldViewSet.as_view(), name='customefields-create'),
+    path('customfieldscreate/<str:pk>/', CustomFieldViewSet.as_view(), name='customefields-details')
 ]

@@ -29,7 +29,7 @@ class CustomFieldSerializer(serializers.ModelSerializer):
 
 
 class CustomFieldOptionSerializer(serializers.ModelSerializer):
-    custom_field = ModCustomFieldSerializer(source='custom_field_id', read_only = True)
+    # custom_field = ModCustomFieldSerializer(source='custom_field_id', read_only = True)
     class Meta:
         model = CustomFieldOption
         fields = '__all__'
