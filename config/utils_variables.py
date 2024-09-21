@@ -170,6 +170,13 @@ journalentries = 'journal_entries'
 chartofaccounts = 'chart_of_accounts'
 bankaccounts = 'bank_accounts'
 
+#custom db tables
+fieldtypes = 'field_types'
+customfields = 'custom_fields'
+customfieldoptions = 'custom_field_options'
+customfieldvalues = 'custom_field_values'
+entities = 'entities'
+
 # Define the stages for the default workflow
 default_workflow_stages = {
     1: 'sale_order',

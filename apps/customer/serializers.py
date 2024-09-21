@@ -151,3 +151,14 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+
+# class CustomFieldSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = CustomField
+#         fields = ['id', 'entity_type', 'field_name', 'field_label', 'field_type', 'field_options', 'is_required', 'is_active']
+
+
+# class CustomFieldValueSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = CustomFieldValue
+#         fields = ['id', 'entity_type', 'entity_id', 'custom_field', 'field_value']

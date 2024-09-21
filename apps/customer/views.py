@@ -99,7 +99,33 @@ class CustomerAttachmentsViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+
+# class CustomFieldsView(viewsets.ModelViewSet):
+#     queryset = CustomField.objects.all()
+#     serializer_class = CustomFieldSerializer
+
+#     def list(self, request, *args, **kwargs):
+#         return list_all_objects(self, request, *args, **kwargs)
+
+#     def create(self, request, *args, **kwargs):
+#         return create_instance(self, request, *args, **kwargs)
+
+#     def update(self, request, *args, **kwargs):
+#         return update_instance(self, request, *args, **kwargs)
     
+# class CustomFieldValuesView(viewsets.ModelViewSet):
+#     queryset = CustomFieldValue.objects.all()
+#     serializer_class = CustomFieldValueSerializer
+
+#     def list(self, request, *args, **kwargs):
+        
+#         return list_all_objects(self, request, *args, **kwargs)
+
+#     def create(self, request, *args, **kwargs):
+#         return create_instance(self, request, *args, **kwargs)
+
+#     def update(self, request, *args, **kwargs):
+#         return update_instance(self, request, *args, **kwargs)
 #==========================================================================  
     
 class CustomerCreateViews(APIView):
@@ -359,3 +385,4 @@ class CustomerCreateViews(APIView):
 
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
+

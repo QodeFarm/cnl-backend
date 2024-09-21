@@ -142,3 +142,26 @@ class CustomerAddresses(models.Model):
         db_table = customeraddressestable
 
     
+# class CustomField(models.Model):
+#     FIELD_TYPES = [
+#         ('text', 'Text'),
+#         ('number', 'Number'),
+#         ('date', 'Date'),
+#         ('boolean', 'Boolean'),
+#         ('select', 'Select'),
+#         ('textarea', 'TextArea'),
+#     ]
+    
+#     entity_type = models.CharField(max_length=50, default='customer')  # Fixed for customers in this case
+#     field_name = models.CharField(max_length=255)  # Internal field name
+#     field_label = models.CharField(max_length=255)  # Display name for the field
+#     field_type = models.CharField(max_length=50, choices=FIELD_TYPES)  # Data type
+#     field_options = models.JSONField(null=True, blank=True)  # For select-type fields (dropdown options)
+#     is_required = models.BooleanField(default=False)
+#     is_active = models.BooleanField(default=True)
+    
+#     def __str__(self):
+#         return f"{self.field_label} (Customer)"
+
+#     class Meta:
+#         db_table = 'custom_fields'

@@ -22,6 +22,7 @@ def api_links(request):
         ('api/v1/assets/', 'Assets API'),
         ('api/v1/production/', 'Production API'),
         ('api/v1/finance/', 'Finance API'),
+        ('api/v1/customfields/', 'Customfields API'),
         ('swagger/','Swagger')
     ]
 
