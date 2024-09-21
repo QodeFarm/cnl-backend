@@ -487,7 +487,7 @@ class SaleCreditNotes(OrderNumberMixin):
     customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
-    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, db_column='order_status_id')
+    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -530,7 +530,7 @@ class SaleDebitNotes(OrderNumberMixin):
     customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
-    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, db_column='order_status_id')
+    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
