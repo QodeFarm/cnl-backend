@@ -500,7 +500,7 @@ def generate_order_number_view(request):
         return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
     
     order_type_prefix = order_type_prefix.upper()
-    valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN']
+    valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
     
     if order_type_prefix not in valid_prefixes:
         return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)
@@ -585,6 +585,35 @@ class DocumentGeneratorView(APIView):
 class ReturnOptionsViewset(viewsets.ModelViewSet):
     queryset = ReturnOptions.objects.all()
     serializer_class = ReturnOptionsSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class FieldTypeViewSet(viewsets.ModelViewSet):
+    queryset = FieldType.objects.all()
+    serializer_class = FieldTypeSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)    
+    
+class EntitiesViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for CRUD operations on Entity model.
+    """
+    queryset = Entities.objects.all()
+    serializer_class = EntitiesSerializer
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

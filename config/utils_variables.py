@@ -59,6 +59,8 @@ salereceipts = 'sale_receipts'
 warehousestable ='warehouses'
 salecreditnote = 'sale_credit_notes'
 salecreditnoteitems = 'sale_credit_note_items'
+saledebitnote = 'sale_debit_notes'
+saledebitnoteitems = 'sale_debit_note_items'
 
 #purchase db_tables
 purchaseorderstable = 'purchase_orders'
@@ -112,6 +114,8 @@ orderstatusestable = 'order_statuses'
 ordertypestable = 'order_types'
 taskprioritiestable ='task_priorities'
 returnoptions = 'return_options'
+entities = 'entities'
+fieldtypes = 'field_types'
 
 #Authentication db_tables
 userstable = 'users'
@@ -169,6 +173,12 @@ journalentrylines = 'journal_entry_lines'
 journalentries = 'journal_entries'
 chartofaccounts = 'chart_of_accounts'
 bankaccounts = 'bank_accounts'
+
+#custom db tables
+customfields = 'custom_fields'
+customfieldoptions = 'custom_field_options'
+customfieldvalues = 'custom_field_values'
+
 
 # Define the stages for the default workflow
 default_workflow_stages = {
