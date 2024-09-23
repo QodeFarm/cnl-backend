@@ -215,30 +215,4 @@ def list_filtered_objects(self, request, model_name,*args, **kwargs):
     status_code = status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
     return filter_response(count=len(paginated_queryset),message=message,data=serializer.data,page=page,limit=limit,total_count=total_count,status_code=status_code)
 
-# def create_filtered_instance(self, request, *args, **kwargs):
-#     serializer = self.get_serializer(data=request.data)
-    
-#     if serializer.is_valid():
-#         serializer.save()
-#         data = serializer.data
-#         return filter_response(count=1,message="Record created successfully",data=data,page=None,limit=None,total_count=None,status_code=status.HTTP_201_CREATED)
-#     else:
-#         errors_str = json.dumps(serializer.errors, indent=2)
-#         logger.error("Serializer validation error: %s", errors_str)
-#         return filter_response(count=0,message="Form validation failed",data=[],page=None,limit=None,total_count=None,status_code=status.HTTP_400_BAD_REQUEST)
-
-# def update_filtered_instance(self, request, *args, **kwargs):
-#     partial = kwargs.pop('partial', False)
-#     instance = self.get_object()
-#     serializer = self.get_serializer(instance, data=request.data, partial=partial)
-    
-#     if serializer.is_valid():
-#         self.perform_update(serializer)
-#         data = serializer.data
-#         return filter_response(count=1,message="Record updated successfully",data=data,page=None,limit=None,total_count=None,status_code=status.HTTP_200_OK)
-#     else:
-#         errors_str = json.dumps(serializer.errors, indent=2)
-#         logger.error("Serializer validation error: %s", errors_str)
-#         return filter_response(count=0,message="Update failed",data=[],page=None,limit=None,total_count=None,status_code=status.HTTP_400_BAD_REQUEST)
-
 #========================Filter Response==================================

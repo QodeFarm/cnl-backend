@@ -7,10 +7,6 @@ from django.db import transaction
 from rest_framework import viewsets, status
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
-from apps.sales.models import SaleInvoiceOrders
-from apps.purchase.models import PurchaseInvoiceOrders
-from apps.sales.serializers import SaleInvoiceOrdersSerializer
-from apps.purchase.serializers import PurchaseInvoiceOrdersSerializer
 from config.utils_methods import build_response, generic_data_creation, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 

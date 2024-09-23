@@ -1,12 +1,9 @@
 from django_filters import rest_framework as filters
 from apps.assets.models import AssetMaintenance, Assets
-from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
-import json
-from django.core.exceptions import ValidationError
 
 class AssetsFilter(filters.FilterSet):
     asset_category_id = filters.CharFilter(field_name='asset_category_id__category_name', lookup_expr='icontains')

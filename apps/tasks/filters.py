@@ -5,8 +5,6 @@ from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
-import json
-from django.core.exceptions import ValidationError
 
 class TasksFilter(filters.FilterSet):
     user_id = filters.CharFilter(field_name='user_id__first_name', lookup_expr='icontains')
