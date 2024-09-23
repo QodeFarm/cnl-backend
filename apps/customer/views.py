@@ -99,7 +99,7 @@ class CustomerAttachmentsViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-    
+
 #==========================================================================  
     
 class CustomerCreateViews(APIView):
@@ -359,3 +359,4 @@ class CustomerCreateViews(APIView):
 
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
+

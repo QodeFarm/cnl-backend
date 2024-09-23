@@ -36,6 +36,8 @@ router.register(r'order_types', OrderTypesView)
 router.register(r'task_priorities', TaskPrioritiesViewSet)
 router.register(r'return_options', ReturnOptionsViewset)
 
+router.register(r'fieldtypes', FieldTypeViewSet)
+router.register(r'entities', EntitiesViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),
