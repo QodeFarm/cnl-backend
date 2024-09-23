@@ -2162,7 +2162,7 @@ class SaleCreditNoteViewset(APIView):
         if sale_credit_note_data:
             sale_credit_note_data['credit_note_id'] = pk
             credit_note_error = validate_multiple_data(
-                self, [sale_credit_note_data], SaleCreditNoteSerializers)
+                self, [sale_credit_note_data], SaleCreditNoteSerializers, ['credit_note_number'])
 
         # Vlidated SaleOrderItems Data
         sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
@@ -2393,7 +2393,7 @@ class SaleDebitNoteViewset(APIView):
         if sale_debit_note_data:
             sale_debit_note_data['debit_note_id'] = pk
             debit_note_error = validate_multiple_data(
-                self, [sale_debit_note_data], SaleDebitNoteSerializers)
+                self, [sale_debit_note_data], SaleDebitNoteSerializers, ['debit_note_number'])
 
         # Vlidated SaleOrderItems Data
         sale_debit_items_data = given_data.pop('sale_debit_note_items', None)
