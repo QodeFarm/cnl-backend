@@ -114,6 +114,8 @@ orderstatusestable = 'order_statuses'
 ordertypestable = 'order_types'
 taskprioritiestable ='task_priorities'
 returnoptions = 'return_options'
+entities = 'entities'
+fieldtypes = 'field_types'
 
 #Authentication db_tables
 userstable = 'users'
@@ -173,11 +175,10 @@ chartofaccounts = 'chart_of_accounts'
 bankaccounts = 'bank_accounts'
 
 #custom db tables
-fieldtypes = 'field_types'
 customfields = 'custom_fields'
 customfieldoptions = 'custom_field_options'
 customfieldvalues = 'custom_field_values'
-entities = 'entities'
+
 
 # Define the stages for the default workflow
 default_workflow_stages = {

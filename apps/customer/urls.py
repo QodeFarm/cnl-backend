@@ -9,8 +9,6 @@ router.register(r'ledger_accounts', LedgerAccountsViews)
 router.register(r'customer', CustomerViews)
 router.register(r'customers_addresses', CustomerAddressesViews)
 router.register(r'customers_attachments', CustomerAttachmentsViews)
-# router.register(r'customfields', CustomFieldsView, basename='customfields')
-# router.register(r'customfieldvalues', CustomFieldValuesView, basename='customfieldvalues')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from config.utils_methods import create_instance, list_all_objects, update_instance
-from .models import FieldType, CustomField, CustomFieldOption, CustomFieldValue, Entities
-from .serializers import FieldTypeSerializer, CustomFieldSerializer, CustomFieldOptionSerializer, CustomFieldValueSerializer, EntitiesSerializer
+from .models import CustomField, CustomFieldOption, CustomFieldValue
+from .serializers import  CustomFieldSerializer, CustomFieldOptionSerializer, CustomFieldValueSerializer
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -10,22 +10,8 @@ from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from django.http import Http404
 import logging
-from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, build_response, validate_multiple_data, validate_payload_data
+from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, build_response, validate_put_method_data
 logger = logging.getLogger(__name__)
-
-class FieldTypeViewSet(viewsets.ModelViewSet):
-    queryset = FieldType.objects.all()
-    serializer_class = FieldTypeSerializer
-
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)    
-
 
 class CustomFieldViewSet(viewsets.ModelViewSet):
     queryset = CustomField.objects.all()
@@ -53,13 +39,6 @@ class CustomFieldOptionViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-class EntitiesViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for CRUD operations on Entity model.
-    """
-    queryset = Entities.objects.all()
-    serializer_class = EntitiesSerializer
-
 class CustomFieldValueViewSet(viewsets.ModelViewSet):
     queryset = CustomFieldValue.objects.all()
     serializer_class = CustomFieldValueSerializer
@@ -73,34 +52,7 @@ class CustomFieldValueViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-# class CustomFieldEntityMappingViewSet(viewsets.ModelViewSet):
-#     queryset = CustomFieldEntityMapping.objects.all()
-#     serializer_class = CustomFieldEntityMappingSerializer
-
-#     def list(self, request, *args, **kwargs):
-#         return list_all_objects(self, request, *args, **kwargs)
-
-#     def create(self, request, *args, **kwargs):
-#         return create_instance(self, request, *args, **kwargs)
-
-#     def update(self, request, *args, **kwargs):
-#         return update_instance(self, request, *args, **kwargs)
-from rest_framework.views import APIView
-from rest_framework import status
-from django.db import transaction
-from django.shortcuts import get_object_or_404
-from .models import CustomField, CustomFieldOption
-from .serializers import CustomFieldSerializer, CustomFieldOptionSerializer
-from config.utils_methods import (
-    update_multi_instances, validate_input_pk, delete_multi_instance, 
-    generic_data_creation, build_response, validate_multiple_data, 
-    validate_payload_data,validate_put_method_data
-)
-import logging
-
-logger = logging.getLogger(__name__)
-
-class CustomFieldViewSet(APIView):
+class CustomFieldCreateViewSet(APIView):
     """
     API ViewSet for handling custom field creation and related options.
     """

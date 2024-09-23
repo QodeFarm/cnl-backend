@@ -1,21 +1,7 @@
 import uuid
 from django.db import models
-from config.utils_variables import fieldtypes, customfields, customfieldoptions, customfieldvalues, entities
-
-class FieldType(models.Model):
-    """
-    Stores possible field types for custom fields.
-    """
-    field_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    field_type_name = models.CharField(max_length=50, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.field_type_name
-    
-    class Meta:
-        db_table = fieldtypes
+from config.utils_variables import  customfields, customfieldoptions, customfieldvalues
+from apps.masters.models import FieldType, Entities
 
 
 class CustomField(models.Model):
@@ -52,21 +38,6 @@ class CustomFieldOption(models.Model):
     
     class Meta:
         db_table = customfieldoptions
-
-class Entities(models.Model):
-    """
-    Model representing the different types of entities (e.g., 'customer', 'order').
-    """
-    entity_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    entity_name = models.CharField(max_length=50, unique=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return self.entity_name
-    
-    class Meta:
-        db_table = entities
 
 class CustomFieldValue(models.Model):
     """
