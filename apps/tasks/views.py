@@ -103,9 +103,13 @@ class TaskView(APIView):
 
             # Apply filters manually
             if request.query_params:
-                filterset = TasksFilter(request.GET, instance=instance)
+                queryset = Tasks.objects.all()
+                filterset = TasksFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
-                    instance = filterset.qs 
+                    queryset = filterset.qs
+                    serializer = TasksSerializer(queryset, many=True)
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Tasks.DoesNotExist:
             logger.error("Tasks does not exist.")
@@ -113,8 +117,7 @@ class TaskView(APIView):
         else:
             serializer = TasksSerializer(instance, many=True)
             logger.info("Tasks data retrieved successfully.")
-            # return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK) 
-            return filter_response(instance.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK) 
 			
     def retrieve(self, request, *args, **kwargs):
         """

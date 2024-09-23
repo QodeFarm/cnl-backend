@@ -1541,10 +1541,24 @@ class SaleReceiptCreateViewSet(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             logger.info("Retrieving all sale_receipt")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+
             queryset = SaleReceipt.objects.all()
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = SaleReceiptFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
+
+            total_count = SaleInvoiceOrders.objects.count()
+
             serializer = SaleReceiptSerializer(queryset, many=True)
             logger.info("sale_receipt data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -1939,6 +1953,9 @@ class WorkflowStageViewSet(viewsets.ModelViewSet):
 class SaleReceiptViewSet(viewsets.ModelViewSet):
     queryset = SaleReceipt.objects.all()
     serializer_class = SaleReceiptSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SaleReceiptFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

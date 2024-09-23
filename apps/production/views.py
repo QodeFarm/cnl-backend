@@ -4,6 +4,9 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
+
+from apps.production.filters import WorkOrderFilter
+from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
 from config.utils_methods import build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
@@ -163,6 +166,21 @@ class WorkOrderAPIView(APIView):
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             instance = WorkOrder.objects.all()
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = WorkOrder.objects.count()
+
+            # Apply filters manually
+            if request.query_params:
+                queryset = WorkOrder.objects.all()
+                filterset = WorkOrderFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    serializer = WorkOrderSerializer(queryset, many=True)
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except WorkOrder.DoesNotExist:
             logger.error("WorkOrder does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)

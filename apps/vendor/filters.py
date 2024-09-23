@@ -3,7 +3,7 @@ from apps.vendor.models import Vendor, VendorAddress
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from django_filters import rest_framework as filters
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, apply_sorting, filter_by_pagination, filter_by_period_name, search_queryset
+from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
 import json
@@ -31,29 +31,16 @@ class VendorFilter(FilterSet): #verified
         return filter_by_period_name(self, queryset, self.data, value)
     
     def filter_by_search(self, queryset, name, value):
-        try:
-            search_params = json.loads(value)
-            self.search_params = search_params  # Set the search_params as an instance attribute
-        except json.JSONDecodeError as e:
-            logger.error(f"Error decoding search params: {e}")
-            raise ValidationError("Invalid search parameter format.")
-
-        queryset = search_queryset(queryset, search_params, self)
-        return queryset.distinct()
+        return filter_by_search(queryset, self, value).distinct()
 
     def filter_by_sort(self, queryset, name, value):
-        return apply_sorting(self, queryset)
+        return filter_by_sort(self, queryset, value)
 
     def filter_by_page(self, queryset, name, value):
-        self.page_number = int(value)
-        return queryset
+        return filter_by_page(self, queryset, value)
 
     def filter_by_limit(self, queryset, name, value):
-        self.limit = int(value)
-        queryset = apply_sorting(self, queryset)
-        paginated_queryset, total_count = filter_by_pagination(queryset.distinct(), self.page_number, self.limit)
-        self.total_count = total_count
-        return paginated_queryset
+        return filter_by_limit(self, queryset, value)
     
     class Meta:
         model = Vendor

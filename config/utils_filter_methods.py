@@ -85,7 +85,6 @@ def filter_by_period_name(self, queryset, name, value):
         return queryset
 
 #=====================filter for page-limit-sort-search=======================================
-
 def apply_sorting(self, queryset):
     sort_param = self.data.get('sort[0]')
     logger.debug(f"Sorting parameter: {sort_param}")
@@ -161,6 +160,30 @@ def search_queryset(queryset, search_params, filter_set):
         queryset = queryset.filter(search_query)
     
     return queryset
+
+def filter_by_search(queryset, filter_set, value):
+    try:
+        search_params = json.loads(value)
+        filter_set.search_params = search_params  # Set the search_params as an instance attribute
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding search params: {e}")
+        raise ValidationError("Invalid search parameter format.")
+    
+    return search_queryset(queryset, search_params, filter_set)
+
+def filter_by_sort(filter_set, queryset, value):
+    return apply_sorting(filter_set, queryset)
+
+def filter_by_page(filter_set, queryset, value):
+    filter_set.page_number = int(value)
+    return queryset
+
+def filter_by_limit(filter_set, queryset, value):
+    filter_set.limit = int(value)
+    queryset = apply_sorting(filter_set, queryset)
+    paginated_queryset, total_count = filter_by_pagination(queryset, filter_set.page_number, filter_set.limit)
+    filter_set.total_count = total_count
+    return paginated_queryset
 
 #========================Filter Response==================================
 

@@ -1053,7 +1053,7 @@ CREATE TABLE IF NOT EXISTS return_options (
 CREATE TABLE IF NOT EXISTS sale_orders(
     sale_order_id CHAR(36) PRIMARY KEY,
     sale_type_id CHAR(36),
-    order_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: SO-2406-00001
+    order_no VARCHAR(20) UNIQUE NOT NULL,
     order_date DATE NOT NULL,
     customer_id CHAR(36) NOT NULL,
     gst_type_id CHAR(36),
@@ -1061,7 +1061,7 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     delivery_date DATE NOT NULL,
     ref_no VARCHAR(255),
     ref_date DATE NOT NULL,
-    tax ENUM('Inclusive', 'Exclusive'),
+    tax ENUM('Exclusive','Inclusive'),
     customer_address_id CHAR(36),
     payment_term_id CHAR(36),
     remarks VARCHAR(1024),
@@ -1077,7 +1077,10 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     doc_amount DECIMAL(18, 2),
     vehicle_name VARCHAR(255),
     total_boxes INT,
+    flow_status VARCHAR(255),
 	order_status_id CHAR(36),
+    workflow_id CHAR(36),
+    sale_return_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1088,7 +1091,9 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     FOREIGN KEY (payment_term_id) REFERENCES customer_payment_terms(payment_term_id),
     FOREIGN KEY (sale_type_id) REFERENCES sale_types(sale_type_id),
     FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id),
-	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id),
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
 );
 
 /* Order Items Table */
@@ -1126,7 +1131,7 @@ CREATE TABLE IF NOT EXISTS sale_invoice_orders(
     ref_no VARCHAR(255),
     ref_date DATE NOT NULL,
     order_salesman_id CHAR(36),
-    tax ENUM('Inclusive', 'Exclusive'),
+    tax ENUM('Exclusive','Inclusive'),
     customer_address_id CHAR(36),
     payment_term_id CHAR(36),
     due_date DATE,
@@ -1200,7 +1205,7 @@ CREATE TABLE IF NOT EXISTS sale_return_orders(
     order_salesman_id CHAR(36),
     against_bill VARCHAR(255),
     against_bill_date DATE,
-    tax ENUM('Inclusive', 'Exclusive'),
+    tax ENUM('Exclusive', 'Inclusive'),
     customer_address_id CHAR(36),
     payment_term_id CHAR(36),
     due_date DATE,
@@ -1346,7 +1351,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     ref_no VARCHAR(255),
     ref_date DATE,
     vendor_agent_id CHAR(36),
-    tax ENUM('Inclusive', 'Exclusive'),
+    tax ENUM('Exclusive','Inclusive'),
     vendor_address_id CHAR(36),
     remarks VARCHAR(1024),
     payment_term_id CHAR(36),
@@ -1412,7 +1417,7 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_orders (
     supplier_invoice_no VARCHAR(255) NOT NULL,
     supplier_invoice_date DATE,
     vendor_agent_id CHAR(36),
-    tax ENUM('Inclusive', 'Exclusive'),
+    tax ENUM('Exclusive','Inclusive'),
     vendor_address_id CHAR(36),
     remarks VARCHAR(1024),
     payment_term_id CHAR(36),
@@ -1479,7 +1484,7 @@ CREATE TABLE IF NOT EXISTS purchase_return_orders (
     ref_no VARCHAR(255),
     ref_date DATE,
     vendor_agent_id CHAR(36),
-    tax ENUM('Inclusive', 'Exclusive'),
+    tax ENUM('Exclusive','Inclusive'),
     vendor_address_id CHAR(36),
     remarks VARCHAR(1024),
     payment_term_id CHAR(36),
@@ -1633,7 +1638,7 @@ CREATE TABLE IF NOT EXISTS quick_packs (
     customer_id CHAR(36),
     name VARCHAR(255) NOT NULL, 
     description VARCHAR(1024),
-    active ENUM('Y', 'N'),
+    active ENUM('N','Y'),
     lot_qty INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1955,7 +1960,7 @@ CREATE TABLE IF NOT EXISTS bank_accounts (
     bank_name VARCHAR(100) NOT NULL,
     branch_name VARCHAR(100),
     ifsc_code VARCHAR(100),
-    account_type ENUM('Savings', 'Current') NOT NULL,
+    account_type ENUM('Current', 'Savings') NOT NULL,
     balance DECIMAL(15, 2) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -1967,7 +1972,7 @@ CREATE TABLE IF NOT EXISTS chart_of_accounts (
     account_id CHAR(36) PRIMARY KEY,
     account_code VARCHAR(20) UNIQUE NOT NULL,
     account_name VARCHAR(100) NOT NULL,
-    account_type ENUM('Asset', 'Liability', 'Equity', 'Revenue', 'Expense') NOT NULL,
+    account_type ENUM('Asset', 'Equity', 'Expense',  'Liability', 'Revenue') NOT NULL,
     parent_account_id CHAR(36) NULL,
     is_active BOOLEAN DEFAULT TRUE,
     bank_account_id CHAR(36) NULL,  -- Link to bank accounts if applicable
@@ -2008,10 +2013,10 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
 CREATE TABLE IF NOT EXISTS payment_transaction (
     payment_id CHAR(36) PRIMARY KEY,
     invoice_id CHAR(36) NOT NULL,
-    order_type ENUM('Sale', 'Purchase') NOT NULL,
+    order_type ENUM('Purchase','Sale') NOT NULL,
     payment_date DATE NOT NULL,
-    payment_method ENUM('Cash', 'Bank Transfer', 'Credit Card', 'Cheque') NOT NULL,
-    payment_status ENUM('Pending', 'Completed', 'Failed') NOT NULL DEFAULT 'Pending',
+    payment_method ENUM('Bank Transfer', 'Cash', 'Cheque', 'Credit Card') NOT NULL,
+    payment_status ENUM('Completed', 'Failed', 'Pending') NOT NULL DEFAULT 'Pending',
     amount DECIMAL(15, 2) NOT NULL,
     reference_number VARCHAR(100),
     notes VARCHAR(512),
@@ -2027,7 +2032,7 @@ CREATE TABLE IF NOT EXISTS tax_configurations (
     tax_id CHAR(36) PRIMARY KEY,
     tax_name VARCHAR(100) NOT NULL,
     tax_rate DECIMAL(5, 2) NOT NULL,
-    tax_type ENUM('Percentage', 'Fixed') NOT NULL,
+    tax_type ENUM('Fixed', 'Percentage') NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -2054,7 +2059,7 @@ CREATE TABLE IF NOT EXISTS expense_claims (
     claim_date DATE NOT NULL,
     description VARCHAR(1024),
     total_amount DECIMAL(15, 2) NOT NULL,
-    status ENUM('Pending', 'Approved', 'Rejected') DEFAULT 'Pending',
+    status ENUM('Approved', 'Pending', 'Rejected') DEFAULT 'Pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
@@ -2065,7 +2070,7 @@ CREATE TABLE IF NOT EXISTS expense_claims (
 CREATE TABLE IF NOT EXISTS financial_reports (
     report_id CHAR(36) PRIMARY KEY,
     report_name VARCHAR(100) NOT NULL,
-    report_type ENUM('Balance Sheet', 'Profit & Loss', 'Cash Flow', 'Trial Balance') NOT NULL,
+    report_type ENUM('Balance Sheet', 'Cash Flow', 'Profit & Loss', 'Trial Balance') NOT NULL,
     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     file_path JSON NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -2083,11 +2088,13 @@ CREATE TABLE IF NOT EXISTS sale_credit_notes (
     total_amount DECIMAL(10,2) NOT NULL,
     reason VARCHAR(1024),
     order_status_id CHAR(36),
+    sale_return_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
-	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
 );
 
 /* Sale Credit Note Items Table */
@@ -2102,5 +2109,104 @@ CREATE TABLE IF NOT EXISTS sale_credit_note_items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (credit_note_id) REFERENCES sale_credit_notes(credit_note_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+
+/* Field Types Table */
+CREATE TABLE IF NOT EXISTS field_types (
+    field_type_id CHAR(36) PRIMARY KEY,
+    field_type_name VARCHAR(50) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+
+
+/* Custom Fields Table */
+-- Stores the definition of custom fields, including entity associations.
+CREATE TABLE IF NOT EXISTS custom_fields (
+    custom_field_id CHAR(36) PRIMARY KEY,
+    field_name VARCHAR(255) NOT NULL,
+    field_type_id CHAR(36) NOT NULL,
+    entity_name VARCHAR(100) NOT NULL,
+    is_required BOOLEAN DEFAULT FALSE,
+    validation_rules JSON DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE (field_name, entity_name), 
+    FOREIGN KEY (field_type_id) REFERENCES field_types(field_type_id) ON DELETE CASCADE
+);
+
+
+
+/* Custom Field Options Table */
+-- Stores the options for fields of type Select or MultiSelect.
+CREATE TABLE IF NOT EXISTS custom_field_options (
+    option_id CHAR(36) PRIMARY KEY,
+    custom_field_id CHAR(36) NOT NULL,
+    option_value VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id) ON DELETE CASCADE
+);
+
+/* Entities Table */
+-- Stores information about the entities that can have custom fields.
+CREATE TABLE entities (
+    entity_id CHAR(36) PRIMARY KEY, 
+    entity_name VARCHAR(50) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+
+/* Custom Field Values Table */
+-- Stores the actual values of custom fields for specific entities.
+CREATE TABLE IF NOT EXISTS custom_field_values (
+    custom_field_value_id CHAR(36) PRIMARY KEY,
+    custom_field_id CHAR(36) NOT NULL,
+    entity_id CHAR(36) NOT NULL, 
+    field_value VARCHAR(255),
+    field_value_type VARCHAR(50), 
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id) ON DELETE CASCADE,
+    FOREIGN KEY (entity_id) REFERENCES entities(entity_id) ON DELETE CASCADE
+);
+
+
+/* Sale Debit Notes Table */
+-- Stores debit notes issued to customers for adjustments such as undercharges or additional fees.
+CREATE TABLE IF NOT EXISTS sale_debit_notes (
+    debit_note_id CHAR(36) PRIMARY KEY,
+    sale_invoice_id CHAR(36) NOT NULL,
+    debit_note_number VARCHAR(100) NOT NULL,
+    debit_date DATE NOT NULL,
+    customer_id CHAR(36) NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    reason VARCHAR(1024),
+    order_status_id CHAR(36),
+    sale_return_id CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
+	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
+);
+
+/* Sale Debit Note Items Table */
+-- Stores individual items that are part of a sale debit note.
+CREATE TABLE IF NOT EXISTS sale_debit_note_items (
+    debit_note_item_id CHAR(36) PRIMARY KEY,
+    debit_note_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    quantity INT NOT NULL,
+    price_per_unit DECIMAL(10,2) NOT NULL,
+    total_price DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (debit_note_id) REFERENCES sale_debit_notes(debit_note_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
