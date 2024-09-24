@@ -7,7 +7,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 class PurchaseOrdersFilter(filters.FilterSet):
-    vendor_id = filters.CharFilter(field_name='vendor_id__name', lookup_expr='icontains')
+    vendor_id = filters.CharFilter(method=filter_uuid)
+    vendor = filters.CharFilter(field_name='vendor_id__name', lookup_expr='icontains')
     purchase_type_id = filters.CharFilter(field_name='purchase_type_id__name', lookup_expr='icontains')
     order_date = filters.DateFilter()
     order_no = filters.CharFilter(lookup_expr='icontains')
@@ -42,7 +43,7 @@ class PurchaseOrdersFilter(filters.FilterSet):
     class Meta:
         model = PurchaseOrders
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['order_no','order_date','vendor_id','purchase_type_id','tax', 'tax_amount','total_amount','remarks','order_status_id','status_name','created_at','period_name','search','sort','page','limit']
+        fields =['order_no','order_date','vendor_id','vendor','purchase_type_id','tax', 'tax_amount','total_amount','remarks','order_status_id','status_name','created_at','period_name','search','sort','page','limit']
 
 class PurchaseInvoiceOrdersFilter(filters.FilterSet):
     vendor_id = filters.CharFilter(method=filter_uuid)
