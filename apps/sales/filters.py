@@ -6,7 +6,6 @@ from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_na
 import logging
 logger = logging.getLogger(__name__)
 
-
 class SaleOrderFilter(filters.FilterSet):
     order_no = filters.CharFilter(lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)
@@ -49,7 +48,8 @@ class SaleOrderFilter(filters.FilterSet):
         fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
-    customer_id = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    customer_id = filters.CharFilter(method=filter_uuid)
+    customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
     invoice_date = filters.DateFilter()
     total_amount = filters.RangeFilter()
     tax_amount = filters.RangeFilter()
@@ -83,10 +83,11 @@ class SaleInvoiceOrdersFilter(filters.FilterSet):
     class Meta:
         model = SaleInvoiceOrders
         #do not change "invoice_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['invoice_no','customer_id','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
+        fields =['invoice_no','customer_id','customer','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
 
 class SaleReturnOrdersFilter(filters.FilterSet):
-    customer_id = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    customer_id = filters.CharFilter(method=filter_uuid)
+    customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
     return_date = filters.DateFilter()
     due_date= filters.DateFilter()
     return_no = filters.CharFilter(lookup_expr='icontains')
@@ -122,7 +123,7 @@ class SaleReturnOrdersFilter(filters.FilterSet):
     class Meta:
         model = SaleReturnOrders
         #do not change "return_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['return_no','return_date','due_date','customer_id','tax', 'tax_amount','total_amount','return_reason','remarks','order_status_id', 'status_name', 'created_at','period_name','search','sort','page','limit']
+        fields =['return_no','return_date','due_date','customer_id','customer','tax', 'tax_amount','total_amount','return_reason','remarks','order_status_id', 'status_name', 'created_at','period_name','search','sort','page','limit']
         
 class SaleOrdersItemsilter(filters.FilterSet):
     sale_order_id = filters.CharFilter(method=filter_uuid)
