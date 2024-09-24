@@ -22,8 +22,8 @@ class PurchaseOrders(OrderNumberMixin):
     ref_no = models.CharField(max_length=255, null=True, default=None)
     ref_date = models.DateField(blank=True, null=True)
     vendor_agent_id = models.ForeignKey(VendorAgent, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_agent_id')
-    TAX_CHOICES = [('Inclusive', 'Inclusive'),
-                   ('Exclusive', 'Exclusive')
+    TAX_CHOICES = [('Exclusive', 'Exclusive'),
+                   ('Inclusive', 'Inclusive')
                 ]
     tax = models.CharField(max_length=20, choices=TAX_CHOICES , blank=True, null=True, default=None)
     vendor_address_id = models.ForeignKey(VendorAddress, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_address_id')
@@ -92,10 +92,9 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     supplier_invoice_no = models.CharField(max_length=255)
     supplier_invoice_date = models.DateField(blank=True, null=True)
     vendor_agent_id = models.ForeignKey(VendorAgent, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_agent_id')
-    
     TAX_CHOICES = [
-        ('Inclusive', 'Inclusive'),
-        ('Exclusive', 'Exclusive')
+        ('Exclusive', 'Exclusive'),
+        ('Inclusive', 'Inclusive')
     ]
     tax = models.CharField(max_length=20, choices=TAX_CHOICES, blank=True, null=True)    
     vendor_address_id = models.ForeignKey(VendorAddress, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_address_id')
@@ -154,8 +153,8 @@ class PurchaseInvoiceItem(models.Model):
 
 class PurchaseReturnOrders(OrderNumberMixin):
     TAX_CHOICES = [
-        ('Inclusive', 'Inclusive'),
         ('Exclusive', 'Exclusive'),
+        ('Inclusive', 'Inclusive')
     ]
     
     purchase_return_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

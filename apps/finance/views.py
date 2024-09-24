@@ -1,4 +1,5 @@
 import logging
+from apps.finance.filters import BankAccountFilter, BudgetFilter, ChartOfAccountsFilter, ExpenseClaimFilter, FinancialReportFilter, JournalEntryFilter, PaymentTransactionFilter, TaxConfigurationFilter
 from .models import *
 from .serializers import *
 from django.http import Http404
@@ -6,11 +7,10 @@ from django.db import transaction
 from rest_framework import viewsets, status
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
-from apps.sales.models import SaleInvoiceOrders
-from apps.purchase.models import PurchaseInvoiceOrders
-from apps.sales.serializers import SaleInvoiceOrdersSerializer
-from apps.purchase.serializers import PurchaseInvoiceOrdersSerializer
 from config.utils_methods import build_response, generic_data_creation, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
+from config.utils_filter_methods import filter_response, list_filtered_objects
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -23,9 +23,12 @@ logger = logging.getLogger(__name__)
 class BankAccountViewSet(viewsets.ModelViewSet):
     queryset = BankAccount.objects.all()
     serializer_class = BankAccountSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = BankAccountFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, BankAccount,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -36,9 +39,12 @@ class BankAccountViewSet(viewsets.ModelViewSet):
 class ChartOfAccountsViewSet(viewsets.ModelViewSet):
     queryset = ChartOfAccounts.objects.all()
     serializer_class = ChartOfAccountsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ChartOfAccountsFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ChartOfAccounts,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -49,6 +55,9 @@ class ChartOfAccountsViewSet(viewsets.ModelViewSet):
 class JournalEntryViewSet(viewsets.ModelViewSet):
     queryset = JournalEntry.objects.all()
     serializer_class = JournalEntrySerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = JournalEntryFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -75,9 +84,12 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
     queryset = PaymentTransaction.objects.all()
     serializer_class = PaymentTransactionSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = PaymentTransactionFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, PaymentTransaction,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -88,9 +100,12 @@ class PaymentTransactionViewSet(viewsets.ModelViewSet):
 class TaxConfigurationViewSet(viewsets.ModelViewSet):
     queryset = TaxConfiguration.objects.all()
     serializer_class = TaxConfigurationSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = TaxConfigurationFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, TaxConfiguration,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -101,9 +116,12 @@ class TaxConfigurationViewSet(viewsets.ModelViewSet):
 class BudgetViewSet(viewsets.ModelViewSet):
     queryset = Budget.objects.all()
     serializer_class = BudgetSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = BudgetFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Budget,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -114,9 +132,12 @@ class BudgetViewSet(viewsets.ModelViewSet):
 class ExpenseClaimViewSet(viewsets.ModelViewSet):
     queryset = ExpenseClaim.objects.all()
     serializer_class = ExpenseClaimSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ExpenseClaimFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ExpenseClaim,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -127,9 +148,12 @@ class ExpenseClaimViewSet(viewsets.ModelViewSet):
 class FinancialReportViewSet(viewsets.ModelViewSet):
     queryset = FinancialReport.objects.all()
     serializer_class = FinancialReportSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = FinancialReportFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, FinancialReport,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -158,9 +182,21 @@ class JournalEntryView(APIView):
         try:
             logger.info("Retrieving all JournalEntry")
             queryset = JournalEntry.objects.all()
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = JournalEntry.objects.count()
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = JournalEntryFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
+
             serializer = JournalEntrySerializer(queryset, many=True)
             logger.info("JournalEntry data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")

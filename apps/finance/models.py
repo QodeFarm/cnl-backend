@@ -14,7 +14,7 @@ class BankAccount(models.Model):
     ifsc_code = models.CharField(max_length=100, null=False)
     account_type = models.CharField(
         max_length=7,
-        choices=[('Savings', 'Savings'), ('Current', 'Current')],
+        choices=[('Current', 'Current'), ('Savings', 'Savings')],
         default='Savings',
         null=False
     )
@@ -34,7 +34,7 @@ class ChartOfAccounts(models.Model):
     account_name = models.CharField(max_length=100, null=False)
     account_type = models.CharField(
         max_length=10,
-        choices=[('Asset', 'Asset'), ('Liability', 'Liability'), ('Equity', 'Equity'), ('Revenue', 'Revenue'), ('Expense', 'Expense')],
+        choices=[('Asset', 'Asset'), ('Equity', 'Equity'), ('Expense', 'Expense'), ('Liability', 'Liability'), ('Revenue', 'Revenue')],
         null=False
     )
     parent_account_id = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, default=None, related_name='sub_accounts', db_column='parent_account_id')
@@ -85,26 +85,26 @@ class PaymentTransaction(models.Model): # Enhance Later
     invoice_id = models.CharField(max_length=36, null=False)  # Foreign key will depend on specific implementation
     order_type = models.CharField(   # order_type
         max_length=10,
-        choices=[('Sale', 'Sale'), ('Purchase', 'Purchase')],
+        choices=[('Purchase', 'Purchase'),('Sale', 'Sale')],
         null=False
     )
     payment_date = models.DateField(null=False)
     payment_method = models.CharField(
     max_length=20,
     choices=[
-        ('Cash', 'Cash'),
         ('Bank Transfer', 'Bank Transfer'),
-        ('Credit Card', 'Credit Card'),
+        ('Cash', 'Cash'),        
         ('Cheque', 'Cheque'),
+        ('Credit Card', 'Credit Card'),
     ],
     null=False
     )
     payment_status = models.CharField(
         max_length=10,
         choices=[
-            ('Pending', 'Pending'),
             ('Completed', 'Completed'),
             ('Failed', 'Failed'),
+            ('Pending', 'Pending'),            
         ],
         default='Pending',
         null=False
@@ -130,8 +130,8 @@ class TaxConfiguration(models.Model):
     PERCENTAGE = 'Percentage'
     FIXED = 'Fixed'
     TAX_TYPE_CHOICES = [
-        (PERCENTAGE, 'Percentage'),
         (FIXED, 'Fixed'),
+        (PERCENTAGE, 'Percentage'),
     ]
     tax_type = models.CharField(max_length=10, choices=TAX_TYPE_CHOICES, null=False)
     is_active = models.BooleanField(default=True)
@@ -166,12 +166,12 @@ class ExpenseClaim(models.Model):
     claim_date = models.DateField(null=False)
     description = models.CharField(max_length=1024, default=None, null=True)
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, null=False)
-    PENDING = 'Pending'
     APPROVED = 'Approved'
+    PENDING = 'Pending'
     REJECTED = 'Rejected'
     STATUS_CHOICES = [
-        (PENDING, 'Pending'),
         (APPROVED, 'Approved'),
+        (PENDING, 'Pending'),
         (REJECTED, 'Rejected'),
     ]
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
@@ -188,13 +188,13 @@ class FinancialReport(models.Model):
     report_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     report_name = models.CharField(max_length=100, null=False)
     BALANCE_SHEET = 'Balance Sheet'
-    PROFIT_LOSS = 'Profit & Loss'
     CASH_FLOW = 'Cash Flow'
+    PROFIT_LOSS = 'Profit & Loss'
     TRIAL_BALANCE = 'Trial Balance'
     REPORT_TYPE_CHOICES = [
         (BALANCE_SHEET, 'Balance Sheet'),
-        (PROFIT_LOSS, 'Profit & Loss'),
         (CASH_FLOW, 'Cash Flow'),
+        (PROFIT_LOSS, 'Profit & Loss'),
         (TRIAL_BALANCE, 'Trial Balance'),
     ]
     report_type = models.CharField(max_length=20, choices=REPORT_TYPE_CHOICES, null=False)

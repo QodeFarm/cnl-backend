@@ -24,8 +24,8 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     ref_no = models.CharField(max_length=255, null=True, default=None)
     ref_date = models.DateField()
     TAX_CHOICES = [
-        ('Inclusive', 'Inclusive'),
-        ('Exclusive', 'Exclusive')
+        ('Exclusive', 'Exclusive'),
+        ('Inclusive', 'Inclusive')
         ]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
     flow_status = models.CharField(max_length=255, null=True, default=None)
@@ -198,7 +198,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
     ref_no = models.CharField(max_length=255, null=True, default=None)
     ref_date = models.DateField()
     order_salesman_id = models.ForeignKey('masters.OrdersSalesman', on_delete=models.CASCADE, db_column='order_salesman_id', null=True, default=None)
-    TAX_CHOICES = [('Inclusive', 'Inclusive'),('Exclusive', 'Exclusive'),]
+    TAX_CHOICES = [('Exclusive', 'Exclusive'),('Inclusive', 'Inclusive')]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, db_column='customer_address_id', null=True, default=None)
     payment_term_id = models.ForeignKey(CustomerPaymentTerms, on_delete=models.CASCADE, db_column='payment_term_id', null=True, default=None)
@@ -302,7 +302,7 @@ class SaleReturnOrders(OrderNumberMixin):
     order_salesman_id = models.ForeignKey('masters.OrdersSalesman', on_delete=models.CASCADE, db_column='order_salesman_id', null=True, default=None)
     against_bill = models.CharField(max_length=255, null=True, default=None)
     against_bill_date = models.DateField(null=True, default=None)
-    TAX_CHOICES = [('Inclusive', 'Inclusive'),('Exclusive', 'Exclusive'),]
+    TAX_CHOICES = [('Exclusive', 'Exclusive'),('Inclusive', 'Inclusive')]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, db_column='customer_address_id', null=True, default=None)
     payment_term_id = models.ForeignKey(CustomerPaymentTerms, on_delete=models.CASCADE, db_column='payment_term_id', null=True, default=None)
@@ -409,7 +409,7 @@ class QuickPacks(models.Model):
     quick_pack_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=512, null=True, default=None)
-    active = models.CharField(max_length=1, choices=[('Y', 'Yes'), ('N', 'No')], null=True, default='Y')
+    active = models.CharField(max_length=1, choices=[('N', 'No'),('Y', 'Yes')], null=True, default='Y')
     lot_qty = models.IntegerField(default=1, null=True)
     customer_id = models.ForeignKey(Customer,on_delete=models.CASCADE, db_column='customer_id', null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
