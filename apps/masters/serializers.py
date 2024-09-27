@@ -323,4 +323,4 @@ class ModEntitiesSerializer(serializers.ModelSerializer):
 class EntitiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Entities
-        fields = ['entity_id', 'entity_name', 'created_at', 'updated_at']
+        fields = '__all__'
