@@ -11,18 +11,20 @@ class CustomField(models.Model):
     custom_field_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     field_name = models.CharField(max_length=255)
     field_type_id = models.ForeignKey(FieldType, on_delete=models.CASCADE, db_column='field_type_id')
-    entity_name = models.CharField(max_length=100)  # e.g., 'customers', 'vendors'
+    entity_id = models.ForeignKey(Entities, on_delete=models.CASCADE, db_column='entity_id')
     is_required = models.BooleanField(default=False)
     validation_rules = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('field_name', 'entity_name')  # Prevents duplicate field names for the same entity
+        # unique_together = ('field_name', 'entity_id')  # Prevents duplicate field names for the same entity
         db_table = customfields
 
     def __str__(self):
-        return f"{self.field_name} ({self.entity_name})"
+        return f"{self.field_name}"
+    
+        # return f"{self.field_name} ({self.entity_id.entity_name})"
 
 
 class CustomFieldOption(models.Model):

@@ -208,7 +208,7 @@ class CustomFieldCreateViewSet(APIView):
             # Manually handle uniqueness validation (like in SaleOrder)
             existing_field = CustomField.objects.exclude(custom_field_id=pk).filter(
                 field_name=custom_field_data.get('field_name'), 
-                entity_name=custom_field_data.get('entity_name')
+                # entity_name=custom_field_data.get('entity_name')
             ).first()
 
             if existing_field:
@@ -216,7 +216,7 @@ class CustomFieldCreateViewSet(APIView):
                     'custom_field': [
                         {
                             'field_name': ['Custom field with this field name already exists.'],
-                            'entity_name': ['Custom field with this entity name already exists.']
+                            # 'entity_name': ['Custom field with this entity name already exists.']
                         }
                     ]
                 }, status.HTTP_400_BAD_REQUEST)
@@ -259,5 +259,33 @@ class CustomFieldCreateViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a custom field and its related options.
+        """
+        try:
+            instance = self.get_object(pk)
+            if not instance:
+                return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+            # Delete related CustomFieldOptions
+            if not delete_multi_instance(pk, CustomField, CustomFieldOption, main_model_field_name='custom_field_id'):
+                return build_response(0, "Error deleting related custom field options", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Delete the main CustomField instance
+            instance.delete()
+
+            logger.info(f"CustomField with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+        except CustomField.DoesNotExist:
+            logger.warning(f"CustomField with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting CustomField with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     

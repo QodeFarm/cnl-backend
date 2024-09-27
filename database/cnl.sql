@@ -2112,10 +2112,18 @@ CREATE TABLE IF NOT EXISTS sale_credit_note_items (
     FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
 
-/* Field Types Table */
 CREATE TABLE IF NOT EXISTS field_types (
     field_type_id CHAR(36) PRIMARY KEY,
     field_type_name VARCHAR(50) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Entities Table */
+-- Stores information about the entities that can have custom fields.
+CREATE TABLE IF NOT EXISTS entities (
+    entity_id CHAR(36) PRIMARY KEY, 
+    entity_name VARCHAR(50) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -2128,13 +2136,14 @@ CREATE TABLE IF NOT EXISTS custom_fields (
     custom_field_id CHAR(36) PRIMARY KEY,
     field_name VARCHAR(255) NOT NULL,
     field_type_id CHAR(36) NOT NULL,
-    entity_name VARCHAR(100) NOT NULL,
+    entity_id CHAR(36) NOT NULL,
     is_required BOOLEAN DEFAULT FALSE,
     validation_rules JSON DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE (field_name, entity_name), 
-    FOREIGN KEY (field_type_id) REFERENCES field_types(field_type_id) ON DELETE CASCADE
+    UNIQUE (field_name),
+    FOREIGN KEY (field_type_id) REFERENCES field_types(field_type_id),
+    FOREIGN KEY (entity_id) REFERENCES entities(entity_id)
 );
 
 
@@ -2147,16 +2156,7 @@ CREATE TABLE IF NOT EXISTS custom_field_options (
     option_value VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id) ON DELETE CASCADE
-);
-
-/* Entities Table */
--- Stores information about the entities that can have custom fields.
-CREATE TABLE entities (
-    entity_id CHAR(36) PRIMARY KEY, 
-    entity_name VARCHAR(50) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id) 
 );
 
 
@@ -2170,8 +2170,8 @@ CREATE TABLE IF NOT EXISTS custom_field_values (
     field_value_type VARCHAR(50), 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id) ON DELETE CASCADE,
-    FOREIGN KEY (entity_id) REFERENCES entities(entity_id) ON DELETE CASCADE
+    FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id),
+    FOREIGN KEY (entity_id) REFERENCES entities(entity_id) 
 );
 
 

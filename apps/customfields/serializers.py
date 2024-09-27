@@ -10,6 +10,7 @@ class ModCustomFieldSerializer(serializers.ModelSerializer):
 
 class CustomFieldSerializer(serializers.ModelSerializer):
     field_type = ModFieldTypeSerializer(source='field_type_id', read_only = True)
+    entity = ModEntitiesSerializer(source='entity_id', read_only = True)
     class Meta:
         model = CustomField
         fields = '__all__'
