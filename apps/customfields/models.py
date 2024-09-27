@@ -56,18 +56,3 @@ class CustomFieldValue(models.Model):
     
     class Meta:
         db_table = customfieldvalues
-
-
-# class CustomFieldEntityMapping(models.Model):
-#     """
-#     Defines which custom fields are available for which entities.
-#     """
-#     mapping_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-#     custom_field_id = models.ForeignKey(CustomField, on_delete=models.CASCADE, db_column='custom_field_id')
-#     entity_name = models.CharField(max_length=100)  # e.g., 'customers', 'vendors'
-
-#     def __str__(self):
-#         return f"{self.custom_field.field_name} mapped to {self.entity_name}"
-    
-#     class Meta:
-#         db_table = customfieldentitymappings
