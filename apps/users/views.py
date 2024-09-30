@@ -1,4 +1,4 @@
-from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
+from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -18,6 +18,7 @@ from rest_framework import viewsets
 from rest_framework import status
 from django.utils import timezone
 import json
+from collections import defaultdict
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -132,6 +133,47 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class UserAccessViewSet(viewsets.ModelViewSet):
+    queryset = RolePermissions.objects.all()
+    serializer_class = UserAccessModuleSerializer
+
+    def list(self, request, *args, **kwargs):
+        # Get all role permissions
+        role_permissions = RolePermissions.objects.all()
+
+        # Create a defaultdict to group sections by module
+        module_dict = defaultdict(list)
+
+        for permission in role_permissions:
+            module_name = permission.module_id.module_name
+            mod_icon = permission.module_id.mod_icon
+
+            section_data = {
+                'sec_link': permission.section_id.sec_link,
+                'section_name': permission.section_id.section_name,
+                'sec_icon': permission.section_id.sec_icon
+            }
+
+            # Append section data under the respective module
+            module_dict[(module_name, mod_icon)].append(section_data)
+
+        # Create a list for the response
+        data = []
+        for (module_name, mod_icon), sections in module_dict.items():
+            data.append({
+                "module_name": module_name,
+                "mod_icon": mod_icon,
+                "module_sections": sections
+            })
+
+        return Response({"count": len(data), "message": None, "data": data}, status=status.HTTP_200_OK)
+    
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
 
@@ -357,6 +399,116 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
         
 #====================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
 class RolePermissionsCreateView(APIView):
+    def post(self, request, *args, **kwargs):
+        result = self.create_list_data(request.data)
+        if isinstance(result, Response):
+            return result
+        
+        serializer = RolePermissionsSerializer(result, many=True)
+        return build_response(len(result), "Record created successfully", serializer.data, status.HTTP_201_CREATED)
+  
+
+    def create_list_data(self, data):
+        role_id = data[0].get('role_id')
+        deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
+        #Check if deletion was successful
+        if deleted_count == 0:
+            return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
+        
+        created_records = []
+        for item in data:
+            module_id = item.get('module_id')
+            section_id = item.get('section_id')
+            action_id = item.get('action_id')
+            role_id = item.get('role_id')
+
+            try:
+                validate_uuid(role_id)
+            except ValidationError as e:
+                return build_response(0, "role_id " + str(e), [], status.HTTP_400_BAD_REQUEST)
+              
+            role = get_object_or_404(Roles, pk=role_id)
+            if not role:
+                return build_response(0, f"Role with id {role_id} does not exist.", [], status.HTTP_400_BAD_REQUEST)
+
+            try:
+                validate_uuid(module_id)
+            except ValidationError as e:
+                return build_response(0, "module_id " + str(e),  [], status.HTTP_400_BAD_REQUEST)
+
+            module = get_object_or_404(Modules, pk=module_id)
+            if not module:
+                return build_response(0, f"Module with id {module_id} does not exist.",  [], status.HTTP_400_BAD_REQUEST)
+
+            try:
+                validate_uuid(section_id)
+            except ValidationError as e:
+                return build_response(0, "section_id " + str(e),  [], status.HTTP_400_BAD_REQUEST)
+
+            section = get_object_or_404(ModuleSections, pk=section_id, module_id=module)
+            if not section:
+                return build_response(0, f"Section with id {section_id} does not exist in module {module.module_name}.",  [], status.HTTP_400_BAD_REQUEST)
+
+            try:
+                validate_uuid(action_id)
+            except ValidationError as e:
+                return build_response(0, "action_id " + str(e),  [], status.HTTP_400_BAD_REQUEST)
+
+
+            action = get_object_or_404(Actions, pk=action_id)
+            if not action:
+                return build_response(0, f"Action with id {action_id} does not exist.",  [], status.HTTP_400_BAD_REQUEST)
+
+            role_permission = RolePermissions.objects.create(
+                module_id=module,
+                section_id=section,
+                action_id=action,
+                role_id=role,
+            )
+            created_records.append(role_permission)
+        return created_records
+    
+    def delete(self, request, role_id, *args, **kwargs):
+        # Delete records with the provided role_id
+        deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
+        
+        if deleted_count == 0:
+            return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
+        
+        return build_response(deleted_count, f"{deleted_count} records deleted",  [], status.HTTP_204_NO_CONTENT)
+    
+    # This is redundant code will needed in future.
+    # def put(self, request, role_id, *args, **kwargs):
+    #     # Delete existing records for the given role_id
+    #     deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
+        
+    #     # Check if deletion was successful
+    #     if deleted_count == 0:
+    #         return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
+
+    #     # Create new records
+    #     result = self.create_list_data(request.data)
+    #     if isinstance(result, Response):
+    #         return result
+        
+    #     serializer = RolePermissionsSerializer(result, many=True)
+    #     return build_response(len(result), "Record created successfully", serializer.data, status.HTTP_201_CREATED)
+
+     # Query the RolePermissions table for the given role_id
+    def get(self, request, role_id, *args, **kwargs):
+        permissions = RolePermissions.objects.filter(role_id=role_id).values(
+            'role_id', 'module_id', 'section_id', 'action_id'
+        )
+
+        # Check if permissions exist for the given role_id
+        if not permissions:
+            return build_response(0, "No permissions found for the specified role_id.",  [], status.HTTP_404_NOT_FOUND)
+
+         # Convert QuerySet to a list of dictionaries
+        permissions_list = list(permissions)
+        return build_response(len(permissions_list), "Records", permissions_list, status.HTTP_200_OK)
+
+class UserAccessCreateView(APIView):
     def post(self, request, *args, **kwargs):
         result = self.create_list_data(request.data)
         if isinstance(result, Response):
