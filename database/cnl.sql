@@ -257,6 +257,8 @@ CREATE TABLE IF NOT EXISTS modules (
     module_id CHAR(36) PRIMARY KEY,
     module_name VARCHAR(255) UNIQUE NOT NULL,
     description VARCHAR(512),
+    mod_icon VARCHAR(255),
+    mod_link VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -267,6 +269,8 @@ CREATE TABLE IF NOT EXISTS module_sections (
     section_id CHAR(36) PRIMARY KEY,
     module_id CHAR(36) NOT NULL,
     section_name VARCHAR(255) NOT NULL,
+    sec_icon VARCHAR(255),
+    sec_link VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (module_id) REFERENCES modules(module_id)

@@ -40,6 +40,8 @@ class Actions(models.Model):
 class Modules(models.Model):
     module_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     module_name = models.CharField(max_length=255,  unique=True)
+    mod_icon = models.CharField(max_length=255, default=None, null=True)
+    mod_link = models.CharField(max_length=255, default=None, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     description = models.TextField()
@@ -54,6 +56,8 @@ class Modules(models.Model):
 class ModuleSections(models.Model):
     module_id = models.ForeignKey(Modules, on_delete=models.CASCADE, default=None, db_column = 'module_id')
     section_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sec_icon = models.CharField(max_length=255, default=None, null=True)  
+    sec_link = models.CharField(max_length=255, default=None, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
     section_name = models.CharField( max_length=255,)
     updated_at = models.DateTimeField(auto_now=True)
