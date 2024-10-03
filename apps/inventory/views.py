@@ -30,9 +30,6 @@ class WarehousesViewSet(viewsets.ModelViewSet):
 class WarehouseLocationsViewSet(viewsets.ModelViewSet):
     queryset = WarehouseLocations.objects.all()
     serializer_class = WarehouseLocationsSerializer
-    filter_backends = [DjangoFilterBackend,OrderingFilter]
-    filterset_class = WareHouseLocationsFilter
-    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
