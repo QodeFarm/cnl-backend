@@ -1,8 +1,10 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter, NumberFilter
 import datetime,django_filters
-from django.utils import timezone
-from .models import ProductGstClassifications, ProductItemBalance
+from .models import ProductGstClassifications, ProductItemBalance, Products
 from config.utils_methods import filter_uuid
+from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+import logging
+logger = logging.getLogger(__name__)
 
 class ProductGroupsFilter(FilterSet):
     group_name = filters.CharFilter(lookup_expr='icontains')
@@ -47,7 +49,6 @@ class ProductsFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
     code = filters.CharFilter(lookup_expr='icontains')
     barcode = filters.CharFilter(lookup_expr='exact')
-    #Foreign key relations or functions
     category_id = filters.CharFilter(method=filter_uuid)
     product_id = filters.CharFilter(method=filter_uuid)
     category_name = CharFilter(field_name='category_id__category_name', lookup_expr='exact')
@@ -57,8 +58,41 @@ class ProductsFilter(FilterSet):
     type_name = CharFilter(field_name='type_id__type_name', lookup_expr='exact')    
     gst_classification_id = filters.CharFilter(method=filter_uuid)
     hsn_or_sac_code = CharFilter(field_name='gst_classification_id__hsn_or_sac_code', lookup_expr='exact')
-    #Date filters - custom methods
     created_at = filters.DateFromToRangeFilter()
+    sales_rate = filters.RangeFilter()
+    mrp = filters.RangeFilter()
+    discount = filters.RangeFilter()
+    dis_amount = filters.RangeFilter()
+    hsn_code = filters.CharFilter(lookup_expr='icontains')
+    print_name = filters.CharFilter(lookup_expr='icontains')
+    unit_options_id = filters.CharFilter(method=filter_uuid)
+    unit_options = filters.CharFilter(field_name='unit_options_id__unit_name', lookup_expr='icontains')
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = Products
+        #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['name','code','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'created_at','period_name','search','sort','page','limit']
+
 
 class ProductItemBalanceFilter(FilterSet):
     product_balance_id = filters.CharFilter(method=filter_uuid)

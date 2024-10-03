@@ -10,6 +10,7 @@ from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
+from config.utils_filter_methods import filter_response
 from .filters import *
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
@@ -179,6 +180,9 @@ class OrderShipmentsView(viewsets.ModelViewSet):
 class QuickPacksView(viewsets.ModelViewSet):
     queryset = QuickPacks.objects.all()
     serializer_class = QuickPackSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = QuickPacksFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -229,6 +233,34 @@ class SaleCreditNoteItemsViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+class SaleDebitNoteViews(viewsets.ModelViewSet):
+    queryset = SaleDebitNotes.objects.all()
+    serializer_class = SaleDebitNoteSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        response = create_instance(self, request, *args, **kwargs)
+        return response
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class SaleDebitNoteItemsViews(viewsets.ModelViewSet):
+    queryset = SaleDebitNoteItems.objects.all()
+    serializer_class = SaleDebitNoteItemsSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        response = create_instance(self, request, *args, **kwargs)
+        return response
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 
 
 class SaleOrderViewSet(APIView):
@@ -256,17 +288,24 @@ class SaleOrderViewSet(APIView):
                 return Response(data, status=status.HTTP_200_OK)
 
             logger.info("Retrieving all sale order")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+
             queryset = SaleOrder.objects.all()
 
             # Apply filters manually
             if request.query_params:
                 filterset = SaleOrderFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
-                    queryset = filterset.qs                 
+                    queryset = filterset.qs   
 
+            total_count = SaleOrder.objects.count()
+        
             serializer = SaleOrderOptionsSerializer(queryset, many=True)
             logger.info("sale order data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -607,6 +646,10 @@ class SaleInvoiceOrdersViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
             logger.info("Retrieving all sale invoice orders")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+
             queryset = SaleInvoiceOrders.objects.all()
 
             # Apply filters manually
@@ -615,10 +658,13 @@ class SaleInvoiceOrdersViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs 
 
+            total_count = SaleInvoiceOrders.objects.count()
+
             serializer = SaleInvoiceOrderOptionsSerializer(queryset, many=True)
             logger.info("sale order invoice data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
- 
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -935,6 +981,10 @@ class SaleReturnOrdersViewSet(APIView):
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
             logger.info("Retrieving all sale return order")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            
             queryset = SaleReturnOrders.objects.all()
 
             # Apply filters manually
@@ -943,10 +993,13 @@ class SaleReturnOrdersViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs 
 
+            total_count = SaleReturnOrders.objects.count()
+
             serializer = SaleReturnOrdersOptionsSerializer(queryset, many=True)
             logger.info("sale return order data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
- 
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+        
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1279,11 +1332,25 @@ class QuickPackCreateViewSet(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
             logger.info("Retrieving all QuickPacks")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10))   
+
             queryset = QuickPacks.objects.all()
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = QuickPacksFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
+
+            total_count = QuickPacks.objects.count()
+                     
             serializer = QuickPackSerializer(queryset, many=True)
             logger.info("QuickPacks data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
- 
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -1502,10 +1569,24 @@ class SaleReceiptCreateViewSet(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             logger.info("Retrieving all sale_receipt")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+
             queryset = SaleReceipt.objects.all()
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = SaleReceiptFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
+
+            total_count = SaleInvoiceOrders.objects.count()
+
             serializer = SaleReceiptSerializer(queryset, many=True)
             logger.info("sale_receipt data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -1900,6 +1981,9 @@ class WorkflowStageViewSet(viewsets.ModelViewSet):
 class SaleReceiptViewSet(viewsets.ModelViewSet):
     queryset = SaleReceipt.objects.all()
     serializer_class = SaleReceiptSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SaleReceiptFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -2134,7 +2218,7 @@ class SaleCreditNoteViewset(APIView):
         if sale_credit_note_data:
             sale_credit_note_data['credit_note_id'] = pk
             credit_note_error = validate_multiple_data(
-                self, [sale_credit_note_data], SaleCreditNoteSerializers)
+                self, [sale_credit_note_data], SaleCreditNoteSerializers, ['credit_note_number'])
 
         # Vlidated SaleOrderItems Data
         sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
@@ -2175,3 +2259,245 @@ class SaleCreditNoteViewset(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
+    def patch(self, request, pk, format=None):
+        sale_credit_note = self.get_object(pk)
+        if sale_credit_note is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SaleCreditNoteSerializers(sale_credit_note, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class SaleDebitNoteViewset(APIView):
+    
+    def get_object(self, pk):
+        try:
+            return SaleDebitNotes.objects.get(pk=pk)
+        except SaleDebitNotes.DoesNotExist:
+            logger.warning(f"salecreditnote with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
+        try:
+            logger.info("Retrieving all salecreditnote")
+            print("try block is triggering")
+            queryset = SaleDebitNotes.objects.all()
+            serializer = SaleDebitNoteSerializers(queryset, many=True)
+            logger.info("salecreditnote data retrieved successfully.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the SaleOrder instance
+            sale_debit_note = get_object_or_404(SaleDebitNotes, pk=pk)
+            sale_debit_note_serializer = SaleDebitNoteSerializers(sale_debit_note)
+
+            # Retrieve related data
+            debit_items_data = self.get_related_data(
+                SaleDebitNoteItems, SaleDebitNoteItemsSerializers, 'debit_note_id', pk)
+
+            # Customizing the response data
+            custom_data = {
+                "sale_debit_note": sale_debit_note_serializer.data,
+                "sale_debit_note_items": debit_items_data,
+            }
+            logger.info("salecreditnote and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+        except Http404:
+            logger.error("salecreditnote with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(
+                "An error occurred while retrieving salecreditnote with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        """
+        Retrieves related data for a given model, serializer, and filter field.
+        """
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            logger.debug("Retrieved related data for model %s with filter %s=%s.",
+                         model.__name__, filter_field, filter_value)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
+                             model.__name__, filter_field, filter_value, str(e))
+            return []
+        
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a sale order and its related attachments and shipments.
+        """
+        try:
+            # Get the SaleDebitNotes instance
+            instance = SaleDebitNotes.objects.get(pk=pk)
+
+            # Delete the main SaleDebitNotes instance
+            instance.delete()
+
+            logger.info(f"SaleDebitNotes with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except SaleDebitNotes.DoesNotExist:
+            logger.warning(f"SaleDebitNotes with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting SaleDebitNotes with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Handling POST requests for creating
+    # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        print("Create is running now:")
+        # Extracting data from the request
+        given_data = request.data
+
+        # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        # Vlidated SaleOrder Data
+        sale_debit_note_data = given_data.pop('sale_debit_note', None)  # parent_data
+        if sale_debit_note_data:
+            debit_note_error = validate_payload_data(
+                self, sale_debit_note_data, SaleDebitNoteSerializers)
+
+        # Vlidated SaleOrderItems Data
+        sale_debit_items_data = given_data.pop('sale_debit_note_items', None)
+        if sale_debit_items_data:
+            item_error = validate_multiple_data(
+                self, sale_debit_items_data, SaleDebitNoteItemsSerializers, ['debit_note_id'])
+
+        # Ensure mandatory data is present
+        if not sale_debit_note_data or not sale_debit_items_data:
+            logger.error(
+                "Saledebitnote and Saledebitnote items are mandatory but not provided.")
+            return build_response(0, "Saledebitnote and Saledebitnote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if debit_note_error:
+            errors["sale_debit_note"] = debit_note_error
+        if item_error:
+            errors["sale_debit_note_items"] = item_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data is created as new instances.
+        """
+
+        # Hence the data is validated , further it can be created.
+
+        # Create SaleDebitNotes Data
+        new_sale_debit_note_data = generic_data_creation(self, [sale_debit_note_data], SaleDebitNoteSerializers)
+        new_sale_debit_note_data = new_sale_debit_note_data[0]
+        debit_note_id = new_sale_debit_note_data.get("debit_note_id", None)
+        logger.info('SaleDebitNotes - created*')
+
+        # Create SaleCreditNotesItems Data
+        update_fields = {'debit_note_id': debit_note_id}
+        items_data = generic_data_creation(
+            self, sale_debit_items_data, SaleDebitNoteItemsSerializers, update_fields)
+        logger.info('SaleCreditNotesItems - created*')
+
+
+        custom_data = {
+            "sale_debit_note": new_sale_debit_note_data,
+            "sale_debit_note_items": items_data,
+        }
+
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+    
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+    
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+
+        # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+
+        # Vlidated SaleOrder Data
+        sale_debit_note_data = given_data.pop('sale_debit_note', None)  # parent_data
+        if sale_debit_note_data:
+            sale_debit_note_data['debit_note_id'] = pk
+            debit_note_error = validate_multiple_data(
+                self, [sale_debit_note_data], SaleDebitNoteSerializers, ['debit_note_number'])
+
+        # Vlidated SaleOrderItems Data
+        sale_debit_items_data = given_data.pop('sale_debit_note_items', None)
+        if sale_debit_items_data:
+            exclude_fields = ['debit_note_id']
+            item_error = validate_put_method_data(self, sale_debit_items_data, SaleDebitNoteItemsSerializers,
+                                                  exclude_fields, SaleDebitNoteItems, current_model_pk_field='debit_note_item_id')
+        # Ensure mandatory data is present
+        if not sale_debit_note_data or not sale_debit_items_data:
+            logger.error(
+                "Saledebitnote and Saledebitnote items are mandatory but not provided.")
+            return build_response(0, "Saledebitnote and Saledebitnote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if debit_note_error:
+            errors["sale_debit_note"] = debit_note_error
+        if item_error:
+            errors["sale_debit_note_items"] = item_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+
+        # update SaleOrder
+        if sale_debit_note_data:
+            update_fields = []  # No need to update any fields
+            saledebitnote_data = update_multi_instances(self, pk, [sale_debit_note_data], SaleDebitNotes, SaleDebitNoteSerializers,
+                                                    update_fields, main_model_related_field='debit_note_id', current_model_pk_field='debit_note_id')
+
+        # Update the 'sale_order_items'
+        update_fields = {'debit_note_id': pk}
+        items_data = update_multi_instances(self, pk, sale_debit_items_data, SaleDebitNoteItems, SaleDebitNoteItemsSerializers,
+                                            update_fields, main_model_related_field='debit_note_id', current_model_pk_field='debit_note_item_id')
+
+        custom_data = {
+            "sale_debit_note": saledebitnote_data[0] if saledebitnote_data else {},
+            "sale_debit_note_items": items_data if items_data else []
+        }
+
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+        
+    def patch(self, request, pk, format=None):
+        sale_debit_note = self.get_object(pk)
+        if sale_debit_note is None:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = SaleDebitNoteSerializers(sale_debit_note, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

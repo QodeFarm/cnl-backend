@@ -23,6 +23,8 @@ router.register(r'workflow_stages', WorkflowStageViewSet)
 router.register(r'sale_receipts', SaleReceiptViewSet)
 router.register(r'sale_credit_note', SaleCreditNoteViews)
 router.register(r'sale_credit_note_item', SaleCreditNoteItemsViews)
+router.register(r'sale_debit_note', SaleDebitNoteViews)
+router.register(r'sale_debit_note_item', SaleDebitNoteItemsViews)
 
 urlpatterns = [
     path('',include(router.urls)),
@@ -40,6 +42,8 @@ urlpatterns = [
     path('work_flow/<str:pk>/', WorkflowCreateViewSet.as_view(), name='Workflow-detail-update-delete'),
     path('sale_order/<uuid:pk>/workflow_pipeline/', ProgressWorkflowView.as_view(), name='workflow-pipeline'),
     path('sale_credit_notes/', SaleCreditNoteViewset.as_view(), name='sale-credit-notes-list-create'),
-    path('sale_credit_notes/<str:pk>/', SaleCreditNoteViewset.as_view(), name='sale-credit-notes-detail-update-delete')
+    path('sale_credit_notes/<str:pk>/', SaleCreditNoteViewset.as_view(), name='sale-credit-notes-detail-update-delete-patch'),
+    path('sale_debit_notes/', SaleDebitNoteViewset.as_view(), name='sale-debit-notes-list-create'),
+    path('sale_debit_notes/<str:pk>/', SaleDebitNoteViewset.as_view(), name='sale-debit-notes-detail-update-delete-patch')
 
 ]

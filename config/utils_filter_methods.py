@@ -1,5 +1,9 @@
+import json
 import logging
 from django.db.models import Q
+from django.forms import ValidationError
+from rest_framework.response import Response
+from rest_framework import status
 logger = logging.getLogger(__name__)
 from django.utils import timezone
 import datetime
@@ -15,7 +19,6 @@ PERIOD_NAME_CHOICES = [
     ('year_to_date', 'YearToDate'),
     ('last_year', 'LastYear'),
 ]
-
 
 def filter_by_period_name(self, queryset, name, value):
         today = timezone.now().date()
@@ -82,7 +85,6 @@ def filter_by_period_name(self, queryset, name, value):
         return queryset
 
 #=====================filter for page-limit-sort-search=======================================
-
 def apply_sorting(self, queryset):
     sort_param = self.data.get('sort[0]')
     logger.debug(f"Sorting parameter: {sort_param}")
@@ -136,9 +138,7 @@ def filter_by_pagination(queryset, page, limit):
 
     total_count = queryset.count()
     logger.debug(f"Total records in the database: {total_count}")
-
     return paginated_queryset, total_count
-
 
 def search_queryset(queryset, search_params, filter_set):
     if search_params:
@@ -161,4 +161,58 @@ def search_queryset(queryset, search_params, filter_set):
     
     return queryset
 
-#=====================filter for page-limit-sort-search=======================================
+def filter_by_search(queryset, filter_set, value):
+    try:
+        search_params = json.loads(value)
+        filter_set.search_params = search_params  # Set the search_params as an instance attribute
+    except json.JSONDecodeError as e:
+        logger.error(f"Error decoding search params: {e}")
+        raise ValidationError("Invalid search parameter format.")
+    
+    return search_queryset(queryset, search_params, filter_set)
+
+def filter_by_sort(filter_set, queryset, value):
+    return apply_sorting(filter_set, queryset)
+
+def filter_by_page(filter_set, queryset, value):
+    filter_set.page_number = int(value)
+    return queryset
+
+def filter_by_limit(filter_set, queryset, value):
+    filter_set.limit = int(value)
+    queryset = apply_sorting(filter_set, queryset)
+    paginated_queryset, total_count = filter_by_pagination(queryset, filter_set.page_number, filter_set.limit)
+    filter_set.total_count = total_count
+    return paginated_queryset
+
+#========================Filter Response==================================
+
+def filter_response(count, message, data,page, limit,total_count,status_code):
+    """
+    Builds a standardized API response.
+    """
+    response = {
+        'count': count,
+        'message': message,
+        'data': data,
+        'page': page,
+        'limit': limit,
+        'totalCount': total_count
+    }
+    return Response(response, status=status_code)
+
+def list_filtered_objects(self, request, model_name,*args, **kwargs):
+    queryset = self.filter_queryset(self.get_queryset())
+    # Pagination handling
+    page = int(request.GET.get('page', 1))
+    limit = int(request.GET.get('limit', 10))
+    total_count = model_name.objects.count()
+    start = (page - 1) * limit
+    end = start + limit
+    paginated_queryset = queryset[start:end]
+    serializer = self.get_serializer(paginated_queryset, many=True)
+    message = "NO RECORDS INSERTED" if not serializer.data else None
+    status_code = status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
+    return filter_response(count=len(paginated_queryset),message=message,data=serializer.data,page=page,limit=limit,total_count=total_count,status_code=status_code)
+
+#========================Filter Response==================================

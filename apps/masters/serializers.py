@@ -304,3 +304,23 @@ class ReturnOptionsSerializers(serializers.ModelSerializer):
     class Meta:
         model = ReturnOptions
         fields = '__all__'
+
+class ModFieldTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FieldType
+        fields = ['field_type_id', 'field_type_name']
+        
+class FieldTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FieldType
+        fields = '__all__'
+        
+class ModEntitiesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Entities
+        fields = ['entity_id', 'entity_name']
+
+class EntitiesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Entities
+        fields = '__all__'

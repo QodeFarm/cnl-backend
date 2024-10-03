@@ -8,6 +8,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import transaction
+from config.utils_filter_methods import filter_response
 from config.utils_variables import *
 from config.utils_methods import *
 from apps.inventory.serializers import WarehouseLocationsSerializer
@@ -258,7 +259,7 @@ class ProductViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get('summary', 'false').lower() == 'true'
+            summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
             if summary:
                 product = Products.objects.all()
                 data = ProductOptionsSerializer.get_product_summary(product)
@@ -266,9 +267,21 @@ class ProductViewSet(APIView):
             else:
                 logger.info("Retrieving all products")
                 queryset = Products.objects.all()
-                serializer = productsSerializer(queryset, many=True)
+
+                page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+                limit = int(request.query_params.get('limit', 10)) 
+                total_count = Products.objects.count()
+
+                # Apply filters manuallys
+                if request.query_params:
+                    filterset = ProductsFilter(request.GET, queryset=queryset)
+                    if filterset.is_valid():
+                        queryset = filterset.qs 
+
+                serializer = ProductOptionsSerializer(queryset, many=True)
                 logger.info("product data retrieved successfully.")
-                return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")

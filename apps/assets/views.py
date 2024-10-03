@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from apps.assets.filters import AssetMaintenanceFilter, AssetsFilter
+from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import list_all_objects,create_instance,update_instance
 from apps.assets.serializers import AssetStatusesSerializers, AssetCategoriesSerializers, LocationsSerializers, AssetsSerializer, AssetMaintenanceSerializer
 from apps.assets.models import AssetStatuses, AssetCategories, Locations, Assets, AssetMaintenance
@@ -56,7 +57,7 @@ class AssetsViewSet(viewsets.ModelViewSet):
 
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Assets, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -72,7 +73,7 @@ class AssetMaintenanceViewSet(viewsets.ModelViewSet):
     ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, AssetMaintenance,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

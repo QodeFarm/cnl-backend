@@ -140,5 +140,3 @@ class CustomerAddresses(models.Model):
     
     class Meta:
         db_table = customeraddressestable
-
-    

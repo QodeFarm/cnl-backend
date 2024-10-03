@@ -5,6 +5,7 @@ from requests import request
 from rest_framework import viewsets, generics, mixins as mi
 from apps import customer
 from apps.customer.filters import LedgerAccountsFilters, CustomerFilters, CustomerAddressesFilters, CustomerAttachmentsFilters
+from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
 from config.utils_methods import *
@@ -99,7 +100,7 @@ class CustomerAttachmentsViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-    
+
 #==========================================================================  
     
 class CustomerCreateViews(APIView):
@@ -116,18 +117,30 @@ class CustomerCreateViews(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving customer summary")
                 customers = Customer.objects.all()
                 data = CustomerOptionSerializer.get_customer_summary(customers)
                 return Response(data, status=status.HTTP_200_OK)
-
+ 
             logger.info("Retrieving all customers")
             queryset = Customer.objects.all()
-            serializer = CustomerSerializer(queryset, many=True)
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = Customer.objects.count()
+             
+            # Apply filters manually
+            if request.query_params:
+                filterset = CustomerFilters(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+
+            serializer = CustomerOptionSerializer(queryset, many=True)
             logger.info("Customer data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -359,3 +372,4 @@ class CustomerCreateViews(APIView):
 
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
+

@@ -4,7 +4,7 @@ from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions
 from apps.products.models import Products
-from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems
+from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems
 from config.utils_methods import OrderNumberMixin
 import logging
 
@@ -24,8 +24,8 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     ref_no = models.CharField(max_length=255, null=True, default=None)
     ref_date = models.DateField()
     TAX_CHOICES = [
-        ('Inclusive', 'Inclusive'),
-        ('Exclusive', 'Exclusive')
+        ('Exclusive', 'Exclusive'),
+        ('Inclusive', 'Inclusive')
         ]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
     flow_status = models.CharField(max_length=255, null=True, default=None)
@@ -47,6 +47,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     vehicle_name = models.CharField(max_length=255, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
     order_status_id  = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
+    sale_return_id = models.ForeignKey('sales.SaleReturnOrders', on_delete=models.CASCADE, null=True, default=None, db_column='sale_return_id')
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -197,7 +198,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
     ref_no = models.CharField(max_length=255, null=True, default=None)
     ref_date = models.DateField()
     order_salesman_id = models.ForeignKey('masters.OrdersSalesman', on_delete=models.CASCADE, db_column='order_salesman_id', null=True, default=None)
-    TAX_CHOICES = [('Inclusive', 'Inclusive'),('Exclusive', 'Exclusive'),]
+    TAX_CHOICES = [('Exclusive', 'Exclusive'),('Inclusive', 'Inclusive')]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, db_column='customer_address_id', null=True, default=None)
     payment_term_id = models.ForeignKey(CustomerPaymentTerms, on_delete=models.CASCADE, db_column='payment_term_id', null=True, default=None)
@@ -301,7 +302,7 @@ class SaleReturnOrders(OrderNumberMixin):
     order_salesman_id = models.ForeignKey('masters.OrdersSalesman', on_delete=models.CASCADE, db_column='order_salesman_id', null=True, default=None)
     against_bill = models.CharField(max_length=255, null=True, default=None)
     against_bill_date = models.DateField(null=True, default=None)
-    TAX_CHOICES = [('Inclusive', 'Inclusive'),('Exclusive', 'Exclusive'),]
+    TAX_CHOICES = [('Exclusive', 'Exclusive'),('Inclusive', 'Inclusive')]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, db_column='customer_address_id', null=True, default=None)
     payment_term_id = models.ForeignKey(CustomerPaymentTerms, on_delete=models.CASCADE, db_column='payment_term_id', null=True, default=None)
@@ -408,7 +409,7 @@ class QuickPacks(models.Model):
     quick_pack_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=512, null=True, default=None)
-    active = models.CharField(max_length=1, choices=[('Y', 'Yes'), ('N', 'No')], null=True, default='Y')
+    active = models.CharField(max_length=1, choices=[('N', 'No'),('Y', 'Yes')], null=True, default='Y')
     lot_qty = models.IntegerField(default=1, null=True)
     customer_id = models.ForeignKey(Customer,on_delete=models.CASCADE, db_column='customer_id', null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -480,6 +481,7 @@ class SaleReceipt(models.Model):
 class SaleCreditNotes(OrderNumberMixin):
     credit_note_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
+    sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, null=True, default=None, db_column='sale_return_id')
     credit_note_number = models.CharField(max_length=100, unique=True, default='')
     order_no_prefix = 'CN'
     order_no_field = 'credit_note_number'
@@ -487,7 +489,7 @@ class SaleCreditNotes(OrderNumberMixin):
     customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
-    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, db_column='order_status_id')
+    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -496,6 +498,11 @@ class SaleCreditNotes(OrderNumberMixin):
     
     class Meta:
         db_table = salecreditnote
+        
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
 
     
 class SaleCreditNoteItems(models.Model):
@@ -514,3 +521,47 @@ class SaleCreditNoteItems(models.Model):
     
     class Meta:
         db_table = salecreditnoteitems
+        
+class SaleDebitNotes(OrderNumberMixin):
+    debit_note_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
+    sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, null=True, default=None, db_column='sale_return_id')
+    debit_note_number = models.CharField(max_length=100, unique=True, default='')
+    order_no_prefix = 'DN'
+    order_no_field = 'debit_note_number'
+    debit_date = models.DateField(auto_now=True)
+    customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    reason = models.CharField(max_length=1024, null=True, default=None)
+    order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, null=True, default=None, db_column='order_status_id')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f'{self.debit_note_number}'
+    
+    class Meta:
+        db_table = saledebitnote
+        
+    def save(self, *args, **kwargs):
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        super().save(*args, **kwargs)
+
+    
+class SaleDebitNoteItems(models.Model):
+    debit_note_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    debit_note_id = models.ForeignKey(SaleDebitNotes, on_delete=models.CASCADE, db_column='debit_note_id')
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
+    quantity = models.IntegerField(default=None)
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+        
+    def __str__(self):
+        return f'{self.debit_note_item_id}'
+    
+    
+    class Meta:
+        db_table = saledebitnoteitems
