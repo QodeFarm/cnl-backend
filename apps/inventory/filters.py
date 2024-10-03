@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.inventory.models import Warehouses
+from apps.inventory.models import WarehouseLocations, Warehouses
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, apply_sorting, filter_by_pagination, filter_by_period_name, search_queryset
@@ -55,3 +55,12 @@ class WarehousesFilter(filters.FilterSet):
         model = Warehouses
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields =['name','code','phone','city_id','city','state_id', 'state','created_at','period_name','page','limit','sort','search']
+
+class WareHouseLocationsFilter(filters.FilterSet):
+    location_name = filters.CharFilter(lookup_expr='icontains')
+    warehouse = filters.CharFilter(field_name='warehouse_id__name', lookup_expr='icontains')
+    
+    class Meta:
+        model = WarehouseLocations
+        fields = ['location_name', 'warehouse']
+
