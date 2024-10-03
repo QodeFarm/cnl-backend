@@ -1,12 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-<<<<<<< HEAD
-
-from apps.inventory.filters import WareHouseLocationsFilter, WarehousesFilter
-=======
 from config.utils_filter_methods import list_filtered_objects
 from apps.inventory.filters import WarehousesFilter
->>>>>>> 84a04a30e7a9c24423aeeac856039fa3bb46ac99
 from .models import *
 from .serializers import *
 from config.utils_methods import *

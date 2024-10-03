@@ -39,17 +39,4 @@ class WarehousesFilter(filters.FilterSet):
     class Meta:
         model = Warehouses
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-<<<<<<< HEAD
-        fields =['name','code','phone','city_id','city','state_id', 'state','created_at','period_name','page','limit','sort','search']
-
-class WareHouseLocationsFilter(filters.FilterSet):
-    location_name = filters.CharFilter(lookup_expr='icontains')
-    warehouse = filters.CharFilter(field_name='warehouse_id__name', lookup_expr='icontains')
-    
-    class Meta:
-        model = WarehouseLocations
-        fields = ['location_name', 'warehouse']
-
-=======
         fields =['name','code','phone','city_id','state_id','created_at','period_name','search','sort','page','limit']
->>>>>>> 84a04a30e7a9c24423aeeac856039fa3bb46ac99
