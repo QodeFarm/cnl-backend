@@ -1,4 +1,4 @@
-from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
+from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -18,6 +18,7 @@ from rest_framework import viewsets
 from rest_framework import status
 from django.utils import timezone
 import json
+from collections import defaultdict
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -132,6 +133,47 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class UserAccessViewSet(viewsets.ModelViewSet):
+    queryset = RolePermissions.objects.all()
+    serializer_class = UserAccessModuleSerializer
+
+    def list(self, request, *args, **kwargs):
+        # Get all role permissions
+        role_permissions = RolePermissions.objects.all()
+
+        # Create a defaultdict to group sections by module
+        module_dict = defaultdict(list)
+
+        for permission in role_permissions:
+            module_name = permission.module_id.module_name
+            mod_icon = permission.module_id.mod_icon
+
+            section_data = {
+                'sec_link': permission.section_id.sec_link,
+                'section_name': permission.section_id.section_name,
+                'sec_icon': permission.section_id.sec_icon
+            }
+
+            # Append section data under the respective module
+            module_dict[(module_name, mod_icon)].append(section_data)
+
+        # Create a list for the response
+        data = []
+        for (module_name, mod_icon), sections in module_dict.items():
+            data.append({
+                "module_name": module_name,
+                "mod_icon": mod_icon,
+                "module_sections": sections
+            })
+
+        return Response({"count": len(data), "message": None, "data": data}, status=status.HTTP_200_OK)
+    
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
 

@@ -2,7 +2,7 @@ from django.urls import path
 from django.contrib.auth import get_user_model
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt import views as jwtview
-from apps.users.views import UserManageView, RolePermissionsCreateView, CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet
+from apps.users.views import UserManageView, RolePermissionsCreateView, CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet, UserAccessViewSet
 
 router = DefaultRouter()
 
@@ -17,6 +17,7 @@ router.register(r'user_time_restrictions', UserTimeRestrictionsViewSet, basename
 
 router.register(r'user_roles', UserRoleViewSet, basename='user_roles')  
 router.register(r'role_permissions_list', RolePermissionsViewSet, basename='role_permissions')
+router.register(r'user_access', UserAccessViewSet, basename='user_access')
 
 urlpatterns = [
     path("login/", UserLoginView.as_view(), name="User_Login_View"),
