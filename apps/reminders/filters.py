@@ -4,8 +4,6 @@ from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
-from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
-
 
 class NotificationFrequenciesFilter(filters.FilterSet):
     frequency_id = filters.CharFilter(method=filter_uuid)
@@ -73,7 +71,7 @@ class RemindersFilter(filters.FilterSet):
 class ReminderRecipientsFilter(filters.FilterSet):
     recipient_id = filters.CharFilter(method=filter_uuid)
     reminder_id = filters.CharFilter(field_name='reminder_id__subject', lookup_expr='icontains')
-    recipient_user_id = filters.NumberFilter()
+    recipient_user_id = filters.CharFilter(field_name='employee_id__name', lookup_expr='icontains')
     recipient_email = filters.CharFilter(lookup_expr='icontains')
     notification_method_id = filters.CharFilter(field_name='notification_method_id__method_name', lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
@@ -85,13 +83,14 @@ class ReminderRecipientsFilter(filters.FilterSet):
 
 class ReminderSettingsFilter(filters.FilterSet):
     setting_id = filters.CharFilter(method=filter_uuid)
+    user_id = filters.CharFilter(field_name='employee_id__name', lookup_expr='icontains')
     notification_frequency_id = filters.CharFilter(field_name='notification_frequency_id__frequency_name', lookup_expr='icontains')
     notification_method_id = filters.CharFilter(field_name='notification_method_id__method_name', lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
  
     class Meta:
         model = ReminderSettings 
-        fields = ['setting_id','notification_frequency_id','notification_method_id','created_at']
+        fields = ['setting_id','user_id','notification_frequency_id','notification_method_id','created_at']
 
 
 class ReminderLogsFilter(filters.FilterSet):
