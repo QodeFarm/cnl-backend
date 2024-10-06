@@ -4,7 +4,7 @@ from .models import *
 class ModEmployeesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employees
-        fields = ['employee_id','name']
+        fields = ['employee_id','name','email']
 
 class ModDesignationsSerializer(serializers.ModelSerializer):
     class Meta:

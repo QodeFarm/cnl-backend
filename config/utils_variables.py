@@ -179,6 +179,15 @@ customfields = 'custom_fields'
 customfieldoptions = 'custom_field_options'
 customfieldvalues = 'custom_field_values'
 
+# reminders db_tables
+notificationfrequenciestable ='notification_frequencies'
+notificationmethodstable ='notification_methods'
+remindertypestable = 'reminder_types'
+reminderstable = 'reminders'
+reminderrecipientstable = 'reminder_recipients'
+remindersettingstable = 'reminder_settings'
+reminderlogstable = 'reminder_logs'
+
 
 # Define the stages for the default workflow
 default_workflow_stages = {

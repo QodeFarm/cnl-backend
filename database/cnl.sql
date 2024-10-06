@@ -2238,3 +2238,87 @@ CREATE TABLE IF NOT EXISTS sale_debit_note_items (
     FOREIGN KEY (debit_note_id) REFERENCES sale_debit_notes(debit_note_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
+
+/* Notification Frequencies Table */
+-- Stores available notification frequencies for reminders.
+CREATE TABLE IF NOT EXISTS notification_frequencies (
+frequency_id CHAR(36) PRIMARY KEY,
+frequency_name VARCHAR(50) NOT NULL UNIQUE,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Notification Methods Table */
+-- Stores available notification methods for reminders and settings.
+CREATE TABLE IF NOT EXISTS notification_methods (
+method_id CHAR(36) PRIMARY KEY,
+method_name VARCHAR(50) NOT NULL UNIQUE,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Reminder Types Table */
+-- Stores different types of reminders.
+CREATE TABLE IF NOT EXISTS reminder_types (
+reminder_type_id CHAR(36) PRIMARY KEY,
+type_name VARCHAR(100) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Reminders Table */
+-- Stores the main reminder details.
+CREATE TABLE IF NOT EXISTS reminders (
+reminder_id CHAR(36) PRIMARY KEY,
+reminder_type_id CHAR(36) NOT NULL,
+subject VARCHAR(255) NOT NULL,
+description TEXT,
+reminder_date TIMESTAMP NOT NULL,
+is_recurring BOOLEAN DEFAULT FALSE,
+recurring_frequency ENUM('Daily', 'Monthly', 'Weekly', 'Yearly') NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (reminder_type_id) REFERENCES reminder_types(reminder_type_id)
+);
+
+/* Reminder Recipients Table */
+-- Stores details of recipients for a reminder.
+CREATE TABLE IF NOT EXISTS reminder_recipients (
+recipient_id CHAR(36) PRIMARY KEY,
+reminder_id CHAR(36) NOT NULL,
+recipient_user_id CHAR(36) NOT NULL,
+recipient_email VARCHAR(255),
+notification_method_id CHAR(36) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id),
+FOREIGN KEY (recipient_user_id) REFERENCES employees(employee_id),
+FOREIGN KEY (notification_method_id) REFERENCES notification_methods(method_id)
+);
+
+/* Reminder Settings Table */
+-- Stores settings related to how reminders are sent to users.
+CREATE TABLE IF NOT EXISTS reminder_settings (
+setting_id CHAR(36) PRIMARY KEY,
+user_id CHAR(36) NOT NULL,
+notification_frequency_id CHAR(36) NOT NULL,
+notification_method_id CHAR(36) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (user_id) REFERENCES employees(employee_id),
+FOREIGN KEY (notification_frequency_id) REFERENCES notification_frequencies(frequency_id),
+FOREIGN KEY (notification_method_id) REFERENCES notification_methods(method_id)
+);
+
+/* Reminder Logs Table */
+-- Logs each reminder activity for tracking.
+CREATE TABLE IF NOT EXISTS reminder_logs (
+log_id CHAR(36) PRIMARY KEY,
+reminder_id CHAR(36) NOT NULL,
+log_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+log_action ENUM('Cancelled',  'Created', 'Dismissed', 'Rescheduled', 'Viewed') NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
+);
+
