@@ -440,6 +440,89 @@ def get_related_data(model, serializer_class, filter_field, filter_value):
         logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
         return []
 
+def product_stock_verification(parent_model, child_model, data): # In case of creation of Invoice for Product(s).
+    """
+    Verifies if sufficient stock is available for the product when a SaleOrder is being created.
+    Raises a ValidationError if the product's available stock is less than the quantity being ordered.
+    """
+    stock_error = {}
+    for item in data:
+        product = item.get('product_id',None)
+        size = item.get('size_id',None)
+        color = item.get('color_id',None)
+        order_qty = item.get('quantity',None)
+
+        # Verify the Product
+        product_balance = parent_model.objects.get(product_id=product).balance
+        if product_balance == 0:
+            return build_response(0, f"Product with ID :'{product}' is Out Of Stock.", [], status.HTTP_400_BAD_REQUEST)
+
+        # Verify the Product Varition
+        try:
+            product_variation = child_model.objects.get(
+                product_id=product,
+                size_id=size,
+                color_id=color
+            )
+            available_stock = product_variation.quantity
+        except child_model.DoesNotExist:
+            available_stock = 0
+
+        if int(order_qty) > int(available_stock):
+            stock_error[f'{product}'] = 'Insufficient stock for this product.'
+    return stock_error
+
+def previous_product_instance_verification(model_name, data): # In case of Product Return
+    """
+    Verifies if PREVIOUS PRODUCT INTANCE is available for the product when a SaleOrder is was created.
+    Raises a ValidationError if the product's instance is not present in database.
+    """    
+    stock_error = {}
+    for item in data:
+        product = item.get('product_id',None)
+        size = item.get('size_id',None)
+        color = item.get('color_id',None)
+        order_qty = item.get('quantity',None)
+
+        # Verify the Product Varition
+        try:
+            product_variation = model_name.objects.get(
+                product_id=product,
+                size_id=size,
+                color_id=color
+            )
+            available_stock = product_variation.quantity
+        except model_name.DoesNotExist:
+            stock_error[f'{product}'] = 'This product variation is unavailable or has been removed.'
+    return stock_error
+
+def update_product_stock(parent_model, child_model, data, operation):
+    for item in data:
+        product = item.get('product_id',None)
+        return_qty = item.get('quantity',None)
+        size = item.get('size_id',None)
+        color = item.get('color_id',None)
+
+        # Update each product stock (Subtract the order QTY from stock)
+        product_instance = parent_model.objects.get(product_id=product)
+        if operation == 'add':
+            product_instance.balance += return_qty
+        elif operation == 'subtract':
+            product_instance.balance -= return_qty
+        product_instance.save()
+
+        # Update each product variation stock (Subtract the order QTY from stock)
+        product_variation_instance = child_model.objects.get(
+            product_id=product,
+            size_id=size,
+            color_id=color
+        )
+        if operation == 'add':
+            product_variation_instance.quantity += return_qty
+        elif operation == 'subtract':
+            product_variation_instance.quantity -= return_qty
+        product_variation_instance.save()
+        logger.info(f'Updated stock for Product ID : {product}')    
 
 #================================================================================================================================================
 #===========================================CHETAN'S METHOD============================================================================

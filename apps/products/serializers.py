@@ -154,25 +154,13 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
-    locations = serializers.SerializerMethodField()
-    total_product_balance = serializers.SerializerMethodField()
     
     class Meta:
         model = Products
         fields = '__all__'
 
-    def get_total_product_balance(self, obj):
-        product_variations = ProductVariation.objects.filter(product_id=obj.product_id).values_list('product_variation_id', flat=True)
-        query_set = ProductItemBalance.objects.filter(product_variation_id__in=product_variations)
-        total_product_balance = query_set.aggregate(total_balance=models.Sum('quantity'))['total_balance']
-        return total_product_balance if total_product_balance else 0
-    
-    def get_locations(self, obj):
-        product_variations = ProductVariation.objects.filter(product_id=obj.product_id).values_list('product_variation_id', flat=True)
-        query_set = ProductItemBalance.objects.filter(product_variation_id__in=product_variations)
-        return ProductItemBalanceSerializer(query_set, many=True).data
-
 class ProductItemBalanceSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id',read_only=True)
     warehouse_location = ModWarehouseLocationsSerializer(source='warehouse_location_id',read_only=True)
     class Meta:
         model = ProductItemBalance
@@ -180,21 +168,21 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
 
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
-    product_balance = serializers.SerializerMethodField()
+    # product_balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
-        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'hsn_code']
+        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'balance', 'hsn_code']
 
-    def get_product_details(self, obj):
-        return productsSerializer().get_total_product_balance(obj)
+    # def get_product_details(self, obj):
+    #     return productsSerializer().get_total_product_balance(obj)
 
-    def get_product_balance(self, obj):
-        return self.get_product_details(obj)
+    # def get_product_balance(self, obj):
+    #     return self.get_product_details(obj)
  
-    def get_product_summary(products):
-        serializer = ProductOptionsSerializer(products, many=True)
-        return serializer.data
+    # def get_product_summary(products):
+    #     serializer = ProductOptionsSerializer(products, many=True)
+    #     return serializer.data
 
 class SizeSerializer(serializers.ModelSerializer):
     class Meta:

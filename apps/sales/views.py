@@ -14,9 +14,10 @@ from config.utils_filter_methods import filter_response
 from .filters import *
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
+from apps.products.models import Products, ProductVariation
 from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
 
@@ -811,6 +812,11 @@ class SaleInvoiceOrdersViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
+        # Stock verification
+        stock_error = product_stock_verification(Products, ProductVariation, sale_invoice_items_data)
+        if stock_error:
+            return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)          
+
         # ---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -858,6 +864,9 @@ class SaleInvoiceOrdersViewSet(APIView):
             "order_attachments": order_attachments,
             "order_shipments": order_shipments,
         }
+
+        # Update Product Stock
+        update_product_stock(Products, ProductVariation, sale_invoice_items_data, 'subtract')
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
@@ -1156,6 +1165,14 @@ class SaleReturnOrdersViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
+        """
+        Verifies if PREVIOUS PRODUCT INTANCE is available for the product.
+        Raises a ValidationError if the product's instance is not present in database.
+        """
+        stock_error = previous_product_instance_verification(ProductVariation, sale_return_items_data)
+        if stock_error:
+            return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)
+
         # ---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -1206,6 +1223,9 @@ class SaleReturnOrdersViewSet(APIView):
             "order_attachments": order_attachments,
             "order_shipments": order_shipments,
         }
+
+        # Update the stock with returned products.
+        update_product_stock(Products, ProductVariation, sale_return_items_data, 'add')
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
@@ -1950,7 +1970,6 @@ class WorkflowCreateViewSet(APIView):
             'workflow_stages': workflow_stage_data_response
         }, status.HTTP_200_OK)
 
-
 class WorkflowViewSet(viewsets.ModelViewSet):
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
@@ -1963,7 +1982,6 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
 
 class WorkflowStageViewSet(viewsets.ModelViewSet):
     queryset = WorkflowStage.objects.all()

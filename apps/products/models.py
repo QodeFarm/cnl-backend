@@ -229,6 +229,7 @@ class Products(OrderNumberMixin):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, null=True, default=None)
     print_name = models.CharField(max_length=255)
     hsn_code= models.CharField(max_length=15, null=True, default=None)
+    balance = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -289,7 +290,7 @@ class ProductVariation(models.Model):
 
 class ProductItemBalance(models.Model):
     product_item_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_variation_id = models.ForeignKey(ProductVariation, on_delete=models.CASCADE, db_column='product_variation_id')
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     warehouse_location_id = models.ForeignKey(WarehouseLocations, on_delete=models.CASCADE, db_column='warehouse_location_id')
     quantity = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -299,4 +300,4 @@ class ProductItemBalance(models.Model):
         db_table = productitembalancetable
 
     def __str__(self):
-        return f'{self.product_variation_id} - {self.warehouse_location_id}'
+        return f'{self.warehouse_location_id}'
