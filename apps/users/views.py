@@ -144,8 +144,8 @@ class UserAccessViewSet(viewsets.ModelViewSet):
     serializer_class = UserAccessModuleSerializer
 
     def list(self, request, *args, **kwargs):
-        # Get all role permissions
-        role_permissions = RolePermissions.objects.all()
+        # Get all role permissions, ordering by module's `created_at` field
+        role_permissions = RolePermissions.objects.select_related('module_id').order_by('module_id__created_at')
 
         # Create a defaultdict to group sections by module
         module_dict = defaultdict(list)
