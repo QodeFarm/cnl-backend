@@ -168,21 +168,21 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
 
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
-    product_balance = serializers.SerializerMethodField()
+    # product_balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
-        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'product_balance', 'hsn_code']
+        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'balance', 'hsn_code']
 
-    def get_product_details(self, obj):
-        return productsSerializer().get_total_product_balance(obj)
+    # def get_product_details(self, obj):
+    #     return productsSerializer().get_total_product_balance(obj)
 
-    def get_product_balance(self, obj):
-        return self.get_product_details(obj)
+    # def get_product_balance(self, obj):
+    #     return self.get_product_details(obj)
  
-    def get_product_summary(products):
-        serializer = ProductOptionsSerializer(products, many=True)
-        return serializer.data
+    # def get_product_summary(products):
+    #     serializer = ProductOptionsSerializer(products, many=True)
+    #     return serializer.data
 
 class SizeSerializer(serializers.ModelSerializer):
     class Meta:

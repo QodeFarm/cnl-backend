@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
 from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers
-from apps.products.serializers import ModProductGroupsSerializer, ModproductsSerializer
+from apps.products.serializers import ColorSerializer, ModProductGroupsSerializer, ModproductsSerializer, SizeSerializer
 from .models import *
 from django.conf import settings
 
@@ -60,6 +60,8 @@ class SaleInvoiceItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)       
 
     class Meta:
         model = SaleInvoiceItems
@@ -77,6 +79,8 @@ class SaleOrderItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)    
 
     class Meta:
         model = SaleOrderItems
@@ -116,6 +120,8 @@ class SaleReturnItemsSerializer(serializers.ModelSerializer):
     sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)
     
     class Meta:
         model = SaleReturnItems

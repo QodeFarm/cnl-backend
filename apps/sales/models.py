@@ -3,7 +3,7 @@ from django.db import models
 from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions
-from apps.products.models import Products
+from apps.products.models import Products, Size, Color
 from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems
 from config.utils_methods import OrderNumberMixin
 import logging
@@ -166,6 +166,8 @@ class SaleOrderItems(models.Model):
     sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.CASCADE, db_column='sale_order_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
@@ -267,6 +269,8 @@ class SaleInvoiceItems(models.Model): #required fields are updated
     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, db_column='color_id')
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
@@ -343,6 +347,8 @@ class SaleReturnItems(models.Model):
     sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, db_column='sale_return_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
@@ -382,7 +388,7 @@ class OrderShipments(OrderNumberMixin):
     destination = models.CharField(max_length=255, null=True, default=None)
     shipping_mode_id = models.ForeignKey('masters.ShippingModes', on_delete=models.CASCADE, db_column='shipping_mode_id', null=True, default=None)
     shipping_company_id = models.ForeignKey('masters.ShippingCompanies', on_delete=models.CASCADE, db_column='shipping_company_id', null=True, default=None)
-    shipping_tracking_no = models.CharField(max_length=20, default='')
+    shipping_tracking_no = models.CharField(max_length=20, unique=True, default='')
     order_no_prefix = 'SHIP'
     order_no_field = 'shipping_tracking_no'
     shipping_date = models.DateField()

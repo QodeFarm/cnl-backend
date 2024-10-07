@@ -3,7 +3,7 @@ from config.utils_variables import *
 from apps.masters.models import PurchaseTypes,State,ProductBrands, GstTypes, OrderStatuses, UnitOptions
 from apps.customer.models import LedgerAccounts,CustomerCategories
 from apps.vendor.models import Vendor,VendorAgent,VendorAddress,VendorPaymentTerms
-from apps.products.models import Products
+from apps.products.models import Products, Size, Color
 import uuid
 from config.utils_methods import OrderNumberMixin
 
@@ -61,6 +61,8 @@ class PurchaseorderItems(models.Model):
     purchase_order_id = models.ForeignKey(PurchaseOrders, on_delete=models.CASCADE, db_column = 'purchase_order_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
@@ -135,6 +137,8 @@ class PurchaseInvoiceItem(models.Model):
     purchase_invoice_id = models.ForeignKey(PurchaseInvoiceOrders, on_delete=models.CASCADE, db_column = 'purchase_invoice_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, db_column='color_id')     
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
@@ -206,6 +210,8 @@ class PurchaseReturnItems(models.Model):
     purchase_return_id = models.ForeignKey(PurchaseReturnOrders, on_delete=models.CASCADE, db_column='purchase_return_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, db_column='color_id')     
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)

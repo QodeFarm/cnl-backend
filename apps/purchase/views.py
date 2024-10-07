@@ -10,6 +10,7 @@ from config.utils_methods import *
 from config.utils_variables import *
 from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from uuid import UUID
+from apps.products.models import Products, ProductVariation
 from apps.sales.serializers import OrderAttachmentsSerializer,OrderShipmentsSerializer
 from apps.sales.models import OrderAttachments,OrderShipments
 from rest_framework import viewsets
@@ -648,6 +649,11 @@ class PurchaseInvoiceOrderViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
+        # Stock verification
+        stock_error = product_stock_verification(Products, ProductVariation, purchase_invoice_items_data)
+        if stock_error:
+            return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)        
+        
         #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -695,6 +701,10 @@ class PurchaseInvoiceOrderViewSet(APIView):
             "order_attachments":order_attachments,
             "order_shipments":order_shipments,
         }
+
+        # Update Product Stock
+        update_product_stock(Products, ProductVariation, purchase_invoice_items_data, 'subtract')        
+
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
     def put(self, request, *args, **kwargs):
@@ -979,6 +989,14 @@ class PurchaseReturnOrderViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
+        """
+        Verifies if PREVIOUS PRODUCT INTANCE is available for the product.
+        Raises a ValidationError if the product's instance is not present in database.
+        """
+        stock_error = previous_product_instance_verification(ProductVariation, purchase_return_items_data)
+        if stock_error:
+            return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)        
+
         #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -1026,6 +1044,10 @@ class PurchaseReturnOrderViewSet(APIView):
             "order_attachments":order_attachments,
             "order_shipments":order_shipments,
         }
+
+        # Update the stock with returned products.
+        update_product_stock(Products, ProductVariation, purchase_return_items_data, 'add')
+
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
     def put(self, request, *args, **kwargs):
