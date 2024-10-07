@@ -738,6 +738,7 @@ CREATE TABLE IF NOT EXISTS products (
     status ENUM('Active', 'Inactive'),
     print_name VARCHAR(255),
     hsn_code VARCHAR(15),
+    balance INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_group_id) REFERENCES product_groups(product_group_id),
@@ -799,12 +800,12 @@ CREATE TABLE IF NOT EXISTS product_variations (
 -- Stores information about product_item_balance.
 CREATE TABLE IF NOT EXISTS product_item_balance (
     product_item_balance_id CHAR(36) PRIMARY KEY,
-    product_variation_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
     warehouse_location_id CHAR(36) NOT NULL,
     quantity INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
     FOREIGN KEY (warehouse_location_id) REFERENCES warehouse_locations(location_id)
 );
 

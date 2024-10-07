@@ -154,25 +154,13 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
-    locations = serializers.SerializerMethodField()
-    total_product_balance = serializers.SerializerMethodField()
     
     class Meta:
         model = Products
         fields = '__all__'
 
-    def get_total_product_balance(self, obj):
-        product_variations = ProductVariation.objects.filter(product_id=obj.product_id).values_list('product_variation_id', flat=True)
-        query_set = ProductItemBalance.objects.filter(product_variation_id__in=product_variations)
-        total_product_balance = query_set.aggregate(total_balance=models.Sum('quantity'))['total_balance']
-        return total_product_balance if total_product_balance else 0
-    
-    def get_locations(self, obj):
-        product_variations = ProductVariation.objects.filter(product_id=obj.product_id).values_list('product_variation_id', flat=True)
-        query_set = ProductItemBalance.objects.filter(product_variation_id__in=product_variations)
-        return ProductItemBalanceSerializer(query_set, many=True).data
-
 class ProductItemBalanceSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id',read_only=True)
     warehouse_location = ModWarehouseLocationsSerializer(source='warehouse_location_id',read_only=True)
     class Meta:
         model = ProductItemBalance
