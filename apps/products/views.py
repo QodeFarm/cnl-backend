@@ -123,9 +123,9 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
 class productsViewSet(viewsets.ModelViewSet):
     queryset = Products.objects.all()
     serializer_class = productsSerializer
-    filter_backends = [DjangoFilterBackend,OrderingFilter]
-    filterset_class = ProductsFilter
-    ordering_fields = ['name','code','barcode','category_id','product_group_id','type_id','gst_classification_id','created_at']
+    # filter_backends = [DjangoFilterBackend,OrderingFilter]
+    # filterset_class = ProductsFilter
+    # ordering_fields = ['name','code','barcode','category_id','product_group_id','type_id','gst_classification_id','created_at']
 
     def list(self, request, *args, **kwargs):
         summary = request.query_params.get('summary', 'false').lower() == 'true'
@@ -514,4 +514,4 @@ class ProductViewSet(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error deleting Leads with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR) 
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
