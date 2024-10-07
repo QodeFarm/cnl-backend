@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import pre_delete
+from apps.hrms.models import Employees
 from config.utils_methods import *
 from config.utils_variables import *
 from django.core.validators import RegexValidator
@@ -467,3 +468,33 @@ class Entities(models.Model):
     
     class Meta:
         db_table = entities
+
+
+class Groups(models.Model):
+    group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group_name = models.CharField(max_length=100,  unique=True)
+    description = models.CharField(max_length=1024, null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = groupstable
+
+    def __str__(self):
+        return self.group_name
+    
+
+class GroupMembers(models.Model):
+    member_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group_id = models.ForeignKey(Groups, on_delete=models.CASCADE, db_column='group_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # unique_together = ('group', 'employee')
+        db_table = groupmemberstable
+
+    def __str__(self):
+        return f"{self.member_id}"
+        # return f'{self.group} - {self.employee}'

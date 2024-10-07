@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.hrms.serializers import ModEmployeesSerializer
 from .models import *
 
 #Create serializers
@@ -323,4 +324,27 @@ class ModEntitiesSerializer(serializers.ModelSerializer):
 class EntitiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Entities
+        fields = '__all__'
+
+
+class ModGroupsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Groups
+        fields = ['group_id', 'group_name','description']
+
+class GroupsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Groups
+        fields = '__all__'
+
+class ModGroupMembersSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupMembers
+        fields = ['member_id', 'group_id','employee_id']
+
+class GroupMembersSerializer(serializers.ModelSerializer):
+    group = ModGroupsSerializer(source='group_id', read_only=True)
+    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
+    class Meta:
+        model = GroupMembers
         fields = '__all__'
