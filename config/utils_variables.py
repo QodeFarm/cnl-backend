@@ -116,6 +116,8 @@ taskprioritiestable ='task_priorities'
 returnoptions = 'return_options'
 entities = 'entities'
 fieldtypes = 'field_types'
+groupstable = 'groups'
+groupmemberstable = 'group_members'
 
 #Authentication db_tables
 userstable = 'users'

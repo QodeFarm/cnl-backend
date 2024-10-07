@@ -2299,3 +2299,21 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
 );
 
+CREATE TABLE groups (
+    group_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
+    group_name VARCHAR(100) UNIQUE NOT NULL,
+    description VARCHAR(1024),  -- Description length set to 1024 characters
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE group_members (
+    member_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
+    group_id CHAR(36) NOT NULL,
+    employee_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES `groups`(group_id) ON DELETE CASCADE,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    UNIQUE (group_id, employee_id)
+);

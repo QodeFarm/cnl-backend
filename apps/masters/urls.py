@@ -38,6 +38,10 @@ router.register(r'return_options', ReturnOptionsViewset)
 
 router.register(r'fieldtypes', FieldTypeViewSet)
 router.register(r'entities', EntitiesViewSet)
+
+router.register(r'groups', GroupsViewset)
+router.register(r'group_members', GroupMembersViewset)
+
 urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),
