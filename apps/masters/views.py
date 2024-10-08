@@ -624,10 +624,9 @@ class EntitiesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-
-class GroupsViewset(viewsets.ModelViewSet):
-    queryset = Groups.objects.all()
-    serializer_class = GroupsSerializer
+class UserGroupsViewset(viewsets.ModelViewSet):
+    queryset = UserGroups.objects.all()
+    serializer_class = UserGroupsSerializer
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -638,9 +637,9 @@ class GroupsViewset(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-class GroupMembersViewset(viewsets.ModelViewSet):
-    queryset = GroupMembers.objects.all()
-    serializer_class = GroupMembersSerializer
+class UserGroupMembersViewset(viewsets.ModelViewSet):
+    queryset = UserGroupMembers.objects.all()
+    serializer_class = UserGroupMembersSerializer
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

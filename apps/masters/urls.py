@@ -39,8 +39,8 @@ router.register(r'return_options', ReturnOptionsViewset)
 router.register(r'fieldtypes', FieldTypeViewSet)
 router.register(r'entities', EntitiesViewSet)
 
-router.register(r'groups', GroupsViewset)
-router.register(r'group_members', GroupMembersViewset)
+router.register(r'user_groups', UserGroupsViewset)
+router.register(r'user_group_members', UserGroupMembersViewset)
 
 urlpatterns = [
     path('', include(router.urls)),

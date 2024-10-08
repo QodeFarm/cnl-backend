@@ -470,7 +470,7 @@ class Entities(models.Model):
         db_table = entities
 
 
-class Groups(models.Model):
+class UserGroups(models.Model):
     group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     group_name = models.CharField(max_length=100,  unique=True)
     description = models.CharField(max_length=1024, null=True, default=None)
@@ -478,22 +478,22 @@ class Groups(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = groupstable
+        db_table = usergroupstable
 
     def __str__(self):
         return self.group_name
     
 
-class GroupMembers(models.Model):
+class UserGroupMembers(models.Model):
     member_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    group_id = models.ForeignKey(Groups, on_delete=models.CASCADE, db_column='group_id')
+    group_id = models.ForeignKey(UserGroups, on_delete=models.CASCADE, db_column='group_id')
     employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # unique_together = ('group', 'employee')
-        db_table = groupmemberstable
+        unique_together = ('group_id', 'employee_id')
+        db_table = usergroupmemberstable
 
     def __str__(self):
         return f"{self.member_id}"

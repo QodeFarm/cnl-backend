@@ -2328,7 +2328,7 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
 );
 
-/* Groups Table */
+/* User Groups Table */
 -- Stores information about different groups.
 CREATE TABLE IF NOT EXISTS user_groups (
     group_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
@@ -2338,7 +2338,7 @@ CREATE TABLE IF NOT EXISTS user_groups (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* Group Members Table */
+/* User Group Members Table */
 -- Tracks the members belonging to each group.
 CREATE TABLE IF NOT EXISTS user_group_members (
     member_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
