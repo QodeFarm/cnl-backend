@@ -624,7 +624,6 @@ class EntitiesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-
 class UserGroupsViewset(viewsets.ModelViewSet):
     queryset = UserGroups.objects.all()
     serializer_class = UserGroupsSerializer
