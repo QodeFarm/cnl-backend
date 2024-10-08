@@ -327,24 +327,24 @@ class EntitiesSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ModGroupsSerializer(serializers.ModelSerializer):
+class ModUserGroupsSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Groups
+        model = UserGroups
         fields = ['group_id', 'group_name','description']
 
-class GroupsSerializer(serializers.ModelSerializer):
+class UserGroupsSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Groups
+        model = UserGroups
         fields = '__all__'
 
-class ModGroupMembersSerializer(serializers.ModelSerializer):
+class ModUserGroupMembersSerializer(serializers.ModelSerializer):
     class Meta:
-        model = GroupMembers
+        model = UserGroupMembers
         fields = ['member_id', 'group_id','employee_id']
 
-class GroupMembersSerializer(serializers.ModelSerializer):
-    group = ModGroupsSerializer(source='group_id', read_only=True)
+class UserGroupMembersSerializer(serializers.ModelSerializer):
+    group = ModUserGroupsSerializer(source='group_id', read_only=True)
     employee = ModEmployeesSerializer(source='employee_id', read_only=True)
     class Meta:
-        model = GroupMembers
+        model = UserGroupMembers
         fields = '__all__'
