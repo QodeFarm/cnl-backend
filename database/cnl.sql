@@ -796,6 +796,43 @@ CREATE TABLE IF NOT EXISTS product_variations (
     FOREIGN KEY (color_id) REFERENCES colors(color_id)
 );
 
+/* Warehouse Table */
+-- Stores information about warehouses.
+CREATE TABLE IF NOT EXISTS warehouses (
+    warehouse_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(255),
+    item_type_id CHAR(36),
+    address VARCHAR(255),
+    city_id CHAR(36) NOT NULL,
+	state_id CHAR(36) NOT NULL,
+	country_id CHAR(36),
+    pin_code VARCHAR(50),
+    phone VARCHAR(50),
+    email VARCHAR(255),
+    longitude DECIMAL(10, 6),
+    latitude DECIMAL(10, 6),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
+    FOREIGN KEY (city_id) REFERENCES city(city_id),
+	FOREIGN KEY (state_id) REFERENCES state(state_id),
+	FOREIGN KEY (country_id) REFERENCES country(country_id)
+);
+
+
+/* Warehouse_Locations Table */
+-- Stores information about warehouse locations.
+CREATE TABLE IF NOT EXISTS warehouse_locations (
+    location_id CHAR(36) PRIMARY KEY,
+    warehouse_id CHAR(36) NOT NULL,
+    location_name VARCHAR(255) NOT NULL,
+    description VARCHAR(512),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
+);
+
 /* Product_item_balance Table */
 -- Stores information about product_item_balance.
 CREATE TABLE IF NOT EXISTS product_item_balance (
@@ -968,39 +1005,6 @@ CREATE TABLE IF NOT EXISTS sale_types (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* Warehouse Table */
--- Stores information about warehouses.
-CREATE TABLE IF NOT EXISTS warehouses (
-    warehouse_id CHAR(36) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    code VARCHAR(255),
-    item_type_id CHAR(36),
-    address VARCHAR(255),
-    city_id CHAR(36) NOT NULL,
-	state_id CHAR(36) NOT NULL,
-	country_id CHAR(36),
-    pin_code VARCHAR(50),
-    phone VARCHAR(50),
-    email VARCHAR(255),
-    longitude DECIMAL(10, 6),
-    latitude DECIMAL(10, 6),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
-    FOREIGN KEY (city_id) REFERENCES city(city_id),
-	FOREIGN KEY (state_id) REFERENCES state(state_id),
-	FOREIGN KEY (country_id) REFERENCES country(country_id)
-);
-
-CREATE TABLE IF NOT EXISTS warehouse_locations (
-    location_id CHAR(36) PRIMARY KEY,
-    warehouse_id CHAR(36) NOT NULL,
-    location_name VARCHAR(255) NOT NULL,
-    description VARCHAR(512),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
-);
 
 /* GST Types Table */
 -- Stores information about different types of GST.
@@ -1053,6 +1057,15 @@ CREATE TABLE IF NOT EXISTS return_options (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+/* Workflows Table */
+-- Stores details about different workflows used in the ERP system.
+CREATE TABLE IF NOT EXISTS workflows (
+    workflow_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 /* Sales Order Table */
 -- Stores information about sales orders.
 CREATE TABLE IF NOT EXISTS sale_orders(
@@ -1097,8 +1110,8 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     FOREIGN KEY (sale_type_id) REFERENCES sale_types(sale_type_id),
     FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id),
 	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
-    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id),
-    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id)/*,
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)*/
 );
 
 /* Order Items Table */
@@ -1859,6 +1872,31 @@ CREATE TABLE IF NOT EXISTS raw_materials (
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+/* Production Statuses Table */
+-- Stores possible statuses for production processes.
+CREATE TABLE IF NOT EXISTS production_statuses (
+    status_id CHAR(36) PRIMARY KEY,
+    status_name VARCHAR(50) NOT NULL UNIQUE,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Work Orders Table */
+-- Tracks production orders, their statuses, and quantities.
+CREATE TABLE IF NOT EXISTS work_orders (
+    work_order_id CHAR(36) PRIMARY KEY,
+    product_id CHAR(36),
+    quantity DECIMAL(10, 2),
+    status_id CHAR(36),
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (status_id) REFERENCES production_statuses(status_id)
+);
+
 CREATE TABLE IF NOT EXISTS work_order_stages (
     work_stage_id CHAR(36) PRIMARY KEY,
     work_order_id CHAR(36),
@@ -1883,31 +1921,6 @@ CREATE TABLE IF NOT EXISTS bill_of_materials (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (product_id) REFERENCES products(product_id)
-);
-
-/* Production Statuses Table */
--- Stores possible statuses for production processes.
-CREATE TABLE IF NOT EXISTS production_statuses (
-    status_id CHAR(36) PRIMARY KEY,
-    status_name VARCHAR(50) NOT NULL UNIQUE,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-/* Work Orders Table */
--- Tracks production orders, their statuses, and quantities.
-CREATE TABLE IF NOT EXISTS work_orders (
-    work_order_id CHAR(36) PRIMARY KEY,
-    product_id CHAR(36),
-    quantity DECIMAL(10, 2),
-    status_id CHAR(36),
-    start_date DATE,
-    end_date DATE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (status_id) REFERENCES production_statuses(status_id)
 );
 
 /* Machines Table */
@@ -1944,14 +1957,6 @@ FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
 FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 );
 
-/* Workflows Table */
--- Stores details about different workflows used in the ERP system.
-CREATE TABLE IF NOT EXISTS workflows (
-    workflow_id CHAR(36) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
 
 /* Workflow Stages Table */
 -- Defines stages within each workflow, including the order of the stages.
