@@ -492,7 +492,7 @@ class UserGroupMembers(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # unique_together = ('group', 'employee')
+        unique_together = ('group_id', 'employee_id')
         db_table = usergroupmemberstable
 
     def __str__(self):
