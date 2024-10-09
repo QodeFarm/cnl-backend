@@ -180,6 +180,23 @@ class UserAccessViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import User
+
+class UserAccessParamViewSet(APIView):
+    def get(self, request, user_id, *args, **kwargs):
+        # Fetch the User object based on the user_id (UUID)
+        user = get_object_or_404(User, user_id=user_id)
+        
+        # Access the role_id from the ForeignKey relationship
+        role_id = user.role.id  # Access the ForeignKey role's ID
+        
+        # Return the role_id in the response
+        return Response({"role_id": role_id}, status=status.HTTP_200_OK)
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
