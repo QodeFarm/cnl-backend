@@ -19,6 +19,9 @@ from rest_framework import status
 from django.utils import timezone
 import json
 from collections import defaultdict
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
+from .filters import RolePermissionsFilter
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -129,6 +132,9 @@ class UserAllowedWeekdaysViewSet(viewsets.ModelViewSet):
 class RolePermissionsViewSet(viewsets.ModelViewSet):
     queryset = RolePermissions.objects.all()
     serializer_class = RolePermissionsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = RolePermissionsFilter
+    # ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -188,15 +194,20 @@ from django.shortcuts import get_object_or_404
 from .models import User
 
 class UserAccessParamViewSet(APIView):
-    def get(self, request, user_id, *args, **kwargs):
-        # Fetch the User object based on the user_id (UUID)
-        user = get_object_or_404(User, user_id=user_id)
-        
-        # Access the role_id from the ForeignKey relationship
-        role_id = user.role.id  # Access the ForeignKey role's ID
-        
-        # Return the role_id in the response
-        return Response({"role_id": role_id}, status=status.HTTP_200_OK)
+    def get(self, request, user_id):
+        try:
+            user = User.objects.get(user_id=user_id)
+            if user.role_id:
+                role_id = user.role_id.role_id
+               
+                return Response({'role_id': str(role_id)}, status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'Role not assigned to user'}, status=status.HTTP_404_NOT_FOUND)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Roles.DoesNotExist:
+            return Response({'error': 'Role not found'}, status=status.HTTP_404_NOT_FOUND)
+ 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
