@@ -426,18 +426,6 @@ class TaskView(APIView):
             taskdata = update_multi_instances(self, pk, task_data, Tasks, TasksSerializer, update_fields,main_model_related_field='task_id', current_model_pk_field='task_id')
             taskdata = taskdata[0] if len(taskdata)==1 else taskdata
 
-            # # Update the 'Task'
-            # update_fields = []  # No need to update any fields
-            # # logger.info(f"Updating task with ID: {pk}, Data: {task_data}")
-            # taskdata = update_multi_instances(self, pk, task_data, Tasks, TasksSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='task_id')
-
-            # # Ensure taskdata is valid
-            # if not taskdata:
-            #     logger.error(f"Failed to update task with ID: {pk}.")
-            #     return build_response(0, "Failed to update task", {}, status.HTTP_400_BAD_REQUEST)
-
-            # taskdata = taskdata[0] if len(taskdata) == 1 else taskdata
-
         # Update the 'TaskComments'
         update_fields = {'task_id':pk}
         taskcomments_data = update_multi_instances(self, pk, task_comments_data or [], TaskComments, TaskCommentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='comment_id')
