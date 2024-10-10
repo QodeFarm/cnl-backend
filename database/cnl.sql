@@ -198,6 +198,15 @@ CREATE TABLE IF NOT EXISTS branch_bank_details (
     FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
+/* Roles Table */
+-- Lists the roles that can be assigned to users, determining permissions and access levels within the ERP system.
+CREATE TABLE IF NOT EXISTS roles (
+    role_id CHAR(36) PRIMARY KEY,
+    role_name VARCHAR(255) NOT NULL UNIQUE,
+    description VARCHAR(512),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
 /* Users Table */
 -- Contains user profiles, including authentication details, contact information, and role within the ERP system.
@@ -217,6 +226,7 @@ CREATE TABLE IF NOT EXISTS users (
     timezone VARCHAR(100),
     language VARCHAR(10),
 	is_active TINYINT,
+    role_id CHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     last_login TIMESTAMP,
@@ -225,19 +235,12 @@ CREATE TABLE IF NOT EXISTS users (
     title ENUM('Mr.','Ms.'),
     INDEX idx_branch_id (branch_id),
     INDEX idx_status_id (status_id),
+    INDEX idx_role_id (role_id),
     FOREIGN KEY (branch_id) REFERENCES branches(branch_id),
-    FOREIGN KEY (status_id) REFERENCES statuses(status_id)
+    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
+    FOREIGN KEY (role_id) REFERENCES roles(role_id)
 ) ENGINE=InnoDB;
 
-/* Roles Table */
--- Lists the roles that can be assigned to users, determining permissions and access levels within the ERP system.
-CREATE TABLE IF NOT EXISTS roles (
-    role_id CHAR(36) PRIMARY KEY,
-    role_name VARCHAR(255) NOT NULL UNIQUE,
-    description VARCHAR(512),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
 
 /* User_roles Table */
 -- Maintain user roles many to many relations
@@ -1606,6 +1609,64 @@ CREATE TABLE IF NOT EXISTS purchase_price_list (
     FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id)
 );
 
+/* ======== HRMS Management ======== */
+
+/* designations Table */
+-- Lookup table for employee designations.
+CREATE TABLE IF NOT EXISTS designations (
+   designation_id CHAR(36) PRIMARY KEY,
+   designation_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* departments Table */
+-- Lookup table for employee departments.
+CREATE TABLE IF NOT EXISTS departments (
+   department_id CHAR(36) PRIMARY KEY,
+   department_name VARCHAR(50) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* employees Table */
+-- Stores information about employees.
+CREATE TABLE IF NOT EXISTS employees (
+   employee_id CHAR(36) PRIMARY KEY,
+   name VARCHAR(255) NOT NULL,
+   email VARCHAR(255) NOT NULL,
+   phone VARCHAR(20),
+   designation_id CHAR(36) NOT NULL,
+   department_id CHAR(36) NOT NULL,
+   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
+   FOREIGN KEY (department_id) REFERENCES departments(department_id)
+);
+
+/* User Groups Table */
+-- Stores information about different groups.
+CREATE TABLE IF NOT EXISTS user_groups (
+    group_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
+    group_name VARCHAR(100) UNIQUE NOT NULL,
+    description VARCHAR(1024),  -- Description length set to 1024 characters
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* User Group Members Table */
+-- Tracks the members belonging to each group.
+CREATE TABLE IF NOT EXISTS user_group_members (
+    member_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
+    group_id CHAR(36) NOT NULL,
+    employee_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES user_groups(group_id) ON DELETE CASCADE,
+	FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    UNIQUE (group_id, employee_id)
+);
+
 /* Task Priorities Table */
 -- Stores possible priorities for tasks.
 CREATE TABLE IF NOT EXISTS task_priorities (
@@ -1619,7 +1680,8 @@ CREATE TABLE IF NOT EXISTS task_priorities (
 -- Stores tasks assigned to users with their status, priority, and other details.
 CREATE TABLE IF NOT EXISTS tasks (
     task_id CHAR(36) PRIMARY KEY,
-    user_id CHAR(36) NOT NULL,
+    user_id CHAR(36) NULL,
+    group_id CHAR(36) NULL,
     status_id CHAR(36) NOT NULL,
     priority_id CHAR(36) NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -1629,7 +1691,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (status_id) REFERENCES statuses(status_id),
-    FOREIGN KEY (priority_id) REFERENCES task_priorities(priority_id)
+    FOREIGN KEY (priority_id) REFERENCES task_priorities(priority_id),
+    FOREIGN KEY (group_id) REFERENCES user_groups(group_id)
 );
 
 /* Task Comments Table */
@@ -1665,12 +1728,14 @@ CREATE TABLE IF NOT EXISTS task_history (
     task_id CHAR(36) NOT NULL,
     status_id CHAR(36) NOT NULL,
     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    user_id CHAR(36) NOT NULL,
+    user_id CHAR(36) NULL,
+    group_id CHAR(36) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(task_id),
     FOREIGN KEY (status_id) REFERENCES statuses(status_id),
-    FOREIGN KEY (user_id) REFERENCES users(user_id)
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (group_id) REFERENCES user_groups(group_id)
 );
 
 /* Quick Packs Table */
@@ -1700,41 +1765,6 @@ CREATE TABLE IF NOT EXISTS quick_pack_items (
     FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
 
-
-/* ======== HRMS Management ======== */
-
-/* designations Table */
--- Lookup table for employee designations.
-CREATE TABLE IF NOT EXISTS designations (
-   designation_id CHAR(36) PRIMARY KEY,
-   designation_name VARCHAR(50) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-/* departments Table */
--- Lookup table for employee departments.
-CREATE TABLE IF NOT EXISTS departments (
-   department_id CHAR(36) PRIMARY KEY,
-   department_name VARCHAR(50) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-/* employees Table */
--- Stores information about employees.
-CREATE TABLE IF NOT EXISTS employees (
-   employee_id CHAR(36) PRIMARY KEY,
-   name VARCHAR(255) NOT NULL,
-   email VARCHAR(255) NOT NULL,
-   phone VARCHAR(20),
-   designation_id CHAR(36) NOT NULL,
-   department_id CHAR(36) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
-   FOREIGN KEY (department_id) REFERENCES departments(department_id)
-);
 
 /* ======== LEAD Management ======== */
 
@@ -2328,25 +2358,3 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
 );
 
-/* User Groups Table */
--- Stores information about different groups.
-CREATE TABLE IF NOT EXISTS user_groups (
-    group_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
-    group_name VARCHAR(100) UNIQUE NOT NULL,
-    description VARCHAR(1024),  -- Description length set to 1024 characters
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-/* User Group Members Table */
--- Tracks the members belonging to each group.
-CREATE TABLE IF NOT EXISTS user_group_members (
-    member_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
-    group_id CHAR(36) NOT NULL,
-    employee_id CHAR(36) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (group_id) REFERENCES user_groups(group_id) ON DELETE CASCADE,
-	FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
-    UNIQUE (group_id, employee_id)
-);
