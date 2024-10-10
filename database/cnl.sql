@@ -1681,9 +1681,9 @@ CREATE TABLE IF NOT EXISTS task_priorities (
 CREATE TABLE IF NOT EXISTS tasks (
     task_id CHAR(36) PRIMARY KEY,
     user_id CHAR(36) NULL,
+    group_id CHAR(36) NULL,
     status_id CHAR(36) NOT NULL,
     priority_id CHAR(36) NOT NULL,
-    group_id CHAR(36) NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     due_date DATE,
