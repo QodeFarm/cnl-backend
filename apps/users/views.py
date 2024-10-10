@@ -19,6 +19,9 @@ from rest_framework import status
 from django.utils import timezone
 import json
 from collections import defaultdict
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
+from .filters import RolePermissionsFilter
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -129,6 +132,9 @@ class UserAllowedWeekdaysViewSet(viewsets.ModelViewSet):
 class RolePermissionsViewSet(viewsets.ModelViewSet):
     queryset = RolePermissions.objects.all()
     serializer_class = RolePermissionsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = RolePermissionsFilter
+    # ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -139,46 +145,94 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-class UserAccessViewSet(viewsets.ModelViewSet):
-    queryset = RolePermissions.objects.all()
-    serializer_class = UserAccessModuleSerializer
 
-    def list(self, request, *args, **kwargs):
-        # Get all role permissions, ordering by module's `created_at` field
-        role_permissions = RolePermissions.objects.select_related('module_id').order_by('module_id__created_at')
+class UserAccessAPIView(APIView):
+    def get(self, request, user_id):
+        try:
+            # Fetch the user by user_id
+            user = User.objects.get(user_id=user_id)
 
-        # Create a defaultdict to group sections by module
-        module_dict = defaultdict(list)
+            # Check if the user has a role assigned
+            if user.role_id:
+                role_id = user.role_id.role_id
 
-        for permission in role_permissions:
-            module_name = permission.module_id.module_name
-            mod_icon = permission.module_id.mod_icon
+                # Fetch all permissions related to the user's role
+                permissions = RolePermissions.objects.filter(role_id=role_id).select_related('module_id', 'section_id', 'action_id')
 
-            section_data = {
-                'sec_link': permission.section_id.sec_link,
-                'section_name': permission.section_id.section_name,
-                'sec_icon': permission.section_id.sec_icon
-            }
+                if permissions.exists():
+                    # Use defaultdict to group permissions by module
+                    module_dict = defaultdict(list)
 
-            # Append section data under the respective module
-            module_dict[(module_name, mod_icon)].append(section_data)
+                    for permission in permissions:
+                        module_name = permission.module_id.module_name
+                        mod_icon = permission.module_id.mod_icon
 
-        # Create a list for the response
-        data = []
-        for (module_name, mod_icon), sections in module_dict.items():
-            data.append({
-                "module_name": module_name,
-                "mod_icon": mod_icon,
-                "module_sections": sections
-            })
+                        # Action data to be grouped under each section
+                        action_data = {
+                            'action_id': permission.action_id.action_id,
+                            'action_name': permission.action_id.action_name
+                        }
+                        
+                        # Section data with an added list of actions
+                        section_data = {
+                            'sec_link': permission.section_id.sec_link,
+                            'section_name': permission.section_id.section_name,
+                            'sec_icon': permission.section_id.sec_icon or None,
+                            'actions': []  # Placeholder for actions
+                        }
 
-        return Response({"count": len(data), "message": None, "data": data}, status=status.HTTP_200_OK)
-    
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
+                        # Check if the section already exists for this module
+                        section_exists = False
+                        for existing_section in module_dict[(module_name, mod_icon)]:
+                            if existing_section['section_name'] == section_data['section_name']:
+                                # Append the action to the existing section
+                                existing_section['actions'].append(action_data)
+                                section_exists = True
+                                break
 
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
+                        # If the section doesn't exist, add the section and the action
+                        if not section_exists:
+                            section_data['actions'].append(action_data)
+                            module_dict[(module_name, mod_icon)].append(section_data)
+
+                    # Prepare the response data in the desired format
+                    data = []
+                    for (module_name, mod_icon), sections in module_dict.items():
+                        data.append({
+                            "module_name": module_name,
+                            "mod_icon": mod_icon,
+                            "module_sections": sections
+                        })
+
+                    # Return the structured response
+                    return Response({
+                        'count': len(data),       
+                        'message': None,                 
+                        'role_id': str(role_id),
+                        'data': data
+                    }, status=status.HTTP_200_OK)
+                else:
+                    # If no permissions exist for the role
+                    return Response({
+                        'role_id': str(role_id),
+                        'message': 'No permissions found for this role',
+                        'data': [],
+                    }, status=status.HTTP_200_OK)
+            else:
+                # If the user has no role assigned
+                return Response({
+                    'message': 'Role not assigned to user'
+                }, status=status.HTTP_404_NOT_FOUND)
+        except User.DoesNotExist:
+            # If the user is not found in the database
+            return Response({
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Roles.DoesNotExist:
+            # If the role is not found in the database
+            return Response({
+                'message': 'Role not found'
+            }, status=status.HTTP_404_NOT_FOUND)
 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
