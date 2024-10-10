@@ -157,8 +157,7 @@ class UserAccessAPIView(APIView):
                 role_id = user.role_id.role_id
 
                 # Fetch all permissions related to the user's role
-                permissions = RolePermissions.objects.filter(role_id=role_id).select_related('module_id', 'section_id', 'action_id')
-
+                permissions = RolePermissions.objects.filter(role_id=role_id).select_related('module_id','section_id','action_id').order_by('module_id__created_at','section_id__created_at','action_id__created_at')
                 if permissions.exists():
                     # Use defaultdict to group permissions by module
                     module_dict = defaultdict(list)
