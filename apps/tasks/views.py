@@ -215,12 +215,33 @@ class TaskView(APIView):
         """
         errors = {}        
 
-        # Vlidated Tasks Data
+        # Validated Tasks Data
         task_data = given_data.pop('task', None)  # parent_data
-        if task_data:
-            task_error = validate_payload_data(self, task_data, TasksSerializer)
-            if task_error:
-                errors["task"] = task_error
+        # Ensure mandatory data is present
+        if not task_data:
+            logger.error("Task data is mandatory but not provided.")
+            return build_response(0, "Task data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        # Check if either user_id or group_id is provided
+        user_id = task_data.get("user_id", None)
+        group_id = task_data.get("group_id", None)
+
+        if not user_id and not group_id:
+            return build_response(0, "Either user_id or group_id must be provided", [], status.HTTP_400_BAD_REQUEST)
+
+        if user_id and group_id:
+            return build_response(0, "Both user_id and group_id cannot be provided at the same time", [], status.HTTP_400_BAD_REQUEST)
+        
+        # Set default task status to 'Open'
+        task_status = get_object_or_none(Statuses, status_name='Open')  # Assuming the default status is 'Open'
+        if task_status is not None:
+            task_data['status_id'] = task_status.status_id
+        else:
+            errors["task"] = {"status_id": ["Invalid status_id."]}
+
+        task_error = validate_payload_data(self, task_data, TasksSerializer)
+        if task_error:
+            errors["task"] = task_error
 
         # Vlidated TaskComments Data
         task_comments_data = given_data.pop('task_comments', None)
@@ -235,11 +256,6 @@ class TaskView(APIView):
             task_attachments_error = validate_multiple_data(self, task_attachments_data, TaskAttachmentsSerializer, ['task_id'])
             if task_attachments_error:
                 errors["task_attachments"] = task_attachments_error
-
-        # Ensure mandatory data is present
-        if not task_data:
-            logger.error("Task data is mandatory but not provided.")
-            return build_response(0, "Task data is mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         if errors:
             return build_response(0, "ValidationError :", errors, status_code=status.HTTP_400_BAD_REQUEST)
@@ -269,12 +285,21 @@ class TaskView(APIView):
             task_attachments_data = generic_data_creation(self, task_attachments_data, TaskAttachmentsSerializer, update_fields)
             logger.info('TaskAttachments - created*')
 
-        # Create TaskHistory Data if Tasks is present
-        user_id = new_task_data.get("user_id", None) # Fetch user_id from  new_task_data
-        status_id = new_task_data.get("status_id", None)# Fetch status_id from  new_task_data        
-        update_fields = {'task_id': task_id, 'user_id': user_id, 'status_id': status_id}
-        task_history_data = generic_data_creation(self, [{}], TaskHistorySerializer, update_fields)
-        logger.info('TaskHistory - created*')#If Task is created then Initial TaskHistory is created
+        # Create TaskHistory Data if Task is present
+        status_id = new_task_data.get("status_id", None)  # Fetch status_id from new_task_data
+        task_history_data = None
+
+        if user_id:
+            # Task assigned to a user
+            update_fields = {'task_id': task_id, 'user_id': user_id, 'status_id': status_id}
+            task_history_data = generic_data_creation(self, [{}], TaskHistorySerializer, update_fields)
+        elif group_id:
+            # Task assigned to a group 
+            update_fields = {'task_id': task_id, 'group_id': group_id, 'status_id': status_id}
+            task_history_data = generic_data_creation(self, [{}], TaskHistorySerializer, update_fields)
+
+        logger.info('TaskHistory - created*')  # If Task is created, then initial TaskHistory is created
+
 
         custom_data = {
             "task": new_task_data,
@@ -302,10 +327,18 @@ class TaskView(APIView):
         given_data = request.data
         errors = {}
 
-        # Validate Tasks Data
+         # Validate Tasks Data
         task_data = given_data.pop('task', None)  # parent_data
         if task_data:
             task_data['task_id'] = pk
+
+            # Ensure that either 'user_id' or 'group_id' is provided but not both
+            if task_data.get('user_id') and task_data.get('group_id'):
+                errors['task'] = "A task can be assigned either to a user or a group, not both."
+            elif not task_data.get('user_id') and not task_data.get('group_id'):
+                errors['task'] = "A task must be assigned to either a user or a group."
+
+            # Validate task data
             task_error = validate_multiple_data(self, [task_data], TasksSerializer, [])
             if task_error:
                 errors["task"] = task_error
@@ -334,7 +367,7 @@ class TaskView(APIView):
         if task_history_data:
             for data in task_history_data:
                 data['task_id'] = pk
-            exclude_fields = ['task_id','user_id','status_id']
+            exclude_fields = ['task_id', 'user_id', 'group_id', 'status_id']
             task_history_error = validate_multiple_data(self, task_history_data, TaskHistorySerializer, exclude_fields)
             if task_history_error:
                 errors["task_history"] = task_history_error
@@ -352,7 +385,14 @@ class TaskView(APIView):
         if task_data:
 
             def create_new_history(self):
-                update_fields = {'task_id':pk, 'status_id':task_data.get('status_id'), 'user_id':task_data.get('user_id')}
+                update_fields = {'task_id': pk, 'status_id': task_data.get('status_id')}
+                
+                # Assign `user_id` or `group_id` based on what's provided
+                if task_data.get('user_id'):
+                    update_fields['user_id'] = task_data.get('user_id')
+                elif task_data.get('group_id'):
+                    update_fields['group_id'] = task_data.get('group_id')
+
                 task_history = generic_data_creation(self, [{}], TaskHistorySerializer, update_fields)
                 task_history = task_history if task_history else []
                 logger.info("'task_history' is created**")
@@ -361,16 +401,24 @@ class TaskView(APIView):
             # Fetch last record in 'Task' | generally one record exists with one 'task_id'
             data_set = Tasks.objects.filter(task_id=pk).order_by('created_at').last()
             if data_set is not None:
-                previous_user_id= str(data_set.user_id_id)
-                current_user_id = task_data.get('user_id')  
-                if previous_user_id != current_user_id: # if 'user_id' change is detected
-                    logger.info("'user_id' is changed**")
+                previous_user_id = str(data_set.user_id_id) 
+                previous_group_id = str(data_set.group_id_id) 
+                current_user_id = task_data.get('user_id')
+                current_group_id = task_data.get('group_id')
+
+                logger.info(f"Previous user ID: {previous_user_id}, Current user ID: {current_user_id}")
+                logger.info(f"Previous group ID: {previous_group_id}, Current group ID: {current_group_id}")
+
+                # Check if 'user_id' or 'group_id' changes
+                if previous_user_id != str(current_user_id) or (previous_group_id and previous_group_id != str(current_group_id)):
+                    logger.info("'user_id' or 'group_id' is changed**")
                     task_history_data = create_new_history(self)
 
-                previous_status_id= str(data_set.status_id_id)
-                current_status_id = task_data.get('status_id')  
-                if previous_status_id != current_status_id: # if 'status_id' change is detected
-                    logger.info("'status_id' is changed**")                   
+                # Check if 'status_id' change is detected
+                previous_status_id = str(data_set.status_id_id)
+                current_status_id = task_data.get('status_id')
+                if previous_status_id != current_status_id:
+                    logger.info("'status_id' is changed**")
                     task_history_data = create_new_history(self)
 
 
@@ -378,12 +426,24 @@ class TaskView(APIView):
             taskdata = update_multi_instances(self, pk, task_data, Tasks, TasksSerializer, update_fields,main_model_related_field='task_id', current_model_pk_field='task_id')
             taskdata = taskdata[0] if len(taskdata)==1 else taskdata
 
+            # # Update the 'Task'
+            # update_fields = []  # No need to update any fields
+            # # logger.info(f"Updating task with ID: {pk}, Data: {task_data}")
+            # taskdata = update_multi_instances(self, pk, task_data, Tasks, TasksSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='task_id')
+
+            # # Ensure taskdata is valid
+            # if not taskdata:
+            #     logger.error(f"Failed to update task with ID: {pk}.")
+            #     return build_response(0, "Failed to update task", {}, status.HTTP_400_BAD_REQUEST)
+
+            # taskdata = taskdata[0] if len(taskdata) == 1 else taskdata
+
         # Update the 'TaskComments'
         update_fields = {'task_id':pk}
-        taskcomments_data = update_multi_instances(self, pk, task_comments_data, TaskComments, TaskCommentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='comment_id')
+        taskcomments_data = update_multi_instances(self, pk, task_comments_data or [], TaskComments, TaskCommentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='comment_id')
 
         # Update the 'Taskattachments'
-        taskattachments_data = update_multi_instances(self, pk, task_attachments_data, TaskAttachments, TaskAttachmentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='attachment_id')
+        taskattachments_data = update_multi_instances(self, pk, task_attachments_data or [],  TaskAttachments, TaskAttachmentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='attachment_id')
 
         custom_data = {
             "task":taskdata,
