@@ -145,69 +145,95 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-class UserAccessViewSet(viewsets.ModelViewSet):
-    queryset = RolePermissions.objects.all()
-    serializer_class = UserAccessModuleSerializer
 
-    def list(self, request, *args, **kwargs):
-        # Get all role permissions, ordering by module's `created_at` field
-        role_permissions = RolePermissions.objects.select_related('module_id').order_by('module_id__created_at')
-
-        # Create a defaultdict to group sections by module
-        module_dict = defaultdict(list)
-
-        for permission in role_permissions:
-            module_name = permission.module_id.module_name
-            mod_icon = permission.module_id.mod_icon
-
-            section_data = {
-                'sec_link': permission.section_id.sec_link,
-                'section_name': permission.section_id.section_name,
-                'sec_icon': permission.section_id.sec_icon
-            }
-
-            # Append section data under the respective module
-            module_dict[(module_name, mod_icon)].append(section_data)
-
-        # Create a list for the response
-        data = []
-        for (module_name, mod_icon), sections in module_dict.items():
-            data.append({
-                "module_name": module_name,
-                "mod_icon": mod_icon,
-                "module_sections": sections
-            })
-
-        return Response({"count": len(data), "message": None, "data": data}, status=status.HTTP_200_OK)
-    
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-
-
-from rest_framework.response import Response
-from rest_framework.views import APIView
-from rest_framework import status
-from django.shortcuts import get_object_or_404
-from .models import User
-
-class UserAccessParamViewSet(APIView):
+class UserAccessAPIView(APIView):
     def get(self, request, user_id):
         try:
+            # Fetch the user by user_id
             user = User.objects.get(user_id=user_id)
+
+            # Check if the user has a role assigned
             if user.role_id:
                 role_id = user.role_id.role_id
-               
-                return Response({'role_id': str(role_id)}, status=status.HTTP_200_OK)
+
+                # Fetch all permissions related to the user's role
+                permissions = RolePermissions.objects.filter(role_id=role_id).select_related('module_id', 'section_id', 'action_id')
+
+                if permissions.exists():
+                    # Use defaultdict to group permissions by module
+                    module_dict = defaultdict(list)
+
+                    for permission in permissions:
+                        module_name = permission.module_id.module_name
+                        mod_icon = permission.module_id.mod_icon
+
+                        # Action data to be grouped under each section
+                        action_data = {
+                            'action_id': permission.action_id.action_id,
+                            'action_name': permission.action_id.action_name
+                        }
+                        
+                        # Section data with an added list of actions
+                        section_data = {
+                            'sec_link': permission.section_id.sec_link,
+                            'section_name': permission.section_id.section_name,
+                            'sec_icon': permission.section_id.sec_icon or None,
+                            'actions': []  # Placeholder for actions
+                        }
+
+                        # Check if the section already exists for this module
+                        section_exists = False
+                        for existing_section in module_dict[(module_name, mod_icon)]:
+                            if existing_section['section_name'] == section_data['section_name']:
+                                # Append the action to the existing section
+                                existing_section['actions'].append(action_data)
+                                section_exists = True
+                                break
+
+                        # If the section doesn't exist, add the section and the action
+                        if not section_exists:
+                            section_data['actions'].append(action_data)
+                            module_dict[(module_name, mod_icon)].append(section_data)
+
+                    # Prepare the response data in the desired format
+                    data = []
+                    for (module_name, mod_icon), sections in module_dict.items():
+                        data.append({
+                            "module_name": module_name,
+                            "mod_icon": mod_icon,
+                            "module_sections": sections
+                        })
+
+                    # Return the structured response
+                    return Response({
+                        'count': len(data),       
+                        'message': None,                 
+                        'role_id': str(role_id),
+                        'data': data
+                    }, status=status.HTTP_200_OK)
+                else:
+                    # If no permissions exist for the role
+                    return Response({
+                        'role_id': str(role_id),
+                        'message': 'No permissions found for this role',
+                        'data': [],
+                    }, status=status.HTTP_200_OK)
             else:
-                return Response({'error': 'Role not assigned to user'}, status=status.HTTP_404_NOT_FOUND)
+                # If the user has no role assigned
+                return Response({
+                    'message': 'Role not assigned to user'
+                }, status=status.HTTP_404_NOT_FOUND)
         except User.DoesNotExist:
-            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+            # If the user is not found in the database
+            return Response({
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
         except Roles.DoesNotExist:
-            return Response({'error': 'Role not found'}, status=status.HTTP_404_NOT_FOUND)
- 
+            # If the role is not found in the database
+            return Response({
+                'message': 'Role not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
