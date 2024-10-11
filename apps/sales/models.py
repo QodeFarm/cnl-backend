@@ -388,7 +388,7 @@ class OrderShipments(OrderNumberMixin):
     destination = models.CharField(max_length=255, null=True, default=None)
     shipping_mode_id = models.ForeignKey('masters.ShippingModes', on_delete=models.CASCADE, db_column='shipping_mode_id', null=True, default=None)
     shipping_company_id = models.ForeignKey('masters.ShippingCompanies', on_delete=models.CASCADE, db_column='shipping_company_id', null=True, default=None)
-    shipping_tracking_no = models.CharField(max_length=20, unique=True, default='')
+    shipping_tracking_no = models.CharField(max_length=20, default='')
     order_no_prefix = 'SHIP'
     order_no_field = 'shipping_tracking_no'
     shipping_date = models.DateField()
