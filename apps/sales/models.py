@@ -119,13 +119,13 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         else:
             # Dynamic handling for non-default workflows
             current_stage = WorkflowStage.objects.filter(
-                workflow=self.workflow_id,
+                workflow_id=self.workflow_id,
                 stage_name=self.flow_status
             ).first()
 
             if current_stage:
                 next_stage = WorkflowStage.objects.filter(
-                    workflow=self.workflow_id,
+                    workflow_id=self.workflow_id,
                     stage_order__gt=current_stage.stage_order
                 ).order_by('stage_order').first()
 
