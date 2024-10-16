@@ -766,7 +766,7 @@ class SaleInvoiceOrdersViewSet(APIView):
         - nulls in required fields
         """
 
-        # Vlidated SaleInvoiceOrders Data
+        # Validate SaleInvoiceOrders Data
         sale_invoice_order_data = given_data.pop('sale_invoice_order', None)  # parent_data
         if sale_invoice_order_data:
             order_error = validate_payload_data(self, sale_invoice_order_data, SaleInvoiceOrdersSerializer)
@@ -778,7 +778,7 @@ class SaleInvoiceOrdersViewSet(APIView):
         if sale_invoice_items_data:
             item_error = validate_multiple_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, ['sale_invoice_id'])
 
-        # Vlidated OrderAttchments Data
+        # Validate OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
         if order_attachments_data:
             attachment_error = validate_multiple_data(self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'])
@@ -786,7 +786,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             # Since 'order_attachments' is optional, so making an error is empty list
             attachment_error = []
 
-        # Vlidated OrderShipments Data
+        # Validate OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
         if order_shipments_data:
             shipments_error = validate_multiple_data(self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'])
