@@ -15,7 +15,7 @@ from apps.inventory.serializers import WarehouseLocationsSerializer
 from apps.inventory.models import WarehouseLocations
 from .serializers import *
 from .models import *
-from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter
+from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -123,9 +123,9 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
 class productsViewSet(viewsets.ModelViewSet):
     queryset = Products.objects.all()
     serializer_class = productsSerializer
-    # filter_backends = [DjangoFilterBackend,OrderingFilter]
-    # filterset_class = ProductsFilter
-    # ordering_fields = ['name','code','barcode','category_id','product_group_id','type_id','gst_classification_id','created_at']
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ProductsFilter
+    ordering_fields = ['name','code','barcode','category_id','product_group_id','type_id','gst_classification_id','created_at']
 
     def list(self, request, *args, **kwargs):
         summary = request.query_params.get('summary', 'false').lower() == 'true'
@@ -220,6 +220,9 @@ class ColorViewSet(viewsets.ModelViewSet):
 class ProductVariationViewSet(viewsets.ModelViewSet):
     queryset = ProductVariation.objects.all()
     serializer_class = ProductVariationSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = ProductVariationFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter, NumberFilter
 import datetime,django_filters
-from .models import ProductGstClassifications, ProductItemBalance, Products
+from .models import ProductGstClassifications, ProductItemBalance, Products, ProductVariation
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -106,3 +106,12 @@ class ProductItemBalanceFilter(FilterSet):
     class Meta:
         model = ProductItemBalance
         fields =[]
+
+class ProductVariationFilter(FilterSet):
+    product_variation_id = filters.CharFilter(method=filter_uuid)
+    product_id = filters.CharFilter(method=filter_uuid)
+    product_name = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
+
+    class Meta:
+        model = ProductVariation
+        fields =[]        
