@@ -65,6 +65,7 @@ class ProductsFilter(FilterSet):
     dis_amount = filters.RangeFilter()
     hsn_code = filters.CharFilter(lookup_expr='icontains')
     print_name = filters.CharFilter(lookup_expr='icontains')
+    balance = filters.NumberFilter()
     unit_options_id = filters.CharFilter(method=filter_uuid)
     unit_options = filters.CharFilter(field_name='unit_options_id__unit_name', lookup_expr='icontains')
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
@@ -91,7 +92,7 @@ class ProductsFilter(FilterSet):
     class Meta:
         model = Products
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'created_at','period_name','search','sort','page','limit']
+        fields =['name','code','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'created_at','period_name','search','sort','page','limit']
 
 
 class ProductItemBalanceFilter(FilterSet):
