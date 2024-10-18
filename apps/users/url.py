@@ -29,9 +29,9 @@ urlpatterns = [
     path('activation/<uid>/<token>/', CustomUserActivationViewSet.as_view({'post': 'activation'}), name='activation'),
     path('role_permissions/', RolePermissionsCreateView.as_view(), name='load-role-permissions'),
     path('role_permissions/<uuid:role_id>/', RolePermissionsCreateView.as_view(), name='load-role-permissions'),
-    path('user/<uuid:user_id>/', UserManageView.as_view(), name='load-role-permissions'),
-    path('user/', UserManageView.as_view(), name='load-role-permissions'),
-    path('user_access/<str:user_id>/', UserAccessAPIView.as_view(), name='user-access-param'),
+    path('user/<uuid:user_id>/', UserManageView.as_view(), name='get/update-perticuler-user'),
+    path('user/', UserManageView.as_view(), name='get-all-users'),
+    path('user_access/<str:role_id>/', UserAccessAPIView.as_view(), name='user-access'),
 ]
 urlpatterns  += router.urls
 
