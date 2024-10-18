@@ -26,7 +26,7 @@ class Tasks(models.Model):
 class TaskComments(models.Model):
     comment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     task_id = models.ForeignKey(Tasks, on_delete=models.CASCADE, db_column='task_id')
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE, null=True, default=None, db_column='user_id')
+    user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='user_id')
     comment_text = models.CharField(max_length=1024)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
