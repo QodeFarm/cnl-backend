@@ -111,6 +111,10 @@ class ProductVariationFilter(FilterSet):
     product_variation_id = filters.CharFilter(method=filter_uuid)
     product_id = filters.CharFilter(method=filter_uuid)
     product_name = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
+    size_id = filters.CharFilter(method=filter_uuid)
+    size_name = filters.CharFilter(field_name='size_id__size_name', lookup_expr='icontains')
+    color_id = filters.CharFilter(method=filter_uuid)
+    color_name = filters.CharFilter(field_name='color_id__color_name', lookup_expr='icontains')    
 
     class Meta:
         model = ProductVariation
