@@ -147,14 +147,10 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
     
 
 class UserAccessAPIView(APIView):
-    def get(self, request, user_id):
+    def get(self, request, role_id):
         try:
-            # Fetch the user by user_id
-            user = User.objects.get(user_id=user_id)
-
             # Check if the user has a role assigned
-            if user.role_id:
-                role_id = user.role_id.role_id
+            if role_id:
 
                 # Fetch all permissions related to the user's role
                 permissions = RolePermissions.objects.filter(role_id=role_id).select_related('module_id','section_id','action_id').order_by('module_id__created_at','section_id__created_at','action_id__created_at')
@@ -242,19 +238,10 @@ def get_tokens_for_user(user):
         profile_picture_url = user.profile_picture_url
 
     try:
-        roles_id = UserRoles.objects.filter(
-            user_id=user.user_id).values_list('role_id', flat=True)
-        role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
-        role_permissions_json = RolePermissionsSerializer(
-            role_permissions_id, many=True)
-        Final_data = json.dumps(role_permissions_json.data,
-                                default=str).replace("\\", "")
-        role_permissions = json.loads(Final_data)
-        role_permissions = role_permissions[0]
-        remove_fields(role_permissions)
+        role_id = user.role_id.role_id
 
     except (ObjectDoesNotExist, IndexError, KeyError) as e:
-            role_permissions = "Role not assigned yet"
+            role_id = "Role not assigned yet"
 
     return {
         'username': user.username,
@@ -267,7 +254,7 @@ def get_tokens_for_user(user):
         'refresh_token': str(refresh),
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
-        'role_permissions': role_permissions
+        'role_id': str(role_id)
     }
 
 #====================================USER-LOGIN-VIEW=============================================================
@@ -332,7 +319,6 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
                
                 # Set the profile_picture_url field in request data as a list of objects
                 request.data['profile_picture_url'] = attachment_data_list
-                print("Using profile_picture_url data: ", request.data['profile_picture_url'])
             else:
                 # Handle case where 'profile_picture_url' list is empty
                 return build_response(0, "'profile_picture_url' list is empty.", [], status.HTTP_400_BAD_REQUEST)
