@@ -517,4 +517,4 @@ class ProductViewSet(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error deleting Leads with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return build_response(0, f"Record deletion failed due to an error : {e}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
