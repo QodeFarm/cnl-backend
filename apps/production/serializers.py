@@ -44,12 +44,6 @@ class WorkOrderSerializer(serializers.ModelSerializer):
         model = WorkOrder
         fields = '__all__'
 
-class InventorySerializer(serializers.ModelSerializer):
-    product = ModproductsSerializer(source='product_id', read_only=True)
-    class Meta:
-        model = Inventory
-        fields = '__all__'
-
 class MachineSerializer(serializers.ModelSerializer):
     class Meta:
         model = Machine

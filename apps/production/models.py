@@ -1,5 +1,5 @@
 from django.db import models
-from config.utils_variables import billofmaterials, productionstatuses, workorders, inventory, machines, rawmaterials, workorderstages, productionworkers, defaultmachinery, workordermachines
+from config.utils_variables import billofmaterials, productionstatuses, workorders, machines, rawmaterials, workorderstages, productionworkers, defaultmachinery, workordermachines
 from apps.products.models import Products
 from apps.hrms.models import Employees
 
@@ -63,19 +63,6 @@ class WorkOrder(models.Model):
 
     def __str__(self):
         return f'{self.product_id.name}_{self.status_id.status_name}'
-
-class Inventory(models.Model):
-    inventory_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
-    location = models.CharField(max_length=100, null=True, default=None)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = inventory
-
-    def __str__(self):
-        return f'{self.inventory_id}'
 
 class Machine(models.Model):
     machine_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
