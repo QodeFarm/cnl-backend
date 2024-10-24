@@ -741,7 +741,12 @@ CREATE TABLE IF NOT EXISTS products (
     status ENUM('Active', 'Inactive'),
     print_name VARCHAR(255),
     hsn_code VARCHAR(15),
-    balance INT,
+    balance INT DEFAULT 0,
+	pack_unit_id CHAR(36) NULL,
+	pack_vs_stock INT DEFAULT 0,
+	g_pack_unit_id CHAR(36) NULL,
+	g_pack_vs_pack INT DEFAULT 0,
+	packet_barcode VARCHAR(50) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_group_id) REFERENCES product_groups(product_group_id),
@@ -754,7 +759,19 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (purchase_gl_id) REFERENCES product_purchase_gl(purchase_gl_id),
     FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
     FOREIGN KEY (drug_type_id) REFERENCES product_drug_types(drug_type_id),
-    FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id)
+    FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id),
+	FOREIGN KEY (pack_unit_id) REFERENCES package_units(pack_unit_id),
+	FOREIGN KEY (g_pack_unit_id) REFERENCES g_package_units(g_pack_unit_id)
+);
+
+CREATE TABLE IF NOT EXISTS package_units (
+    pack_unit_id CHAR(36) PRIMARY KEY,
+    unit_name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS g_package_units (
+    g_pack_unit_id CHAR(36) PRIMARY KEY,
+    unit_name VARCHAR(50) NOT NULL
 );
 
 /* Sizes Table */

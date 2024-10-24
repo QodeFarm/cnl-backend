@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import *
-from apps.masters.serializers import ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
+from apps.masters.serializers import GPackageUnitSerializer, PackageUnitSerializer, ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
 from apps.inventory.serializers import ModWarehouseLocationsSerializer
 
 
@@ -154,6 +154,8 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
+    pack_unit = PackageUnitSerializer(source='pack_unit_id',read_only=True)
+    g_pack_unit = GPackageUnitSerializer(source='g_pack_unit_id',read_only=True)
     
     class Meta:
         model = Products

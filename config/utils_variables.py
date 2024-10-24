@@ -118,6 +118,8 @@ entities = 'entities'
 fieldtypes = 'field_types'
 usergroupstable = 'user_groups'
 usergroupmemberstable = 'user_group_members'
+packageunits = 'package_units' 
+gpackageunits = 'g_package_units'
 
 #Authentication db_tables
 userstable = 'users'

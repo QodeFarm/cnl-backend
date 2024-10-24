@@ -498,3 +498,25 @@ class UserGroupMembers(models.Model):
     def __str__(self):
         return f"{self.member_id}"
         # return f'{self.group} - {self.employee}'
+
+
+class PackageUnit(models.Model):
+    pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit_name = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = packageunits
+
+    def __str__(self):
+        return self.unit_name
+
+
+class GPackageUnit(models.Model):
+    g_pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit_name = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = gpackageunits
+
+    def __str__(self):
+        return self.unit_name
