@@ -279,8 +279,8 @@ class Color(models.Model):
 class ProductVariation(models.Model):
     product_variation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id', related_name='locations')
-    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, db_column='size_id')
-    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, db_column='color_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')
     sku = models.CharField(max_length=100, unique=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.IntegerField(default=0)
