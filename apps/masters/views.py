@@ -649,3 +649,32 @@ class UserGroupMembersViewset(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+
+class PackageUnitViewSet(viewsets.ModelViewSet):
+    queryset = PackageUnit.objects.all()
+    serializer_class = PackageUnitSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)    
+
+
+class GPackageUnitViewSet(viewsets.ModelViewSet):
+    queryset = GPackageUnit.objects.all()
+    serializer_class = GPackageUnitSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+    

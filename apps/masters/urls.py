@@ -32,6 +32,8 @@ router.register(r'orders_salesman', OrdersSalesmanView)
 router.register(r'payment_link_type', PaymentLinkTypesView)
 router.register(r'order_status', OrderStatusesView)
 router.register(r'order_types', OrderTypesView)
+router.register(r'package_units', PackageUnitViewSet)
+router.register(r'g_package_units', GPackageUnitViewSet)
 
 router.register(r'task_priorities', TaskPrioritiesViewSet)
 router.register(r'return_options', ReturnOptionsViewset)

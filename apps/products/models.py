@@ -6,7 +6,7 @@ from apps.inventory.models import WarehouseLocations, Warehouses
 from config.utils_methods import *
 from config.utils_variables import *
 from config.utils_methods import OrderNumberMixin
-from apps.masters.models import ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands
+from apps.masters.models import GPackageUnit, PackageUnit, ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands
 
 def product_groups_picture(instance, filename):
     # Get the file extension
@@ -230,6 +230,11 @@ class Products(OrderNumberMixin):
     print_name = models.CharField(max_length=255)
     hsn_code= models.CharField(max_length=15, null=True, default=None)
     balance = models.IntegerField(default=0)
+    pack_unit_id = models.ForeignKey(PackageUnit, on_delete=models.CASCADE, null=True, default=None, db_column = 'pack_unit_id')
+    g_pack_unit_id = models.ForeignKey(GPackageUnit, on_delete=models.CASCADE, null=True, default=None, db_column = 'g_pack_unit_id')
+    pack_vs_stock = models.IntegerField(default=0)
+    g_pack_vs_pack = models.IntegerField(default=0)
+    packet_barcode = models.CharField(max_length=50, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

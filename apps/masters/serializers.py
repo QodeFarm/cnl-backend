@@ -348,3 +348,14 @@ class UserGroupMembersSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserGroupMembers
         fields = '__all__'
+
+class PackageUnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PackageUnit
+        fields = '__all__'
+
+class GPackageUnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GPackageUnit
+        fields = '__all__'
+
