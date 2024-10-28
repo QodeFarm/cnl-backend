@@ -1,5 +1,6 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter, NumberFilter
 import datetime,django_filters
+from django_filters import BooleanFilter
 from .models import ProductGstClassifications, ProductItemBalance, Products, ProductVariation
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
@@ -120,6 +121,8 @@ class ProductVariationFilter(FilterSet):
     size_name = filters.CharFilter(field_name='size_id__size_name', lookup_expr='icontains')
     color_id = filters.CharFilter(method=filter_uuid)
     color_name = filters.CharFilter(field_name='color_id__color_name', lookup_expr='icontains')    
+    size_isnull = BooleanFilter(field_name='size_id', lookup_expr='isnull')
+    color_isnull = BooleanFilter(field_name='color_id', lookup_expr='isnull')       
 
     class Meta:
         model = ProductVariation
