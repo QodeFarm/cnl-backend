@@ -1100,6 +1100,7 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     ref_no VARCHAR(255),
     ref_date DATE NOT NULL,
     tax ENUM('Exclusive','Inclusive'),
+    sale_estimate ENUM('Yes', 'No') DEFAULT 'No',
     customer_address_id CHAR(36),
     payment_term_id CHAR(36),
     remarks VARCHAR(1024),

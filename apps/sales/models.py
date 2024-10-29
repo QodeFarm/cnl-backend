@@ -28,6 +28,11 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         ('Inclusive', 'Inclusive')
         ]
     tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
+    SALE_ESTIMATE_CHOICES = [
+        ('Yes', 'Yes'),
+        ('No', 'No')
+    ]
+    sale_estimate = models.CharField(max_length=3, choices=SALE_ESTIMATE_CHOICES, default='No')
     flow_status = models.CharField(max_length=255, null=True, default=None)
     workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id')
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, null=True, default=None, db_column='customer_address_id')

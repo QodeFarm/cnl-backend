@@ -10,7 +10,7 @@ from django.conf import settings
 class ModSaleOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id','customer_id','order_date','delivery_date']
+        fields = ['sale_order_id','customer_id','order_date','delivery_date', 'sale_estimate']
 
 class ModSaleReturnOrdersSerializer(serializers.ModelSerializer):
     class Meta:
@@ -152,7 +152,7 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'flow_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'sale_estimate', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'flow_status', 'remarks', 'created_at', 'updated_at']
 
     def get_sale_order_details(self, obj):
         sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
