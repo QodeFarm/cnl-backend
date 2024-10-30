@@ -1663,7 +1663,7 @@ CREATE TABLE IF NOT EXISTS purchase_price_list (
 -- );
 
 
-CREATE TABLE IF NOT EXISTS cnl2.job_types (
+CREATE TABLE IF NOT EXISTS job_types (
     job_type_id CHAR(36) PRIMARY KEY,
     job_type_name varchar(55) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
