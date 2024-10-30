@@ -1,6 +1,6 @@
 from rest_framework import serializers
+from apps.masters.models import Statuses
 from .models import *
-# from apps.masters.serializers import StatusesSerializer
 
 class ModJobTypesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -55,8 +55,8 @@ class ShiftsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shifts
         fields = '__all__'
-	
-	
+ 
+ 
 class ModEmployeesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employees
@@ -249,14 +249,21 @@ class ModEmployeeOnboardingSerializer(serializers.ModelSerializer):
         model = EmployeeOnboarding
         fields = ['onboarding_id','onboarding_date','orientation_completed']
 
+
+class ModStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Statuses
+        fields = ['status_id','status_name']
+
+
 class EmployeeOnbordingSerializer(serializers.ModelSerializer):
-    # status = StatusesSerializer(source='status_id', read_only=True)
+    status = ModStatusSerializer(source='status_id', read_only=True)
     department_training = ModDepartmentsSerializer(source='department_training_id', read_only=True)
     employee = ModEmployeesSerializer(source='employee_id', read_only=True)
     mentor = ModEmployeesSerializer(source='mentor_id', read_only=True)
     class Meta :
         model = EmployeeOnboarding
-        fields = '__all__'
+        fields = '__all__' 
 		
 		
 class ModEmployeeHardwareAssignmentSerializer(serializers.ModelSerializer):
@@ -302,7 +309,7 @@ class ModEmployeeLeavesSerializer(serializers.ModelSerializer):
         fields = ['leave_id','start_date','end_date']
 		
 class EmployeeLeavesSerializer(serializers.ModelSerializer):
-    # status = StatusesSerializer(source='status_id', read_only=True)
+    status = ModStatusSerializer(source='status_id', read_only=True)
     leave_type = ModLeaveTypesSerializer(source='leave_type_id', read_only=True)
     employee = ModEmployeesSerializer(source='employee_id', read_only=True)
     class Meta :
@@ -316,7 +323,7 @@ class ModLeaveApprovalsSerializer(serializers.ModelSerializer):
         fields = ['approval_id','approval_date','comments']
 		
 class LeaveApprovalsSerializer(serializers.ModelSerializer):
-    # status = StatusesSerializer(source='status_id', read_only=True)
+    status = ModStatusSerializer(source='status_id', read_only=True)
     leave = ModLeaveTypesSerializer(source='leave_id', read_only=True)
     approver = ModEmployeesSerializer(source='approver_id', read_only=True)
     class Meta:
@@ -346,7 +353,7 @@ class ModAttendanceSerializer(serializers.ModelSerializer):
 		
 class AttendanceSerializer(serializers.ModelSerializer):
     employee = ModEmployeesSerializer(source='employee_id',read_only=True)
-    # status = StatusesSerializer(source='status_id',read_only=True)
+    status = ModStatusSerializer(source='status_id',read_only=True)
     department = ModDepartmentsSerializer(source='department_id',read_only=True)
     shift = ModShiftsSerializer(source='shift_id',read_only=True)
     class Meta:

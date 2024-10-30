@@ -3,7 +3,6 @@ from django.db import models
 from config.utils_methods import *
 from config.utils_variables import *
 from phonenumber_field.modelfields import PhoneNumberField
-# from apps.masters.models import Statuses
 
 class JobTypes(models.Model):
     job_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
