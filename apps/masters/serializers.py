@@ -359,3 +359,13 @@ class GPackageUnitSerializer(serializers.ModelSerializer):
         model = GPackageUnit
         fields = '__all__'
 
+class ModFlowstatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FlowStatus
+        fields = ['flow_status_id', 'flow_status_name']
+
+class FlowStatusSerializers(serializers.ModelSerializer):
+    # flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
+    class Meta:
+        model = FlowStatus
+        fields = '__all__'

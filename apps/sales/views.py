@@ -20,7 +20,11 @@ from apps.masters.models import OrderTypes
 from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
+from django.apps import apps
 
+
+from datetime import datetime
+from config.utils_methods import workflow_progression_dict 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1815,7 +1819,7 @@ class WorkflowCreateViewSet(APIView):
 
     def retrieve(self, request, *args, **kwargs):
         """
-        Retrieves a workflow and its related workflow_stages.
+        Retrieves a workflow and its related workflow stages.
         """
         pk = kwargs.get('pk')
         if not pk:
@@ -1827,7 +1831,7 @@ class WorkflowCreateViewSet(APIView):
             workflow = get_object_or_404(Workflow, pk=pk)
             workflow_serializer = WorkflowSerializer(workflow)
 
-            # Retrieve associated workflow_stages
+            # Retrieve associated workflow stages
             workflow_stages = WorkflowStage.objects.filter(workflow_id=pk)
             workflow_stages_serializer = WorkflowStageSerializer(workflow_stages, many=True)
 
@@ -1848,7 +1852,7 @@ class WorkflowCreateViewSet(APIView):
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a workflow and its related workflow_stages.
+        Handles the deletion of a workflow and its related workflow stages.
         """
         try:
             # Get the Workflow instance
@@ -1874,28 +1878,36 @@ class WorkflowCreateViewSet(APIView):
         # Extract and validate workflow data if provided
         workflow_data = given_data.get('workflow')
         workflow_instance = None
+
         if workflow_data:
-            # Create a new workflow
+            # Create a new workflow instance
             workflow_serializer = WorkflowSerializer(data=workflow_data)
             if not workflow_serializer.is_valid():
                 return build_response(0, "ValidationError", workflow_serializer.errors, status.HTTP_400_BAD_REQUEST)
+            
+            # Save the workflow instance
             workflow_instance = workflow_serializer.save()
 
         if not workflow_instance:
             return build_response(0, "Workflow data is mandatory", [], status.HTTP_400_BAD_REQUEST)
 
-        # Handle workflow_stage data if provided
+        # Handle workflow stages data
         workflow_stage_data_list = given_data.get('workflow_stages')
         workflow_stage_instances = []
+
         if workflow_stage_data_list and isinstance(workflow_stage_data_list, list):
-            for workflow_stage_data in workflow_stage_data_list:
-                # Override the workflow ID in each stage with the newly created workflow's ID
-                workflow_stage_data['workflow'] = workflow_instance.pk
-                workflow_stage_serializer = WorkflowStageSerializer(data=workflow_stage_data)
+            for stage_data in workflow_stage_data_list:
+                # Assign the newly created workflow's ID to each stage
+                stage_data['workflow_id'] = workflow_instance.pk
+
+                # Validate and save the workflow stage
+                workflow_stage_serializer = WorkflowStageSerializer(data=stage_data)
                 if not workflow_stage_serializer.is_valid():
                     return build_response(0, "ValidationError", workflow_stage_serializer.errors, status.HTTP_400_BAD_REQUEST)
-                workflow_stage_instance = workflow_stage_serializer.save()
-                workflow_stage_instances.append(workflow_stage_instance)
+                
+                # Save the stage instance
+                stage_instance = workflow_stage_serializer.save()
+                workflow_stage_instances.append(stage_instance)
 
         # Prepare response data
         workflow_data_response = WorkflowSerializer(workflow_instance).data
@@ -1906,6 +1918,7 @@ class WorkflowCreateViewSet(APIView):
             'workflow_stages': workflow_stage_data_response
         }, status.HTTP_201_CREATED)
 
+
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
 
@@ -1914,56 +1927,61 @@ class WorkflowCreateViewSet(APIView):
         given_data = request.data
         errors = {}
 
-        # Update the Workflow Data
+        # Update the Workflow data
         workflow_data = given_data.get('workflow')
         if workflow_data:
-            workflow_instance = Workflow.objects.get(pk=pk)
-            workflow_serializer = WorkflowSerializer(workflow_instance, data=workflow_data, partial=True)
-            if not workflow_serializer.is_valid():
-                errors["workflow"] = workflow_serializer.errors
-            else:
-                workflow_serializer.save()
+            try:
+                workflow_instance = Workflow.objects.get(pk=pk)
+                workflow_serializer = WorkflowSerializer(workflow_instance, data=workflow_data, partial=True)
+                if not workflow_serializer.is_valid():
+                    errors["workflow"] = workflow_serializer.errors
+                else:
+                    workflow_serializer.save()
+            except Workflow.DoesNotExist:
+                return build_response(0, f"Workflow with ID {pk} does not exist.", [], status.HTTP_404_NOT_FOUND)
 
         # Handle Workflow Stages
         workflow_stage_data_list = given_data.get('workflow_stages')
         existing_stage_ids = set()
 
         if workflow_stage_data_list and isinstance(workflow_stage_data_list, list):
-            for workflow_stage_data in workflow_stage_data_list:
-                stage_id = workflow_stage_data.get('stage_id')
+            for stage_data in workflow_stage_data_list:
+                stage_id = stage_data.get('workflow_stage_id')
                 if stage_id:
-                    # Update existing stage by ID
+                    # Update the existing workflow stage by ID
                     try:
                         stage_instance = WorkflowStage.objects.get(pk=stage_id, workflow_id=pk)
-                        workflow_stage_serializer = WorkflowStageSerializer(stage_instance, data=workflow_stage_data, partial=True)
-                        existing_stage_ids.add(stage_id)
-                    except WorkflowStage.DoesNotExist:
-                        return build_response(0, f"WorkflowStage with ID {stage_id} does not exist for this workflow.", [], status.HTTP_400_BAD_REQUEST)
-                else:
-                    # Try to find a matching stage by stage_name and stage_order
-                    try:
-                        stage_instance = WorkflowStage.objects.get(stage_name=workflow_stage_data['stage_name'], stage_order=workflow_stage_data['stage_order'], workflow_id=pk)
-                        workflow_stage_serializer = WorkflowStageSerializer(stage_instance, data=workflow_stage_data, partial=True)
-                        existing_stage_ids.add(stage_instance.stage_id)
-                    except WorkflowStage.DoesNotExist:
-                        # Create a new WorkflowStage if no match is found
-                        workflow_stage_data['workflow'] = pk
-                        workflow_stage_serializer = WorkflowStageSerializer(data=workflow_stage_data)
-                        if workflow_stage_serializer.is_valid():
-                            workflow_stage_instance = workflow_stage_serializer.save()
-                            existing_stage_ids.add(workflow_stage_instance.stage_id)
-                        else:
-                            errors["workflow_stage"] = workflow_stage_serializer.errors
+                        stage_serializer = WorkflowStageSerializer(stage_instance, data=stage_data, partial=True)
 
-        # Optionally, remove any stages that were not in the update request
-        WorkflowStage.objects.filter(workflow_id=pk).exclude(stage_id__in=existing_stage_ids).delete()
+                        if not stage_serializer.is_valid():
+                            errors[f"workflow_stage_{stage_id}"] = stage_serializer.errors
+                        else:
+                            stage_serializer.save()
+                            existing_stage_ids.add(stage_id)
+                    except WorkflowStage.DoesNotExist:
+                        return build_response(0, f"WorkflowStage with ID {stage_id} does not exist.", [], status.HTTP_400_BAD_REQUEST)
+                else:
+                    # Create a new WorkflowStage if not found
+                    stage_data['workflow'] = pk
+                    stage_serializer = WorkflowStageSerializer(data=stage_data)
+
+                    if stage_serializer.is_valid():
+                        new_stage = stage_serializer.save()
+                        existing_stage_ids.add(new_stage.workflow_stage_id)
+                    else:
+                        errors["workflow_stage_creation"] = stage_serializer.errors
+
+        # Optionally, remove stages that were not included in the update request
+        WorkflowStage.objects.filter(workflow_id=pk).exclude(workflow_stage_id__in=existing_stage_ids).delete()
 
         if errors:
             return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
 
         # Prepare the response data
         workflow_data_response = WorkflowSerializer(Workflow.objects.get(pk=pk)).data
-        workflow_stage_data_response = WorkflowStageSerializer(WorkflowStage.objects.filter(workflow_id=pk), many=True).data
+        workflow_stage_data_response = WorkflowStageSerializer(
+            WorkflowStage.objects.filter(workflow_id=pk), many=True
+        ).data
 
         return build_response(1, "Records updated successfully", {
             'workflow': workflow_data_response,
@@ -2012,50 +2030,51 @@ class SaleReceiptViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-class ProgressWorkflowView(APIView):
-    """
-    API view to progress the workflow of a specific SaleOrder to the next stage.
-    This view is used to update the flow_status of a sale order, moving it from one stage to the next within its defined workflow.
-    """
+# created new view for this
+# class ProgressWorkflowView(APIView):
+#     """
+#     API view to progress the workflow of a specific SaleOrder to the next stage.
+#     This view is used to update the flow_status of a sale order, moving it from one stage to the next within its defined workflow.
+#     """
 
-    def post(self, request, pk, format=None):
-        """
-        Handle POST requests to progress the workflow of the specified SaleOrder.
+#     def post(self, request, pk, format=None):
+#         """
+#         Handle POST requests to progress the workflow of the specified SaleOrder.
         
-        Parameters:
-        - request: The HTTP request object.
-        - pk: The primary key of the SaleOrder to be updated.
-        - format: An optional format specifier for content negotiation.
+#         Parameters:
+#         - request: The HTTP request object.
+#         - pk: The primary key of the SaleOrder to be updated.
+#         - format: An optional format specifier for content negotiation.
 
-        Returns:
-        - Custom JSON structure with 'count', 'message', and 'data'.
-        """
-        try:
-            # Attempt to retrieve the SaleOrder by its primary key (pk)
-            sale_order = SaleOrder.objects.get(pk=pk)
+#         Returns:
+#         - Custom JSON structure with 'count', 'message', and 'data'.
+#         """
+#         try:
+#             # Attempt to retrieve the SaleOrder by its primary key (pk)
+#             sale_order = SaleOrder.objects.get(pk=pk)
 
-            # Try to progress the workflow to the next stage
-            if sale_order.progress_workflow():
-                response_data = {
-                    "count": 1,
-                    "message": "Success",
-                    "data": {"status": "Flow status updated successfully."}
-                }
-                return Response(response_data, status=status.HTTP_200_OK)
-            else:
-                response_data = {
-                    "count": 1,
-                    "message": "Success",
-                    "data": {"status": "No further stages. Workflow is complete."}
-                }
-                return Response(response_data, status=status.HTTP_200_OK)
-        except SaleOrder.DoesNotExist:
-            response_data = {
-                "count": 0,
-                "message": "SaleOrder not found.",
-                "data": None
-            }
-            return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+#             # Try to progress the workflow to the next stage
+#             if sale_order.progress_workflow():
+#                 response_data = {
+#                     "count": 1,
+#                     "message": "Success",
+#                     "data": {"status": "Flow status updated successfully."}
+#                 }
+#                 return Response(response_data, status=status.HTTP_200_OK)
+#             else:
+#                 response_data = {
+#                     "count": 1,
+#                     "message": "Success",
+#                     "data": {"status": "No further stages. Workflow is complete."}
+#                 }
+#                 return Response(response_data, status=status.HTTP_200_OK)
+#         except SaleOrder.DoesNotExist:
+#             response_data = {
+#                 "count": 0,
+#                 "message": "SaleOrder not found.",
+#                 "data": None
+#             }
+#             return Response(response_data, status=status.HTTP_404_NOT_FOUND)
         
 class SaleCreditNoteViewset(APIView):
     
@@ -2519,3 +2538,126 @@ class SaleDebitNoteViewset(APIView):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+#workflow stages (MoveToNextStages)
+class MoveToNextStageGenericView(APIView):
+    """
+    API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) to the next stage in its workflow.
+    """
+    
+    def post(self, request, module_name, object_id):
+        try:
+            # Dynamically load the model based on module_name
+            ModelClass = None
+            for model in apps.get_models():
+                if model.__name__.lower() == module_name.lower():
+                    ModelClass = model
+                    break
+            
+            if not ModelClass:
+                return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch the object from the appropriate model
+            obj = ModelClass.objects.get(pk=object_id)
+            print(f"Current flow_status_id: {obj.flow_status_id}")
+
+            # Find the current workflow stage based on the current flow_status_id
+            current_stage = WorkflowStage.objects.filter(flow_status_id=obj.flow_status_id).first()
+            if not current_stage:
+                return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            print(f"Current Stage: {current_stage}")
+
+            # Find the next stage by incrementing the stage_order
+            next_stage = WorkflowStage.objects.filter(
+                workflow_id=current_stage.workflow_id_id,
+                stage_order__gt=current_stage.stage_order  # Find the next higher stage order
+            ).order_by('stage_order').first()
+
+            if next_stage:
+                # Update the object's flow_status_id to the next stage's flow_status_id
+                obj.flow_status_id = next_stage.flow_status_id
+                obj.save()
+
+                # Step 1: Store workflow progression details in the global dictionary
+                workflow_progression_dict[obj.pk] = {
+                    "current_stage": current_stage.flow_status_id.flow_status_name,
+                    "next_stage": next_stage.flow_status_id.flow_status_name,
+                    "timestamp": str(datetime.now())  # Add a timestamp
+                }
+
+                # Step 2: Print or log the dictionary to check its contents
+                print("Workflow progression for the object:")
+                # pprint.pprint(workflow_progression_dict)
+
+                return Response({
+                    "message": f"{module_name} moved to the next stage.",
+                    "current_stage": current_stage.flow_status_id.flow_status_name,
+                    "next_stage": next_stage.flow_status_id.flow_status_name
+                }, status=status.HTTP_200_OK)
+            else:
+                return Response({"message": f"{module_name} has reached the final stage."}, status=status.HTTP_200_OK)
+
+        except ModelClass.DoesNotExist:
+            return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def patch(self, request, module_name, object_id):
+        """
+        Partially update the object's fields.
+        """
+        try:
+            # Dynamically load the model based on module_name
+            ModelClass = self.get_model_class(module_name)
+            if not ModelClass:
+                return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch the object from the appropriate model
+            obj = ModelClass.objects.get(pk=object_id)
+            print(f"Updating fields for: {module_name} with ID {object_id}")
+
+            # Update fields with the data from the request
+            for field, value in request.data.items():
+                if hasattr(obj, field):
+                    setattr(obj, field, value)
+                    print(f"Updated {field} to {value}")
+
+            # Save the updated object
+            obj.save()
+
+            return Response({
+                "message": f"{module_name} partially updated successfully.",
+                "updated_fields": request.data
+            }, status=status.HTTP_200_OK)
+
+        except ModelClass.DoesNotExist:
+            return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_model_class(self, module_name):
+        """
+        Helper method to dynamically load the model class.
+
+        Parameters:
+            - module_name (str): The name of the model (e.g., 'SaleOrder', 'PurchaseOrder').
+        
+        Returns:
+            - Model class if found, otherwise None.
+        
+        Example:
+        If `module_name` is 'SaleOrder', and a model named 'SaleOrder' exists in the app,
+        this method will return the corresponding Django model class.
+
+        Note:
+        This function is useful for creating a generic API that can operate on different 
+        model
+        """
+        try:
+            for model in apps.get_models():
+                if model.__name__.lower() == module_name.lower():
+                    return model
+        except LookupError:
+            print(f"Model {module_name} not found.")
+            return None

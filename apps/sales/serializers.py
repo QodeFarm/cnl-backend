@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
-from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers
+from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers, ModFlowstatusSerializer
 from apps.products.serializers import ColorSerializer, ModProductGroupsSerializer, ModproductsSerializer, SizeSerializer
+from apps.users.serializers import ModModuleSectionsSerializer
 from .models import *
 from django.conf import settings
 
@@ -42,8 +43,9 @@ class SaleOrderSerializer(serializers.ModelSerializer):
     sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
-    workflow = ModWorkflowSerializer(source='workflow_id',read_only=True)
+    # workflow = ModWorkflowSerializer(source='workflow_id',read_only=True)
     sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
+    flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
     
     class Meta:
         model = SaleOrder
@@ -148,11 +150,12 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
     sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
     amount = serializers.SerializerMethodField()
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
-
+    flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
+    products = serializers.SerializerMethodField()  # New field for products
 
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'sale_estimate', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'flow_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'products', 'sale_type', 'order_status', 'flow_status', 'remarks', 'created_at', 'updated_at']
 
     def get_sale_order_details(self, obj):
         sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
@@ -168,6 +171,23 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
 
     def get_amount(self, obj):
         return self.get_sale_order_details(obj)
+    
+    def get_products(self, obj):
+        # Fetch sale order items and their associated products
+        sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
+        products = []
+        
+        for item in sale_order_items:
+            product = item.product_id 
+            if product:
+                product_data = {
+                    "product_id": product.product_id,
+                    "product_name": product.name,
+                    "quantity": item.quantity,
+                }
+                products.append(product_data)
+        
+        return products
     
     @staticmethod
     def get_sale_order_summary(sale_order):
@@ -234,6 +254,9 @@ class WorkflowSerializer(serializers.ModelSerializer):
 
 class WorkflowStageSerializer(serializers.ModelSerializer):
     workflow = ModWorkflowSerializer(source='workflow_id', read_only=True)
+    section = ModModuleSectionsSerializer(source='section_id', read_only=True)
+    flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
+
     class Meta:
         model = WorkflowStage
         fields = '__all__'
