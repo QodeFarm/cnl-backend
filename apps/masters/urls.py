@@ -44,6 +44,8 @@ router.register(r'entities', EntitiesViewSet)
 router.register(r'user_groups', UserGroupsViewset)
 router.register(r'user_group_members', UserGroupMembersViewset)
 
+router.register(r'flow_status', FlowStatusViews)
+
 urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),

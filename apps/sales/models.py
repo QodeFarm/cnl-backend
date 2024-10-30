@@ -2,10 +2,11 @@ import uuid
 from django.db import models
 from apps import products
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
-from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions
+from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions, FlowStatus
 from apps.products.models import Products, Size, Color
+from apps.users.models import ModuleSections
 from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems
-from config.utils_methods import OrderNumberMixin
+from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id
 import logging
 
 # Create your models here.
@@ -33,8 +34,8 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         ('No', 'No')
     ]
     sale_estimate = models.CharField(max_length=3, choices=SALE_ESTIMATE_CHOICES, default='No')
-    flow_status = models.CharField(max_length=255, null=True, default=None)
-    workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id')
+    flow_status_id = models.ForeignKey(FlowStatus, on_delete=models.CASCADE, db_column='flow_status_id', null=True, default=None)
+    # workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id')
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, null=True, default=None, db_column='customer_address_id')
     remarks = models.TextField(null=True, default=None)
     payment_term_id = models.ForeignKey(CustomerPaymentTerms, on_delete=models.CASCADE, null=True, default=None, db_column='payment_term_id')
@@ -65,86 +66,46 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         db_table = saleorders
         
     def save(self, *args, **kwargs):
-        # Set default order status if not provided
         if not self.order_status_id:
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+            
+        print("Save method called")
+        print(f"self.pk: {self.pk}")
+        print(f"self.flow_status_id: {self.flow_status_id}")
 
-        # Automatically assign the default workflow if none is selected
-        if not self.workflow_id:
-            self.workflow_id = Workflow.objects.get_or_create(name=default_workflow_name)[0]
+        # Only assign the flow_status_id when creating a new sale order
+        if self.pk and not self.flow_status_id:
+            try:
+                print("Assigning flow_status_id to the first stage...")
 
-        # Check if the workflow is the default one
-        if not self.flow_status:
-            if self.workflow_id.name == default_workflow_name:
-                # Hardcode the flow status based on the predefined stages
-                self.flow_status = default_workflow_stages[1]  # Dispatch Ready
-            else:
-                # Dynamically set flow status based on the stage with order 2
-                second_stage = WorkflowStage.objects.filter(
-                    workflow_id=self.workflow_id,
-                    stage_order=2
-                ).first()
+                # Step 1: Fetch the section ID for Sale Order
+                section_id = get_section_id('Sale Order')
+                print(f"Section ID for 'Sale Order': {section_id}")
 
-                if second_stage:
-                    self.flow_status = second_stage.stage_name
-                else:
-                    # Fallback to the first stage if stage_order 2 doesn't exist
-                    first_stage = WorkflowStage.objects.filter(
-                        workflow_id=self.workflow_id,
-                        stage_order=1
-                    ).first()
+                # Step 2: Fetch the active workflow for this section
+                workflow = get_active_workflow(section_id)
+                print(f"Active Workflow: {workflow}")
+
+                if workflow:
+                    # Step 3: Fetch the first stage of the workflow
+                    first_stage = WorkflowStage.objects.filter(workflow_id=workflow.workflow_id).order_by('stage_order').first()
+                    print(f"First Stage: {first_stage}")
+
                     if first_stage:
-                        self.flow_status = first_stage.stage_name
+                        # Step 4: Assign the flow status of the first stage
+                        self.flow_status_id = first_stage.flow_status_id
+                        print(f"Assigned flow_status_id: {self.flow_status_id}")
+                    else:
+                        print(f"No Stage 1 found for workflow {workflow.workflow_id}")
+                else:
+                    print(f"No active workflow found for section_id: {section_id}")
 
-        # Call the original save() method to handle the rest
+            except Exception as e:
+                print(f"Error during SaleOrder save: {str(e)}")
+
+        # Proceed with saving the object
         super().save(*args, **kwargs)
 
-
-    def progress_workflow(self):
-        logger = logging.getLogger(__name__)
-
-        # Handle progress for default workflow
-        if self.workflow_id.name == default_workflow_name:
-            # Find the current stage key based on the current flow status
-            current_stage_key = None
-            for key, value in default_workflow_stages.items():
-                if value == self.flow_status:
-                    current_stage_key = key
-                    break
-            
-            if current_stage_key is not None and current_stage_key + 1 in default_workflow_stages:
-                # Move to the next stage
-                self.flow_status = default_workflow_stages[current_stage_key + 1]
-                self.save()
-                logger.info(f"SaleOrder {self.sale_order_id} moved to stage: {self.flow_status}")
-                return True
-            else:
-                logger.info(f"SaleOrder {self.sale_order_id} has completed the default workflow.")
-                return False
-        else:
-            # Dynamic handling for non-default workflows
-            current_stage = WorkflowStage.objects.filter(
-                workflow_id=self.workflow_id,
-                stage_name=self.flow_status
-            ).first()
-
-            if current_stage:
-                next_stage = WorkflowStage.objects.filter(
-                    workflow_id=self.workflow_id,
-                    stage_order__gt=current_stage.stage_order
-                ).order_by('stage_order').first()
-
-                if next_stage:
-                    self.flow_status = next_stage.stage_name
-                    self.save()
-                    logger.info(f"SaleOrder {self.sale_order_id} moved to stage: {next_stage.stage_name}")
-                    return True
-                else:
-                    logger.info(f"SaleOrder {self.sale_order_id} has completed the workflow.")
-                    return False
-            else:
-                logger.warning(f"SaleOrder {self.sale_order_id} could not find current stage in workflow.")
-                return False
 
 
 
@@ -450,6 +411,7 @@ class QuickPackItems(models.Model):
 class Workflow(models.Model):
     workflow_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -460,10 +422,13 @@ class Workflow(models.Model):
         return self.name
 
 class WorkflowStage(models.Model):
-    stage_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workflow_stage_id  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     workflow_id = models.ForeignKey(Workflow, on_delete=models.CASCADE, db_column='workflow_id')
-    stage_name = models.CharField(max_length=255)
+    # stage_name = models.CharField(max_length=255)
     stage_order = models.IntegerField()
+    description = models.CharField(max_length=255, null=True, default=None)
+    section_id = models.ForeignKey(ModuleSections, on_delete=models.CASCADE,  db_column = 'section_id')
+    flow_status_id = models.ForeignKey(FlowStatus, on_delete=models.CASCADE, db_column='flow_status_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -471,7 +436,7 @@ class WorkflowStage(models.Model):
         db_table = workflowstages
 
     def __str__(self):
-        return f"{self.stage_name} (Order: {self.stage_order})"
+        return f"{self.section_id.section_name} (Order: {self.stage_order})"
     
 
 class SaleReceipt(models.Model):
