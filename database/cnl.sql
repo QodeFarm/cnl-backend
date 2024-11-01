@@ -753,15 +753,15 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (category_id) REFERENCES product_categories(category_id),
     FOREIGN KEY (type_id) REFERENCES product_types(type_id),
     FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
-    FOREIGN KEY (stock_unit_id) REFERENCES product_stock_units(stock_unit_id),
     FOREIGN KEY (gst_classification_id) REFERENCES product_gst_classifications(gst_classification_id),
     FOREIGN KEY (sales_gl_id) REFERENCES product_sales_gl(sales_gl_id),
     FOREIGN KEY (purchase_gl_id) REFERENCES product_purchase_gl(purchase_gl_id),
     FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
     FOREIGN KEY (drug_type_id) REFERENCES product_drug_types(drug_type_id),
     FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id),
-	FOREIGN KEY (pack_unit_id) REFERENCES package_units(pack_unit_id),
-	FOREIGN KEY (g_pack_unit_id) REFERENCES g_package_units(g_pack_unit_id)
+    FOREIGN KEY (stock_unit_id) REFERENCES product_stock_units(stock_unit_id),
+	FOREIGN KEY (pack_unit_id) REFERENCES product_stock_units(stock_unit_id),
+	FOREIGN KEY (g_pack_unit_id) REFERENCES product_stock_units(stock_unit_id)
 );
 
 CREATE TABLE IF NOT EXISTS package_units (
