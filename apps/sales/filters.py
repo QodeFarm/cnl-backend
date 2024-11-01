@@ -45,7 +45,7 @@ class SaleOrderFilter(filters.FilterSet):
     class Meta:
         model = SaleOrder 
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
+        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','flow_status','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
