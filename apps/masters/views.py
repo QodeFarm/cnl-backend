@@ -677,4 +677,16 @@ class GPackageUnitViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-    
+class FlowStatusViews(viewsets.ModelViewSet):
+    queryset = FlowStatus.objects.all()
+    serializer_class = FlowStatusSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        response = create_instance(self, request, *args, **kwargs)
+        return response
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)

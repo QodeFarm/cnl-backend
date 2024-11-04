@@ -154,8 +154,8 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
-    pack_unit = PackageUnitSerializer(source='pack_unit_id',read_only=True)
-    g_pack_unit = GPackageUnitSerializer(source='g_pack_unit_id',read_only=True)
+    pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)  # PackageUnitSerializer(source='pack_unit_id',read_only=True)
+    g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True) #GPackageUnitSerializer(source='g_pack_unit_id',read_only=True)
     
     class Meta:
         model = Products

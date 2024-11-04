@@ -763,15 +763,15 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (category_id) REFERENCES product_categories(category_id),
     FOREIGN KEY (type_id) REFERENCES product_types(type_id),
     FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
-    FOREIGN KEY (stock_unit_id) REFERENCES product_stock_units(stock_unit_id),
     FOREIGN KEY (gst_classification_id) REFERENCES product_gst_classifications(gst_classification_id),
     FOREIGN KEY (sales_gl_id) REFERENCES product_sales_gl(sales_gl_id),
     FOREIGN KEY (purchase_gl_id) REFERENCES product_purchase_gl(purchase_gl_id),
     FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
     FOREIGN KEY (drug_type_id) REFERENCES product_drug_types(drug_type_id),
     FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id),
-	FOREIGN KEY (pack_unit_id) REFERENCES package_units(pack_unit_id),
-	FOREIGN KEY (g_pack_unit_id) REFERENCES g_package_units(g_pack_unit_id)
+    FOREIGN KEY (stock_unit_id) REFERENCES product_stock_units(stock_unit_id),
+	FOREIGN KEY (pack_unit_id) REFERENCES product_stock_units(stock_unit_id),
+	FOREIGN KEY (g_pack_unit_id) REFERENCES product_stock_units(stock_unit_id)
 );
 
 /* Sizes Table */
@@ -1082,6 +1082,7 @@ CREATE TABLE IF NOT EXISTS return_options (
 CREATE TABLE IF NOT EXISTS workflows (
     workflow_id CHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -1116,9 +1117,8 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     doc_amount DECIMAL(18, 2),
     vehicle_name VARCHAR(255),
     total_boxes INT,
-    flow_status VARCHAR(255),
+    flow_status_id CHAR(36),
 	order_status_id CHAR(36),
-    workflow_id CHAR(36),
     sale_return_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
@@ -1131,7 +1131,7 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     FOREIGN KEY (sale_type_id) REFERENCES sale_types(sale_type_id),
     FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id),
 	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
-    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id)/*,
+    FOREIGN KEY (flow_status_id) REFERENCES flow_status(flow_status_id),/*,
     FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)*/
 );
 
@@ -2168,16 +2168,31 @@ FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 
 
 /* Workflow Stages Table */
--- Defines stages within each workflow, including the order of the stages.
-CREATE TABLE IF NOT EXISTS workflow_stages (
-    stage_id CHAR(36) PRIMARY KEY,    
+-- Defines stages within each workflow, specifying the order and description for each stage.
+CREATE TABLE IF NOT EXISTS workflowstages (
+    workflow_stage_id CHAR(36) PRIMARY KEY,
     workflow_id CHAR(36) NOT NULL,
-    stage_name VARCHAR(255) NOT NULL,
     stage_order INT NOT NULL,
+    description VARCHAR(255),
+    section_id CHAR(36) NOT NULL,
+    flow_status_id CHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id)
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id),
+    FOREIGN KEY (section_id) REFERENCES module_sections(section_id) ,
+    FOREIGN KEY (flow_status_id) REFERENCES flow_status(flow_status_id)
 );
+
+
+/* Flow Status Table */
+-- Defines different statuses within a workflow, such as "Pending," "In Progress," or "Completed."
+CREATE TABLE IF NOT EXISTS flow_status (
+    flow_status_id CHAR(36) PRIMARY KEY,    
+    flow_status_name VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 
 /* Sale Receipts Table */
 -- Stores receipts associated with sale invoices.

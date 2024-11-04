@@ -520,3 +520,15 @@ class GPackageUnit(models.Model):
 
     def __str__(self):
         return self.unit_name
+
+class FlowStatus(models.Model):
+    flow_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    flow_status_name = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.flow_status_name
+    
+    class Meta:
+        db_table = 'flow_status'
