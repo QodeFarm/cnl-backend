@@ -5,8 +5,6 @@ from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
-import json
-from django.core.exceptions import ValidationError
 
 class EmployeesFilter(filters.FilterSet):
     first_name = filters.CharFilter(lookup_expr='icontains')
