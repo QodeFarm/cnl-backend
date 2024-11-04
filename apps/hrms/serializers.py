@@ -12,7 +12,6 @@ class JobTypesSerializer(serializers.ModelSerializer):
         model = JobTypes
         fields = '__all__'
 
-
 class ModDesignationsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Designations
@@ -85,89 +84,15 @@ class EmployeeDetailsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class ModOrganisationSerializer(serializers.ModelSerializer):
+class ModEmployeeSalarySerializer(serializers.ModelSerializer):
     class Meta:
-        model = Organisation
-        fields = ['org_id','org_name','org_address','description','org_email']
-		
-class OrganisationSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Organisation
-        fields = '__all__'
-
-
-class ModEmployeeCompensationHistorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeCompensationHistory
-        fields = ['compensation_id','start_date','compensation_name','amount','currency']
-		
-class EmployeeCompensationHistorySerializer(serializers.ModelSerializer):
-    org = ModOrganisationSerializer(source = 'org_id',read_only=True)
-    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
-    class Meta:
-        model = EmployeeCompensationHistory
-        fields = '__all__'
-		
-class ModOrganisationBranchesSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = OrganisationBranches
-        fields = ['org_branch_id','branch_name','branch_address','branch_contact_person']
-		
-class OrganisationBranchesSerializer(serializers.ModelSerializer):
-    org = ModOrganisationSerializer(source='org_id',read_only=True)
-    class Meta:
-        model = OrganisationBranches
-        fields = '__all__'
-
-class ModEmployeeHistorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeHistory
-        fields = ['history_id','start_date','action_name']
-		
-class EmployeeHistorySerializer(serializers.ModelSerializer):
-    job_type = ModJobTypesSerializer(source='job_type_id',read_only=True)
-    designation = ModDesignationsSerializer(source='designation_id',read_only=True)
-    manager = ModEmployeesSerializer(source='manager_id', read_only=True)
-    branch = ModOrganisationBranchesSerializer(source='branch_id',read_only=True)
-    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
-
-    class Meta:
-        model = EmployeeHistory
-        fields = '__all__'
-
-		
-class ModPreviousCompanyHistorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PreviousCompanyHistory
-        fields = ['history_id','company_name','position','start_date','end_date']
-		
-class PreviousCompanyHistorySerializer(serializers.ModelSerializer):
-    employee= ModEmployeesSerializer(source='employee_id', read_only=True)
-    class Meta:
-        model = PreviousCompanyHistory
-        fields = '__all__'
-	
-	
-class ModEmployeesalarySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Employeesalary
+        model = EmployeeSalary
         fields = ['salary_id','salary_amount','salary_currency','salary_start_date','salary_end_date']
 		
-class EmployeesalarySerializer(serializers.ModelSerializer):
+class EmployeeSalarySerializer(serializers.ModelSerializer):
     employee = ModEmployeesSerializer(source='employee_id', read_only=True)
     class Meta:
-        model = Employeesalary
-        fields = '__all__'
-	
-	
-class ModHardwareSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Hardware
-        fields = ['hardware_id','hardware_name']
-		
-class HardwareSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Hardware
+        model = EmployeeSalary
         fields = '__all__'
 
 
@@ -189,108 +114,12 @@ class ModEmployeeSalaryComponentsSerializer(serializers.ModelSerializer):
 		
 class EmployeeSalaryComponentsSerializer(serializers.ModelSerializer):
     component = ModSalaryComponentsSerializer(source='component_id', read_only = True)
-    salary = ModEmployeesalarySerializer(source='salary_id', read_only = True)
+    salary = ModEmployeeSalarySerializer(source='salary_id', read_only = True)
     class Meta:
         model = EmployeeSalaryComponents
         fields = '__all__'      
 
-
-class ModBenefitsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Benefits
-        fields = ['benefit_id','benefit_name']
-		
-class BenefitsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Benefits
-        fields = '__all__'
-	
-
-class ModBenefitProvidersSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BenefitProviders
-        fields = ['provider_id','provider_name']
-		
-class BenefitProvidersSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BenefitProviders
-        fields = '__all__'  
-
-
-class ModEmployeeBenefitsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeBenefits
-        fields = ['employee_benefit_id','enrollment_date','coverage_amount']
-		
-class EmployeeBenefitsSerializer(serializers.ModelSerializer):
-    employee = ModEmployeesSerializer(source='employee_id',read_only=True)
-    benefit = ModBenefitsSerializer(source='benefit_id',read_only=True)
-    class Meta:
-        model = EmployeeBenefits
-        fields = '__all__'
-
-
-class ModEmployeeBenefitProvidersSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeBenefitProviders
-        fields = ['employee_benefit_provider_id','policy_number']
-		
-class EmployeeBenefitProvidersSerializer(serializers.ModelSerializer):
-    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
-    benefit = ModBenefitsSerializer(source='benefit_id', read_only=True)
-    provider = ModBenefitProvidersSerializer(source='provider_id', read_only=True)
-    class Meta:
-        model = EmployeeBenefitProviders
-        fields = '__all__'
-
-
-class ModEmployeeOnboardingSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeOnboarding
-        fields = ['onboarding_id','onboarding_date','orientation_completed']
-
-
-class ModStatusSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Statuses
-        fields = ['status_id','status_name']
-
-
-class EmployeeOnbordingSerializer(serializers.ModelSerializer):
-    status = ModStatusSerializer(source='status_id', read_only=True)
-    department_training = ModDepartmentsSerializer(source='department_training_id', read_only=True)
-    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
-    mentor = ModEmployeesSerializer(source='mentor_id', read_only=True)
-    class Meta :
-        model = EmployeeOnboarding
-        fields = '__all__' 
-		
-		
-class ModEmployeeHardwareAssignmentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = EmployeeHardwareAssignment
-        fields = ['assignment_id','onboarding_id','hardware_id']
-		
-class EmployeeHardwareAssignmentSerializer(serializers.ModelSerializer):
-    onboarding = ModEmployeeOnboardingSerializer(source='onboarding_id',read_only=True)
-    hardware = ModHardwareSerializer(source='hardware_id',read_only=True)
-    class Meta:
-        model = EmployeeHardwareAssignment
-        fields = '__all__'        
-
-
 # =====================leaves====================================      
-
-# class ModStatusesSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Statuses
-#         fields = ['status_id','status_name']
-		
-# class StatusesSerializer(serializers.ModelSerializer):
-#     class Meta :
-#         model = Statuses
-#         fields = '__all__'
-		
 
 class ModLeaveTypesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -301,6 +130,11 @@ class LeavesTypesSerializer(serializers.ModelSerializer):
     class Meta :
         model = LeaveTypes
         fields = '__all__'
+
+class ModStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Statuses
+        fields = ['status_id','status_name']
 
 		
 class ModEmployeeLeavesSerializer(serializers.ModelSerializer):
@@ -324,7 +158,7 @@ class ModLeaveApprovalsSerializer(serializers.ModelSerializer):
 		
 class LeaveApprovalsSerializer(serializers.ModelSerializer):
     status = ModStatusSerializer(source='status_id', read_only=True)
-    leave = ModLeaveTypesSerializer(source='leave_id', read_only=True)
+    leave = ModEmployeeLeavesSerializer(source='leave_id', read_only=True)
     approver = ModEmployeesSerializer(source='approver_id', read_only=True)
     class Meta:
         model   = LeaveApprovals
@@ -383,36 +217,3 @@ class BiometricSerializer(serializers.ModelSerializer):
     class Meta:
         model = Biometric
         fields = '__all__'
-
-# class ModEmployeesSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Employees
-#         fields = ['employee_id','name','email']
-
-# class ModDesignationsSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Designations
-#         fields = ['designation_id','designation_name']
-
-# class ModDepartmentsSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Departments
-#         fields = ['department_id','department_name']
-
-# class DesignationsSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Designations
-#         fields = '__all__'
-
-# class DepartmentsSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Departments
-#         fields = '__all__'
-
-# class EmployeesSerializer(serializers.ModelSerializer):
-#     designation = ModDesignationsSerializer(source='designation_id', read_only=True)
-#     department = ModDepartmentsSerializer(source='department_id', read_only=True)
-
-#     class Meta:
-#         model = Employees
-#         fields = '__all__'
