@@ -698,6 +698,16 @@ CREATE TABLE IF NOT EXISTS product_brands (
     FOREIGN KEY (brand_salesman_id) REFERENCES brand_salesman(brand_salesman_id)
 );
 
+CREATE TABLE IF NOT EXISTS package_units (
+    pack_unit_id CHAR(36) PRIMARY KEY,
+    unit_name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS g_package_units (
+    g_pack_unit_id CHAR(36) PRIMARY KEY,
+    unit_name VARCHAR(50) NOT NULL
+);
+
 /* Products Table */
 -- Stores information about products.
 CREATE TABLE IF NOT EXISTS products (
@@ -762,16 +772,6 @@ CREATE TABLE IF NOT EXISTS products (
     FOREIGN KEY (stock_unit_id) REFERENCES product_stock_units(stock_unit_id),
 	FOREIGN KEY (pack_unit_id) REFERENCES product_stock_units(stock_unit_id),
 	FOREIGN KEY (g_pack_unit_id) REFERENCES product_stock_units(stock_unit_id)
-);
-
-CREATE TABLE IF NOT EXISTS package_units (
-    pack_unit_id CHAR(36) PRIMARY KEY,
-    unit_name VARCHAR(50) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS g_package_units (
-    g_pack_unit_id CHAR(36) PRIMARY KEY,
-    unit_name VARCHAR(50) NOT NULL
 );
 
 /* Sizes Table */
@@ -1629,37 +1629,198 @@ CREATE TABLE IF NOT EXISTS purchase_price_list (
 
 /* ======== HRMS Management ======== */
 
-/* designations Table */
--- Lookup table for employee designations.
+CREATE TABLE IF NOT EXISTS job_types (
+    job_type_id CHAR(36) PRIMARY KEY,
+    job_type_name varchar(55) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS designations (
-   designation_id CHAR(36) PRIMARY KEY,
-   designation_name VARCHAR(50) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    designation_id CHAR(36) PRIMARY KEY,
+    designation_name varchar(55) NOT NULL,
+    responsibilities varchar(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* departments Table */
--- Lookup table for employee departments.
+CREATE TABLE IF NOT EXISTS job_codes (
+    job_code_id CHAR(36) PRIMARY KEY,
+    job_code varchar(55) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS departments (
-   department_id CHAR(36) PRIMARY KEY,
-   department_name VARCHAR(50) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    department_id CHAR(36) PRIMARY KEY,
+    department_name VARCHAR(55) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* employees Table */
--- Stores information about employees.
+CREATE TABLE IF NOT EXISTS shifts (
+    shift_id CHAR(36) PRIMARY KEY,
+    shift_name VARCHAR(55) NOT NULL,
+    start_time timestamp NOT NULL,
+    end_time timestamp NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS employees (
-   employee_id CHAR(36) PRIMARY KEY,
-   name VARCHAR(255) NOT NULL,
-   email VARCHAR(255) NOT NULL,
-   phone VARCHAR(20),
-   designation_id CHAR(36) NOT NULL,
-   department_id CHAR(36) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
-   FOREIGN KEY (department_id) REFERENCES departments(department_id)
+    employee_id CHAR(36) PRIMARY KEY,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    address VARCHAR(255),
+    hire_date date,
+    job_type_id CHAR(36) NOT NULL,
+    designation_id CHAR(36) NOT NULL,
+    job_code_id CHAR(36) NOT NULL,
+    department_id CHAR(36) NOT NULL,
+    shift_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (job_type_id) REFERENCES job_types(job_type_id),
+    FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
+    FOREIGN KEY (job_code_id) REFERENCES job_codes(job_code_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id)
+);
+
+CREATE TABLE IF NOT EXISTS employee_details (
+    employee_detail_id CHAR(36) PRIMARY KEY,
+    date_of_birth date NOT NULL,
+    gender varchar(20) NULL,
+    nationality varchar(20) NULL,
+    emergency_contact varchar(20) NULL,
+    emergency_contact_relationship varchar(55) NULL,
+    employee_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS employee_salary (
+    salary_id CHAR(36) PRIMARY KEY,
+    salary_amount float NOT NULL,
+    salary_currency varchar(45) NOT NULL,
+    salary_start_date DATE NOT NULL,
+    salary_end_date DATE NOT NULL,
+    employee_id CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS salary_components (
+    component_id CHAR(36) PRIMARY KEY,
+    component_name varchar(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS employee_salary_components (
+    employee_component_id CHAR(36) PRIMARY KEY,
+    component_id CHAR(36) NOT NULL,
+    component_amount float,
+    salary_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (component_id) REFERENCES salary_components(component_id),
+    FOREIGN KEY (salary_id) REFERENCES employee_salary(salary_id)
+);
+
+/* ======== leaves ======== */
+
+CREATE TABLE IF NOT EXISTS leave_types (
+    leave_type_id CHAR(36) PRIMARY KEY,
+    leave_type_name VARCHAR(55) NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    max_days_allowed int NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS employee_leaves (
+    leave_id CHAR(36) PRIMARY KEY,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    status_id CHAR(36) NOT NULL,
+    comments varchar(255),
+    employee_id CHAR(36) NOT NULL,
+    leave_type_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (leave_type_id) REFERENCES leave_types(leave_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS leave_approvals ( 
+    approval_id CHAR(36) PRIMARY KEY,
+    approval_date datetime,
+    comments varchar(255),
+    status_id CHAR(36) NOT NULL,
+    leave_id CHAR(36) NOT NULL,
+    approver_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
+    FOREIGN KEY (leave_id) REFERENCES employee_leaves(leave_id),
+    FOREIGN KEY (approver_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS employee_leave_balance (
+    balance_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    leave_type_id CHAR(36) NOT NULL,
+    leave_balance decimal(10,2) NOT NULL,
+    year varchar(45) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (leave_type_id) REFERENCES leave_types(leave_type_id)
+);
+
+/* ======== attendance ======== */
+
+CREATE TABLE IF NOT EXISTS attendance (
+    attendance_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    attendance_date DATE,
+    clock_in_time datetime,
+    clock_out_time datetime,
+    status_id CHAR(36),
+    department_id CHAR(36),
+    shift_id CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id)
+);
+
+CREATE TABLE IF NOT EXISTS swipes (
+    swipe_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    swipe_time datetime,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS biometric (
+    biometric_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    biometric_entry_id int,
+    template_data text NOT NULL,
+    entry_stamp timestamp,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
 );
 
 /* User Groups Table */
