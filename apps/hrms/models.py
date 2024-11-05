@@ -1,6 +1,5 @@
 import uuid
 from django.db import models
-from config.utils_methods import *
 from config.utils_variables import *
 from phonenumber_field.modelfields import PhoneNumberField
 

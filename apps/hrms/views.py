@@ -1,16 +1,22 @@
-from rest_framework import viewsets
+import logging
+from rest_framework import viewsets, status
 from django.db import transaction
 from rest_framework.views import APIView
 from django.http import  Http404
 from django.shortcuts import get_object_or_404
 from .models import *
 from .serializers import *
-from config.utils_methods import list_all_objects, create_instance, update_instance
+from config.utils_methods import build_response, generic_data_creation, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
 from apps.hrms.filters import EmployeesFilter, EmployeeSalaryFilter, EmployeeSalaryComponentsFilter, EmployeeLeavesFilter, LeaveApprovalsFilter, EmployeeLeaveBalanceFilter, AttendanceFilter, SwipesFilter
 
+# Set up basic configuration for logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Create a logger object
+logger = logging.getLogger(__name__)
 
 class JobTypesViewSet(viewsets.ModelViewSet):
     queryset = JobTypes.objects.all()
@@ -320,7 +326,7 @@ class EmployeeView(APIView):
             employee_serializer = EmployeesSerializer(employee)
 
             # Retrieve EmployeeDetails data
-            employee_details_data = self.get_related_data(EmployeeDetails, EmployeeDetailsSerializer, 'employee_id', pk)
+            employee_details_data = get_related_data(EmployeeDetails, EmployeeDetailsSerializer, 'employee_id', pk)
             emp_details_data = employee_details_data[0] if employee_details_data else {}
 
             # Customizing the response data
@@ -337,19 +343,6 @@ class EmployeeView(APIView):
         except Exception as e:
             logger.exception("An error occurred while retrieving Employees with pk %s: %s", pk, str(e))
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    def get_related_data(self, model, serializer_class, filter_field, filter_value):
-        """
-        Retrieves related data for a given model, serializer, and filter field.
-        """
-        try:
-            related_data = model.objects.filter(**{filter_field: filter_value})
-            serializer = serializer_class(related_data, many=True)
-            logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
-            return serializer.data
-        except Exception as e:
-            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
-            return []
         
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
