@@ -8,7 +8,7 @@ from apps.users.models import ModuleSections
 from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems
 from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id
 import logging
-
+from django.core.exceptions import ObjectDoesNotExist
 # Create your models here.
 
 
@@ -66,33 +66,34 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         db_table = saleorders
         
     def save(self, *args, **kwargs):
+        # Set the order status to "Pending" if not already set
         if not self.order_status_id:
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
-            
+
         print("Save method called")
         print(f"self.pk: {self.pk}")
-        print(f"self.flow_status_id: {self.flow_status_id}")
+        print(f"self.flow_status_id before assignment: {self.flow_status_id}")
 
         # Only assign the flow_status_id when creating a new sale order
-        if self.pk and not self.flow_status_id:
+        if not self.pk or self.flow_status_id is None:  # Check if it's a new order or if flow_status_id is None
             try:
                 print("Assigning flow_status_id to the first stage...")
 
-                # Step 1: Fetch the section ID for Sale Order
+                # Fetch the section ID for Sale Order
                 section_id = get_section_id('Sale Order')
                 print(f"Section ID for 'Sale Order': {section_id}")
 
-                # Step 2: Fetch the active workflow for this section
+                # Fetch the active workflow for this section
                 workflow = get_active_workflow(section_id)
                 print(f"Active Workflow: {workflow}")
 
                 if workflow:
-                    # Step 3: Fetch the first stage of the workflow
-                    first_stage = WorkflowStage.objects.filter(workflow_id=workflow.workflow_id).order_by('stage_order').first()
+                    # Fetch the first stage of the workflow (ensure stage_order=1)
+                    first_stage = WorkflowStage.objects.filter(workflow_id=workflow.workflow_id, stage_order=1).first()
                     print(f"First Stage: {first_stage}")
 
                     if first_stage:
-                        # Step 4: Assign the flow status of the first stage
+                        # Explicitly reset flow_status_id to ensure it starts at the first stage
                         self.flow_status_id = first_stage.flow_status_id
                         print(f"Assigned flow_status_id: {self.flow_status_id}")
                     else:
@@ -103,12 +104,21 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             except Exception as e:
                 print(f"Error during SaleOrder save: {str(e)}")
 
+    # Check if flow_status_id is set to "Completed"
+        try:
+            # Assuming the "Completed" status has a specific name or identifier in FlowStatus
+            completed_status = FlowStatus.objects.get(flow_status_name="Completed")
+            
+            if self.flow_status_id == completed_status:
+                # Set the order status to "Completed" if flow_status_id is "Completed"
+                self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Completed')[0]
+                print("Order status set to Completed")
+        
+        except ObjectDoesNotExist:
+            print("Completed flow status or order status does not exist")
+
         # Proceed with saving the object
         super().save(*args, **kwargs)
-
-
-
-
 
 class SalesPriceList(models.Model): #required fields are updated
     sales_price_list_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -135,7 +145,7 @@ class SaleOrderItems(models.Model):
     size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)
-    quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    quantity = models.IntegerField(null=True, default=None) #changed to Integerfield
     total_boxes = models.IntegerField(null=True, default=None)
     rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
@@ -357,8 +367,8 @@ class OrderShipments(OrderNumberMixin):
     shipping_tracking_no = models.CharField(max_length=20, default='')
     order_no_prefix = 'SHIP'
     order_no_field = 'shipping_tracking_no'
-    shipping_date = models.DateField()
-    shipping_charges = models.DecimalField(max_digits=10, decimal_places=2)
+    shipping_date = models.DateField(null=True, default=None)
+    shipping_charges = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
     vehicle_vessel = models.CharField(max_length=255, null=True, default=None)
     charge_type = models.CharField(max_length=255, null=True, default=None)
     document_through = models.CharField(max_length=255, null=True, default=None)

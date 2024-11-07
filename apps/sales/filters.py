@@ -50,6 +50,7 @@ class SaleOrderFilter(filters.FilterSet):
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    sale_order_id = filters.CharFilter(method=filter_uuid)
     invoice_date = filters.DateFilter()
     total_amount = filters.RangeFilter()
     tax_amount = filters.RangeFilter()
@@ -83,7 +84,7 @@ class SaleInvoiceOrdersFilter(filters.FilterSet):
     class Meta:
         model = SaleInvoiceOrders
         #do not change "invoice_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['invoice_no','customer_id','customer','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
+        fields =['invoice_no','customer_id','customer','sale_order_id','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
 
 class SaleReturnOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
