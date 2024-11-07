@@ -64,7 +64,7 @@ class ModRolePermissionsSerializer(serializers.ModelSerializer):
 class ModUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['user_id','first_name']
+        fields = ['user_id','first_name','last_name','username']
         
 class ModUserRoleSerializer(serializers.ModelSerializer):
     class Meta:
