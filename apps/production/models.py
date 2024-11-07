@@ -2,7 +2,7 @@ from django.db import models
 from config.utils_variables import billofmaterials, productionstatuses, workorders, machines, rawmaterials, workorderstages, productionworkers, defaultmachinery, workordermachines
 from apps.products.models import Products
 from apps.hrms.models import Employees
-
+from apps.sales.models import SaleOrder
 # Create your models here.
 from django.db import models
 import uuid
@@ -55,6 +55,7 @@ class WorkOrder(models.Model):
     status_id = models.ForeignKey(ProductionStatus, on_delete=models.CASCADE, null=True, default=None, db_column='status_id')
     start_date = models.DateField(null=True, default=None)
     end_date = models.DateField(null=True, default=None)
+    sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.CASCADE, db_column='sale_order_id', null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

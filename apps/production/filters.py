@@ -8,7 +8,9 @@ logger = logging.getLogger(__name__)
 
 class WorkOrderFilter(filters.FilterSet):
     product = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
+    product_id = filters.CharFilter(method=filter_uuid)
     status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
+    flow_status = filters.CharFilter(field_name='sale_order_id__flow_status_id__flow_status_name', lookup_expr='iexact')
     quantity = filters.RangeFilter()
     start_date = filters.DateFromToRangeFilter()
     end_date = filters.DateFromToRangeFilter()
@@ -37,4 +39,4 @@ class WorkOrderFilter(filters.FilterSet):
     class Meta:
         model = WorkOrder 
         #do not change "product",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['product','status_id','quantity','start_date','end_date','created_at','period_name','search','sort','page','limit']
+        fields = ['product','status_id','quantity','product_id','flow_status','start_date','end_date','created_at','period_name','search','sort','page','limit']

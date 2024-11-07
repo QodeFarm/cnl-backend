@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import *
 from apps.products.serializers import ModproductsSerializer
 from apps.hrms.serializers import ModEmployeesSerializer
+from apps.sales.serializers import ModFlowstatusSerializer
 
 class ModProductionStatusSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,7 +24,7 @@ class ModWorkOrderSerializer(serializers.ModelSerializer):
     status = ModProductionStatusSerializer(source='status_id', read_only=True)
     class Meta:
         model = WorkOrder
-        fields = ['work_order_id','quantity','product','status']
+        fields = ['work_order_id','quantity','product','status','start_date','end_date']
 
 class BillOfMaterialsSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id', read_only=True)
@@ -79,3 +80,35 @@ class ProductionWorkerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionWorker
         fields = '__all__' 
+
+class WorkOrderOptionsSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    quantity = serializers.IntegerField(read_only=True)
+    sale_order_id = serializers.SerializerMethodField()
+    flow_status = serializers.SerializerMethodField()
+    status = ModProductionStatusSerializer(source='status_id', read_only=True)
+    # work_order = ModWorkOrderSerializer(source='work_order_id', read_only=True)
+
+    class Meta:
+        model = WorkOrder
+        fields = ['work_order_id', 'product', 'quantity', 'sale_order_id', 'flow_status', 'status' ,'start_date', 'end_date']
+
+    def get_sale_order_id(self, obj):
+        # Assuming there is a related SaleOrder and foreign key on WorkOrder model
+        sale_order = SaleOrder.objects.filter(workorder=obj).first()
+        return sale_order.sale_order_id if sale_order else None
+
+    def get_flow_status(self, obj):
+        # Access flow_status directly from sale_order_id to avoid additional query
+        if obj.sale_order_id and obj.sale_order_id.flow_status_id:
+            return ModFlowstatusSerializer(obj.sale_order_id.flow_status_id).data
+        return None
+
+    @staticmethod
+    def get_work_order_summary(work_orders):
+        serializer = WorkOrderOptionsSerializer(work_orders, many=True)
+        return {
+            "count": len(serializer.data),
+            "msg": "SUCCESS",
+            "data": serializer.data
+        }
