@@ -162,6 +162,7 @@ swipes = 'swipes'
 biometric = 'biometric'
 
 # Production
+bom = 'bom'
 billofmaterials = 'bill_of_materials'
 productionstatuses = 'production_statuses'
 workorders = 'work_orders'

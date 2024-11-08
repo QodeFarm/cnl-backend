@@ -1,7 +1,12 @@
 from rest_framework import serializers
 from .models import *
-from apps.products.serializers import ModproductsSerializer
+from apps.products.serializers import ModColorSerializer, ModproductsSerializer, ModSizeSerializer
 from apps.hrms.serializers import ModEmployeesSerializer
+
+class ModBOMSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BOM
+        fields = ['bom_id','bom_name']
 
 class ModProductionStatusSerializer(serializers.ModelSerializer):
     class Meta:
@@ -25,9 +30,17 @@ class ModWorkOrderSerializer(serializers.ModelSerializer):
         model = WorkOrder
         fields = ['work_order_id','quantity','product','status']
 
-class BillOfMaterialsSerializer(serializers.ModelSerializer):
+class BOMSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id', read_only=True)
-    raw_material = ModRawMaterialSerializer(source='raw_material_id', read_only=True)
+    class Meta:
+        model = BOM
+        fields = '__all__'
+
+class BillOfMaterialsSerializer(serializers.ModelSerializer):
+    bom = ModBOMSerializer(source='bom_id', read_only=True)
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    size = ModSizeSerializer(source='size_id',read_only=True)
+    color = ModColorSerializer(source='color_id',read_only=True)
     class Meta:
         model = BillOfMaterials
         fields = '__all__'
