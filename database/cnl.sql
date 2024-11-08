@@ -2112,10 +2112,12 @@ CREATE TABLE IF NOT EXISTS work_orders (
     status_id CHAR(36),
     start_date DATE,
     end_date DATE,
+    sale_order_id CHAR(36) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (status_id) REFERENCES production_statuses(status_id)
+    FOREIGN KEY (status_id) REFERENCES production_statuses(status_id),
+    FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id)
 );
 
 CREATE TABLE IF NOT EXISTS work_order_stages (

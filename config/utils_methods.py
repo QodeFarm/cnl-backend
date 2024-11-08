@@ -735,79 +735,34 @@ def get_section_id(section_name):
             raise ValueError(f"Section '{section_name}' not found in ModuleSections")
     except Exception as e:
         raise ValueError(f"Error fetching section_id for {section_name}: {str(e)}")
-    
+
+#Added new logic
 def get_active_workflow(section_id):
     """
     Retrieve the active workflow based on the given section_id by looking up the WorkflowStage.
     """
     from apps.sales.models import Workflow, WorkflowStage
     try:
-        # Step 1: Find the workflow stage associated with the section_id
-        print(f"Looking for workflow stages with section_id: {section_id}")
-        workflow_stage = WorkflowStage.objects.filter(section_id=section_id).first()
-        
-        if workflow_stage:
-            print(f"Found workflow stage: {workflow_stage}")
-            print(f"Workflow ID retrieved from workflow stage: {workflow_stage.workflow_id_id}")
+        # Step 1: Find the active workflow for the section by checking WorkflowStage for a match
+        active_workflow = Workflow.objects.filter(is_active=True, workflowstage__section_id=section_id).first()
 
-            # Step 2: Fetch the corresponding workflow using the workflow_id UUID
-            workflow = Workflow.objects.filter(is_active=True, workflow_id=workflow_stage.workflow_id_id).first()
-            
-            if workflow:
-                return workflow
-            else:
-                raise ValueError(f"No active workflow found for section_id {section_id} and workflow_id {workflow_stage.workflow_id_id}")
+        if not active_workflow:
+            raise ValueError(f"No active workflow found for section_id {section_id}")
+
+        print(f"Active Workflow ID: {active_workflow.workflow_id}")
+
+        # Step 2: Retrieve the first stage of this active workflow
+        first_stage = WorkflowStage.objects.filter(
+            workflow_id=active_workflow.workflow_id, section_id=section_id
+        ).order_by('stage_order').first()
+
+        if first_stage:
+            return active_workflow
         else:
-            raise ValueError(f"No workflow stages found for section_id {section_id}")
+            raise ValueError(f"No stages found for active workflow with ID {active_workflow.workflow_id}")
 
     except Exception as e:
         raise ValueError(f"Error fetching active workflow: {str(e)}")
 
 
 
-def get_active_workflow(section_id):
-    """
-    Retrieve the active workflow based on the given section_id by looking up the WorkflowStage.
-    """
-    from apps.sales.models import Workflow, WorkflowStage
-    try:
-        # Step 1: Find the active workflow associated with the section_id
-        workflow_stage = WorkflowStage.objects.filter(section_id=section_id).first()
-        
-        if workflow_stage:
-            print(f"Found workflow stage: {workflow_stage}")
-            workflow_id = workflow_stage.workflow_id_id
-            print(f"Workflow ID retrieved from workflow stage: {workflow_id}")
-
-            # Step 2: Fetch the active workflow using the workflow_id UUID
-            workflow = Workflow.objects.filter(is_active=True, workflow_id=workflow_id).first()
-            
-            if workflow:
-                # Step 3: Retrieve all stages for this workflow and store them in the dictionary
-                stages = WorkflowStage.objects.filter(workflow_id=workflow.workflow_id).order_by('stage_order')
-                stage_data = [
-                    {
-                        "stage_order": stage.stage_order,
-                        # "flow_status_id": stage.flow_status_id.flow_status_id,
-                        "flow_status_name": stage.flow_status_id.flow_status_name,
-                    }
-                    for stage in stages
-                ]
-                
-                # Store the workflow and its stages in the global dictionary
-                workflow_progression_dict[workflow.workflow_id] = {
-                    "workflow_name": workflow.name,
-                    "stages": stage_data
-                }
-
-                print("Workflow and stages stored in dictionary:")
-                print(workflow_progression_dict)
-
-                return workflow
-            else:
-                raise ValueError(f"No active workflow found for section_id {section_id} and workflow_id {workflow_id}")
-        else:
-            raise ValueError(f"No workflow stages found for section_id {section_id}")
-
-    except Exception as e:
-        raise ValueError(f"Error fetching active workflow: {str(e)}")

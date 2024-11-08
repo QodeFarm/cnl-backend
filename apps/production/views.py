@@ -2,6 +2,7 @@ import logging
 from django.http import Http404
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
@@ -171,6 +172,21 @@ class WorkOrderAPIView(APIView):
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             instance = WorkOrder.objects.all()
+
+            #Added wokorder summary logic here(starts)
+            summary = request.query_params.get("summary", "false").lower() == "true"
+            if summary:
+                logger.info("Retrieving Work Order summary")
+                
+                # Apply filters to the queryset for the summary case
+                workorders = WorkOrder.objects.all()
+                filterset = WorkOrderFilter(request.GET, queryset=workorders)
+                if filterset.is_valid():
+                    workorders = filterset.qs  # Filtered queryset for summary
+                
+                data = WorkOrderOptionsSerializer.get_work_order_summary(workorders)
+                return Response(data, status=status.HTTP_200_OK)
+            #wokorder summary logic(ends)
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 

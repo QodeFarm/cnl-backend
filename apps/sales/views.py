@@ -1962,7 +1962,7 @@ class WorkflowCreateViewSet(APIView):
                         return build_response(0, f"WorkflowStage with ID {stage_id} does not exist.", [], status.HTTP_400_BAD_REQUEST)
                 else:
                     # Create a new WorkflowStage if not found
-                    stage_data['workflow'] = pk
+                    stage_data['workflow_id'] = pk  # Attach the workflow ID to the new stage data
                     stage_serializer = WorkflowStageSerializer(data=stage_data)
 
                     if stage_serializer.is_valid():
@@ -2540,11 +2540,135 @@ class SaleDebitNoteViewset(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 #workflow stages (MoveToNextStages)
+# class MoveToNextStageGenericView(APIView):
+#     """
+#     API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) to the next stage in its workflow.
+#     """
+    
+#     def post(self, request, module_name, object_id):
+#         try:
+#             # Dynamically load the model based on module_name
+#             ModelClass = None
+#             for model in apps.get_models():
+#                 if model.__name__.lower() == module_name.lower():
+#                     ModelClass = model
+#                     break
+            
+#             if not ModelClass:
+#                 return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#             # Fetch the object from the appropriate model
+#             obj = ModelClass.objects.get(pk=object_id)
+#             print(f"Current flow_status_id: {obj.flow_status_id}")
+
+#             # Find the current workflow stage based on the current flow_status_id
+#             current_stage = WorkflowStage.objects.filter(flow_status_id=obj.flow_status_id).first()
+#             if not current_stage:
+#                 return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#             print(f"Current Stage: {current_stage}")
+
+#             # Find the next stage by incrementing the stage_order
+#             next_stage = WorkflowStage.objects.filter(
+#                 workflow_id=current_stage.workflow_id_id,
+#                 stage_order__gt=current_stage.stage_order  # Find the next higher stage order
+#             ).order_by('stage_order').first()
+
+#             if next_stage:
+#                 # Update the object's flow_status_id to the next stage's flow_status_id
+#                 obj.flow_status_id = next_stage.flow_status_id
+#                 obj.save()
+
+#                 # Step 1: Store workflow progression details in the global dictionary
+#                 workflow_progression_dict[obj.pk] = {
+#                     "current_stage": current_stage.flow_status_id.flow_status_name,
+#                     "next_stage": next_stage.flow_status_id.flow_status_name,
+#                     "timestamp": str(datetime.now())  # Add a timestamp
+#                 }
+
+#                 # Step 2: Print or log the dictionary to check its contents
+#                 print("Workflow progression for the object:")
+#                 # pprint.pprint(workflow_progression_dict)
+
+#                 return Response({
+#                     "message": f"{module_name} moved to the next stage.",
+#                     "current_stage": current_stage.flow_status_id.flow_status_name,
+#                     "next_stage": next_stage.flow_status_id.flow_status_name
+#                 }, status=status.HTTP_200_OK)
+#             else:
+#                 return Response({"message": f"{module_name} has reached the final stage."}, status=status.HTTP_200_OK)
+
+#         except ModelClass.DoesNotExist:
+#             return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+#     def patch(self, request, module_name, object_id):
+#         """
+#         Partially update the object's fields.
+#         """
+#         try:
+#             # Dynamically load the model based on module_name
+#             ModelClass = self.get_model_class(module_name)
+#             if not ModelClass:
+#                 return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+#             # Fetch the object from the appropriate model
+#             obj = ModelClass.objects.get(pk=object_id)
+#             print(f"Updating fields for: {module_name} with ID {object_id}")
+
+#             # Update fields with the data from the request
+#             for field, value in request.data.items():
+#                 if hasattr(obj, field):
+#                     setattr(obj, field, value)
+#                     print(f"Updated {field} to {value}")
+
+#             # Save the updated object
+#             obj.save()
+
+#             return Response({
+#                 "message": f"{module_name} partially updated successfully.",
+#                 "updated_fields": request.data
+#             }, status=status.HTTP_200_OK)
+
+#         except ModelClass.DoesNotExist:
+#             return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+#         except Exception as e:
+#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#     def get_model_class(self, module_name):
+#         """
+#         Helper method to dynamically load the model class.
+
+#         Parameters:
+#             - module_name (str): The name of the model (e.g., 'SaleOrder', 'PurchaseOrder').
+        
+#         Returns:
+#             - Model class if found, otherwise None.
+        
+#         Example:
+#         If `module_name` is 'SaleOrder', and a model named 'SaleOrder' exists in the app,
+#         this method will return the corresponding Django model class.
+
+#         Note:
+#         This function is useful for creating a generic API that can operate on different 
+#         model
+#         """
+#         try:
+#             for model in apps.get_models():
+#                 if model.__name__.lower() == module_name.lower():
+#                     return model
+#         except LookupError:
+#             print(f"Model {module_name} not found.")
+#             return None
+
+
+
 class MoveToNextStageGenericView(APIView):
     """
     API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) to the next stage in its workflow.
     """
-    
+
     def post(self, request, module_name, object_id):
         try:
             # Dynamically load the model based on module_name
@@ -2553,7 +2677,8 @@ class MoveToNextStageGenericView(APIView):
                 if model.__name__.lower() == module_name.lower():
                     ModelClass = model
                     break
-            
+
+            # Check if ModelClass was found
             if not ModelClass:
                 return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -2579,16 +2704,12 @@ class MoveToNextStageGenericView(APIView):
                 obj.flow_status_id = next_stage.flow_status_id
                 obj.save()
 
-                # Step 1: Store workflow progression details in the global dictionary
+                # Log workflow progression details in the global dictionary
                 workflow_progression_dict[obj.pk] = {
                     "current_stage": current_stage.flow_status_id.flow_status_name,
                     "next_stage": next_stage.flow_status_id.flow_status_name,
                     "timestamp": str(datetime.now())  # Add a timestamp
                 }
-
-                # Step 2: Print or log the dictionary to check its contents
-                print("Workflow progression for the object:")
-                # pprint.pprint(workflow_progression_dict)
 
                 return Response({
                     "message": f"{module_name} moved to the next stage.",
@@ -2602,62 +2723,3 @@ class MoveToNextStageGenericView(APIView):
             return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-    def patch(self, request, module_name, object_id):
-        """
-        Partially update the object's fields.
-        """
-        try:
-            # Dynamically load the model based on module_name
-            ModelClass = self.get_model_class(module_name)
-            if not ModelClass:
-                return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
-
-            # Fetch the object from the appropriate model
-            obj = ModelClass.objects.get(pk=object_id)
-            print(f"Updating fields for: {module_name} with ID {object_id}")
-
-            # Update fields with the data from the request
-            for field, value in request.data.items():
-                if hasattr(obj, field):
-                    setattr(obj, field, value)
-                    print(f"Updated {field} to {value}")
-
-            # Save the updated object
-            obj.save()
-
-            return Response({
-                "message": f"{module_name} partially updated successfully.",
-                "updated_fields": request.data
-            }, status=status.HTTP_200_OK)
-
-        except ModelClass.DoesNotExist:
-            return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def get_model_class(self, module_name):
-        """
-        Helper method to dynamically load the model class.
-
-        Parameters:
-            - module_name (str): The name of the model (e.g., 'SaleOrder', 'PurchaseOrder').
-        
-        Returns:
-            - Model class if found, otherwise None.
-        
-        Example:
-        If `module_name` is 'SaleOrder', and a model named 'SaleOrder' exists in the app,
-        this method will return the corresponding Django model class.
-
-        Note:
-        This function is useful for creating a generic API that can operate on different 
-        model
-        """
-        try:
-            for model in apps.get_models():
-                if model.__name__.lower() == module_name.lower():
-                    return model
-        except LookupError:
-            print(f"Model {module_name} not found.")
-            return None
