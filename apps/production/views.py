@@ -5,8 +5,9 @@ from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
-
-from apps.production.filters import WorkOrderFilter
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
+from apps.production.filters import BOMFilter, MaterialFilter, WorkOrderFilter
 from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
@@ -18,9 +19,26 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 # Create a logger object
 logger = logging.getLogger(__name__)
 
+class BOMViewSet(viewsets.ModelViewSet):
+    queryset = BOM.objects.all()
+    serializer_class = BOMSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = BOMFilter
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
 class BillOfMaterialsViewSet(viewsets.ModelViewSet):
     queryset = BillOfMaterials.objects.all()
     serializer_class = BillOfMaterialsSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = MaterialFilter
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -470,4 +488,211 @@ class WorkOrderAPIView(APIView):
             "work_order_stages" : stages_data if stages_data else []
         }
 
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+#------------------- BILL OF MATERIAL API VIEW ------------------#
+"""
+API VIEW for BOM creation
+"""
+class BOMView(APIView):
+    """
+    API for handling Bill Of Material creation and related data.
+    """
+    def get_object(self, pk):
+        try:
+            return BOM.objects.get(pk=pk)
+        except BOM.DoesNotExist:
+            logger.warning(f"BOM with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        if 'pk' in kwargs:
+           result =  validate_input_pk(self,kwargs['pk'])
+           return result if result else self.retrieve(self, request, *args, **kwargs)
+        try:
+            instance = BOM.objects.all()
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = BOM.objects.count()
+
+            # Apply filters manually
+            if request.query_params:
+                queryset = BOM.objects.all()
+                filterset = BOMFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    serializer = BOMSerializer(queryset, many=True)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+        except BOM.DoesNotExist:
+            logger.error("BOM does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        else:
+            serializer = BOMSerializer(instance, many=True)
+            logger.info("BOM data retrieved successfully.")
+            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Retrieves a BOM and its related data.
+        """
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            # Retrieve the BOM instance
+            instance = get_object_or_404(BOM, pk=pk)
+            bom = BOMSerializer(instance)
+
+            # Retrieve related data
+            material_data = get_related_data(BillOfMaterials, BillOfMaterialsSerializer, 'bom_id', pk)
+
+            # Customizing the response data
+            custom_data = {
+                "bom": bom.data,
+                "bill_of_material": material_data
+            }
+            logger.info("BOM and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+        except Http404:
+            logger.error("BOM with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception("An error occurred while retrieving BOM with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Handles the deletion of a BOM and its related Bill of materials.
+        """
+        try:
+            # Get the BOM instance
+            instance = BOM.objects.get(pk=pk)
+
+            # Delete the main WorkOrder instance
+            instance.delete()
+
+            logger.info(f"BOM with ID {pk} deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except BOM.DoesNotExist:
+            logger.warning(f"BOM with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting BOM with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Handling POST requests for creating
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        # Extracting data from the request
+        given_data = request.data
+
+        #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+
+        # Validated BOM Data
+        bom_data = given_data.pop('bom', None) # parent_data
+        # Ensure mandatory data is present
+        if not bom_data:
+            logger.error("BOM data are mandatory but not provided.")
+            return build_response(0, "BOM data are mandatory but not provided.", [], status.HTTP_400_BAD_REQUEST)        
+        else:
+            bom_error = validate_multiple_data(self, [bom_data] , BOMSerializer, [])
+
+        # Validated BillOfMaterial Data
+        material_data = given_data.pop('bill_of_material', None)
+        if material_data:
+            material_error = validate_multiple_data(self, material_data, BillOfMaterialsSerializer, ['bom_id'])
+        else:
+            material_error = []
+
+        errors = {
+            "bom": bom_error,
+            "bill_of_material": material_error
+        }
+        errors = {key: value for key, value in errors.items() if value}
+
+        if errors:
+            return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
+
+        #---------------------- D A T A   C R E A T I O N ----------------------------#
+        """
+        After the data is validated, this validated data created as new instances.
+        """
+        # Create BOM Data
+        new_bom_data = generic_data_creation(self, [bom_data], BOMSerializer, {})[0]
+        bom_id = new_bom_data.get("bom_id",None) #Fetch bom_id from mew instance
+        logger.info('BOM - created*')
+ 
+        # Create BillOfMaterials Data
+        new_material_data = generic_data_creation(self, material_data, BillOfMaterialsSerializer, {'bom_id': bom_id})
+        logger.info('BillOfMaterials - created*')
+       
+        custom_data = {
+            "bom":new_bom_data,
+            "bill_of_material":new_material_data,
+        }
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+        #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+        """
+        All the data in request will be validated here. it will handle the following errors:
+        - Invalid data types
+        - Invalid foreign keys
+        - nulls in required fields
+        """
+        # Get the given data from request
+        given_data = request.data
+
+        # Validated BOM Data
+        bom_data = given_data.pop('bom', None) # parent_data
+        if not bom_data:
+            logger.error("BOM data are mandatory but not provided.")
+            return build_response(0, "BOM data are mandatory but not provided.", [], status.HTTP_400_BAD_REQUEST)        
+        else:
+            bom_error = validate_multiple_data(self, [bom_data] , BOMSerializer, [])        
+        
+        # Validated BillOfMaterial Data
+        material_data = given_data.pop('bill_of_material', [])
+        material_error = []
+        if material_data:
+            material_error = validate_put_method_data(self, material_data, BillOfMaterialsSerializer, {'bom_id':pk}, BillOfMaterials, current_model_pk_field='material_id')
+
+        errors = {
+            "bom":bom_error,
+            "bill_of_material":material_error
+        }
+        errors = { key : value for key, value in errors.items() if value}
+        if errors:
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+      
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        # update BOM
+        new_bom_data = update_multi_instances(self, pk, [bom_data], BOM, BOMSerializer, [], main_model_related_field='bom_id', current_model_pk_field='bom_id')[0]
+
+        # Update the 'BillOfMaterials'
+        new_material_data = update_multi_instances(self, pk, material_data, BillOfMaterials, BillOfMaterialsSerializer, {'bom_id':pk}, main_model_related_field='bom_id', current_model_pk_field='material_id')
+
+        custom_data = {
+            "bom" : new_bom_data,
+            "bill_of_material" : new_material_data
+        }
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)

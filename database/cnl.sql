@@ -2073,6 +2073,18 @@ CREATE TABLE IF NOT EXISTS asset_maintenance (
 );
 
 /* ======== Manufacturing/Production ======== */
+
+CREATE TABLE IF NOT EXISTS bom (
+    bom_id CHAR(36) PRIMARY KEY,
+    bom_name VARCHAR(100) NOT NULL,
+    product_id CHAR(36),
+    quantity INT NOT NULL DEFAULT 1,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    ); 
+
 CREATE TABLE IF NOT EXISTS raw_materials (
    raw_material_id  CHAR(36) PRIMARY KEY,
    name VARCHAR(255) NOT NULL,
@@ -2124,15 +2136,22 @@ CREATE TABLE IF NOT EXISTS work_order_stages (
 /* Bill of Materials (BOM) Table */
 -- Stores the list of materials and components required to produce each product.
 CREATE TABLE IF NOT EXISTS bill_of_materials (
-  bom_id CHAR(36) PRIMARY KEY,
-  product_id CHAR(36),
-  component_name VARCHAR(100),
-  quantity_required DECIMAL(10,2),
-  order_id CHAR(36),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(product_id)
-);
+    material_id CHAR(36) PRIMARY KEY,
+    bom_id   CHAR(36),
+    product_id  CHAR(36),
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    unit_cost DECIMAL(10, 2) NOT NULL,
+    total_cost DECIMAL(10, 2) NOT NULL,
+    notes TEXT,  
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	FOREIGN KEY (bom_id) REFERENCES bom(bom_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
+    );
 
 /* Machines Table */
 -- Stores information about the machines used in production.
