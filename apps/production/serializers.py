@@ -4,10 +4,6 @@ from apps.products.serializers import ModColorSerializer, ModproductsSerializer,
 from apps.hrms.serializers import ModEmployeesSerializer
 from apps.sales.serializers import ModFlowstatusSerializer
 
-class ModBOMSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BOM
-        fields = ['bom_id','bom_name']
 
 class ModProductionStatusSerializer(serializers.ModelSerializer):
     class Meta:
@@ -38,7 +34,6 @@ class BOMSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class BillOfMaterialsSerializer(serializers.ModelSerializer):
-    bom = ModBOMSerializer(source='bom_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
     size = ModSizeSerializer(source='size_id',read_only=True)
     color = ModColorSerializer(source='color_id',read_only=True)

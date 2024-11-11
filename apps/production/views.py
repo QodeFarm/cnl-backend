@@ -225,7 +225,7 @@ class WorkOrderAPIView(APIView):
             work_order = WorkOrderSerializer(instance)
 
             # Retrieve related data
-            bom_data = get_related_data(BillOfMaterials, BillOfMaterialsSerializer, 'order_id', pk)
+            bom_data = get_related_data(BillOfMaterials, BillOfMaterialsSerializer, 'reference_id', pk)
             machines_data = get_related_data(WorkOrderMachine, WorkOrderMachineSerializer, 'work_order_id', pk)
             workers_data = get_related_data(ProductionWorker, ProductionWorkerSerializer, 'work_order_id', pk)
             stages_data = get_related_data(WorkOrderStage, WorkOrderStageSerializer, 'work_order_id', pk)
@@ -258,8 +258,7 @@ class WorkOrderAPIView(APIView):
             instance = WorkOrder.objects.get(pk=pk)
 
             # Delete related BillOfMaterials.
-            if not delete_multi_instance(pk, WorkOrder, BillOfMaterials, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related BillOfMaterials", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            BillOfMaterials.objects.filter(reference_id=pk).delete()
 
             # Delete the main WorkOrder instance
             instance.delete()
@@ -298,7 +297,7 @@ class WorkOrderAPIView(APIView):
         # Validated BillOfMaterial Data
         bom_data = given_data.pop('bom', None)
         if bom_data:
-            bom_error = validate_multiple_data(self, bom_data, BillOfMaterialsSerializer, ['work_order_id'])
+            bom_error = validate_multiple_data(self, bom_data, BillOfMaterialsSerializer, ['reference_id'])
         else:
             bom_error = []
 
@@ -346,27 +345,15 @@ class WorkOrderAPIView(APIView):
         """
         After the data is validated, this validated data is created as new instances.
         """
-
         # Hence the data is validated , further it can be created.
-
-        # get default status_id
-        '''
-        try:
-            status_name = ProductionStatus.objects.get(status_name='work in progress')
-            status_id = status_name.status_id
-        except ProductionStatus.DoesNotExist:
-            return build_response(0, "No matching status found.", status.HTTP_400_BAD_REQUEST)
-        '''
-
         # Create WorkOrder Data
-        # update_fields = {'status_id': status_id}
         order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, {})
         new_work_order_data = order_data[0]
         work_order_id = new_work_order_data.get("work_order_id",None) #Fetch work_order_id from mew instance
         logger.info('WorkOrder - created*')
  
         # Create BillOfMaterials Data
-        update_fields = {'order_id': work_order_id}
+        update_fields = {'reference_id': work_order_id}
         bom_data = generic_data_creation(self, bom_data, BillOfMaterialsSerializer, update_fields)
         logger.info('BillOfMaterials - created*')
 
@@ -416,7 +403,7 @@ class WorkOrderAPIView(APIView):
         # Validated BillOfMaterial Data
         bom_data = given_data.pop('bom', None)
         if bom_data:
-            bom_error = validate_put_method_data(self, bom_data, BillOfMaterialsSerializer, [], BillOfMaterials, current_model_pk_field='bom_id')
+            bom_error = validate_put_method_data(self, bom_data, BillOfMaterialsSerializer,['reference_id'], BillOfMaterials, current_model_pk_field='material_id')
         else:
             bom_error = []
 
@@ -467,8 +454,8 @@ class WorkOrderAPIView(APIView):
         product_id = work_order_data.get('product_id',None)            
 
         # Update the 'BillOfMaterials'
-        update_fields = {'order_id':pk}
-        bom_data = update_multi_instances(self, pk, bom_data, BillOfMaterials, BillOfMaterialsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='bom_id')
+        update_fields = {'reference_id':pk}
+        bom_data = update_multi_instances(self, pk, bom_data, BillOfMaterials, BillOfMaterialsSerializer, update_fields, main_model_related_field='reference_id', current_model_pk_field='material_id')
 
         # Update the 'WorkOrderMachineSerializer'
         update_fields = {'work_order_id':pk}
@@ -548,7 +535,7 @@ class BOMView(APIView):
             bom = BOMSerializer(instance)
 
             # Retrieve related data
-            material_data = get_related_data(BillOfMaterials, BillOfMaterialsSerializer, 'bom_id', pk)
+            material_data = get_related_data(BillOfMaterials, BillOfMaterialsSerializer, 'reference_id', pk)
 
             # Customizing the response data
             custom_data = {
@@ -573,6 +560,9 @@ class BOMView(APIView):
         try:
             # Get the BOM instance
             instance = BOM.objects.get(pk=pk)
+
+            # Delete the Child table instances from 'bill of materials'.
+            BillOfMaterials.objects.filter(reference_id=pk).delete()
 
             # Delete the main WorkOrder instance
             instance.delete()
@@ -615,7 +605,7 @@ class BOMView(APIView):
         # Validated BillOfMaterial Data
         material_data = given_data.pop('bill_of_material', None)
         if material_data:
-            material_error = validate_multiple_data(self, material_data, BillOfMaterialsSerializer, ['bom_id'])
+            material_error = validate_multiple_data(self, material_data, BillOfMaterialsSerializer, ['reference_id'])
         else:
             material_error = []
 
@@ -634,11 +624,11 @@ class BOMView(APIView):
         """
         # Create BOM Data
         new_bom_data = generic_data_creation(self, [bom_data], BOMSerializer, {})[0]
-        bom_id = new_bom_data.get("bom_id",None) #Fetch bom_id from mew instance
+        reference_id = new_bom_data.get("bom_id",None) #Fetch 'bom_id' as 'reference_id' from mew instance
         logger.info('BOM - created*')
  
         # Create BillOfMaterials Data
-        new_material_data = generic_data_creation(self, material_data, BillOfMaterialsSerializer, {'bom_id': bom_id})
+        new_material_data = generic_data_creation(self, material_data, BillOfMaterialsSerializer, {'reference_id': reference_id})
         logger.info('BillOfMaterials - created*')
        
         custom_data = {
@@ -674,8 +664,7 @@ class BOMView(APIView):
         material_data = given_data.pop('bill_of_material', [])
         material_error = []
         if material_data:
-            material_error = validate_put_method_data(self, material_data, BillOfMaterialsSerializer, {'bom_id':pk}, BillOfMaterials, current_model_pk_field='material_id')
-
+            material_error = validate_multiple_data(self, material_data, BillOfMaterialsSerializer,['reference_id'])
         errors = {
             "bom":bom_error,
             "bill_of_material":material_error
@@ -689,7 +678,7 @@ class BOMView(APIView):
         new_bom_data = update_multi_instances(self, pk, [bom_data], BOM, BOMSerializer, [], main_model_related_field='bom_id', current_model_pk_field='bom_id')[0]
 
         # Update the 'BillOfMaterials'
-        new_material_data = update_multi_instances(self, pk, material_data, BillOfMaterials, BillOfMaterialsSerializer, {'bom_id':pk}, main_model_related_field='bom_id', current_model_pk_field='material_id')
+        new_material_data = update_multi_instances(self, pk, material_data, BillOfMaterials, BillOfMaterialsSerializer, {'reference_id':pk}, main_model_related_field='reference_id', current_model_pk_field='material_id')
 
         custom_data = {
             "bom" : new_bom_data,

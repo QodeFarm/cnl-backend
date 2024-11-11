@@ -2137,7 +2137,6 @@ CREATE TABLE IF NOT EXISTS work_order_stages (
 -- Stores the list of materials and components required to produce each product.
 CREATE TABLE IF NOT EXISTS bill_of_materials (
     material_id CHAR(36) PRIMARY KEY,
-    bom_id   CHAR(36),
     product_id  CHAR(36),
     size_id CHAR(36) NULL,
     color_id CHAR(36) NULL,
@@ -2145,9 +2144,9 @@ CREATE TABLE IF NOT EXISTS bill_of_materials (
     unit_cost DECIMAL(10, 2) NOT NULL,
     total_cost DECIMAL(10, 2) NOT NULL,
     notes TEXT,  
+    reference_id CHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-	FOREIGN KEY (bom_id) REFERENCES bom(bom_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
     FOREIGN KEY (size_id) REFERENCES sizes(size_id),
     FOREIGN KEY (color_id) REFERENCES colors(color_id)

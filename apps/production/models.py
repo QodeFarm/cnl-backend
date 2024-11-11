@@ -37,7 +37,7 @@ class BOM(models.Model):
 
 class BillOfMaterials(models.Model):
     material_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    bom_id = models.ForeignKey(BOM, on_delete=models.CASCADE, db_column='bom_id')
+    reference_id = models.CharField(max_length=36, null=False)
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')
@@ -49,10 +49,11 @@ class BillOfMaterials(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = billofmaterials
+        # db_table = billofmaterials
+        db_table = 'bill_of_materials_2'
 
     def __str__(self):
-        return f"{self.bom_id}"
+        return f"{self.material_id}"
 
 class ProductionStatus(models.Model):
     status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
