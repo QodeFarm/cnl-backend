@@ -49,8 +49,7 @@ class BillOfMaterials(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # db_table = billofmaterials
-        db_table = 'bill_of_materials_2'
+        db_table = billofmaterials
 
     def __str__(self):
         return f"{self.material_id}"
