@@ -443,12 +443,13 @@ class SaleOrderViewSet(APIView):
 
         # Vlidated OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
-        if order_shipments_data:
+        if len(order_shipments_data) > 1 :  #handling validation error for shipments
             shipments_error = validate_multiple_data(
                 self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'])
         else:
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
+            order_shipments_data = {} #handling validation error for shipments
 
         # Ensure mandatory data is present
         if not sale_order_data or not sale_order_items_data:
@@ -2539,7 +2540,7 @@ class SaleDebitNoteViewset(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-#workflow stages (MoveToNextStages)
+#workflow stages (MoveToNextStages) Added new logic for this
 # class MoveToNextStageGenericView(APIView):
 #     """
 #     API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) to the next stage in its workflow.

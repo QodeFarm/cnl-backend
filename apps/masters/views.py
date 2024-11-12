@@ -486,35 +486,55 @@ class OrderTypesView(viewsets.ModelViewSet):
 @api_view(['GET'])
 def generate_order_number_view(request):
     """
-    API endpoint to generate an order number based on the given type.
-
-    Args:
-        request (HttpRequest): The request object containing the query parameter 'type'.
-
-    Returns:
-        Response: A JSON response containing the generated order number or an error message.
+    API endpoint to fetch the next order number based on the given type.
+    The sequence is only incremented when a record is successfully created.
     """
     order_type_prefix = request.GET.get('type')
-    
+
     if not order_type_prefix:
         return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     order_type_prefix = order_type_prefix.upper()
     valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
-    
+
     if order_type_prefix not in valid_prefixes:
         return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
-        order_number = generate_order_number(order_type_prefix)
+        # Get the next order number without incrementing
+        order_number = get_next_order_number(order_type_prefix)
         response_data = {
-            'count': 1,
-            'msg': None,
+            'msg': 'Next available order number (reserved but not yet saved)',
             'data': {'order_number': order_number}
         }
         return Response(response_data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def get_next_order_number(order_type_prefix):
+    """
+    Get the next order number without incrementing the sequence.
+
+    Args:
+        order_type_prefix (str): The prefix for the order type.
+
+    Returns:
+        str: The next order number.
+    """
+    if order_type_prefix == "PRD":
+        key = f"{order_type_prefix}"
+        sequence_number = cache.get(key, 0)
+        sequence_number_str = f"{sequence_number + 1:05d}"
+        return f"{order_type_prefix}-{sequence_number_str}"
+
+    # For date-based prefixes
+    current_date = timezone.now()
+    date_str = current_date.strftime('%y%m')
+    key = f"{order_type_prefix}-{date_str}"
+    sequence_number = cache.get(key, 0)
+    sequence_number_str = f"{sequence_number + 1:05d}"  # +1 for the next number
+    return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+
     
 class TaskPrioritiesViewSet(viewsets.ModelViewSet):
     queryset = TaskPriorities.objects.all()

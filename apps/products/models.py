@@ -242,7 +242,32 @@ class Products(OrderNumberMixin):
         db_table = productstable
 
     def __str__(self):
-        return f"{self.name}"   
+        return f"{self.name}"
+
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)   
 
 class Size(models.Model):
     size_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
