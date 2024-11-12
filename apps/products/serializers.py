@@ -132,6 +132,15 @@ class ModproductsSerializer(serializers.ModelSerializer):
         model = Products
         fields = ['product_id','name', 'code']
 
+class ModSizeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Size
+        fields = ['size_id','size_name']
+
+class ModColorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Color
+        fields = ['color_id','color_name']
 #--------------------------------------------------------------
 class PictureSerializer(serializers.Serializer):
     uid = serializers.CharField(max_length=255)

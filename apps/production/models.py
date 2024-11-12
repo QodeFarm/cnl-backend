@@ -1,6 +1,6 @@
 from django.db import models
-from config.utils_variables import billofmaterials, productionstatuses, workorders, machines, rawmaterials, workorderstages, productionworkers, defaultmachinery, workordermachines
-from apps.products.models import Products
+from config.utils_variables import bom, billofmaterials, productionstatuses, workorders, machines, rawmaterials, workorderstages, productionworkers, defaultmachinery, workordermachines
+from apps.products.models import Color, Products, Size
 from apps.hrms.models import Employees
 from apps.sales.models import SaleOrder
 # Create your models here.
@@ -20,12 +20,31 @@ class RawMaterial(models.Model):
     def __str__(self):
         return self.name
 
-class BillOfMaterials(models.Model): # verified
+class BOM(models.Model):
     bom_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.SET_NULL, null=True, db_column='product_id')
-    component_name = models.CharField(max_length=100, null=True, default=None)
-    quantity_required = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
-    order_id = models.CharField(max_length=36, null=True, default=None)
+    bom_name = models.CharField(max_length=100)
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, null=False, default=1)
+    notes = models.TextField(default=None, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = bom
+
+    def __str__(self):
+        return f"{self.bom_name}"
+
+class BillOfMaterials(models.Model):
+    material_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    reference_id = models.CharField(max_length=36, null=False)
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')
+    quantity = models.IntegerField(default=0)
+    unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    notes = models.TextField(default=None, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -33,7 +52,7 @@ class BillOfMaterials(models.Model): # verified
         db_table = billofmaterials
 
     def __str__(self):
-        return f'{self.component_name}'
+        return f"{self.material_id}"
 
 class ProductionStatus(models.Model):
     status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
