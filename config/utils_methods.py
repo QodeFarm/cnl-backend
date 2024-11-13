@@ -194,6 +194,38 @@ class OrderNumberMixin(models.Model):
         if not getattr(self, self.order_no_field):
             setattr(self, self.order_no_field, generate_order_number(self.order_no_prefix))
         super().save(*args, **kwargs)
+
+def increment_order_number(order_type_prefix):
+    """
+    Generate and increment an order number based on the given prefix and the current date.
+
+    Args:
+        order_type_prefix (str): The prefix for the order type.
+
+    Returns:
+        str: The generated order number.
+    """
+    # Handle prefixes without date-based sequences (e.g., PRD)
+    if order_type_prefix == "PRD":
+        key = f"{order_type_prefix}"
+        sequence_number = cache.get(key, 0)
+        sequence_number += 1
+        cache.set(key, sequence_number, timeout=None)
+
+        sequence_number_str = f"{sequence_number:05d}"
+        return f"{order_type_prefix}-{sequence_number_str}"
+
+    # Handle date-based sequences (e.g., SO-INV, SO, SHIP, etc.)
+    current_date = timezone.now()
+    date_str = current_date.strftime('%y%m')
+
+    key = f"{order_type_prefix}-{date_str}"
+    sequence_number = cache.get(key, 0) + 1
+    cache.set(key, sequence_number, timeout=None)
+
+    sequence_number_str = f"{sequence_number:05d}"
+    return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+
 #======================================================================================================
 #It removes fields from role_permissions for sending Proper data to frontend team after successfully login
 def remove_fields(obj):

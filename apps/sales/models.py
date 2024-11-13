@@ -6,9 +6,10 @@ from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, C
 from apps.products.models import Products, Size, Color
 from apps.users.models import ModuleSections
 from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems
-from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id
+from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id, generate_order_number
 import logging
 from django.core.exceptions import ObjectDoesNotExist
+
 # Create your models here.
 
 
@@ -66,16 +67,17 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         db_table = saleorders
         
     def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+
+        # Determine if this is a new record based on the `_state.adding` property
+        is_new_record = self._state.adding
+
         # Set the order status to "Pending" if not already set
         if not self.order_status_id:
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
-        print("Save method called")
-        print(f"self.pk: {self.pk}")
-        print(f"self.flow_status_id before assignment: {self.flow_status_id}")
-
         # Only assign the flow_status_id when creating a new sale order
-        if not self.pk or self.flow_status_id is None:  # Check if it's a new order or if flow_status_id is None
+        if is_new_record or self.flow_status_id is None:  # Check if it's a new order or if flow_status_id is None
             try:
                 print("Assigning flow_status_id to the first stage...")
 
@@ -104,7 +106,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             except Exception as e:
                 print(f"Error during SaleOrder save: {str(e)}")
 
-    # Check if flow_status_id is set to "Completed"
+        # Check if flow_status_id is set to "Completed"
         try:
             # Assuming the "Completed" status has a specific name or identifier in FlowStatus
             completed_status = FlowStatus.objects.get(flow_status_name="Completed")
@@ -117,8 +119,22 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         except ObjectDoesNotExist:
             print("Completed flow status or order status does not exist")
 
-        # Proceed with saving the object
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
         super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
 
 class SalesPriceList(models.Model): #required fields are updated
     sales_price_list_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -209,10 +225,30 @@ class SaleInvoiceOrders(OrderNumberMixin):
         return str(self.sale_invoice_id)
     
     def save(self, *args, **kwargs):
-        if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='In Progress')[0]
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
         super().save(*args, **kwargs)
-    
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
+
     
 class PaymentTransactions(models.Model): #required fields are updated
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -314,9 +350,33 @@ class SaleReturnOrders(OrderNumberMixin):
         return str(self.sale_return_id)
     
     def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Ensure the order status is set if not already set
         if not self.order_status_id:
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
         super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
     
 class SaleReturnItems(models.Model):
     sale_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -386,6 +446,31 @@ class OrderShipments(OrderNumberMixin):
 
     def __str__(self):
         return self.shipment_id
+    
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
 
 class QuickPacks(models.Model):
     quick_pack_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -486,10 +571,33 @@ class SaleCreditNotes(OrderNumberMixin):
         db_table = salecreditnote
         
     def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Ensure the order status is set if not already set
         if not self.order_status_id:
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
         super().save(*args, **kwargs)
 
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
     
 class SaleCreditNoteItems(models.Model):
     credit_note_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -530,9 +638,33 @@ class SaleDebitNotes(OrderNumberMixin):
         db_table = saledebitnote
         
     def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Ensure the order status is set if not already set
         if not self.order_status_id:
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
         super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
 
     
 class SaleDebitNoteItems(models.Model):

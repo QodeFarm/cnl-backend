@@ -1394,7 +1394,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     purchase_order_id CHAR(36) PRIMARY KEY,
 	purchase_type_id CHAR(36),
 	order_date DATE NOT NULL,
-	order_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: PO-2406-00001
+	order_no VARCHAR(20),  -- ex pattern: PO-2406-00001
     gst_type_id CHAR(36),
     vendor_id CHAR(36) NOT NULL,
     email VARCHAR(255),
@@ -1464,7 +1464,7 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_orders (
     purchase_invoice_id CHAR(36) PRIMARY KEY,
 	purchase_type_id CHAR(36),
 	invoice_date DATE NOT NULL,
-    invoice_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: PO-INV-2406-00001
+    invoice_no VARCHAR(20),  -- ex pattern: PO-INV-2406-00001
     gst_type_id CHAR(36),
     vendor_id CHAR(36) NOT NULL,
     email VARCHAR(255),
@@ -1536,7 +1536,7 @@ CREATE TABLE IF NOT EXISTS purchase_return_orders (
     purchase_return_id CHAR(36) PRIMARY KEY,
 	purchase_type_id CHAR(36),
 	return_date DATE NOT NULL,
-    return_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: PR-2406-00001
+    return_no VARCHAR(20),  -- ex pattern: PR-2406-00001
     gst_type_id CHAR(36),
     vendor_id CHAR(36) NOT NULL,
     email VARCHAR(255),
