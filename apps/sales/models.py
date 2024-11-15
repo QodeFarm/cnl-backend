@@ -65,6 +65,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     
     class Meta:
         db_table = saleorders
+        ordering = ['-created_at', '-updated_at']
         
     def save(self, *args, **kwargs):
         from apps.masters.views import increment_order_number
@@ -220,6 +221,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
 
     class Meta:
         db_table = saleinvoiceorderstable
+        ordering = ['-created_at', '-updated_at']
 
     def __str__(self):
         return str(self.sale_invoice_id)
@@ -345,6 +347,7 @@ class SaleReturnOrders(OrderNumberMixin):
 
     class Meta:
         db_table = salereturnorderstable
+        ordering = ['-created_at', '-updated_at']
 
     def __str__(self):
         return str(self.sale_return_id)

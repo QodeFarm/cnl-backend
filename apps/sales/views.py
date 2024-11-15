@@ -286,32 +286,31 @@ class SaleOrderViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Sale order summary")
-                saleorders = SaleOrder.objects.all()
+                saleorders = SaleOrder.objects.all().order_by('-created_at', '-updated_at')
                 data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
                 return Response(data, status=status.HTTP_200_OK)
 
-            logger.info("Retrieving all sale order")
+            logger.info("Retrieving all sale orders")
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleOrder.objects.all()
+            queryset = SaleOrder.objects.all().order_by('-created_at', '-updated_at')
 
             # Apply filters manually
             if request.query_params:
                 filterset = SaleOrderFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
-                    queryset = filterset.qs   
+                    queryset = filterset.qs
 
-            total_count = SaleOrder.objects.count()
-        
+            total_count = queryset.count()
+            
             serializer = SaleOrderOptionsSerializer(queryset, many=True)
-            logger.info("sale order data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            logger.info("Sale order data retrieved successfully.")
+            return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -648,7 +647,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale invoice order summary")
-                saleinvoiceorder = SaleInvoiceOrders.objects.all()
+                saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('-created_at', '-updated_at')
                 data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
@@ -657,7 +656,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleInvoiceOrders.objects.all()
+            queryset = SaleInvoiceOrders.objects.all().order_by('-created_at', '-updated_at')
 
             # Apply filters manually
             if request.query_params:
@@ -991,7 +990,7 @@ class SaleReturnOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale return orders summary")
-                salereturnorders = SaleReturnOrders.objects.all()
+                salereturnorders = SaleReturnOrders.objects.all().order_by('-created_at', '-updated_at')
                 data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
@@ -1000,7 +999,7 @@ class SaleReturnOrdersViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
             
-            queryset = SaleReturnOrders.objects.all()
+            queryset = SaleReturnOrders.objects.all().order_by('-created_at', '-updated_at')
 
             # Apply filters manually
             if request.query_params:
@@ -2544,9 +2543,11 @@ class SaleDebitNoteViewset(APIView):
 class MoveToNextStageGenericView(APIView):
     """
     API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) to the next stage in its workflow.
+    It also supports updating specific fields on the object using the PATCH method.
     """
 
     def post(self, request, module_name, object_id):
+        # Existing code for the sequential stage progression...
         try:
             # Dynamically load the model based on module_name
             ModelClass = self.get_model_class(module_name)
@@ -2603,6 +2604,39 @@ class MoveToNextStageGenericView(APIView):
                 }, status=status.HTTP_200_OK)
             else:
                 return Response({"message": f"{module_name} has reached the final stage."}, status=status.HTTP_200_OK)
+
+        except ModelClass.DoesNotExist:
+            return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def patch(self, request, module_name, object_id):
+        """
+        Partially update the object's fields, including setting a specific flow status.
+        """
+        try:
+            # Dynamically load the model based on module_name
+            ModelClass = self.get_model_class(module_name)
+            if not ModelClass:
+                return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch the object from the appropriate model
+            obj = ModelClass.objects.get(pk=object_id)
+            print(f"Updating fields for: {module_name} with ID {object_id}")
+
+            # Update fields with the data from the request
+            for field, value in request.data.items():
+                if hasattr(obj, field):
+                    setattr(obj, field, value)
+                    print(f"Updated {field} to {value}")
+
+            # Save the updated object
+            obj.save()
+
+            return Response({
+                "message": f"{module_name} partially updated successfully.",
+                "updated_fields": request.data
+            }, status=status.HTTP_200_OK)
 
         except ModelClass.DoesNotExist:
             return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
