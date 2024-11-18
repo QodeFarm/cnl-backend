@@ -70,13 +70,36 @@ class ProductionStatus(models.Model):
 class WorkOrder(models.Model):
     work_order_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
-    quantity = models.DecimalField(max_digits=10, decimal_places=2)
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')    
+    quantity =  models.IntegerField(default=0)
+    completed_qty = models.IntegerField(null=True, default=0)
+    pending_qty = models.IntegerField(null=True, default=0, editable=False)
     status_id = models.ForeignKey(ProductionStatus, on_delete=models.CASCADE, null=True, default=None, db_column='status_id')
     start_date = models.DateField(null=True, default=None)
     end_date = models.DateField(null=True, default=None)
     sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.CASCADE, db_column='sale_order_id', null=True, default=None)
+    sync_qty = models.BooleanField(null=False, default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # Ensure completed_qty is always valid
+        self.completed_qty = self.completed_qty or 0
+
+        if self.completed_qty == 0 and self.pending_qty ==0: # Inital record creation stage
+            self.pending_qty = self.quantity
+        # Calculate pending_qty
+        if self.sync_qty:
+            # Calculate pending_qty based on completed_qty
+            self.pending_qty = self.pending_qty - self.completed_qty
+
+            # Reset sync flag after recalculation
+            self.sync_qty = False
+
+        # Call the parent save method
+        super().save(*args, **kwargs)
+            
 
     class Meta:
         db_table = workorders

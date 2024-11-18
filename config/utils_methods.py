@@ -472,44 +472,57 @@ def get_related_data(model, serializer_class, filter_field, filter_value):
         logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
         return []
 
-def product_stock_verification(parent_model, child_model, data): # In case of creation of Invoice for Product(s).
+def product_stock_verification(parent_model, child_model, data):
     """
-    Verifies if sufficient stock is available for the product when a SaleOrder is being created.
+    Verifies if sufficient stock is available for the product when a Sale/Purchase/work Order is being created.
     Raises a ValidationError if the product's available stock is less than the quantity being ordered.
     """
-    stock_error = {}
-    for item in data:
-        product = item.get('product_id',None)
-        size = item.get('size_id',None)
-        color = item.get('color_id',None)
-        order_qty = item.get('quantity',None)
-
-        # Verify the Product
-        product_balance = parent_model.objects.get(product_id=product).balance
-        if product_balance == 0:
-            return build_response(0, f"Product with ID :'{product}' is Out Of Stock.", [], status.HTTP_400_BAD_REQUEST)
+    def assign_error(balance, order_qty, stock_error, product):
+        # Ensure balance is an integer and order_qty is also an integer
+        if balance <= 0:
+            stock_error[f'{product}'] = f"Product with ID :'{product}' is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
         
-        # Verify if no of variations are zero , confirm if it is a direct product.
-        product_variation_instance = child_model.objects.filter(product_id=product).exists()
+        # Validate if the order_qty is greater than the available stock balance
+        elif int(order_qty) > balance:
+            stock_error[f'{product}'] = f'Insufficient stock for this product. Available: {balance}, Ordered: {order_qty}'
+    
+    stock_error = {}
+    
+    for item in data:
+        product = item.get('product_id', None)
+        size = item.get('size_id', None)
+        color = item.get('color_id', None)
+        order_qty = item.get('quantity', None)
 
-        # Verify the Product Varition
         try:
-            product_variation = child_model.objects.get(
-                product_id=product,
-                size_id=size,
-                color_id=color
-            )
-            available_stock = product_variation.quantity
-        except child_model.DoesNotExist:
-            pass
+            # Verify if product has variations
+            variations = child_model.objects.filter(product_id=product)
+            if not variations.exists():  # Check if variations are not present
+                # Verify the Main Product (Direct Product)
+                product_balance = parent_model.objects.get(product_id=product).balance
+                logger.info('product_balance = %s', product_balance)
+                
+                # Call the error handling function if stock is insufficient
+                assign_error(product_balance, order_qty, stock_error, product)
 
-        if product_variation_instance:
-            logger.info(f'if: {product} : {available_stock}')
-            if int(order_qty) > int(available_stock):
-                stock_error[f'{product}'] = 'Insufficient stock for this product variant.'
-        else:
-            if int(order_qty) > int(product_balance):
-                stock_error[f'{product}'] = 'Insufficient stock for this product.'            
+            else:
+                # Get the product variation (assuming only one variation exists for the combination)
+                product_variation = child_model.objects.get(
+                    product_id=product,
+                    size_id=size,
+                    color_id=color
+                )
+                
+                # Validate the variation quantity
+                assign_error(product_variation.quantity, order_qty, stock_error, product)
+
+        except parent_model.DoesNotExist:
+            logger.error(f'Product with ID {product} not found in Products model.')
+        except child_model.DoesNotExist:
+            logger.error(f'Variation with product_id {product}, size_id {size}, color_id {color} not found in Product Variations.')
+        except Exception as e:
+            logger.error(f'Unexpected error: {str(e)}')
+
     return stock_error
 
 def previous_product_instance_verification(model_name, data): # In case of Product Return

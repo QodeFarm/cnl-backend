@@ -2108,14 +2108,21 @@ CREATE TABLE IF NOT EXISTS production_statuses (
 CREATE TABLE IF NOT EXISTS work_orders (
     work_order_id CHAR(36) PRIMARY KEY,
     product_id CHAR(36),
-    quantity DECIMAL(10, 2),
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,    
+    quantity INT NOT NULL DEFAULT 0,
+    completed_qty INT NULL DEFAULT 0,
+    pending_qty INT NULL DEFAULT 0,
     status_id CHAR(36),
     start_date DATE,
     end_date DATE,
     sale_order_id CHAR(36) DEFAULT NULL,
+    sync_qty BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id),  
     FOREIGN KEY (status_id) REFERENCES production_statuses(status_id),
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id)
 );
