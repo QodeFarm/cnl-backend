@@ -457,6 +457,7 @@ class EmployeeView(APIView):
         # Validated Employees Data
         employee_data = given_data.pop('employee', None)
         if employee_data:
+            employee_data['employee_id'] = pk
             employee_error = validate_payload_data(self, employee_data , EmployeesSerializer)
 
         # Validated EmployeeDetails Data
