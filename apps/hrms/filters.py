@@ -151,7 +151,7 @@ class LeaveApprovalsFilter(filters.FilterSet):
     comments = filters.CharFilter(lookup_expr='icontains') 
     status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
     leave_id = filters.CharFilter(field_name='leave_id__comments', lookup_expr='icontains')
-    approver_id = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
+    approver_id = filters.CharFilter(field_name='approver_id__first_name', lookup_expr='icontains')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     search = filters.CharFilter(method='filter_by_search', label="Search")
