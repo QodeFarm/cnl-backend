@@ -140,7 +140,7 @@ class ModStatusSerializer(serializers.ModelSerializer):
 class ModEmployeeLeavesSerializer(serializers.ModelSerializer):
     class Meta:
         model = EmployeeLeaves
-        fields = ['leave_id','start_date','end_date']
+        fields = ['leave_id','start_date','end_date', 'comments']
 		
 class EmployeeLeavesSerializer(serializers.ModelSerializer):
     status = ModStatusSerializer(source='status_id', read_only=True)

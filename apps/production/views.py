@@ -10,8 +10,10 @@ from rest_framework.filters import OrderingFilter
 from apps.production.filters import BOMFilter, MaterialFilter, WorkOrderFilter
 from config.utils_filter_methods import filter_response
 from .models import *
+from apps.products.models import Products, ProductVariation
+from apps.products.serializers import ProductVariationSerializer, productsSerializer
 from .serializers import *
-from config.utils_methods import build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
+from config.utils_methods import build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -341,6 +343,12 @@ class WorkOrderAPIView(APIView):
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
 
+        # Stock Verification
+        if bom_data:
+            stock_error = product_stock_verification(Products, ProductVariation, bom_data)
+            if stock_error:
+                return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)                
+
         #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -349,7 +357,7 @@ class WorkOrderAPIView(APIView):
         # Create WorkOrder Data
         order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, {})
         new_work_order_data = order_data[0]
-        work_order_id = new_work_order_data.get("work_order_id",None) #Fetch work_order_id from mew instance
+        work_order_id = new_work_order_data.get("work_order_id", None) #Fetch work_order_id from mew instance
         logger.info('WorkOrder - created*')
  
         # Create BillOfMaterials Data
@@ -368,7 +376,7 @@ class WorkOrderAPIView(APIView):
 
         # create WorkOrderStage Data
         stages_data = generic_data_creation(self, stages_data, WorkOrderStageSerializer, update_fields)
-        # logger.info('WorkOrderStage - created*')        
+        logger.info('WorkOrderStage - created*')      
 
         custom_data = {
             "work_order":new_work_order_data,
@@ -377,6 +385,11 @@ class WorkOrderAPIView(APIView):
             "workers":workers_data,
             "work_order_stages":stages_data
         }
+
+        # Update Product Stock
+        update_product_stock(Products, ProductVariation, bom_data, 'subtract')
+        logger.info('Stock Updated Successfully.')
+
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
     def put(self, request, *args, **kwargs):
