@@ -35,12 +35,13 @@ logger = logging.getLogger(__name__)
 
 
 class SaleOrderView(viewsets.ModelViewSet):
-    queryset = SaleOrder.objects.all()
+    queryset = SaleOrder.objects.all().order_by('-created_at')
     serializer_class = SaleOrderSerializer
-    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SaleOrderFilter
     ordering_fields = ['num_employees', 'created_at', 'updated_at', 'name']
-
+    ordering = ['-created_at']
+    
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
@@ -289,7 +290,7 @@ class SaleOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving Sale order summary")
-                saleorders = SaleOrder.objects.all()
+                saleorders = SaleOrder.objects.all().order_by('-created_at')
                 data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
                 return Response(data, status=status.HTTP_200_OK)
 
@@ -298,7 +299,7 @@ class SaleOrderViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleOrder.objects.all()
+            queryset = SaleOrder.objects.all().order_by('-created_at')
 
             # Apply filters manually
             if request.query_params:
