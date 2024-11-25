@@ -51,10 +51,19 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     size = ModSizeSerializer(source='size_id',read_only=True)
     color = ColorSerializer(source='color_id',read_only=True)    
     status = ModProductionStatusSerializer(source='status_id', read_only=True)
+    pending_qty = serializers.SerializerMethodField()
+
     class Meta:
         model = WorkOrder
         fields = '__all__'
-        read_only_fields = ['pending_qty']
+    
+    def get_pending_qty(self, obj):
+        return obj.quantity - obj.completed_qty
+
+class CompletedQuantitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompletedQuantity
+        fields = '__all__'
 
 class MachineSerializer(serializers.ModelSerializer):
     class Meta:
