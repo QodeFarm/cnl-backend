@@ -35,12 +35,11 @@ logger = logging.getLogger(__name__)
 
 
 class SaleOrderView(viewsets.ModelViewSet):
-    queryset = SaleOrder.objects.all().order_by('-created_at')
+    queryset = SaleOrder.objects.all()
     serializer_class = SaleOrderSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SaleOrderFilter
     ordering_fields = ['num_employees', 'created_at', 'updated_at', 'name']
-    ordering = ['-created_at']
     
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -649,7 +648,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale invoice order summary")
-                saleinvoiceorder = SaleInvoiceOrders.objects.all()
+                saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('-created_at')
                 data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
@@ -658,7 +657,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleInvoiceOrders.objects.all()
+            queryset = SaleInvoiceOrders.objects.all().order_by('-created_at')
 
             # Apply filters manually
             if request.query_params:
@@ -992,7 +991,7 @@ class SaleReturnOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale return orders summary")
-                salereturnorders = SaleReturnOrders.objects.all()
+                salereturnorders = SaleReturnOrders.objects.all().order_by('-created_at')
                 data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
@@ -1001,7 +1000,7 @@ class SaleReturnOrdersViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
             
-            queryset = SaleReturnOrders.objects.all()
+            queryset = SaleReturnOrders.objects.all().order_by('-created_at')
 
             # Apply filters manually
             if request.query_params:
