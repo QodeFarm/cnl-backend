@@ -148,12 +148,11 @@ class PurchaseOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase order summary")
-                purchaseorders = PurchaseOrders.objects.all()
+                purchaseorders = PurchaseOrders.objects.all().order_by('-created_at', '-updated_at')
                 data = PurchaseOrdersOptionsSerializer.get_purchase_orders_summary(purchaseorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
-            instance = PurchaseOrders.objects.all()
-
+            instance = PurchaseOrders.objects.all().order_by('-created_at', '-updated_at')
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
             total_count = PurchaseOrders.objects.count()
@@ -482,11 +481,11 @@ class PurchaseInvoiceOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase Invoice orders summary")
-                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all()
+                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all().order_by('-created_at', '-updated_at')
                 data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
-            instance = PurchaseInvoiceOrders.objects.all()
+            instance = PurchaseInvoiceOrders.objects.all().order_by('-created_at', '-updated_at')
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
@@ -822,11 +821,11 @@ class PurchaseReturnOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase return orders summary")
-                purchasereturnorders = PurchaseReturnOrders.objects.all()
+                purchasereturnorders = PurchaseReturnOrders.objects.all().order_by('-created_at', '-updated_at')
                 data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(purchasereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
-            instance = PurchaseReturnOrders.objects.all()
+            instance = PurchaseReturnOrders.objects.all().order_by('-created_at', '-updated_at')
             
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
