@@ -1,4 +1,5 @@
 import logging
+import re
 from django.http import Http404
 from django.db import transaction
 from django.shortcuts import get_object_or_404
@@ -67,6 +68,19 @@ class ProductionStatusViewSet(viewsets.ModelViewSet):
 class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all()
     serializer_class = WorkOrderSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+class CompletedQuantityViewSet(viewsets.ModelViewSet):
+    queryset = CompletedQuantity.objects.all()
+    serializer_class = CompletedQuantitySerializer  
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -460,11 +474,8 @@ class WorkOrderAPIView(APIView):
         # update WorkOrder
         if work_order_data:
             update_fields = [] # No need to update any fields
-            work_order_data = update_multi_instances(self, pk, work_order_data, WorkOrder, WorkOrderSerializer, update_fields,main_model_related_field='work_order_id', current_model_pk_field='work_order_id')
+            updated_work_order_data = update_multi_instances(self, pk, work_order_data, WorkOrder, WorkOrderSerializer, update_fields,main_model_related_field='work_order_id', current_model_pk_field='work_order_id')
             work_order_data = work_order_data[0] if len(work_order_data)==1 else work_order_data
-
-        # Get 'product_id' from WorkOrder
-        product_id = work_order_data.get('product_id',None)            
 
         # Update the 'BillOfMaterials'
         update_fields = {'reference_id':pk}
@@ -481,12 +492,40 @@ class WorkOrderAPIView(APIView):
         stages_data = update_multi_instances(self, pk, stages_data, WorkOrderStage, WorkOrderStageSerializer, update_fields, main_model_related_field='work_order_id', current_model_pk_field='work_stage_id')
 
         custom_data = {
-            "work_order" : work_order_data,
+            "work_order" : updated_work_order_data,
             "bom" : bom_data if bom_data else [],
             "work_order_machines" : machines_data if machines_data else [],
             "workers" : workers_data if workers_data else [],
             "work_order_stages" : stages_data if stages_data else []
         }
+
+        """This code searches 'closed' in production status. if matched it updates Inventory with unsynced quantity.
+           And deletes the record in 'CompletedQuantity' """
+        
+        # Get 'sync_qty' status from WorkOrder
+        sync_qty = work_order_data.get('sync_qty', None)
+
+        pattern = r"(?i)\bclosed\b"
+        order_status = work_order_data.get('status_id', None)
+        name = ProductionStatus.objects.get(status_id=order_status)
+        if re.search(pattern, name.status_name):
+            # Update Product Stock
+            unsync_qty = CompletedQuantity.objects.get(work_order_id=pk).quantity
+            copy_data = work_order_data.copy()
+            copy_data["quantity"] = unsync_qty
+            update_product_stock(Products, ProductVariation, [copy_data], 'add')
+            logger.info('Stock Updated Successfully.')            
+            # Delete the record.
+            CompletedQuantity.objects.get(work_order_id=pk).delete()
+            sync_qty = True
+
+        if sync_qty:
+            copy_data = work_order_data.copy()
+            completed_qty = copy_data.pop('completed_qty')
+            copy_data["quantity"] = completed_qty# Take completed quantity to update further
+            logger.info('completed QTY : %s ', completed_qty)
+            update_product_stock(Products, ProductVariation, [copy_data], 'add')
+            logger.info('Stock Updated Successfully.')
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 

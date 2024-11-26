@@ -2128,6 +2128,13 @@ CREATE TABLE IF NOT EXISTS work_orders (
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id)
 );
 
+CREATE TABLE IF NOT EXISTS completed_quantity (
+    quantity_id CHAR(36) PRIMARY KEY,
+    quantity INT NULL,
+    work_order_id CHAR(36) NOT NULL,
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+    );
+
 CREATE TABLE IF NOT EXISTS work_order_stages (
     work_stage_id CHAR(36) PRIMARY KEY,
     work_order_id CHAR(36),
