@@ -173,6 +173,7 @@ workorderstages = 'work_order_stages'
 defaultmachinery = 'default_machinery'
 workordermachines = 'work_order_machines'
 labor = 'labor'
+completedquantity = 'completed_quantity'
 
 #workflow tables
 workflow = 'workflows'

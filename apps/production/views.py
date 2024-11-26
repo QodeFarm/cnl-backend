@@ -510,13 +510,18 @@ class WorkOrderAPIView(APIView):
         name = ProductionStatus.objects.get(status_id=order_status)
         if re.search(pattern, name.status_name):
             # Update Product Stock
-            unsync_qty = CompletedQuantity.objects.get(work_order_id=pk).quantity
+            try:
+                unsync_qty = CompletedQuantity.objects.get(work_order_id=pk).quantity
+            except CompletedQuantity.DoesNotExist:
+                unsync_qty = 0
             copy_data = work_order_data.copy()
             copy_data["quantity"] = unsync_qty
             update_product_stock(Products, ProductVariation, [copy_data], 'add')
             logger.info('Stock Updated Successfully.')            
             # Delete the record.
-            CompletedQuantity.objects.get(work_order_id=pk).delete()
+            try:
+                CompletedQuantity.objects.get(work_order_id=pk).delete()
+            except CompletedQuantity.DoesNotExist:pass
             sync_qty = True
 
         if sync_qty:

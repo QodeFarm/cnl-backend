@@ -2131,6 +2131,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
 CREATE TABLE IF NOT EXISTS completed_quantity (
     quantity_id CHAR(36) PRIMARY KEY,
     quantity INT NULL,
+    sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     work_order_id CHAR(36) NOT NULL,
     FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
     );
