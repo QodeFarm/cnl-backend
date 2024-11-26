@@ -14,7 +14,7 @@ from .models import *
 from apps.products.models import Products, ProductVariation
 from apps.products.serializers import ProductVariationSerializer, productsSerializer
 from .serializers import *
-from config.utils_methods import build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
+from config.utils_methods import build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -308,7 +308,13 @@ class WorkOrderAPIView(APIView):
         # Validated WorkOrder Data
         work_order_data = given_data.pop('work_order', None) # parent_data
         if work_order_data:
-            work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer, ['status_id'])
+            # Set default status to 'Open'
+            id = ProductionStatus.objects.filter(status_name='open').values_list('status_id', flat=True).first()
+            if id:
+                work_order_data['status_id'] = id
+            else:
+                return build_response(0, " ValidationError: 'ProductionStatus' has no status named 'open'. ", [], status.HTTP_400_BAD_REQUEST)
+            work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer, [])
 
         # Validated BillOfMaterial Data
         bom_data = given_data.pop('bom', None)
