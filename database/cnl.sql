@@ -2587,3 +2587,13 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
 );
 
+/* For Dashboard Reports*/
+-- Storing Standard Queries For Chart
+CREATE TABLE report_definition (
+    query_id CHAR(36) PRIMARY KEY,
+    query TEXT NOT NULL,
+    query_name CHAR(50) NOT NULL,
+    visualization_type CHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
