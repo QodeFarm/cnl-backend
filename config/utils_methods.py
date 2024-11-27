@@ -1,46 +1,44 @@
-#utils_methods file
-import logging
-# from django.forms import ValidationError
-from rest_framework.serializers import ValidationError
-from rest_framework.response import Response
-from rest_framework import status
-from django.db import models
-import uuid
-from django.db.models import Q
-from uuid import uuid4
-from uuid import UUID
+# Grouped imports:
 import base64
-import os
 import json
-from django.utils import timezone
-from django.db import models
-from django.core.cache import cache
-from django.core.mail import EmailMessage
-from config.settings import MEDIA_ROOT, MEDIA_URL
-import requests
-import inflect
+import logging
+import os
 import random
 import string
+import uuid
+from uuid import UUID, uuid4
+
+# Alphabetized imports:
+import inflect
+import requests
 from django.conf import settings
+from django.core.cache import cache
+from django.core.mail import EmailMessage
+from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.serializers import ValidationError
+
+from config.settings import MEDIA_ROOT, MEDIA_URL
+
 
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__) # Create a logger object
 
-# Create a logger object
-logger = logging.getLogger(__name__)
-
-# -------------- File Path Handler (for Vendor model only)----------------------
 def custom_upload_to(instance, filename):
+    ''' File Path Handler (for Vendor model only) '''
     file_extension = filename.split('.')[-1]
     unique_id = uuid4().hex[:7]  # Generate a unique ID (e.g., using UUID)
     new_filename = f"{unique_id}_{filename}"
     new_filename = new_filename.replace(' ', '_')
     return os.path.join('vendor', str(instance.name), new_filename)
-# ---------------------------------------------------------
 
-#functions for demonstration purposes
 def encrypt(text):
+    ''' Functions for demonstration purposes '''
     if text is None:
         return None
     # Encode the text using base64
@@ -82,25 +80,12 @@ class EncryptedTextField(models.TextField):
         # Implement encryption logic here
         return encrypt(value)
 
+" NOTE : If you want to decrypt then you can uncomment this and run... in output you will find the decrypted account number "
+encoded_account_number = "" # Encoded account number
+decoded_bytes = base64.b64decode(encoded_account_number) # Decode from base64
+original_account_number = decoded_bytes.decode("utf-8") # Convert bytes to string
 
-#If you want to decrypt then you can uncomment this and run... in output you will find the decrypted account number 
-# # Encoded account number
-encoded_account_number = ""
-
-# Decode from base64
-decoded_bytes = base64.b64decode(encoded_account_number)
-
-# Convert bytes to string
-original_account_number = decoded_bytes.decode("utf-8")
-
-#=======================Filters for primary key===============================================
-def filter_uuid(queryset, name, value):
-    try:
-        uuid.UUID(value)
-    except ValueError:
-        return queryset.none()
-    return queryset.filter(Q(**{name: value}))
-#======================================================================
+#======================= POST / PUT / GET / BUILD RESPONSE =====================================================
 
 def build_response(count, message, data, status_code, errors=None):
     """
@@ -145,8 +130,7 @@ def update_instance(self, request, *args, **kwargs):
 def perform_update(self, serializer):
     serializer.save()  # Add any custom logic for updating if needed
 
-#==================================================
-#Patterns
+#=========================== Patterns /  Order number related =====================================================
 
 def generate_order_number(order_type_prefix):
     """
@@ -226,19 +210,7 @@ def increment_order_number(order_type_prefix):
     sequence_number_str = f"{sequence_number:05d}"
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
 
-#======================================================================================================
-#It removes fields from role_permissions for sending Proper data to frontend team after successfully login
-def remove_fields(obj):
-    if isinstance(obj, dict):
-        obj.pop('created_at', None)
-        obj.pop('updated_at', None)
-        for value in obj.values():
-            remove_fields(value)
-    elif isinstance(obj, list):
-        for item in obj:
-            remove_fields(item)
-
-#====================================== API- Bulk Data CURD Operation-Requirements ===============================================
+#=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
 
 def get_object_or_none(model, **kwargs):
     """
@@ -333,13 +305,19 @@ def generic_data_creation(self, valid_data, serializer_class, update_fields=None
 
     return data_list
 
-# Validates the input 'pk'
 def validate_input_pk(self, pk=None):
     try:
         UUID(pk, version=4)
     except ValueError:
         logger.info('Invalid UUID provided')
         return build_response(0, "Invalid UUID provided", [], status.HTTP_404_NOT_FOUND)
+
+def filter_uuid(queryset, name, value):
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return queryset.none()
+    return queryset.filter(Q(**{name: value}))
 
 def update_multi_instances(self, pk, valid_data, related_model_name, related_class_name, update_fields, main_model_related_field=None, current_model_pk_field=None):
     '''
@@ -584,17 +562,28 @@ def update_product_stock(parent_model, child_model, data, operation):
         except Exception:
             logger.info('Direct Product stock is updated.')
 
-#================================================================================================================================================
-#===========================================CHETAN'S METHOD============================================================================
-#================================================================================================================================================
+#=========================== COMMUNICATION / REPORTS / OTHER SPECIAL FUNCTIONS (CHETAN) ============================
+
+def remove_fields(obj):
+    """
+    It removes fields from role_permissions for sending Proper data to frontend team after successfully login
+    """
+    if isinstance(obj, dict):
+        obj.pop('created_at', None)
+        obj.pop('updated_at', None)
+        for value in obj.values():
+            remove_fields(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            remove_fields(item)
+
 def validate_uuid(uuid_to_test, version=4):
     try:
         uuid_obj = uuid.UUID(uuid_to_test, version=version)
     except ValueError:
         raise ValidationError("Invalid UUID")
     return uuid_obj
-
-       
+     
 def format_phone_number(phone_number):
     phone_number_str = str(phone_number) 
     
@@ -605,7 +594,6 @@ def format_phone_number(phone_number):
         return phone_number_str  
     else:
         return "Mobile number has incorrect length"  
-
 
 def send_pdf_via_email(to_email, pdf_relative_path):
     """Send the generated PDF as an email attachment."""
@@ -629,7 +617,6 @@ def send_pdf_via_email(to_email, pdf_relative_path):
     email.send()
 
     return "PDF sent via Email successfully."
-
 
 def send_whatsapp_message_via_wati(to_number, file_url):
     """ Send the PDF file as a WhatsApp message using WATI API. """
@@ -723,8 +710,6 @@ def convert_rupees_to_indian_words(number):
     
     return " ".join(parts)
 
-
-
 def extract_product_data(data):
     product_data = []
     
@@ -761,9 +746,7 @@ def path_generate(document_type):
     return doc_name, file_path, relative_file_path
 
 #workflow code
-
 workflow_progression_dict = {}
-
 def get_section_id(section_name):
     """
     Retrieve the section ID from the ModuleSections model based on the provided section name.
@@ -808,6 +791,4 @@ def get_active_workflow(section_id):
 
     except Exception as e:
         raise ValueError(f"Error fetching active workflow: {str(e)}")
-
-
 
