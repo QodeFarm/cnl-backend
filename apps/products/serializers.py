@@ -128,9 +128,10 @@ class ProductPurchaseGlSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ModproductsSerializer(serializers.ModelSerializer):
+    unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
     class Meta:
         model = Products
-        fields = ['product_id','name', 'code']
+        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount']
 
 class ModSizeSerializer(serializers.ModelSerializer):
     class Meta:
