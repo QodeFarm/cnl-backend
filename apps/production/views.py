@@ -14,7 +14,7 @@ from .models import *
 from apps.products.models import Products, ProductVariation
 from apps.products.serializers import ProductVariationSerializer, productsSerializer
 from .serializers import *
-from config.utils_methods import build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
+from config.utils_methods import build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -187,10 +187,28 @@ class WorkOrderAPIView(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            instance = WorkOrder.objects.all()
+            instances = WorkOrder.objects.all()
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = WorkOrder.objects.count()            
 
             #Added wokorder summary logic here(starts)
             summary = request.query_params.get("summary", "false").lower() == "true"
+            stock_journal = request.query_params.get('stock_journal', 'false').lower() == 'true'
+            if stock_journal:
+                logger.info("Retrieving stock_journal")
+                data = []
+                for work_order in instances:
+                    bom_data = BillOfMaterials.objects.filter(reference_id=work_order.pk).values()
+                    data.append({
+                        'work_order_id' : str(work_order.pk),
+                        'finished_product' : str(work_order.product_id),
+                        'quantity' : str(work_order.quantity),
+                        'bom_components' : bom_data,
+                        })
+                    
+                return filter_response(len(data),"Success", data, page, limit, total_count, status.HTTP_200_OK)
+                    
             if summary:
                 logger.info("Retrieving Work Order summary")
                 
@@ -201,12 +219,7 @@ class WorkOrderAPIView(APIView):
                     workorders = filterset.qs  # Filtered queryset for summary
                 
                 data = WorkOrderOptionsSerializer.get_work_order_summary(workorders)
-                return Response(data, status=status.HTTP_200_OK)
-            #wokorder summary logic(ends)
-
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
-            total_count = WorkOrder.objects.count()
+                return filter_response(len(data),"Success", data, page, limit, total_count, status.HTTP_200_OK)
 
             # Apply filters manually
             if request.query_params:
@@ -214,17 +227,16 @@ class WorkOrderAPIView(APIView):
                 filterset = WorkOrderFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-                    serializer = WorkOrderSerializer(queryset, many=True)
-                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+                    data = WorkOrderSerializer(queryset, many=True).data
+                    return filter_response(queryset.count(),"Success", data, page, limit, total_count, status.HTTP_200_OK)
 
         except WorkOrder.DoesNotExist:
             logger.error("WorkOrder does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         else:
-            serializer = WorkOrderSerializer(instance, many=True)
+            serializer = WorkOrderSerializer(instances, many=True)
             logger.info("WorkOrder data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)  
+            return build_response(instances.count(), "Success", serializer.data, status.HTTP_200_OK)  
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -308,7 +320,13 @@ class WorkOrderAPIView(APIView):
         # Validated WorkOrder Data
         work_order_data = given_data.pop('work_order', None) # parent_data
         if work_order_data:
-            work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer, ['status_id'])
+            # Set default status to 'Open'
+            id = ProductionStatus.objects.filter(status_name='open').values_list('status_id', flat=True).first()
+            if id:
+                work_order_data['status_id'] = id
+            else:
+                return build_response(0, " ValidationError: 'ProductionStatus' has no status named 'open'. ", [], status.HTTP_400_BAD_REQUEST)
+            work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer, [])
 
         # Validated BillOfMaterial Data
         bom_data = given_data.pop('bom', None)
@@ -510,13 +528,18 @@ class WorkOrderAPIView(APIView):
         name = ProductionStatus.objects.get(status_id=order_status)
         if re.search(pattern, name.status_name):
             # Update Product Stock
-            unsync_qty = CompletedQuantity.objects.get(work_order_id=pk).quantity
+            try:
+                unsync_qty = CompletedQuantity.objects.get(work_order_id=pk).quantity
+            except CompletedQuantity.DoesNotExist:
+                unsync_qty = 0
             copy_data = work_order_data.copy()
             copy_data["quantity"] = unsync_qty
             update_product_stock(Products, ProductVariation, [copy_data], 'add')
             logger.info('Stock Updated Successfully.')            
             # Delete the record.
-            CompletedQuantity.objects.get(work_order_id=pk).delete()
+            try:
+                CompletedQuantity.objects.get(work_order_id=pk).delete()
+            except CompletedQuantity.DoesNotExist:pass
             sync_qty = True
 
         if sync_qty:

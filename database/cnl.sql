@@ -2079,7 +2079,6 @@ CREATE TABLE IF NOT EXISTS bom (
     bom_id CHAR(36) PRIMARY KEY,
     bom_name VARCHAR(100) NOT NULL,
     product_id CHAR(36),
-    quantity INT NOT NULL DEFAULT 1,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2131,6 +2130,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
 CREATE TABLE IF NOT EXISTS completed_quantity (
     quantity_id CHAR(36) PRIMARY KEY,
     quantity INT NULL,
+    sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     work_order_id CHAR(36) NOT NULL,
     FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
     );
@@ -2585,6 +2585,17 @@ log_action ENUM('Cancelled',  'Created', 'Dismissed', 'Rescheduled', 'Viewed') N
 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
+);
+
+/* For Dashboard Reports*/
+-- Storing Standard Queries For Chart
+CREATE TABLE report_definition (
+    query_id CHAR(36) PRIMARY KEY,
+    query TEXT NOT NULL,
+    query_name CHAR(50) NOT NULL,
+    visualization_type CHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 /* stroing Hours configuration tables */
