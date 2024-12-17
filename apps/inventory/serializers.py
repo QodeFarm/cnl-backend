@@ -28,3 +28,14 @@ class WarehouseLocationsSerializer(serializers.ModelSerializer):
     class Meta:
         model = WarehouseLocations
         fields = '__all__'
+
+
+class InventoryBlockConfigSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InventoryBlockConfig
+        fields = '__all__'
+
+class BlockedInventorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlockedInventory
+        fields = '__all__'

@@ -1,4 +1,5 @@
 import logging
+from django.utils import timezone
 from django.db import transaction
 from django.forms import ValidationError
 from django.http import Http404
@@ -10,6 +11,7 @@ from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
+from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from config.utils_filter_methods import filter_response
 from .filters import *
 from apps.purchase.models import PurchaseOrders
@@ -23,7 +25,7 @@ from rest_framework.filters import OrderingFilter
 from django.apps import apps
 
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from config.utils_methods import workflow_progression_dict 
 workflow_progression_dict = {}
 # Set up basic configuration for logging
@@ -268,6 +270,7 @@ class SaleDebitNoteItemsViews(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+from django.db.models import F
 
 class SaleOrderViewSet(APIView):
     """
@@ -514,14 +517,78 @@ class SaleOrderViewSet(APIView):
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
 
+        # custom_data = {
+        #     "sale_order": new_sale_order_data,
+        #     "sale_order_items": items_data,
+        #     "order_attachments": order_attachments,
+        #     "order_shipments": order_shipments,
+        # }
+
+        # -------------------- Inventory Blocking ----------------------------------------------
+        if sale_order_data.get("sale_estimate", "").lower() != "yes":
+            block_duration = InventoryBlockConfig.objects.filter(product_id__isnull=True).first()
+            block_duration_hours = getattr(block_duration, 'block_duration_hours', 24)
+            # expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+            expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+
+            # blocked_inventory_data = [
+            #     BlockedInventory(
+            #         # sale_order_id=sale_order_id,
+            #         sale_order_id=SaleOrder.objects.get(sale_order_id=sale_order_id),
+            #         product_id=Products.objects.get(product_id=item.get("product_id")),
+            #         blocked_qty=item.get("quantity"),
+            #         expiration_time=expiration_time
+            #     ) for item in sale_order_items_data
+            # ]
+            # BlockedInventory.objects.bulk_create(blocked_inventory_data, ignore_conflicts=True)
+            # logger.info("Inventory blocked for sale order %s.", sale_order_id)
+            
+            # Subtract product quantities and block inventory
+            blocked_inventory_data = []
+            for item in sale_order_items_data:
+                product_id = item.get("product_id")
+                ordered_qty = item.get("quantity")
+
+                product = Products.objects.filter(product_id=product_id).first()
+                print("Product data : ", product)
+                if product:
+                    if product.balance >= ordered_qty:
+                        product.balance = F('balance') - ordered_qty
+                        product.save(update_fields=['balance'])
+                    else:
+                        return build_response(
+                            0,
+                            f"Insufficient stock for product {product.product_name}. Available: {product.quantity}, Ordered: {ordered_qty}",
+                            [],
+                            status.HTTP_400_BAD_REQUEST
+                        )
+                    blocked_inventory_data.append(BlockedInventory(
+                        sale_order_id=SaleOrder.objects.get(sale_order_id=sale_order_id),
+                        product_id=Products.objects.get(product_id=product_id),
+                        blocked_qty=ordered_qty,
+                        expiration_time=expiration_time
+                    ))
+                else:
+                    return build_response(
+                        0,
+                        f"Product with ID {product_id} not found.",
+                        [],
+                        status.HTTP_404_NOT_FOUND
+                    )
+
+            BlockedInventory.objects.bulk_create(blocked_inventory_data, ignore_conflicts=True)
+            logger.info("Inventory blocked for sale order %s.", sale_order_id)
+
+        # ---------------------- R E S P O N S E ----------------------------#
+
+        # Response
         custom_data = {
             "sale_order": new_sale_order_data,
             "sale_order_items": items_data,
             "order_attachments": order_attachments,
             "order_shipments": order_shipments,
         }
-
-        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+        return build_response(1, "Sale Order created successfully", custom_data, status.HTTP_201_CREATED)  
 
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
@@ -627,6 +694,8 @@ class SaleOrderViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+#-------------------- Sale Order End ----------------------------------------------------    
+
 
 class SaleInvoiceOrdersViewSet(APIView):
     """
