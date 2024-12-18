@@ -2597,3 +2597,24 @@ CREATE TABLE report_definition (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
+
+/* stroing Hours configuration tables */
+CREATE TABLE IF NOT EXISTS inventory_block_config (
+    config_id INT AUTO_INCREMENT PRIMARY KEY,
+    block_duration_hours INT DEFAULT 24 COMMENT 'Duration (in hours) to block inventory',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS blocked_inventory (
+    block_id INT AUTO_INCREMENT PRIMARY KEY,
+    sale_order_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    blocked_qty INT DEFAULT 0,
+    expiration_time TIMESTAMP NOT NULL COMMENT 'Timestamp when the block expires',
+    is_expired BOOLEAN DEFAULT FALSE COMMENT 'True if block duration has passed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
