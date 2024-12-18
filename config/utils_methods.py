@@ -211,6 +211,11 @@ def increment_order_number(order_type_prefix):
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
 
 #=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
+def normalize_value(value):
+    '''Check if the value is a list containing exactly one empty dictionary or [empty_dict, None]'''
+    if value == [{}] or value is None or value == [{}, None]:
+        return []
+    return value
 
 def get_object_or_none(model, **kwargs):
     """
