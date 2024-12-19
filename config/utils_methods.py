@@ -463,7 +463,7 @@ def product_stock_verification(parent_model, child_model, data):
     def assign_error(balance, order_qty, stock_error, product):
         # Ensure balance is an integer and order_qty is also an integer
         if balance <= 0:
-            stock_error[f'{product}'] = f"Product with ID :'{product}' is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
+            stock_error[f'{product}'] = f"Product is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
         
         # Validate if the order_qty is greater than the available stock balance
         elif int(order_qty) > balance:
