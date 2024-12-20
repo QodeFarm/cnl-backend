@@ -18,6 +18,6 @@ class DynamicQueryAPIView(APIView):
         results = execute_query(sql_query)
 
         if "error" in results:
-            return Response({'count': '1', 'msg': 'Error Occurred', 'data': results}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'count': '1', 'msg': 'Success', 'data':results}, status=status.HTTP_200_OK)
+            return Response({'count': len(results), 'msg': 'Error Occurred', 'data': results}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'count': len(results), 'msg': 'Success', 'data':results}, status=status.HTTP_200_OK)
 
