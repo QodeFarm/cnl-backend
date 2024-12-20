@@ -25,18 +25,12 @@ def execute_query(query):
         password=db_config.get('PASSWORD', ''),
         database=db_config.get('NAME', ''),
         port=int(db_config.get('PORT', 3306)),
-    )
-    
+    )    
     cursor = connection.cursor()
-    
+
     try:
-        # Step 1: Execute the session setting query to disable ONLY_FULL_GROUP_BY
         cursor.execute("SET SESSION sql_mode = (SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''));")
-        
-        # Step 2: Now execute the main query
-        cursor.execute(query)  # Execute the actual main query
-        
-        # Step 3: Fetch the results
+        cursor.execute(query)  
         if query:
             results = cursor.fetchall()
             columns = [col[0] for col in cursor.description]
@@ -44,7 +38,6 @@ def execute_query(query):
         return {"message": "Query executed successfully"}
     
     except Exception as e:
-        # Catch any errors and print the exception message
         print(f"Error: {str(e)}")
         return {"error": str(e)}
     

@@ -8,7 +8,6 @@ class DynamicQueryAPIView(APIView):
     """Fetch data based on dynamic endpoints and execute SQL queries."""
 
     def get(self, request, query_name):
-        #print('++++>>>', query_name)
         if query_name not in query:
             return Response(
                 {"error": f"No query found for {query_name}."},
@@ -16,10 +15,9 @@ class DynamicQueryAPIView(APIView):
             )
 
         sql_query = query[query_name]
-        #print('++++>>>', sql_query)
         results = execute_query(sql_query)
 
         if "error" in results:
-            return Response(results, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response(results, status=status.HTTP_200_OK)
+            return Response({'count': '1', 'msg': 'Error Occurred', 'data': results}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'count': '1', 'msg': 'Success', 'data':results}, status=status.HTTP_200_OK)
 
