@@ -630,6 +630,8 @@ class QuickPackItems(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     quick_pack_id = models.ForeignKey(QuickPacks,on_delete=models.CASCADE, db_column='quick_pack_id')
     product_id = models.ForeignKey(Products,on_delete=models.CASCADE, db_column='product_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, db_column='color_id')
      
     class Meta:
         db_table = quickpackitems
