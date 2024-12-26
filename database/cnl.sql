@@ -1938,11 +1938,15 @@ CREATE TABLE IF NOT EXISTS quick_pack_items (
     quick_pack_item_id CHAR(36) PRIMARY KEY,
     quick_pack_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,
     quantity INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (quick_pack_id) REFERENCES quick_packs(quick_pack_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
 );
 
 
