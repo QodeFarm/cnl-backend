@@ -329,6 +329,7 @@ class WorkOrderAPIView(APIView):
             bom_error = validate_multiple_data(self, bom_data, BillOfMaterialsSerializer, ['reference_id'])
         else:
             bom_error = []
+            return build_response(0, "Bill Of Materials are required.", [], status.HTTP_400_BAD_REQUEST)
 
         # Validated WorkOrderMachine Data
         work_order_machines_data = normalize_value(given_data.pop('work_order_machines', None))
