@@ -1672,35 +1672,29 @@ CREATE TABLE IF NOT EXISTS employees (
     employee_id CHAR(36) PRIMARY KEY,
     first_name VARCHAR(255) NOT NULL,
     last_name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    phone VARCHAR(20),
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(255),
     address VARCHAR(255),
     hire_date date,
+    date_of_birth date,
+    gender varchar(20) NOT NULL,
+    nationality varchar(20),
+    emergency_contact varchar(20),
+    emergency_contact_relationship varchar(55),
     job_type_id CHAR(36) NOT NULL,
-    designation_id CHAR(36) NOT NULL,
-    job_code_id CHAR(36) NOT NULL,
-    department_id CHAR(36) NOT NULL,
-    shift_id CHAR(36) NOT NULL,
+    designation_id CHAR(36),
+    job_code_id CHAR(36),
+    department_id CHAR(36),
+    shift_id CHAR(36),
+    manager_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (job_type_id) REFERENCES job_types(job_type_id),
     FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
     FOREIGN KEY (job_code_id) REFERENCES job_codes(job_code_id),
     FOREIGN KEY (department_id) REFERENCES departments(department_id),
-    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id)
-);
-
-CREATE TABLE IF NOT EXISTS employee_details (
-    employee_detail_id CHAR(36) PRIMARY KEY,
-    date_of_birth date NOT NULL,
-    gender varchar(20) NULL,
-    nationality varchar(20) NULL,
-    emergency_contact varchar(20) NULL,
-    emergency_contact_relationship varchar(55) NULL,
-    employee_id CHAR(36) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id),
+    FOREIGN KEY (manager_id) REFERENCES employees(employee_id)
 );
 
 CREATE TABLE IF NOT EXISTS employee_salary (
@@ -1748,7 +1742,6 @@ CREATE TABLE IF NOT EXISTS employee_leaves (
     leave_id CHAR(36) PRIMARY KEY,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    status_id CHAR(36) NOT NULL,
     comments varchar(255),
     employee_id CHAR(36) NOT NULL,
     leave_type_id CHAR(36) NOT NULL,
@@ -1762,7 +1755,6 @@ CREATE TABLE IF NOT EXISTS employee_leaves (
 CREATE TABLE IF NOT EXISTS leave_approvals ( 
     approval_id CHAR(36) PRIMARY KEY,
     approval_date datetime,
-    comments varchar(255),
     status_id CHAR(36) NOT NULL,
     leave_id CHAR(36) NOT NULL,
     approver_id CHAR(36) NOT NULL,
@@ -1787,21 +1779,15 @@ CREATE TABLE IF NOT EXISTS employee_leave_balance (
 
 /* ======== attendance ======== */
 
-CREATE TABLE IF NOT EXISTS attendance (
-    attendance_id CHAR(36) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS employee_attendance (
+    employee_attendance_id CHAR(36) PRIMARY KEY,
     employee_id CHAR(36) NOT NULL,
-    attendance_date DATE,
-    clock_in_time datetime,
-    clock_out_time datetime,
-    status_id CHAR(36),
-    department_id CHAR(36),
-    shift_id CHAR(36),
+    attendance_date DATE NOT NULL DEFAULT (CURRENT_DATE),
+    absent BOOLEAN,
+    leave_duration ENUM('First Half', 'Full Day', 'Second Half'),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
-    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
-    FOREIGN KEY (department_id) REFERENCES departments(department_id),
-    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id)
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
 );
 
 CREATE TABLE IF NOT EXISTS swipes (
