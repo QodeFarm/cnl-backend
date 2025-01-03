@@ -94,4 +94,7 @@ all_model_fields = {
     'vendor_category':['vendor_category_id','code','name','created_at','updated_at'],
     'vendor_payment_terms':['payment_term_id','name','code','fixed_days','no_of_fixed_days','payment_cycle','run_on','created_at','updated_at'],
     'warehouses':['warehouse_id','name','code','item_type_id','customer_id','address','city_id','state_id','country_id','pin_code','phone','email','longitude','latitude','created_at','updated_at'],
+    'employees':['first_name','email','phone','hire_date','job_type','designation','department','shift','manager'],
+    'employee_attendance':['employee','attendance_date','absent','leave_duration'],
+    'employee_leave_balance':['employee','leave_type','leave_balance','year'],
 }
