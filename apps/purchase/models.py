@@ -3,16 +3,16 @@ from config.utils_variables import *
 from apps.masters.models import PurchaseTypes,State,ProductBrands, GstTypes, OrderStatuses, UnitOptions
 from apps.customer.models import LedgerAccounts,CustomerCategories
 from apps.vendor.models import Vendor,VendorAgent,VendorAddress,VendorPaymentTerms
-from apps.products.models import Products
+from apps.products.models import Products, Size, Color
 import uuid
-from config.utils_methods import OrderNumberMixin
+from config.utils_methods import OrderNumberMixin, generate_order_number
 
 # Create your models here.
 class PurchaseOrders(OrderNumberMixin):
     purchase_order_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     purchase_type_id = models.ForeignKey(PurchaseTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'purchase_type_id')
     order_date = models.DateField()
-    order_no = models.CharField(max_length=255, unique=True, default='')
+    order_no = models.CharField(max_length=255, null=True, default='')
     order_no_prefix = 'PO'
     order_no_field = 'order_no'
     gst_type_id = models.ForeignKey(GstTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'GST_Type_id')
@@ -22,8 +22,8 @@ class PurchaseOrders(OrderNumberMixin):
     ref_no = models.CharField(max_length=255, null=True, default=None)
     ref_date = models.DateField(blank=True, null=True)
     vendor_agent_id = models.ForeignKey(VendorAgent, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_agent_id')
-    TAX_CHOICES = [('Inclusive', 'Inclusive'),
-                   ('Exclusive', 'Exclusive')
+    TAX_CHOICES = [('Exclusive', 'Exclusive'),
+                   ('Inclusive', 'Inclusive')
                 ]
     tax = models.CharField(max_length=20, choices=TAX_CHOICES , blank=True, null=True, default=None)
     vendor_address_id = models.ForeignKey(VendorAddress, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_address_id')
@@ -50,12 +50,44 @@ class PurchaseOrders(OrderNumberMixin):
 
     def __str__(self):
         return f"{self.purchase_order_id}"
+    
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Ensure the order status is set if not already set
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
+
 
 class PurchaseorderItems(models.Model):
     purchase_order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     purchase_order_id = models.ForeignKey(PurchaseOrders, on_delete=models.CASCADE, db_column = 'purchase_order_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
@@ -77,7 +109,7 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     purchase_invoice_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     purchase_type_id = models.ForeignKey(PurchaseTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'purchase_type_id')
     invoice_date = models.DateField()
-    invoice_no = models.CharField(max_length=20, unique=True, default='')
+    invoice_no = models.CharField(max_length=20, null=True, default='')
     order_no_prefix = 'PO-INV'
     order_no_field = 'invoice_no'
     gst_type_id = models.ForeignKey(GstTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'GST_Type_id')
@@ -87,10 +119,9 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     supplier_invoice_no = models.CharField(max_length=255)
     supplier_invoice_date = models.DateField(blank=True, null=True)
     vendor_agent_id = models.ForeignKey(VendorAgent, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_agent_id')
-    
     TAX_CHOICES = [
-        ('Inclusive', 'Inclusive'),
-        ('Exclusive', 'Exclusive')
+        ('Exclusive', 'Exclusive'),
+        ('Inclusive', 'Inclusive')
     ]
     tax = models.CharField(max_length=20, choices=TAX_CHOICES, blank=True, null=True)    
     vendor_address_id = models.ForeignKey(VendorAddress, on_delete=models.CASCADE, null=True, default=None, db_column = 'vendor_address_id')
@@ -120,12 +151,43 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     def __str__(self):
         return f"{self.purchase_invoice_id}"
     
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Ensure the order status is set if not already set
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
+    
 
 class PurchaseInvoiceItem(models.Model):
     purchase_invoice_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     purchase_invoice_id = models.ForeignKey(PurchaseInvoiceOrders, on_delete=models.CASCADE, db_column = 'purchase_invoice_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, db_column='color_id')     
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
@@ -144,14 +206,14 @@ class PurchaseInvoiceItem(models.Model):
 
 class PurchaseReturnOrders(OrderNumberMixin):
     TAX_CHOICES = [
-        ('Inclusive', 'Inclusive'),
         ('Exclusive', 'Exclusive'),
+        ('Inclusive', 'Inclusive')
     ]
     
     purchase_return_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     purchase_type_id = models.ForeignKey(PurchaseTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'purchase_type_id')
     return_date = models.DateField()
-    return_no = models.CharField(max_length=20, unique=True, default='')
+    return_no = models.CharField(max_length=20, null=True, default='')
     order_no_prefix = 'PR'
     order_no_field = 'return_no'
     gst_type_id = models.ForeignKey(GstTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'GST_Type_id')
@@ -186,12 +248,43 @@ class PurchaseReturnOrders(OrderNumberMixin):
 
     def __str__(self):
         return f"{self.purchase_return_id}"
+    
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Ensure the order status is set if not already set
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
 
 class PurchaseReturnItems(models.Model):
     purchase_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     purchase_return_id = models.ForeignKey(PurchaseReturnOrders, on_delete=models.CASCADE, db_column='purchase_return_id')
     product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, db_column='unit_options_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, db_column='color_id')     
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)

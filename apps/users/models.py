@@ -1,7 +1,6 @@
 from config.utils_variables import rolestable, rolepermissionstable, actionstable, modulestable, modulesections, userstable, usertimerestrictions, userallowedweekdays, userroles
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 from django.db.models.signals import pre_delete
-from apps.company.models import Companies
 from apps.masters.models import Statuses
 from apps.company.models import Branches
 from django.dispatch import receiver
@@ -41,6 +40,8 @@ class Actions(models.Model):
 class Modules(models.Model):
     module_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     module_name = models.CharField(max_length=255,  unique=True)
+    mod_icon = models.CharField(max_length=255, default=None, null=True)
+    mod_link = models.CharField(max_length=255, default=None, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     description = models.TextField()
@@ -55,6 +56,8 @@ class Modules(models.Model):
 class ModuleSections(models.Model):
     module_id = models.ForeignKey(Modules, on_delete=models.CASCADE, default=None, db_column = 'module_id')
     section_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sec_icon = models.CharField(max_length=255, default=None, null=True)  
+    sec_link = models.CharField(max_length=255, default=None, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
     section_name = models.CharField( max_length=255,)
     updated_at = models.DateTimeField(auto_now=True)
@@ -85,10 +88,12 @@ class UserManager(BaseUserManager):
         # You can set specific flags or permissions for superusers here
         return user
 
+
+#====
 class User(AbstractBaseUser):
-    GENDER_CHOICES = [('Male', 'Male'), ('Female', 'Female'), ('Other', 'Other'), ('Prefer Not to Say', 'Prefer Not to Say')]
-    TITLE_CHOICES = [('Mr.', 'Mr.'), ('Ms.', 'Ms.')]
-    profile_picture_url = models.CharField(max_length=255, null=True, default=None)
+    GENDER_CHOICES = [('Male', 'Male'),('Female', 'Female'),('Other', 'Other'),('Prefer Not to Say', 'Prefer Not to Say')]
+    TITLE_CHOICES = [('Mr.', 'Mr.'),('Ms.', 'Ms.')]
+    profile_picture_url = models.JSONField(null = True, default=None) 
     gender = models.CharField(max_length=20, choices=GENDER_CHOICES, default='Prefer Not to Say')
     title = models.CharField(max_length=20, choices=TITLE_CHOICES, default=None)
     username = models.CharField(verbose_name="Username", max_length=255, unique=True)
@@ -106,10 +111,9 @@ class User(AbstractBaseUser):
     is_active = models.BooleanField(default=True)
     first_name = models.CharField(max_length=255)
     last_login = models.DateTimeField(null=True, default=None)
-    branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id')
+    branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id', null= True)
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
     role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
-    company_id = models.ForeignKey(Companies, on_delete=models.CASCADE,  db_column = 'company_id')
 
     objects = UserManager()
     
@@ -117,7 +121,7 @@ class User(AbstractBaseUser):
         db_table = userstable
 
     USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id', 'company_id'] 
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id'] 
 
     def __str__(self):
         return self.username
@@ -138,15 +142,6 @@ class User(AbstractBaseUser):
     @property
     def is_staff(self):
         return False  # or customize based on your own logic
-    # @receiver(pre_delete, sender='users.User')
-    # def delete_user_picture(sender, instance, **kwargs):
-    #     if instance.profile_picture_url and instance.profile_picture_url.name:
-    #         file_path = instance.profile_picture_url.path
-    #         if os.path.exists(file_path):
-    #             os.remove(file_path)
-    #             picture_dir = os.path.dirname(file_path)
-    #             if not os.listdir(picture_dir):
-    #                 os.rmdir(picture_dir)
 
 class UserTimeRestrictions(models.Model):
     user_id = models.ForeignKey(User, on_delete=models.CASCADE,  db_column = 'user_id')

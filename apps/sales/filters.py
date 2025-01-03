@@ -1,178 +1,198 @@
 from django_filters import rest_framework as filters
-from .models import SaleOrder, SaleInvoiceOrders
-# from .models import SaleOrder,Invoices,PaymentTransactions,OrderItems,Shipments,SalesPriceList,SaleOrderReturns
+from .models import QuickPacks, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders
 from config.utils_methods import filter_uuid
+from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
+from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+import logging
+logger = logging.getLogger(__name__)
 
 class SaleOrderFilter(filters.FilterSet):
-    # order_date = filters.DateFromToRangeFilter()
-    # delivery_date = filters.DateFromToRangeFilter()
-    # created_at = filters.DateFromToRangeFilter()
-    # order_no = filters.CharFilter(lookup_expr='icontains')
+    order_no = filters.CharFilter(lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)
-    # order_id = filters.CharFilter(method=filter_uuid)
-    # remarks = filters.CharFilter(lookup_expr='icontains')
-    # customer_name = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
-    # sale_type_id = filters.CharFilter(method=filter_uuid)
-    # sales_type_name = filters.CharFilter(field_name='sale_type_id__name', lookup_expr='icontains')
-    # item_value = filters.RangeFilter()
-    # advance_amount = filters.RangeFilter()
-    # doc_amount = filters.RangeFilter()
-
-    class Meta:
-        model = SaleOrder
-        fields =[]
-
-# class InvoicesFilter(filters.FilterSet):
-#     invoice_date = filters.DateFilter()            
-#     due_date = filters.DateFromToRangeFilter()     
-#     status = filters.CharFilter(lookup_expr='icontains')
-#     total_amount = filters.RangeFilter()          
-#     sale_type_id = filters.NumberFilter()
-#     sales_type_name = filters.CharFilter(field_name='sale_type_id__name', lookup_expr='icontains')
-#     warehouse_id = filters.NumberFilter()
-#     warehouse_name = filters.CharFilter(field_name ='warehouse_id__name', lookup_expr='icontains' )
-
-#     class Meta:
-#         model = Invoices
-#         fields = ['invoice_date', 'due_date', 'status', 'total_amount']
-
-# class PaymentTransactionsFilter(filters.FilterSet):
-#     payment_date = filters.RangeFilter()
-#     payment_status =filters.CharFilter(lookup_expr='icontains')
-#     amount = filters.RangeFilter()
-
-#     class Meta:
-#         model = PaymentTransactions
-#         fields = ['payment_date', 'payment_status', 'amount']
-
-# class OrderItemsFilter(filters.FilterSet):
-#     order_id = filters.CharFilter(method=filter_uuid)
-#     product_id = filters.CharFilter(method=filter_uuid)
-#     product_name = filters.CharFilter(field_name='product_id__name',lookup_expr='icontains')
-#     amount = filters.RangeFilter()
-#     rate= filters.RangeFilter()
-   
-
-#     class Meta:
-#         model = OrderItems
-#         fields = ['order_id', 'product_id', 'amount','rate']
-
-# class ShipmentsFilter(filters.FilterSet):
-#     shipping_date = filters.DateFilter()
-#     order_id = filters.CharFilter(method=filter_uuid)
-#     shipping_tracking_no = filters.CharFilter(field_name='shipping_tracking_no', lookup_expr='icontains')
-
-#     class Meta:
-#         model = Shipments
-#         fields = ['shipping_date', 'order_id','shipping_tracking_no']
-
-# class SalesPriceListFilter(filters.FilterSet):
-#     effective_From = filters.DateFilter()
-#     effective_date = filters.DateFilter()
-#     effective_range = filters.DateFromToRangeFilter(field_name='effective_From')
-#     customer_category_id = filters.NumberFilter()
-#     customer_category_name = filters.CharFilter(field_name='customer_category_id__name',lookup_expr='icontains')
-#     brand_id = filters.CharFilter(method=filter_uuid)
-#     brand_name = filters.CharFilter(field_name='brand_id__name',lookup_expr='icontains')
-#     # product_group_id = filters.NumberFilter(field_name='group_id__id')
-
-#     class Meta:
-#         model = SalesPriceList
-#         fields = ['effective_From', 'effective_date','effective_range','customer_category_id','customer_category_name','brand_id']
-
-# class SaleOrderReturnsFilter(filters.FilterSet):
-#     sales_return_no = filters.CharFilter(lookup_expr='icontains')
-#     due_date = filters.DateFilter()
-#     sale_id = filters.CharFilter(method=filter_uuid)
-#     class Meta:
-#         model = SaleOrderReturns
-#         fields = ['sales_return_no', 'due_date','sale_id']
-
-#==========================common-utility-function===================================
-
-from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter, DateFilter
-from django.utils import timezone
-from django_filters import rest_framework as filters
-import datetime
-from dateutil.relativedelta import relativedelta
-
-PERIOD_NAME_CHOICES = [
-    ('today', 'Today'),
-    ('yesterday', 'Yesterday'),
-    ('last_week', 'LastWeek'),
-    ('current_month', 'CurrentMonth'),
-    ('last_month', 'LastMonth'),
-    ('last_six_months', 'LastSixMonths'),
-    ('current_quarter', 'CurrentQuarter'),
-    ('year_to_date', 'YearToDate'),
-    ('last_year', 'LastYear'),
-]
-
-class SaleInvoiceOrdersFilter(FilterSet):
-    period_name = ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    created_at = DateFromToRangeFilter()
+    customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    # order_date = filters.DateFromToRangeFilter()
+    order_date = filters.DateFilter()
+    sale_type_id = filters.CharFilter(method=filter_uuid)
+    sale_type = filters.CharFilter(field_name='sale_type_id__name', lookup_expr='icontains')
+    order_status_id = filters.CharFilter(method=filter_uuid)
+    created_at = filters.DateFromToRangeFilter()
+    advance_amount = filters.RangeFilter()
+    tax = filters.ChoiceFilter(field_name='tax', choices=SaleOrder.TAX_CHOICES)
+    amount = filters.RangeFilter(field_name='item_value', lookup_expr='icontains')
+    flow_status = filters.CharFilter(field_name='flow_status_id__flow_status_name', lookup_expr='iexact')
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
 
     def filter_by_period_name(self, queryset, name, value):
-        today = timezone.now().date()
-        start_date = None
-        end_date = today
+        return filter_by_period_name(self, queryset, self.data, value)
 
-        # Check if custom from_date and to_date are provided in the URL
-        from_date = self.data.get('created_at_after')
-        to_date = self.data.get('created_at_before')
-
-        if from_date and to_date:
-            try:
-                start_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
-                end_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
-            except ValueError:
-                # Handle invalid date format
-                print(f"Invalid date format: from_date={from_date}, to_date={to_date}")
-                return queryset.none()
-        else:
-            # Determine the date range based on the period_name selected
-            if value == 'today':
-                start_date = end_date
-            elif value == 'yesterday':
-                start_date = end_date - datetime.timedelta(days=1)
-                end_date = start_date
-            elif value == 'last_week':
-                start_date = today - datetime.timedelta(days=today.weekday() + 7)
-                end_date = start_date + datetime.timedelta(days=6)
-            elif value == 'current_month':
-                start_date = today.replace(day=1)
-            elif value == 'last_month':
-                first_day_of_current_month = today.replace(day=1)
-                last_day_of_last_month = first_day_of_current_month - datetime.timedelta(days=1)
-                start_date = last_day_of_last_month.replace(day=1)
-                end_date = last_day_of_last_month
-            elif value == 'last_six_months':
-                start_date = today - datetime.timedelta(days=180)
-                # six_months_ago = today - relativedelta(months=6)
-                # start_date = six_months_ago.replace(day=1)
-                # end_date = today
-            elif value == 'current_quarter':
-                quarter = (today.month - 1) // 3 + 1
-                start_date = today.replace(month=(quarter - 1) * 3 + 1, day=1)
-            elif value == 'year_to_date':
-                # start_date = today.replace(month=1, day=1)
-                start_date = today.replace(month=4, day=1)
-            elif value == 'last_year':
-                # start_date = today.replace(month=1, day=1) - datetime.timedelta(days=365)
-                # end_date = today.replace(month=12, day=31)
-                start_date = today.replace(month=4, day=1) - datetime.timedelta(days=365)
-                end_date = today.replace(month=3, day=31)
-
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
   
-        # Convert start_date and end_date to datetime objects with min and max times
-        if start_date:
-            start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
-        if end_date:
-            end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
 
-        # Apply filters
-        if start_datetime and end_datetime:
-            queryset = queryset.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
 
-        return queryset
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
     
+    class Meta:
+        model = SaleOrder 
+        #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','flow_status','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
+
+class SaleInvoiceOrdersFilter(filters.FilterSet):
+    customer_id = filters.CharFilter(method=filter_uuid)
+    customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    sale_order_id = filters.CharFilter(method=filter_uuid)
+    invoice_date = filters.DateFilter()
+    total_amount = filters.RangeFilter()
+    tax_amount = filters.RangeFilter()
+    invoice_no = filters.CharFilter(lookup_expr='icontains')
+    advance_amount = filters.RangeFilter()
+    remarks= filters.CharFilter(lookup_expr='icontains')
+    order_status_id = filters.CharFilter(method=filter_uuid)
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
+    created_at = filters.DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = SaleInvoiceOrders
+        #do not change "invoice_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['invoice_no','customer_id','customer','sale_order_id','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
+
+class SaleReturnOrdersFilter(filters.FilterSet):
+    customer_id = filters.CharFilter(method=filter_uuid)
+    customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    return_date = filters.DateFilter()
+    due_date= filters.DateFilter()
+    return_no = filters.CharFilter(lookup_expr='icontains')
+    tax = filters.ChoiceFilter(choices=SaleReturnOrders.TAX_CHOICES)
+    tax_amount = filters.RangeFilter()
+    total_amount = filters.RangeFilter()
+    return_reason = filters.CharFilter(lookup_expr='icontains')
+    remarks= filters.CharFilter(lookup_expr='icontains')
+    order_status_id = filters.CharFilter(method=filter_uuid)
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+     
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = SaleReturnOrders
+        #do not change "return_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['return_no','return_date','due_date','customer_id','customer','tax', 'tax_amount','total_amount','return_reason','remarks','order_status_id', 'status_name', 'created_at','period_name','search','sort','page','limit']
+        
+class SaleOrdersItemsilter(filters.FilterSet):
+    sale_order_id = filters.CharFilter(method=filter_uuid)
+    
+    class Meta:
+        model = SaleOrderItems
+        fields =['sale_order_id']
+
+class QuickPacksFilter(filters.FilterSet):
+    name = filters.CharFilter(lookup_expr='icontains')
+    lot_qty = filters.NumberFilter(field_name='lot_qty', lookup_expr='exact')
+    description = filters.CharFilter(lookup_expr='icontains')
+    active = filters.ChoiceFilter(field_name='active',choices=[('N', 'No'),('Y', 'Yes')])
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+     
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = QuickPacks
+        #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['name','lot_qty','description','active','created_at','period_name','search','sort','page','limit']
+
+class SaleReceiptFilter(filters.FilterSet):
+    sale_invoice_id = filters.CharFilter(field_name='sale_invoice_id__customer_id__name', lookup_expr='icontains')
+    sale_invoice = filters.CharFilter(field_name='sale_invoice_id__invoice_no', lookup_expr='icontains')
+    receipt_name = filters.CharFilter(lookup_expr='icontains')
+    description = filters.CharFilter(lookup_expr='icontains')
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+     
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = SaleReceipt
+        #do not change "sale_invoice_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+        fields =['sale_invoice_id','sale_invoice','receipt_name','description','created_at','period_name','search','sort','page','limit']

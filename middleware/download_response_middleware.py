@@ -5,7 +5,7 @@
 # It proceeds to download model data, filter data, and customized filter data accordingly.
 #---------------------------------------------------------------------------------------------
 
-
+import logging
 import csv
 import json
 import decimal
@@ -18,6 +18,11 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from .fields import *
 
+# Set up basic configuration for logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Get an instance of a logger
+logger = logging.getLogger(__name__)
 
 # Below function is useful in such cases if some response data is still in 'Decimal Format' which is not co-operative to dump in json.
 # It converts Decimal data type to float data type
@@ -151,7 +156,7 @@ class StripDownloadJsonMiddleware:
 
     def __call__(self, request):
         if request.method == 'GET' and ('download' in request.path_info or 'download' in request.get_full_path()):
-            print("\n|----Hello i'm Download Middleware------|")
+            logger.info("\n|----Hello i'm Download Middleware------|")
             # Store the original path
             original_path = request.path_info
             # Store the fill path including filtering options
@@ -216,12 +221,12 @@ class StripDownloadJsonMiddleware:
                     ws.title = f'{filter_name}'
 
                     if filter_name not in custom_filters:
-                        print('------>Normal filter data is fetched\n')
+                        logger.info("Normal filter data is fetched.")
                         response = download_fields_excel_data(response,original_path)
                         return response
     
                     if new_data and filter_name in custom_filters: #if new_data:
-                        print('------>Custom Filter data is fetched\n')
+                        logger.info("Custom Filter data is fetched.")
                         # Write the headers
                         header = new_data[0].keys()
                         writer.writerow(header)

@@ -1,6 +1,6 @@
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from django.utils.encoding import smart_str, force_bytes, DjangoUnicodeDecodeError
-from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
+from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer, UserSerializer as DjoserUserSerializer
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from apps.company.serializers import ModBranchesSerializer, ModCompaniesSerializer
 from apps.masters.serializers import ModStatusesSerializer
@@ -8,6 +8,7 @@ from rest_framework import serializers
 from .utils import Utils
 from .passwdgen import *
 import os
+from apps.products.serializers import PictureSerializer
 from config.utils_variables import baseurl
 #=========================MOD_SERIALIZATION=========================
 class ModRoleSerializer(serializers.ModelSerializer):
@@ -18,8 +19,23 @@ class ModRoleSerializer(serializers.ModelSerializer):
 class ModModulesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Modules
-        fields = ['module_id','module_name']
+        fields = ['module_id', 'module_name', 'mod_link', 'mod_icon']
 
+class ModUserAccessModuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Modules
+        fields = ['module_name', 'mod_link', 'mod_icon']
+
+class ModUserAccessSectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ModuleSections
+        fields = ['section_name', 'sec_link', 'sec_icon']
+
+class ModuleSectionChildSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ModuleSections
+        fields = ['sec_link', 'section_name', 'sec_icon']
+        
 class ModActionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Actions
@@ -28,7 +44,7 @@ class ModActionsSerializer(serializers.ModelSerializer):
 class ModModuleSectionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ModuleSections
-        fields = ['section_id','section_name']
+        fields = ['section_id','section_name', 'sec_link', 'sec_icon']
 
 class ModUserTimeRestrictionsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -48,7 +64,7 @@ class ModRolePermissionsSerializer(serializers.ModelSerializer):
 class ModUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['user_id','first_name']
+        fields = ['user_id','first_name','last_name','username']
         
 class ModUserRoleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -91,11 +107,41 @@ class ModuleSectionsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ModulesSerializer(serializers.ModelSerializer):
-    module_sections = ModuleSectionsSerializer(many=True, read_only=True, source='modulesections_set')
+    # module_sections = ModuleSectionsSerializer(many=True, read_only=True, source='modulesections_set') //commented for future references
 
     class Meta:
         model = Modules
         fields = '__all__'
+
+# class UserAccessSerializer(serializers.ModelSerializer):
+#     # role = ModRoleSerializer(source='role_id', read_only = True)
+#     module = ModUserAccessModuleSerializer(source='module_id', read_only = True)
+#     # action =  ModActionsSerializer(source='action_id', read_only = True)
+#     section = ModUserAccessSectionSerializer(source='section_id', read_only = True)
+
+#     class Meta:
+#         model = RolePermissions
+#         fields = ['module', 'section']
+
+
+class UserAccessModuleSerializer(serializers.ModelSerializer):
+    child = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Modules
+        fields = ['module_name', 'mod_icon', 'child']
+
+    def get_child(self, obj):
+        # Get the sections related to this module
+        sections = ModuleSections.objects.filter(module_id=obj.module_id)
+        return ModuleSectionChildSerializer(sections, many=True).data
+
+class UserAccessSerializer(serializers.ModelSerializer):
+    module = UserAccessModuleSerializer(source='module_id', read_only=True)
+
+    class Meta:
+        model = RolePermissions
+        fields = ['module']
 
 class RolePermissionsSerializer(serializers.ModelSerializer):
     role = ModRoleSerializer(source='role_id', read_only = True)
@@ -112,49 +158,39 @@ class GetUserDataSerializer(serializers.ModelSerializer):
     branch = ModBranchesSerializer(source='branch_id', read_only = True)
     status = ModStatusesSerializer(source='status_id', read_only = True)
     role = ModRoleSerializer(source='role_id', read_only = True)
-    company = ModCompaniesSerializer(source='company_id', read_only = True)
     class Meta:
         model = User
-        fields = ['email', 'user_id', 'username', 'title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'branch', 'status', 'role', 'company']   #if we use here '__all__' then it shows password field also.
-#=================================================================================================
-#user create Serializer
+        fields = ['email', 'user_id', 'username', 'title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'branch', 'status', 'role']   #if we use here '__all__' then it shows password field also.
+
+#====================================USER-CREATE-SERIALIZER=============================================================
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
     class Meta(BaseUserCreateSerializer.Meta):
+        profile_picture_url = PictureSerializer(many=True)
         model = User
         fields = '__all__'
 
-    # '''CURD Operations For Profile Picture'''
-    # def create(self, validated_data):
-    #         profile_picture_url = validated_data.pop('profile_picture_url', None)
-    #         instance = super().create(validated_data)
-    #         if profile_picture_url:
-    #             instance.profile_picture_url = profile_picture_url
-    #             instance.save()
-    #         return instance
+#====================================USER-UPDATE-SERIALIZER=============================================================
+class CustomUserUpdateSerializer(DjoserUserSerializer):
+    class Meta:
+        model = User
+        fields = DjoserUserSerializer.Meta.fields 
+
+    def update(self, instance, validated_data):
+        # Update instance fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        instance.save()
+        return instance
     
-    # def update(self, instance, validated_data):
-    #     profile_picture_url = validated_data.pop('profile_picture_url', None)
-    #     if profile_picture_url:
-    #         # Delete the previous picture file and its directory if they exist
-    #         if instance.profile_picture_url:
-    #             picture_path = instance.profile_picture_url.path
-    #             if os.path.exists(picture_path):
-    #                 os.remove(picture_path)
-    #                 picture_dir = os.path.dirname(picture_path)
-    #                 if not os.listdir(picture_dir):
-    #                     os.rmdir(picture_dir)
-    #         instance.profile_picture_url = profile_picture_url
-    #         instance.save()
-    #     return super().update(instance, validated_data)
-#===================================================================================================
-#login serializer
+#====================================USER-LOGIN-SERIALIZER=============================================================
 class UserLoginSerializer(serializers.ModelSerializer):
     username = serializers.CharField(max_length=255)
     class Meta:
         model = User
         fields =['username', 'password']
-#=================================================================================================
-#change known Password serializer
+
+#====================================USER-CHANGE-KNOWN-PASSWD-SERIALIZER=============================================================
 class UserChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(max_length=255, style={'input_type': 'password'}, write_only=True)
     password = serializers.CharField(max_length=255, style={'input_type':'password'}, write_only=True)
@@ -179,8 +215,7 @@ class UserChangePasswordSerializer(serializers.Serializer):
         user.save()
         return attrs
 
-#====================================================================================================
-#forgot passswd serializer
+#====================================USER-FORGET-PASSWD-SERIALIZER=============================================================
 class SendPasswordResetEmailSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
     class Meta:

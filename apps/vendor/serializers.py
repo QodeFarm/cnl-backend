@@ -2,6 +2,7 @@ from apps.masters.serializers import ModFirmStatusesSerializers, ModTerritorySer
 from apps.customer.serializers import ModLedgerAccountsSerializers
 from rest_framework import serializers
 from .models import *
+from apps.products.serializers import PictureSerializer
 
 class ModVendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerializer
     class Meta:
@@ -66,6 +67,7 @@ class VendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerialize
     price_category = ModPriceCategoriesSerializers(source='price_category_id', read_only = True)
     vendor_agent = ModVendorAgentSerializer(source='vendor_agent_id', read_only = True)
     transporter = ModTransportersSerializers(source='transporter_id', read_only = True)
+    picture = PictureSerializer(many=True)
 
     class Meta:
         model = Vendor
@@ -75,13 +77,13 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
     vendor_addresses = serializers.SerializerMethodField()
-    vendor_category_id = ModVendorCategorySerializer()
-    ledger_account_id = ModLedgerAccountsSerializers()
+    vendor_category = serializers.SerializerMethodField() 
+    ledger_account = serializers.SerializerMethodField() 
     city = serializers.SerializerMethodField() 
 
     class Meta:
         model = Vendor
-        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category_id', 'ledger_account_id', 'created_at','vendor_addresses'] 
+        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category', 'ledger_account', 'created_at','vendor_addresses', 'updated_at'] 
 
     def get_vendor_address_details(self, obj):
         addresses = VendorAddress.objects.filter(vendor_id=obj.vendor_id)
@@ -110,9 +112,9 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
         }
 
         if billing_address:
-            vendor_addresses["billing_address"] = f"{billing_address.address}, {billing_address.city_id.city_name}, {billing_address.state_id.state_name}, {billing_address.country_id.country_name}, {billing_address.pin_code}, Phone: {billing_address.phone}"
+            vendor_addresses["billing_address"] = f"{billing_address.address}, {billing_address.city_id.city_name}, {billing_address.state_id.state_name}, {billing_address.country_id.country_name}, {billing_address.pin_code}, Phone: {billing_address.phone},email: {billing_address.email}"
         if shipping_address:
-            vendor_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone}"
+            vendor_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone},email: {shipping_address.email}"
 
         return email, phone, city, vendor_addresses
 
@@ -130,6 +132,16 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
     
     def get_vendor_addresses(self, obj):
         return self.get_vendor_address_details(obj)[3]
+    
+    def get_ledger_account(self, obj):
+        if obj.ledger_account_id:
+            return ModLedgerAccountsSerializers(obj.ledger_account_id).data
+        return None
+    
+    def get_vendor_category(self, obj):
+        if obj.vendor_category_id:
+            return ModVendorCategorySerializer(obj.vendor_category_id).data
+        return None
     
     def get_vendors_summary(vendors):
         serializer = VendorsOptionsSerializer(vendors, many=True)

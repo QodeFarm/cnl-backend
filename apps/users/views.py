@@ -1,12 +1,15 @@
 import copy
-from .serializers import CustomUserUpdateSerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer
+from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
+from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from rest_framework.decorators import permission_classes
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
+from django.shortcuts import get_object_or_404
+from django.db import connection, transaction
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -14,11 +17,15 @@ from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
 from rest_framework import status
-from django.utils import timezone  
-import json
 import uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+import json
+from collections import defaultdict
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
+from .filters import RolePermissionsFilter
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -128,6 +135,9 @@ class UserAllowedWeekdaysViewSet(viewsets.ModelViewSet):
 class RolePermissionsViewSet(viewsets.ModelViewSet):
     queryset = RolePermissions.objects.all()
     serializer_class = RolePermissionsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = RolePermissionsFilter
+    # ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -137,30 +147,106 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
 
-# ==================================================================================================
-# Creating tokens manually
+
+class UserAccessAPIView(APIView):
+    def get(self, request, role_id):
+        try:
+            # Check if the user has a role assigned
+            if role_id:
+
+                # Fetch all permissions related to the user's role
+                permissions = RolePermissions.objects.filter(role_id=role_id).select_related('module_id','section_id','action_id').order_by('module_id__created_at','section_id__created_at','action_id__created_at')
+                if permissions.exists():
+                    # Use defaultdict to group permissions by module
+                    module_dict = defaultdict(list)
+
+                    for permission in permissions:
+                        module_name = permission.module_id.module_name
+                        mod_icon = permission.module_id.mod_icon
+
+                        # Action data to be grouped under each section
+                        action_data = {
+                            'action_id': permission.action_id.action_id,
+                            'action_name': permission.action_id.action_name
+                        }
+                        
+                        # Section data with an added list of actions
+                        section_data = {
+                            'sec_link': permission.section_id.sec_link,
+                            'section_name': permission.section_id.section_name,
+                            'sec_icon': permission.section_id.sec_icon or None,
+                            'actions': []  # Placeholder for actions
+                        }
+
+                        # Check if the section already exists for this module
+                        section_exists = False
+                        for existing_section in module_dict[(module_name, mod_icon)]:
+                            if existing_section['section_name'] == section_data['section_name']:
+                                # Append the action to the existing section
+                                existing_section['actions'].append(action_data)
+                                section_exists = True
+                                break
+
+                        # If the section doesn't exist, add the section and the action
+                        if not section_exists:
+                            section_data['actions'].append(action_data)
+                            module_dict[(module_name, mod_icon)].append(section_data)
+
+                    # Prepare the response data in the desired format
+                    data = []
+                    for (module_name, mod_icon), sections in module_dict.items():
+                        data.append({
+                            "module_name": module_name,
+                            "mod_icon": mod_icon,
+                            "module_sections": sections
+                        })
+
+                    # Return the structured response
+                    return Response({
+                        'count': len(data),       
+                        'message': None,                 
+                        'role_id': str(role_id),
+                        'data': data
+                    }, status=status.HTTP_200_OK)
+                else:
+                    # If no permissions exist for the role
+                    return Response({
+                        'role_id': str(role_id),
+                        'message': 'No permissions found for this role',
+                        'data': [],
+                    }, status=status.HTTP_200_OK)
+            else:
+                # If the user has no role assigned
+                return Response({
+                    'message': 'Role not assigned to user'
+                }, status=status.HTTP_404_NOT_FOUND)
+        except User.DoesNotExist:
+            # If the user is not found in the database
+            return Response({
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Roles.DoesNotExist:
+            # If the role is not found in the database
+            return Response({
+                'message': 'Role not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+#====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
 
     profile_picture_url = None
     if user.profile_picture_url:
-        profile_picture_url = user.profile_picture_url  #removed '.url' cause now profile_picture_url became charfield
+        profile_picture_url = user.profile_picture_url
 
     try:
-        roles_id = UserRoles.objects.filter(
-            user_id=user.user_id).values_list('role_id', flat=True)
-        role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
-        role_permissions_json = RolePermissionsSerializer(
-            role_permissions_id, many=True)
-        Final_data = json.dumps(role_permissions_json.data,
-                                default=str).replace("\\", "")
-        role_permissions = json.loads(Final_data)
-        role_permissions = role_permissions[0]
-        remove_fields(role_permissions)
+        role_id = user.role_id.role_id
 
     except (ObjectDoesNotExist, IndexError, KeyError) as e:
-            role_permissions = "Role not assigned yet"
+            role_id = "Role not assigned yet"
+
     return {
         'username': user.username,
         'first_name': user.first_name,
@@ -172,10 +258,10 @@ def get_tokens_for_user(user):
         'refresh_token': str(refresh),
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
-        'role_permissions': role_permissions
+        'role_id': str(role_id)
     }
 
-# login View
+#====================================USER-LOGIN-VIEW=============================================================
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -193,8 +279,7 @@ class UserLoginView(APIView):
         else:
             return build_response(1, 'Username or Password is not valid', [] , status.HTTP_404_NOT_FOUND)
 
-# ==================================================================================================
-# change known Password view
+#====================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -204,8 +289,8 @@ class UserChangePasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         return build_response(1, 'Password Changed Successfully', [] , status.HTTP_200_OK)
 
-# =================================================================================================
-# Forgot Password
+
+#====================================USER-FORGET-PASSWD-VIEW=============================================================
 @permission_classes([AllowAny])
 class SendPasswordResetEmailView(APIView):
     renderer_classes = [UserRenderer]
@@ -225,27 +310,61 @@ class UserPasswordResetView(APIView):
         serializer.is_valid(raise_exception=True)
         return build_response(1, 'Password Reset Successfully', [] , status.HTTP_200_OK)   
 
-# =================================================================================================
+# ============================= #USER-CREATE   &    USER-UPDATE#==========================================================
 class CustomUserCreateViewSet(DjoserUserViewSet):
-    def create(self, request, *args, **kwargs):        
+    def create(self, request, *args, **kwargs):
         if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
-        # Assuming the first item in the list contains the attachment data
             attachment_data_list = request.data['profile_picture_url']
             if attachment_data_list:
-                first_attachment = attachment_data_list[0]
-                request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
+                # Ensure all items in the list have the required fields
+                for attachment in attachment_data_list:
+                    if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
+                        return build_response(0, "Missing required fields in some profile_picture_url data.", [], status.HTTP_400_BAD_REQUEST)
+               
+                # Set the profile_picture_url field in request data as a list of objects
+                request.data['profile_picture_url'] = attachment_data_list
+            else:
+                # Handle case where 'profile_picture_url' list is empty
+                return build_response(0, "'profile_picture_url' list is empty.", [], status.HTTP_400_BAD_REQUEST)
+        else:
+            # Handle the case where 'profile_picture_url' is not provided or not a list
+            return build_response(0, "'profile_picture_url' field is required and should be a list.", [], status.HTTP_400_BAD_REQUEST)
+ 
+        # Proceed with creating the instance
         try:
             response = super().create(request, *args, **kwargs)
+           
+            # Format the response to include the profile_picture_url data
+            if isinstance(response.data, dict):
+                picture_data = response.data.get('profile_picture_url')
+                if picture_data:
+                    response.data['profile_picture_url'] = picture_data
+            return response
+       
+        except ValidationError as e:
+            return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
+    
+    def update(self, request, *args, **kwargs):
+        try:
+            # Retrieve the user instance
+            partial = kwargs.pop('partial', False)
+            instance = self.get_object()
+
+            # Use the custom serializer for updates
+            serializer = CustomUserUpdateSerializer(instance, data=request.data, partial=partial)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+
             custom_response_data = {
                 'count': '1',
-                'msg': 'Success! Your user account has been created. Please check your mailbox',
-                'data': [response.data]
+                'msg': 'Success! Your user account has been updated.',
+                'data': [serializer.data]
             }
-            return Response(custom_response_data, status=status.HTTP_201_CREATED)
+            return Response(custom_response_data, status=status.HTTP_200_OK)
         except ValidationError as e:
             error_response_data = {
                 'count': '1',
-                'msg': 'User creation failed due to validation errors.',
+                'msg': 'User update failed due to validation errors.',
                 'data': [e.detail]
             }
             return Response(error_response_data, status=status.HTTP_201_CREATED)
@@ -283,9 +402,9 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
 
         except User.DoesNotExist:
             return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-# ++==================================CODE with GET, GET ALL, UPDATE, DELETE Methods fro USER:========+++++++++++++++++++++++++++++++++++++++
-class UserUpdateView(APIView):
-    
+
+# =============================USER GET ,  USER GET-All  ,  USER DELETE===================================================
+class UserManageView(APIView):    
     def get(self, request, user_id=None):
         """
         Retrieve a specific user if user_id is provided, otherwise retrieve all users.
@@ -299,38 +418,40 @@ class UserUpdateView(APIView):
             serializer = GetUserDataSerializer(users, many=True)
             return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
 
-    def put(self, request, user_id):
-        """
-        Update user data for a specific user identified by user_id.
-        """
-        user = get_object_or_404(User, user_id=user_id)
-        
-        if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
-            # Assuming the first item in the list contains the attachment data
-            attachment_data_list = request.data['profile_picture_url']
-            if attachment_data_list:
-                first_attachment = attachment_data_list[0]
-                request.data['profile_picture_url'] = first_attachment.get('attachment_path', None)
-
-        # Serialize the user data
-        serializer = GetUserDataSerializer(user, data=request.data, partial=True)
-        
-        # Validate and save the updated user data
-        if serializer.is_valid():
-            serializer.save()
-            return build_response(1, "User Data Updated Successfully!", serializer.data, status.HTTP_200_OK)
-        
-        return build_response(1, serializer.errors, [] , status.HTTP_400_BAD_REQUEST)
-
     def delete(self, request, user_id):
         """
         Delete a specific user identified by user_id.
         """
-        user = get_object_or_404(User, user_id=user_id)
-        user.delete()
-        return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
+        user_id_str = str(user_id).replace("-", "")
+        # user = get_object_or_404(User, user_id=user_id)
+        try:
+        # Start a database transaction
+            with transaction.atomic():
+                # Get the cursor object to execute raw SQL queries
+                with connection.cursor() as cursor:
+                    # Check if the user exists in the database
+                    cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = %s", [user_id_str])
+                    user_exists = cursor.fetchone()[0]
 
-# =================================================================================================
+                    if not user_exists:
+                        # If the user does not exist, return a 404 response
+                        return build_response(0, "User not found!", {}, status.HTTP_404_NOT_FOUND)
+
+                    # Execute the deletion query
+                    cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id_str])
+
+                    # Check if the deletion was successful
+                    if cursor.rowcount == 0:
+                        # If no rows were deleted, return an error response
+                        return build_response(0, "Failed to delete the user!", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+                    # If successful, return a success response
+                    return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
+
+        except Exception as e:
+            return build_response(0, "An error occurred while deleting the user.", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#====================================USER-ACTIVATION-VIEW=============================================================
 class CustomUserActivationViewSet(DjoserUserViewSet):
     @action(["post"], detail=False)
     def activation(self, request, *args, **kwargs):
@@ -349,7 +470,8 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
                 'data': [e.detail],
             }
             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
-# ++==================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
+        
+#====================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
 class RolePermissionsCreateView(APIView):
     def post(self, request, *args, **kwargs):
         result = self.create_list_data(request.data)
@@ -361,6 +483,12 @@ class RolePermissionsCreateView(APIView):
   
 
     def create_list_data(self, data):
+        role_id = data[0].get('role_id')
+        deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
+        #Check if deletion was successful
+        if deleted_count == 0:
+            return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
+        
         created_records = []
         for item in data:
             module_id = item.get('module_id')
@@ -423,22 +551,22 @@ class RolePermissionsCreateView(APIView):
         
         return build_response(deleted_count, f"{deleted_count} records deleted",  [], status.HTTP_204_NO_CONTENT)
     
-
-    def put(self, request, role_id, *args, **kwargs):
-        # Delete existing records for the given role_id
-        deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
+    # This is redundant code will needed in future.
+    # def put(self, request, role_id, *args, **kwargs):
+    #     # Delete existing records for the given role_id
+    #     deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
         
-        # Check if deletion was successful
-        if deleted_count == 0:
-            return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
+    #     # Check if deletion was successful
+    #     if deleted_count == 0:
+    #         return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
 
-        # Create new records
-        result = self.create_list_data(request.data)
-        if isinstance(result, Response):
-            return result
+    #     # Create new records
+    #     result = self.create_list_data(request.data)
+    #     if isinstance(result, Response):
+    #         return result
         
-        serializer = RolePermissionsSerializer(result, many=True)
-        return build_response(len(result), "Record created successfully", serializer.data, status.HTTP_201_CREATED)
+    #     serializer = RolePermissionsSerializer(result, many=True)
+    #     return build_response(len(result), "Record created successfully", serializer.data, status.HTTP_201_CREATED)
 
      # Query the RolePermissions table for the given role_id
     def get(self, request, role_id, *args, **kwargs):

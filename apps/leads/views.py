@@ -1,13 +1,18 @@
+# from itertools import count
 import logging
 from django.http import Http404
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
+from apps.leads.filters import LeadsFilter
+from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
 from config.utils_methods import build_response, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data
 from rest_framework.views import APIView
 from datetime import datetime
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -44,6 +49,9 @@ class InteractionTypesView(viewsets.ModelViewSet):
 class LeadsView(viewsets.ModelViewSet):
     queryset = Leads.objects.all()
     serializer_class = LeadsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = LeadsFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -101,13 +109,26 @@ class LeadsViewSet(APIView):
         try:
             logger.info("Retrieving all lead")
             queryset = Leads.objects.all()
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = Leads.objects.count()
+                        
+            # Apply filters manually
+            if request.query_params:
+                filterset = LeadsFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+
             serializer = LeadsSerializer(queryset, many=True)
             logger.info("lead data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     def retrieve(self, request, *args, **kwargs):
         """

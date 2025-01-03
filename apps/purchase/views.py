@@ -2,12 +2,15 @@ import logging
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
+from apps.purchase.filters import PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
+from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
 from config.utils_methods import *
 from config.utils_variables import *
 from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from uuid import UUID
+from apps.products.models import Products, ProductVariation
 from apps.sales.serializers import OrderAttachmentsSerializer,OrderShipmentsSerializer
 from apps.sales.models import OrderAttachments,OrderShipments
 from rest_framework import viewsets
@@ -15,6 +18,8 @@ from apps.masters.models import OrderTypes
 from rest_framework.views import APIView
 from django.db import transaction
 from rest_framework.serializers import ValidationError
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,6 +31,9 @@ logger = logging.getLogger(__name__)
 class PurchaseOrdersViewSet(viewsets.ModelViewSet):
     queryset = PurchaseOrders.objects.all()
     serializer_class = PurchaseOrdersSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = PurchaseOrdersFilter
+    ordering_fields = []
  
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -52,6 +60,9 @@ class PurchaseorderItemsViewSet(viewsets.ModelViewSet):
 class PurchaseInvoiceOrdersViewSet(viewsets.ModelViewSet):
     queryset = PurchaseInvoiceOrders.objects.all()
     serializer_class = PurchaseInvoiceOrdersSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = PurchaseInvoiceOrdersFilter
+    ordering_fields = []
  
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -78,6 +89,9 @@ class PurchaseInvoiceItemViewSet(viewsets.ModelViewSet):
 class PurchaseReturnOrdersViewSet(viewsets.ModelViewSet):
     queryset = PurchaseReturnOrders.objects.all()
     serializer_class = PurchaseReturnOrdersSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = PurchaseReturnOrdersFilter
+    ordering_fields = []
  
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -131,14 +145,29 @@ class PurchaseOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase order summary")
-                purchaseorders = PurchaseOrders.objects.all()
+                purchaseorders = PurchaseOrders.objects.all().order_by('-created_at')
                 data = PurchaseOrdersOptionsSerializer.get_purchase_orders_summary(purchaseorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
             instance = PurchaseOrders.objects.all()
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = PurchaseOrders.objects.count()
+
+            # Apply filters manually
+            if request.query_params:
+                queryset = PurchaseOrders.objects.all().order_by('-created_at')
+                filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    serializer = PurchaseOrdersOptionsSerializer(queryset, many=True)
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except PurchaseOrders.DoesNotExist:
             logger.error("Purchase order does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
@@ -146,6 +175,7 @@ class PurchaseOrderViewSet(APIView):
             serializer = PurchaseOrdersSerializer(instance, many=True)
             logger.info("Purchase order data retrieved successfully.")
             return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
+        
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -449,14 +479,29 @@ class PurchaseInvoiceOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase Invoice orders summary")
-                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all()
+                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all().order_by('-created_at')
                 data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
             instance = PurchaseInvoiceOrders.objects.all()
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = PurchaseInvoiceOrders.objects.count()
+
+            # Apply filters manually
+            if request.query_params:
+                queryset = PurchaseInvoiceOrders.objects.all().order_by('-created_at')
+                filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    serializer = PurchaseInvoiceOrdersOptionsSerializer(queryset, many=True)
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except PurchaseInvoiceOrders.DoesNotExist:
             logger.error("Purchase invoice order does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
@@ -604,6 +649,11 @@ class PurchaseInvoiceOrderViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
+        # Stock verification
+        stock_error = product_stock_verification(Products, ProductVariation, purchase_invoice_items_data)
+        if stock_error:
+            return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)        
+        
         #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -651,6 +701,10 @@ class PurchaseInvoiceOrderViewSet(APIView):
             "order_attachments":order_attachments,
             "order_shipments":order_shipments,
         }
+
+        # Update Product Stock
+        update_product_stock(Products, ProductVariation, purchase_invoice_items_data, 'subtract')        
+
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
     def put(self, request, *args, **kwargs):
@@ -765,14 +819,29 @@ class PurchaseReturnOrderViewSet(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"
+            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase return orders summary")
-                purchasereturnorders = PurchaseReturnOrders.objects.all()
+                purchasereturnorders = PurchaseReturnOrders.objects.all().order_by('-created_at')
                 data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(purchasereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
             instance = PurchaseReturnOrders.objects.all()
+            
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10)) 
+            total_count = PurchaseReturnOrders.objects.count()            
+            
+            # Apply filters manually
+            if request.query_params:
+                queryset = PurchaseReturnOrders.objects.all().order_by('-created_at')
+                filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    serializer = PurchaseReturnOrdersOptionsSerializer(queryset, many=True)
+                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except PurchaseReturnOrders.DoesNotExist:
             logger.error("Purchase return order does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
@@ -920,6 +989,14 @@ class PurchaseReturnOrderViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
+        """
+        Verifies if PREVIOUS PRODUCT INTANCE is available for the product.
+        Raises a ValidationError if the product's instance is not present in database.
+        """
+        stock_error = previous_product_instance_verification(ProductVariation, purchase_return_items_data)
+        if stock_error:
+            return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)        
+
         #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -967,6 +1044,10 @@ class PurchaseReturnOrderViewSet(APIView):
             "order_attachments":order_attachments,
             "order_shipments":order_shipments,
         }
+
+        # Update the stock with returned products.
+        update_product_stock(Products, ProductVariation, purchase_return_items_data, 'add')
+
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
     def put(self, request, *args, **kwargs):

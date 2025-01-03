@@ -23,6 +23,9 @@ productsalesgltable = 'product_sales_gl'
 productpurchasegltable ='product_purchase_gl'
 productstable = 'products'
 productitembalancetable = 'product_item_balance'
+colors = 'colors'
+sizes = 'sizes'
+productvariations = 'product_variations'
 
 #vendor db_tables
 vendorcategory='vendor_category'
@@ -37,6 +40,7 @@ saleorders = 'sale_orders'
 paymenttransactions = 'payment_transactions'
 invoices = 'invoices'
 warehouses = 'warehouses'
+warehouselocations = 'warehouse_locations'
 saleinvoiceitemstable = 'sale_invoice_items'
 shipments = 'shipments'
 salespricelist  = 'sales_price_list'
@@ -50,9 +54,15 @@ orderattachmentstable = 'order_attachments'
 ordershipmentstable = 'order_shipments'
 quickpackitems = 'quick_pack_items'
 quickpacks = 'quick_packs'
-
+salereceipts = 'sale_receipts'
 #inventory db_tables
 warehousestable ='warehouses'
+salecreditnote = 'sale_credit_notes'
+salecreditnoteitems = 'sale_credit_note_items'
+saledebitnote = 'sale_debit_notes'
+saledebitnoteitems = 'sale_debit_note_items'
+config_block = 'inventory_block_config'
+inventory_blocked = 'blocked_inventory'
 
 #purchase db_tables
 purchaseorderstable = 'purchase_orders'
@@ -105,6 +115,13 @@ paymentlinktable = 'payment_link_types'
 orderstatusestable = 'order_statuses'
 ordertypestable = 'order_types'
 taskprioritiestable ='task_priorities'
+returnoptions = 'return_options'
+entities = 'entities'
+fieldtypes = 'field_types'
+usergroupstable = 'user_groups'
+usergroupmemberstable = 'user_group_members'
+packageunits = 'package_units' 
+gpackageunits = 'g_package_units'
 
 #Authentication db_tables
 userstable = 'users'
@@ -128,6 +145,74 @@ leadinteractions = 'lead_interactions'
 leadassignmenthistory = 'lead_assignment_history'
 
 # HRMS
+jobtypes = 'job_types'
 designations = 'designations'
+jobcodes = 'job_codes'
 departments = 'departments'
-employees = 'employees'
+shifts = 'shifts'
+employees = 'employees' 
+employeedetails = 'employee_details'
+employeesalary = 'employee_salary'
+salarycomponents = 'salary_components'
+employeesalarycomponents = 'employee_salary_components'
+leavetypes = 'leave_types'
+employeeleaves = 'employee_leaves'
+leaveapprovals = 'leave_approvals'
+employeeleavebalance = 'employee_leave_balance'
+attendance = 'attendance'
+swipes = 'swipes'
+biometric = 'biometric'
+
+# Production
+bom = 'bom'
+billofmaterials = 'bill_of_materials'
+productionstatuses = 'production_statuses'
+workorders = 'work_orders'
+machines = 'machines'
+productionworkers = 'production_workers'
+rawmaterials = 'raw_materials'
+workorderstages = 'work_order_stages'
+defaultmachinery = 'default_machinery'
+workordermachines = 'work_order_machines'
+labor = 'labor'
+completedquantity = 'completed_quantity'
+
+#workflow tables
+workflow = 'workflows'
+workflowstages = 'workflow_stages'
+
+#Define default work flow name
+default_workflow_name = 'sales'
+
+# Finance db_tables
+financialreports = 'financial_reports'
+expenseclaims = 'expense_claims'
+budgets = 'budgets'
+taxconfigurations = 'tax_configurations'
+paymenttransaction = 'payment_transaction'
+journalentrylines = 'journal_entry_lines'
+journalentries = 'journal_entries'
+chartofaccounts = 'chart_of_accounts'
+bankaccounts = 'bank_accounts'
+
+#custom db tables
+customfields = 'custom_fields'
+customfieldoptions = 'custom_field_options'
+customfieldvalues = 'custom_field_values'
+
+# reminders db_tables
+notificationfrequenciestable ='notification_frequencies'
+notificationmethodstable ='notification_methods'
+remindertypestable = 'reminder_types'
+reminderstable = 'reminders'
+reminderrecipientstable = 'reminder_recipients'
+remindersettingstable = 'reminder_settings'
+reminderlogstable = 'reminder_logs'
+
+
+# Define the stages for the default workflow
+default_workflow_stages = {
+    1: 'sale_order',
+    2: 'dispatch',
+    3: 'invoice'
+}

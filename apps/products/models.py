@@ -2,11 +2,11 @@ import os,uuid
 from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import pre_delete
-from apps.inventory.models import Warehouses
+from apps.inventory.models import WarehouseLocations, Warehouses
 from config.utils_methods import *
 from config.utils_variables import *
 from config.utils_methods import OrderNumberMixin
-from apps.masters.models import ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands
+from apps.masters.models import GPackageUnit, PackageUnit, ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands
 
 def product_groups_picture(instance, filename):
     # Get the file extension
@@ -197,7 +197,7 @@ class Products(OrderNumberMixin):
     stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, db_column = 'stock_unit_id')
     print_barcode = models.BooleanField(null=True, default=None)
     gst_classification_id = models.ForeignKey(ProductGstClassifications, on_delete=models.CASCADE, null=True, default=None, db_column = 'gst_classification_id')
-    picture = models.ImageField(max_length=255, default=None, null=True, upload_to=products_picture)
+    picture = models.JSONField(null=True, default=None)
     sales_description = models.TextField(null=True, default=None)
     sales_gl_id = models.ForeignKey(ProductSalesGl, on_delete=models.CASCADE, db_column = 'sales_gl_id')
     mrp = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
@@ -228,7 +228,13 @@ class Products(OrderNumberMixin):
     ]
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, null=True, default=None)
     print_name = models.CharField(max_length=255)
-    hsn_code= models.CharField(max_length=15)
+    hsn_code= models.CharField(max_length=15, null=True, default=None)
+    balance = models.IntegerField(default=0)
+    pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, null=True, default=None, db_column = 'pack_unit_id', related_name='pack_unit')
+    g_pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, null=True, default=None, db_column = 'g_pack_unit_id', related_name='g_pack_unit')
+    pack_vs_stock = models.IntegerField(default=0)
+    g_pack_vs_pack = models.IntegerField(default=0)
+    packet_barcode = models.CharField(max_length=50, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -236,24 +242,87 @@ class Products(OrderNumberMixin):
         db_table = productstable
 
     def __str__(self):
-        return f"{self.product_id} {self.name}"
+        return f"{self.name}"
 
-    @receiver(pre_delete, sender='products.products')
-    def delete_branches_picture(sender, instance, **kwargs):
-        if instance.picture and instance.picture.name:
-            file_path = instance.picture.path
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                picture_dir = os.path.dirname(file_path)
-                if not os.listdir(picture_dir):
-                    os.rmdir(picture_dir)   
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)   
+
+class Size(models.Model):
+    size_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    size_name = models.CharField(max_length=50, blank=True, null=True)
+    size_category = models.CharField(max_length=100)
+    size_system = models.CharField(max_length=50, blank=True, null=True)
+    length = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    height = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    width = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    size_unit = models.CharField(max_length=50, blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = sizes
+
+    def __str__(self):
+        return f"{self.size_name} ({self.size_category}, {self.size_system})"
+
+
+class Color(models.Model):
+    color_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    color_name = models.CharField(max_length=50, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)    
+
+    class Meta:
+        db_table = colors
+
+    def __str__(self):
+        return self.color_name
+
+class ProductVariation(models.Model):
+    product_variation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id', related_name='locations')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')
+    sku = models.CharField(max_length=100, unique=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    quantity = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = productvariations
+
+    def __str__(self):
+        return f"{self.product_id.name} - {self.size_id.size_name} - {self.color_id.color_name}"
 
 class ProductItemBalance(models.Model):
-    product_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id')
-    balance = models.IntegerField(default=0)
-    location_id= models.CharField(max_length=36)
-    warehouse_id = models.ForeignKey(Warehouses, on_delete=models.CASCADE, null=True, default=None, db_column = 'warehouse_id')
+    product_item_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
+    warehouse_location_id = models.ForeignKey(WarehouseLocations, on_delete=models.CASCADE, db_column='warehouse_location_id')
+    quantity = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -261,4 +330,4 @@ class ProductItemBalance(models.Model):
         db_table = productitembalancetable
 
     def __str__(self):
-        return f"{self.product_balance_id}"
+        return f'{self.warehouse_location_id}'
