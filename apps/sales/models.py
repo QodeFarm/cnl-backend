@@ -68,73 +68,206 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         
     def save(self, *args, **kwargs):
         from apps.masters.views import increment_order_number
-
-        # Determine if this is a new record based on the `_state.adding` property
+        
         is_new_record = self._state.adding
 
-        # Set the order status to "Pending" if not already set
-        if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+        # Assign default stage for new orders
+        if is_new_record or self.flow_status_id is None:
+            is_child = self.is_child_order(self.order_no)
+            if is_child:
+                self.flow_status_id = self.get_stage_flow_status(2)  # Default stage for child orders
+            else:
+                self.flow_status_id = self.get_stage_flow_status(1)  # Default stage for parent orders
 
-        # Only assign the flow_status_id when creating a new sale order
-        if is_new_record or self.flow_status_id is None:  # Check if it's a new order or if flow_status_id is None
-            try:
-                print("Assigning flow_status_id to the first stage...")
+        super().save(*args, **kwargs)  # Save the order
 
-                # Fetch the section ID for Sale Order
-                section_id = get_section_id('Sale Order')
-                print(f"Section ID for 'Sale Order': {section_id}")
-
-                # Fetch the active workflow for this section
-                workflow = get_active_workflow(section_id)
-                print(f"Active Workflow: {workflow}")
-
-                if workflow:
-                    # Fetch the first stage of the workflow (ensure stage_order=1)
-                    first_stage = WorkflowStage.objects.filter(workflow_id=workflow.workflow_id, stage_order=1).first()
-                    print(f"First Stage: {first_stage}")
-
-                    if first_stage:
-                        # Explicitly reset flow_status_id to ensure it starts at the first stage
-                        self.flow_status_id = first_stage.flow_status_id
-                        print(f"Assigned flow_status_id: {self.flow_status_id}")
-                    else:
-                        print(f"No Stage 1 found for workflow {workflow.workflow_id}")
-                else:
-                    print(f"No active workflow found for section_id: {section_id}")
-
-            except Exception as e:
-                print(f"Error during SaleOrder save: {str(e)}")
-
-        # Check if flow_status_id is set to "Completed"
-        try:
-            # Assuming the "Completed" status has a specific name or identifier in FlowStatus
-            completed_status = FlowStatus.objects.get(flow_status_name="Completed")
-            
-            if self.flow_status_id == completed_status:
-                # Set the order status to "Completed" if flow_status_id is "Completed"
-                self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Completed')[0]
-                print("Order status set to Completed")
-        
-        except ObjectDoesNotExist:
-            print("Completed flow status or order status does not exist")
-
-        # Only generate and set the order number if this is a new record
         if is_new_record:
-            # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+            # Increment the order number only for parent orders
+            if not self.is_child_order(self.order_no):  # Skip increment for child orders
+                increment_order_number(self.order_no_prefix)
 
-        # Save the record
-        super().save(*args, **kwargs)
-
-        # After the record is saved, increment the order number sequence only for new records
-        if is_new_record:
-            print("from create", self.pk)
-            increment_order_number(self.order_no_prefix)
         else:
             print("from edit", self.pk)
+
+        # Handle transitions for existing records
+        if not is_new_record:
+            if self.is_child_order(self.order_no):
+                # Handle child order transition
+                self.handle_child_order_transition()
+            else:
+                # Force parent order status update
+                self.force_parent_status_update()            
+
+    def force_parent_status_update(self):
+        """
+        Force a parent status update to handle skipped stages for parent orders.
+        """
+        try:
+            print(f"Triggering parent order update for {self.order_no}...")
+            self.update_parent_status()
+        except Exception as e:
+            print(f"Error during forced parent status update for {self.order_no}: {e}")
+
+    def is_child_order(self, order_no):
+        """
+        Determine if the order is a child sale order based on the number of hyphens in the order_no.
+        """
+        print(f"Checking if {order_no} is a child order...")
+        return order_no.count('-') >= 3
+
+    def handle_child_order_transition(self):
+        """
+        Ensure child orders skip the 'last before stage' and directly move to 'Completed'.
+        After transitioning, check the parent order's status.
+        """
+        print(f"Checking child order {self.order_no} for stage transition...")
+
+        # Retrieve the "last before stage" and "Completed" statuses
+        last_before_status = self.get_last_before_stage_status()
+        completed_status = self.get_stage_flow_status_by_name("Completed")
+
+        # If the current stage is the "last before stage," move directly to "Completed"
+        if self.flow_status_id == last_before_status:
+            self.flow_status_id = completed_status
+            self.save()  # Save the updated status
+            print(f"Child order {self.order_no} skipped 'Last Before Stage' and moved to 'Completed'.")
+            # Check the parent order and update its status if required
+            self.update_parent_status()
+        elif self.flow_status_id != completed_status:
+            print(f"Child order {self.order_no} remains in normal workflow at stage: {self.flow_status_id.flow_status_name}.")
+        else:
+            print(f"Child order {self.order_no} is already in 'Completed' stage.")
+
+    def update_parent_status(self):
+        """
+        When the parent order is in the 'Last Before Stage', check child order statuses:
+        - If all child orders are in 'Completed', move parent to 'Completed'.
+        - Otherwise, keep the parent in 'Last Before Stage'.
+        """
+        try:
+            print(f"Checking parent order for transition logic: {self.order_no}...")
+
+            # Check if the current order is a child or parent
+            is_child = self.is_child_order(self.order_no)
+            if is_child:
+                print(f"Order {self.order_no} is a child order. No further processing for parent status.")
+                return  # Exit if it's a child order
+
+            # The current order is a parent order
+            print(f"Order {self.order_no} is a parent order. Checking for child order statuses...")
+
+            # Fetch stages
+            last_before_stage = self.get_last_before_stage_status()  # "Last Before Stage"
+            completed_stage = self.get_stage_flow_status_by_name("Completed")  # Final stage
+
+            # Fetch the WorkflowStage dynamically using the flow_status_id
+            current_stage = WorkflowStage.objects.filter(flow_status_id=self.flow_status_id).first()
+            if not current_stage:
+                print(f"WorkflowStage not found for current flow status {self.flow_status_id}. Exiting.")
+                return
+
+            print(f"Current stage for order {self.order_no}: {current_stage.stage_order} ({current_stage.flow_status_id.flow_status_name})")
+
+            # Check if the parent is in the "Last Before Stage"
+            if self.flow_status_id == last_before_stage.flow_status_id:
+                # Get all child orders for this parent order
+                child_orders = SaleOrder.objects.filter(order_no__startswith=f"{self.order_no}-")
+                if not child_orders.exists():
+                    print(f"No child orders found for parent order {self.order_no}. Keeping in 'Last Before Stage'.")
+                    return
+
+                # Check if all child orders are completed
+                all_completed = all(
+                    child.flow_status_id.flow_status_name == "Completed" for child in child_orders
+                )
+
+                print(f"All child orders completed for parent order {self.order_no}: {all_completed}")
+
+                if all_completed:
+                    # Move parent to "Completed"
+                    print(f"Parent order {self.order_no} moving to 'Completed'.")
+                    self.flow_status_id = completed_stage
+                    self.order_status_id = OrderStatuses.objects.get_or_create(status_name="Completed")[0]
+                    self.save()
+                else:
+                    print(f"Parent order {self.order_no} remains in 'Last Before Stage' due to incomplete child orders.")
+            else:
+                print(f"Parent order {self.order_no} is not in 'Last Before Stage'. No child order checks.")
+
+        except Exception as e:
+            print(f"Error while updating parent status for order {self.order_no}: {e}")
+
+
+
+    def get_stage_flow_status(self, stage_order):
+        """
+        Retrieve the flow_status_id for the given stage order.
+        """
+        try:
+            section_id = get_section_id('Sale Order')
+            workflow = get_active_workflow(section_id)
+            if workflow:
+                stage = WorkflowStage.objects.filter(workflow_id=workflow.workflow_id, stage_order=stage_order).first()
+                if stage:
+                    print(f"Retrieved flow_status_id for Stage {stage_order}: {stage.flow_status_id.flow_status_name}")
+                    return stage.flow_status_id
+            print(f"No flow_status_id found for Stage {stage_order}.")
+            return None
+        except Exception as e:
+            print(f"Error retrieving flow_status_id for Stage {stage_order}: {str(e)}")
+            return None
+
+    def get_stage_flow_status_by_name(self, flow_status_name):
+        """
+        Retrieve the flow_status_id for the given flow status name.
+        """
+        try:
+            section_id = get_section_id('Sale Order')
+            workflow = get_active_workflow(section_id)
+            if workflow:
+                stage = WorkflowStage.objects.filter(
+                    workflow_id=workflow.workflow_id,
+                    flow_status_id__flow_status_name=flow_status_name
+                ).first()
+                if stage:
+                    print(f"Retrieved flow_status_id for '{flow_status_name}': {stage.flow_status_id.flow_status_name}")
+                    return stage.flow_status_id
+            print(f"No flow_status_id found for '{flow_status_name}'.")
+            return None
+        except Exception as e:
+            print(f"Error retrieving flow_status_id for '{flow_status_name}': {str(e)}")
+            return None
+
+    def get_last_before_stage_status(self):
+        """
+        Retrieve the WorkflowStage object for the stage immediately before the "Completed" stage.
+        """
+        try:
+            section_id = get_section_id('Sale Order')
+            workflow = get_active_workflow(section_id)
+            if workflow:
+                # Fetch the "Completed" stage
+                completed_stage = WorkflowStage.objects.filter(
+                    workflow_id=workflow.workflow_id,
+                    flow_status_id__flow_status_name="Completed"
+                ).first()
+
+                # Fetch the "last before stage"
+                last_before_stage = WorkflowStage.objects.filter(
+                    workflow_id=workflow.workflow_id,
+                    stage_order=completed_stage.stage_order - 1
+                ).first()
+
+                if last_before_stage:
+                    print(f"Retrieved 'Last Before Stage': {last_before_stage.flow_status_id.flow_status_name}")
+                    return last_before_stage  # Return the WorkflowStage object
+
+            print("No 'Last Before Stage' found.")
+            return None
+        except Exception as e:
+            print(f"Error retrieving last before stage: {str(e)}")
+            return None
+
 
 class SalesPriceList(models.Model): #required fields are updated
     sales_price_list_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -497,6 +630,8 @@ class QuickPackItems(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     quick_pack_id = models.ForeignKey(QuickPacks,on_delete=models.CASCADE, db_column='quick_pack_id')
     product_id = models.ForeignKey(Products,on_delete=models.CASCADE, db_column='product_id')
+    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, db_column='color_id')
      
     class Meta:
         db_table = quickpackitems

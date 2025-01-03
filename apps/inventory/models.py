@@ -1,7 +1,10 @@
 from django.db import models
+# from apps.sales.models import SaleOrder
 from config.utils_methods import *
-from config.utils_variables import warehouselocations, warehousestable
+from config.utils_variables import warehouselocations, warehousestable, config_block, inventory_blocked
+# from apps.products.models import Products
 import uuid
+
 
 # Create your models here.
 class Warehouses(models.Model):
@@ -41,3 +44,31 @@ class WarehouseLocations(models.Model):
     def __str__(self):
         return f"{self.location_name}"
 		
+#---------------------------------------------------------------
+#store the configuration hours
+
+class InventoryBlockConfig(models.Model):
+    config_id = models.AutoField(primary_key=True)
+    block_duration_hours = models.IntegerField(default=24, help_text="Duration (in hours) to block inventory")
+    product_id = models.ForeignKey('products.Products', on_delete=models.CASCADE, db_column='product_id')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = config_block
+
+       
+class BlockedInventory(models.Model):
+    block_id = models.AutoField(primary_key=True)
+    sale_order_id = models.ForeignKey('sales.SaleOrder', on_delete=models.CASCADE, db_column='sale_order_id')
+    product_id = models.ForeignKey('products.Products', on_delete=models.CASCADE, db_column='product_id')
+    blocked_qty = models.IntegerField(default=0)
+    expiration_time = models.DateTimeField(help_text="Timestamp when the block expires")
+    is_expired = models.BooleanField(default=False, help_text="True if block duration has passed")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = inventory_blocked
+
+

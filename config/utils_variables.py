@@ -61,6 +61,8 @@ salecreditnote = 'sale_credit_notes'
 salecreditnoteitems = 'sale_credit_note_items'
 saledebitnote = 'sale_debit_notes'
 saledebitnoteitems = 'sale_debit_note_items'
+config_block = 'inventory_block_config'
+inventory_blocked = 'blocked_inventory'
 
 #purchase db_tables
 purchaseorderstable = 'purchase_orders'
@@ -172,6 +174,7 @@ workorderstages = 'work_order_stages'
 defaultmachinery = 'default_machinery'
 workordermachines = 'work_order_machines'
 labor = 'labor'
+completedquantity = 'completed_quantity'
 
 #workflow tables
 workflow = 'workflows'

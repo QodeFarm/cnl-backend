@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     'apps.finance',
     'apps.customfields',
     'apps.reminders',
+    'apps.dashboard'
 ]
 
 MIDDLEWARE = [

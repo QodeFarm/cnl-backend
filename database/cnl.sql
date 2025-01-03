@@ -1924,11 +1924,15 @@ CREATE TABLE IF NOT EXISTS quick_pack_items (
     quick_pack_item_id CHAR(36) PRIMARY KEY,
     quick_pack_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,
     quantity INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (quick_pack_id) REFERENCES quick_packs(quick_pack_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
 );
 
 
@@ -2065,7 +2069,6 @@ CREATE TABLE IF NOT EXISTS bom (
     bom_id CHAR(36) PRIMARY KEY,
     bom_name VARCHAR(100) NOT NULL,
     product_id CHAR(36),
-    quantity INT NOT NULL DEFAULT 1,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2113,6 +2116,14 @@ CREATE TABLE IF NOT EXISTS work_orders (
     FOREIGN KEY (status_id) REFERENCES production_statuses(status_id),
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id)
 );
+
+CREATE TABLE IF NOT EXISTS completed_quantity (
+    quantity_id CHAR(36) PRIMARY KEY,
+    quantity INT NULL,
+    sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    work_order_id CHAR(36) NOT NULL,
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+    );
 
 CREATE TABLE IF NOT EXISTS work_order_stages (
     work_stage_id CHAR(36) PRIMARY KEY,
@@ -2566,3 +2577,34 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
 );
 
+/* For Dashboard Reports*/
+-- Storing Standard Queries For Chart
+CREATE TABLE report_definition (
+    query_id CHAR(36) PRIMARY KEY,
+    query TEXT NOT NULL,
+    query_name CHAR(50) NOT NULL,
+    visualization_type CHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+/* stroing Hours configuration tables */
+CREATE TABLE IF NOT EXISTS inventory_block_config (
+    config_id INT AUTO_INCREMENT PRIMARY KEY,
+    block_duration_hours INT DEFAULT 24 COMMENT 'Duration (in hours) to block inventory',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS blocked_inventory (
+    block_id INT AUTO_INCREMENT PRIMARY KEY,
+    sale_order_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    blocked_qty INT DEFAULT 0,
+    expiration_time TIMESTAMP NOT NULL COMMENT 'Timestamp when the block expires',
+    is_expired BOOLEAN DEFAULT FALSE COMMENT 'True if block duration has passed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
