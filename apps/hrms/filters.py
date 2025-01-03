@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters
 from apps.hrms.models import Employees, EmployeeSalary, EmployeeLeaves, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, Swipes
 from config.utils_methods import filter_uuid
-from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
+from django_filters import DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)

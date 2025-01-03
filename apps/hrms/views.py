@@ -11,7 +11,6 @@ from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
 from apps.masters.models import Statuses
-from django.db.models import Prefetch
 from apps.hrms.filters import EmployeesFilter, EmployeeSalaryFilter, EmployeeLeavesFilter, LeaveApprovalsFilter, EmployeeLeaveBalanceFilter, EmployeeAttendanceFilter, SwipesFilter
 from django.utils.timezone import now
 from datetime import datetime
