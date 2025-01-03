@@ -1,18 +1,21 @@
+from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
+from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
+from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data
+from apps.masters.template.table_defination import doc_heading
 from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.shortcuts import render
 from rest_framework import viewsets
 from config.utils_methods import *
 from rest_framework import status
 from django.conf import settings
+from django.http import Http404
 from .serializers import *
 from .filters import *
 from .models import *
-import json
 import os
 
 class FileUploadView(APIView):
@@ -483,35 +486,55 @@ class OrderTypesView(viewsets.ModelViewSet):
 @api_view(['GET'])
 def generate_order_number_view(request):
     """
-    API endpoint to generate an order number based on the given type.
-
-    Args:
-        request (HttpRequest): The request object containing the query parameter 'type'.
-
-    Returns:
-        Response: A JSON response containing the generated order number or an error message.
+    API endpoint to fetch the next order number based on the given type.
+    The sequence is only incremented when a record is successfully created.
     """
     order_type_prefix = request.GET.get('type')
-    
+
     if not order_type_prefix:
         return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     order_type_prefix = order_type_prefix.upper()
-    valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD']
-    
+    valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
+
     if order_type_prefix not in valid_prefixes:
         return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)
-    
+
     try:
-        order_number = generate_order_number(order_type_prefix)
+        # Get the next order number without incrementing
+        order_number = get_next_order_number(order_type_prefix)
         response_data = {
-            'count': 1,
-            'msg': None,
+            'msg': 'Next available order number (reserved but not yet saved)',
             'data': {'order_number': order_number}
         }
         return Response(response_data, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+def get_next_order_number(order_type_prefix):
+    """
+    Get the next order number without incrementing the sequence.
+
+    Args:
+        order_type_prefix (str): The prefix for the order type.
+
+    Returns:
+        str: The next order number.
+    """
+    if order_type_prefix == "PRD":
+        key = f"{order_type_prefix}"
+        sequence_number = cache.get(key, 0)
+        sequence_number_str = f"{sequence_number + 1:05d}"
+        return f"{order_type_prefix}-{sequence_number_str}"
+
+    # For date-based prefixes
+    current_date = timezone.now()
+    date_str = current_date.strftime('%y%m')
+    key = f"{order_type_prefix}-{date_str}"
+    sequence_number = cache.get(key, 0)
+    sequence_number_str = f"{sequence_number + 1:05d}"  # +1 for the next number
+    return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+
     
 class TaskPrioritiesViewSet(viewsets.ModelViewSet):
     queryset = TaskPriorities.objects.all()
@@ -522,6 +545,168 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+#===============================================PDF_creation================================
+class DocumentGeneratorView(APIView):
+    def post(self, request, **kwargs):
+        """ Retrieves a sale order and its related data. """
+
+        try:
+            flag = request.data.get('flag')
+            pk = kwargs.get('pk')
+            document_type = kwargs.get('document_type')
+            doc_name, file_path, relative_file_path = path_generate(document_type)
+            
+#   #=======================================ReportLab Code Started============================          
+            if document_type == "sale_order" or document_type == "sale_invoice":
+                pdf_data = sale_order_sales_invoice_data(pk, document_type)
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
+                sale_order_sales_invoice_doc(
+                                   elements, doc, 
+                                   pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                                   pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'],
+                                   pdf_data['product_data'],
+                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
+                                   pdf_data['bill_amount_in_words'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
+                                )
+            elif document_type == "purchase_order" or document_type == "purchase_return":
+                pdf_data = purchase_data(pk, document_type)
+                sub_heading = [pdf_data['comp_name'], pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']]
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_heading)
+                purchase_doc(elements, doc, 
+                                   pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                                   pdf_data['customer_name'], pdf_data['v_billing_address'], pdf_data['v_shipping_address_lbl'],  pdf_data['v_shipping_address'],
+                                   pdf_data['product_data'],
+                                   pdf_data['total_qty'], pdf_data['total_amt'],pdf_data['total_disc_amt'], pdf_data['total_txbl_amt'], pdf_data['total_sub_amt'], pdf_data['total_bill_amt'],
+                                   pdf_data['destination'], pdf_data['tax_type'], pdf_data['shipping_mode_name'], pdf_data['port_of_landing'], pdf_data['port_of_discharge'],
+                                   pdf_data['comp_name'],
+                                   pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'],  pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
+                                   pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']
+                                )
+            
+            if flag == 'email':
+                pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path)
+            # elif flag == 'whatsapp':
+            #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
+
+        except Http404:
+            logger.error("pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception("An error occurred while retrieving pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return build_response(1, pdf_send_response , [], status.HTTP_200_OK)
+
+class ReturnOptionsViewset(viewsets.ModelViewSet):
+    queryset = ReturnOptions.objects.all()
+    serializer_class = ReturnOptionsSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class FieldTypeViewSet(viewsets.ModelViewSet):
+    queryset = FieldType.objects.all()
+    serializer_class = FieldTypeSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)    
+    
+class EntitiesViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for CRUD operations on Entity model.
+    """
+    queryset = Entities.objects.all()
+    serializer_class = EntitiesSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class UserGroupsViewset(viewsets.ModelViewSet):
+    queryset = UserGroups.objects.all()
+    serializer_class = UserGroupsSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+class UserGroupMembersViewset(viewsets.ModelViewSet):
+    queryset = UserGroupMembers.objects.all()
+    serializer_class = UserGroupMembersSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+class PackageUnitViewSet(viewsets.ModelViewSet):
+    queryset = PackageUnit.objects.all()
+    serializer_class = PackageUnitSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)    
+
+
+class GPackageUnitViewSet(viewsets.ModelViewSet):
+    queryset = GPackageUnit.objects.all()
+    serializer_class = GPackageUnitSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+class FlowStatusViews(viewsets.ModelViewSet):
+    queryset = FlowStatus.objects.all()
+    serializer_class = FlowStatusSerializers
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        response = create_instance(self, request, *args, **kwargs)
+        return response
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)

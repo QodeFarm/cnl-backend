@@ -80,6 +80,11 @@ INSTALLED_APPS = [
     'apps.leads',
     'apps.hrms',
     'apps.assets',
+    'apps.production',
+    'apps.finance',
+    'apps.customfields',
+    'apps.reminders',
+    'apps.dashboard'
 ]
 
 MIDDLEWARE = [
@@ -218,7 +223,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=8),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -296,8 +301,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     'http://localhost:4200',
+    'http://127.0.0.1:4200',
     'http://localhost:8080',
     'http://127.0.0.1:5500',
+    'http://195.35.20.172'
 
 ]
 

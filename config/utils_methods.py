@@ -1,39 +1,44 @@
-#utils_methods file
-import logging
-# from django.forms import ValidationError
-from rest_framework.serializers import ValidationError
-from rest_framework.response import Response
-from rest_framework import status
-from django.db import models
-import uuid
-from django.db.models import Q
-from uuid import uuid4
-from uuid import UUID
+# Grouped imports:
 import base64
-import os
 import json
-from django.utils import timezone
-from django.db import models
+import logging
+import os
+import random
+import string
+import uuid
+from uuid import UUID, uuid4
+
+# Alphabetized imports:
+import inflect
+import requests
+from django.conf import settings
 from django.core.cache import cache
+from django.core.mail import EmailMessage
+from django.db import models, transaction
+from django.db.models import Q
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.serializers import ValidationError
+
+from config.settings import MEDIA_ROOT, MEDIA_URL
+
 
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__) # Create a logger object
 
-# Create a logger object
-logger = logging.getLogger(__name__)
-
-# -------------- File Path Handler (for Vendor model only)----------------------
 def custom_upload_to(instance, filename):
+    ''' File Path Handler (for Vendor model only) '''
     file_extension = filename.split('.')[-1]
     unique_id = uuid4().hex[:7]  # Generate a unique ID (e.g., using UUID)
     new_filename = f"{unique_id}_{filename}"
     new_filename = new_filename.replace(' ', '_')
     return os.path.join('vendor', str(instance.name), new_filename)
-# ---------------------------------------------------------
 
-#functions for demonstration purposes
 def encrypt(text):
+    ''' Functions for demonstration purposes '''
     if text is None:
         return None
     # Encode the text using base64
@@ -75,25 +80,12 @@ class EncryptedTextField(models.TextField):
         # Implement encryption logic here
         return encrypt(value)
 
+" NOTE : If you want to decrypt then you can uncomment this and run... in output you will find the decrypted account number "
+encoded_account_number = "" # Encoded account number
+decoded_bytes = base64.b64decode(encoded_account_number) # Decode from base64
+original_account_number = decoded_bytes.decode("utf-8") # Convert bytes to string
 
-#If you want to decrypt then you can uncomment this and run... in output you will find the decrypted account number 
-# # Encoded account number
-encoded_account_number = ""
-
-# Decode from base64
-decoded_bytes = base64.b64decode(encoded_account_number)
-
-# Convert bytes to string
-original_account_number = decoded_bytes.decode("utf-8")
-
-#=======================Filters for primary key===============================================
-def filter_uuid(queryset, name, value):
-    try:
-        uuid.UUID(value)
-    except ValueError:
-        return queryset.none()
-    return queryset.filter(Q(**{name: value}))
-#======================================================================
+#======================= POST / PUT / GET / BUILD RESPONSE =====================================================
 
 def build_response(count, message, data, status_code, errors=None):
     """
@@ -138,8 +130,7 @@ def update_instance(self, request, *args, **kwargs):
 def perform_update(self, serializer):
     serializer.save()  # Add any custom logic for updating if needed
 
-#==================================================
-#Patterns
+#=========================== Patterns /  Order number related =====================================================
 
 def generate_order_number(order_type_prefix):
     """
@@ -187,19 +178,44 @@ class OrderNumberMixin(models.Model):
         if not getattr(self, self.order_no_field):
             setattr(self, self.order_no_field, generate_order_number(self.order_no_prefix))
         super().save(*args, **kwargs)
-#======================================================================================================
-#It removes fields from role_permissions for sending Proper data to frontend team after successfully login
-def remove_fields(obj):
-    if isinstance(obj, dict):
-        obj.pop('created_at', None)
-        obj.pop('updated_at', None)
-        for value in obj.values():
-            remove_fields(value)
-    elif isinstance(obj, list):
-        for item in obj:
-            remove_fields(item)
 
-#====================================== API- Bulk Data CURD Operation-Requirements ===============================================
+def increment_order_number(order_type_prefix):
+    """
+    Generate and increment an order number based on the given prefix and the current date.
+
+    Args:
+        order_type_prefix (str): The prefix for the order type.
+
+    Returns:
+        str: The generated order number.
+    """
+    # Handle prefixes without date-based sequences (e.g., PRD)
+    if order_type_prefix == "PRD":
+        key = f"{order_type_prefix}"
+        sequence_number = cache.get(key, 0)
+        sequence_number += 1
+        cache.set(key, sequence_number, timeout=None)
+
+        sequence_number_str = f"{sequence_number:05d}"
+        return f"{order_type_prefix}-{sequence_number_str}"
+
+    # Handle date-based sequences (e.g., SO-INV, SO, SHIP, etc.)
+    current_date = timezone.now()
+    date_str = current_date.strftime('%y%m')
+
+    key = f"{order_type_prefix}-{date_str}"
+    sequence_number = cache.get(key, 0) + 1
+    cache.set(key, sequence_number, timeout=None)
+
+    sequence_number_str = f"{sequence_number:05d}"
+    return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+
+#=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
+def normalize_value(value):
+    '''Check if the value is a list containing exactly one empty dictionary or [empty_dict, None]'''
+    if value == [{}] or value is None or value == [{}, None]:
+        return []
+    return value
 
 def get_object_or_none(model, **kwargs):
     """
@@ -294,13 +310,19 @@ def generic_data_creation(self, valid_data, serializer_class, update_fields=None
 
     return data_list
 
-# Validates the input 'pk'
 def validate_input_pk(self, pk=None):
     try:
         UUID(pk, version=4)
     except ValueError:
         logger.info('Invalid UUID provided')
         return build_response(0, "Invalid UUID provided", [], status.HTTP_404_NOT_FOUND)
+
+def filter_uuid(queryset, name, value):
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return queryset.none()
+    return queryset.filter(Q(**{name: value}))
 
 def update_multi_instances(self, pk, valid_data, related_model_name, related_class_name, update_fields, main_model_related_field=None, current_model_pk_field=None):
     '''
@@ -420,16 +442,373 @@ def validate_order_type(data, error_list, model_name,look_up=None):
             else:
                 error_list.append({look_up:["Invalid order type."]})
 
+def get_related_data(model, serializer_class, filter_field, filter_value):
+    """
+    Retrieves related data for a given model, serializer, and filter field.
+    """
+    try:
+        related_data = model.objects.filter(**{filter_field: filter_value})
+        serializer = serializer_class(related_data, many=True)
+        logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
+        return serializer.data
+    except Exception as e:
+        logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
+        return []
 
-#================================================================================================================================================
-#===========================================CHETAN'S METHOD============================================================================
-#================================================================================================================================================
+def product_stock_verification(parent_model, child_model, data):
+    """
+    Verifies if sufficient stock is available for the product when a Sale/Purchase/work Order is being created.
+    Raises a ValidationError if the product's available stock is less than the quantity being ordered.
+    """
+    def assign_error(balance, order_qty, stock_error, product, size=None, color=None):
+        # Ensure balance is an integer and order_qty is also an integer
+        from apps.products.models import Products, Size, Color
+        product_name = Products.objects.get(product_id=product).name
+        if balance <= 0:
+            stock_error[f'{product_name}'] = f"Product is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
+
+        # Validate if the order_qty is greater than the available stock balance
+        elif int(order_qty) > balance:
+            stock_error[f'{product_name}'] = f'Insufficient stock for this product. Available: {balance}, Ordered: {order_qty}'
+
+        # Product variation verification.
+        try:
+            if size or color: # if both are none, then it is direct product.
+            # Update each product variation stock (Subtract/Add the order QTY from stock)
+                product_variation_instance = child_model.objects.get(product_id=product, size_id=size, color_id=color)
+        except Exception:
+            size_name = (Size.objects.filter(size_id=size).first().size_name if size else None)
+            color_name = (Color.objects.filter(color_id=color).first().color_name if color else None)
+            logger.error(f"Product variation with size :{size_name} , color :{color_name} does not exist.")
+            stock_error[f'{product_name}'] = f"Product variation with size :{size_name} , color :{color_name} does not exist."
+    
+    stock_error = {}
+    
+    for item in data:
+        product = item.get('product_id', None)
+        size = item.get('size_id', None)
+        color = item.get('color_id', None)
+        order_qty = item.get('quantity', None)
+
+        try:
+            # Verify if product has variations
+            variations = child_model.objects.filter(product_id=product)
+            if not variations.exists():  # Check if variations are not present
+                # Verify the Main Product (Direct Product)
+                product_balance = parent_model.objects.get(product_id=product).balance
+                logger.info('product_balance = %s', product_balance)
+                
+                # Call the error handling function if stock is insufficient
+                assign_error(product_balance, order_qty, stock_error, product, size, color)
+
+            else:
+                # Get the product variation (assuming only one variation exists for the combination)
+                product_variation = child_model.objects.get(
+                    product_id=product,
+                    size_id=size,
+                    color_id=color
+                )
+                
+                # Validate the variation quantity
+                assign_error(product_variation.quantity, order_qty, stock_error, product, size, color)
+
+        except parent_model.DoesNotExist:
+            logger.error(f'Product with ID {product} not found in Products model.')
+        except child_model.DoesNotExist:
+            assign_error(0, order_qty, stock_error, product, size, color)
+            logger.error(f'Variation with product_id {product}, size_id {size}, color_id {color} not found in Product Variations.')
+        except Exception as e:
+            logger.error(f'Unexpected error: {str(e)}')
+
+    return stock_error
+
+def previous_product_instance_verification(model_name, data): # In case of Product Return
+    """
+    Verifies if PREVIOUS PRODUCT INTANCE is available for the product when a SaleOrder is was created.
+    Raises a ValidationError if the product's instance is not present in database.
+    """    
+    stock_error = {}
+    for item in data:
+        product = item.get('product_id',None)
+        size = item.get('size_id',None)
+        color = item.get('color_id',None)
+        order_qty = item.get('quantity',None)
+
+        # Verify if 'Product variations' are present with provided 'product_id' in payload.
+        product_variation_instance = model_name.objects.filter(product_id=product).exists()
+
+        if product_variation_instance:
+            # Verify the Product Varition
+            try:
+                product_variation = model_name.objects.get(
+                    product_id=product,
+                    size_id=size,
+                    color_id=color
+                )
+                available_stock = product_variation.quantity
+            except model_name.DoesNotExist:
+                stock_error[f'{product}'] = 'This product variation is unavailable or has been removed.'
+    return stock_error
+
+@transaction.atomic
+def update_product_stock(parent_model, child_model, data, operation):
+    for item in data:
+        product = item.get('product_id',None)
+        return_qty = int(item.get('quantity',None))
+        size = item.get('size_id',None)
+        color = item.get('color_id',None)
+
+        # Update each product stock (Subtract the order QTY from stock)
+        product_instance = parent_model.objects.get(product_id=product)
+        if operation == 'add':
+            product_instance.balance += return_qty
+        elif operation == 'subtract':
+            product_instance.balance -= return_qty
+        product_instance.save()
+
+        try:
+            # Update each product variation stock (Subtract/Add the order QTY from stock)
+            product_variation_instance = child_model.objects.get(
+                product_id=product,
+                size_id=size,
+                color_id=color
+            )
+            if operation == 'add':
+                product_variation_instance.quantity += return_qty
+            elif operation == 'subtract':
+                product_variation_instance.quantity -= return_qty
+            product_variation_instance.save()
+            logger.info(f'Updated stock for Product ID : {product}')
+        except Exception:
+            logger.info('Direct Product stock is updated.')
+
+#=========================== COMMUNICATION / REPORTS / OTHER SPECIAL FUNCTIONS (CHETAN) ============================
+
+def remove_fields(obj):
+    """
+    It removes fields from role_permissions for sending Proper data to frontend team after successfully login
+    """
+    if isinstance(obj, dict):
+        obj.pop('created_at', None)
+        obj.pop('updated_at', None)
+        for value in obj.values():
+            remove_fields(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            remove_fields(item)
+
 def validate_uuid(uuid_to_test, version=4):
     try:
         uuid_obj = uuid.UUID(uuid_to_test, version=version)
     except ValueError:
         raise ValidationError("Invalid UUID")
     return uuid_obj
+     
+def format_phone_number(phone_number):
+    phone_number_str = str(phone_number) 
+    
+    # Check if the phone number length is correct
+    if len(phone_number_str) == 10:
+        return "91" + phone_number_str  #
+    elif len(phone_number_str) == 12 and phone_number_str.startswith("91"):
+        return phone_number_str  
+    else:
+        return "Mobile number has incorrect length"  
 
+def send_pdf_via_email(to_email, pdf_relative_path):
+    """Send the generated PDF as an email attachment."""
+    
+    # Construct the full path to the PDF file
+    pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
+    
+    subject = 'Your Sales Order Receipt'
+    body = 'Please find attached your sales order receipt.'
+    email = EmailMessage(subject, body, to=[to_email])
 
+    # Ensure the PDF file exists before attempting to open it
+    if not os.path.exists(pdf_full_path):
+        raise FileNotFoundError(f"The file {pdf_full_path} does not exist.")
+
+    # Read the PDF file from the provided full path
+    with open(pdf_full_path, 'rb') as pdf_file:
+        email.attach('sales_order_receipt.pdf', pdf_file.read(), 'application/pdf')
+    
+    # Send the email
+    email.send()
+
+    return "PDF sent via Email successfully."
+
+def send_whatsapp_message_via_wati(to_number, file_url):
+    """ Send the PDF file as a WhatsApp message using WATI API. """
+    result = ""
+    # Construct the full path to the file using MEDIA_ROOT
+    full_file_path = os.path.join(MEDIA_ROOT, file_url.replace(MEDIA_URL, ''))
+    # Ensure the file exists
+    if not os.path.exists(full_file_path):
+        return (f"File not found: {full_file_path}")            
+    
+    url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
+    
+    headers = {
+    'accept': '*/*',
+    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMzMyNWFmNC0wNDE2LTQzYTQtOTcwNi00MGYxZDViZTM0MGQiLCJ1bmlxdWVfbmFtZSI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsIm5hbWVpZCI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsImVtYWlsIjoicnVkaHJhaW5kdXN0cmllcy5ubHJAZ21haWwuY29tIiwiYXV0aF90aW1lIjoiMDgvMjYvMjAyNCAwNjowMzozNSIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJ0ZW5hbnRfaWQiOiIzMTIxNzIiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.qFA42Ze-itghM2LXR5sZ-P9BJB84iD3oXqk5olG_kX8',
+    }
+
+    # Open the file and attach it to the request
+    with open(full_file_path, 'rb') as file:
+        files = {
+            'file': (os.path.basename(full_file_path), file, 'application/pdf'),
+        }
+        response = requests.post(url, headers=headers, files=files)
+
+        # Convert the response text to a Python dictionary
+    response_data = json.loads(response.text) 
+
+    if response_data.get("result") == True:
+        result = "PDF sent via WhatsApp successfully."
+        return result
+    else:
+        result = response_data.get('info')
+        return result
+
+def convert_amount_to_words(amount):
+    '''
+This Code convert amount into world.
+Ex. amount = 784365923.04
+    O/P = INR Seventy-Eight Crore Forty-Three Lakh Sixty-Five Thousand Nine Hundred Twenty-Three And Four Paise
+-------------For Testing---------------
+# # Example usage:
+# amount = 784365923.04
+# result = convert_amount_to_words(amount)
+# print((result))  
+
+'''
+    # Split amount into rupees and paise
+    amount_parts = str(amount).split(".")
+    
+    # Convert rupees part
+    rupees_part = int(amount_parts[0])
+    
+    # Check if there are paise
+    paise_part = int(amount_parts[1]) if len(amount_parts) > 1 else 0
+    
+    # Convert rupees to words
+    rupees_in_words = convert_rupees_to_indian_words(rupees_part)
+    
+    # Convert paise to words
+    p = inflect.engine()
+    paise_in_words = (
+        p.number_to_words(paise_part).replace(",", "") if paise_part > 0 else "zero"
+    )
+    
+    amt_world = f"{rupees_in_words} and {paise_in_words} paise"
+    return "INR " + amt_world.title() 
+
+def convert_rupees_to_indian_words(number):
+    p = inflect.engine()
+    if number == 0:
+        return "zero rupees"
+    
+    parts = []
+    
+    # Define thresholds and labels
+    units = [
+        (1000000000, "arab"),
+        (10000000, "crore"),
+        (100000, "lakh"),
+        (1000, "thousand"),
+        (100, "hundred")
+    ]
+    
+    for value, name in units:
+        if number >= value:
+            quotient, number = divmod(number, value)
+            parts.append(f"{p.number_to_words(quotient)} {name}")
+    
+    if number > 0:
+        parts.append(p.number_to_words(number))
+    
+    return " ".join(parts)
+
+def extract_product_data(data):
+    product_data = []
+    
+    for index, item in enumerate(data, start=1):
+        product = item['product']
+        unit_options = item['unit_options']        
+        product_name = product['name']
+        quantity = item['quantity']
+        unit_name = unit_options['unit_name']
+        rate = item['rate']
+        amount = item['amount']
+        discount = item['discount']
+        tax = (item['tax'] if item['tax'] is not None else 0)
         
+        product_data.append([
+            index, product_name, quantity, unit_name, rate, amount, discount, tax])
+
+    return product_data
+
+def path_generate(document_type):
+    # Generate a random filename
+    unique_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4)) + '.pdf'
+    doc_name = document_type + '_' + unique_code
+    # Construct the full file path
+    file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', doc_name)
+    # Ensure that the directory exists
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+    # Return the relative path to the file (relative to MEDIA_ROOT)
+    relative_file_path = os.path.join('doc_generater', os.path.basename(doc_name))
+    # cdn_path = os.path.join(MEDIA_URL, relative_file_path)
+    # print(cdn_path)
+
+    return doc_name, file_path, relative_file_path
+
+#workflow code
+workflow_progression_dict = {}
+def get_section_id(section_name):
+    """
+    Retrieve the section ID from the ModuleSections model based on the provided section name.
+    This function can be used for any module by passing the appropriate section name (e.g., 'Sale Order', 'Purchase Order').
+    """
+    from apps.users.models import ModuleSections
+
+    try:
+        # Look up the section based on the given section name
+        section = ModuleSections.objects.filter(section_name=section_name).first()
+        if section:
+            return section.section_id
+        else:
+            raise ValueError(f"Section '{section_name}' not found in ModuleSections")
+    except Exception as e:
+        raise ValueError(f"Error fetching section_id for {section_name}: {str(e)}")
+
+#Added new logic
+def get_active_workflow(section_id):
+    """
+    Retrieve the active workflow based on the given section_id by looking up the WorkflowStage.
+    """
+    from apps.sales.models import Workflow, WorkflowStage
+    try:
+        # Step 1: Find the active workflow for the section by checking WorkflowStage for a match
+        active_workflow = Workflow.objects.filter(is_active=True, workflowstage__section_id=section_id).first()
+
+        if not active_workflow:
+            raise ValueError(f"No active workflow found for section_id {section_id}")
+
+        print(f"Active Workflow ID: {active_workflow.workflow_id}")
+
+        # Step 2: Retrieve the first stage of this active workflow
+        first_stage = WorkflowStage.objects.filter(
+            workflow_id=active_workflow.workflow_id, section_id=section_id
+        ).order_by('stage_order').first()
+
+        if first_stage:
+            return active_workflow
+        else:
+            raise ValueError(f"No stages found for active workflow with ID {active_workflow.workflow_id}")
+
+    except Exception as e:
+        raise ValueError(f"Error fetching active workflow: {str(e)}")
+

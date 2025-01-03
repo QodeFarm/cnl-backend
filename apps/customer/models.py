@@ -67,7 +67,7 @@ class Customer(models.Model):
     territory_id = models.ForeignKey(Territory, on_delete=models.CASCADE, null=True, default=None, db_column='territory_id')
     customer_category_id = models.ForeignKey(CustomerCategories, on_delete=models.CASCADE, null=True, default=None, db_column='customer_category_id')
     contact_person = models.CharField(max_length=255, null=True, default=None,)
-    picture = models.ImageField(max_length=255, default=None, null=True, upload_to=customer_picture)
+    picture = models.JSONField(null=True)
     gst = models.CharField(max_length=50, null=True, default=None)
     registration_date = models.DateField(auto_now_add=True, null=True)
     cin = models.CharField(max_length=50, null=True, default=None)
@@ -98,16 +98,6 @@ class Customer(models.Model):
     
     class Meta:
         db_table = customerstable
-
-    @receiver(pre_delete, sender='customer.Customer')
-    def delete_branches_picture(sender, instance, **kwargs):
-        if instance.picture and instance.picture.name:
-            file_path = instance.picture.path
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                picture_dir = os.path.dirname(file_path)
-                if not os.listdir(picture_dir):
-                    os.rmdir(picture_dir)
                     
 class CustomerAttachments(models.Model):
     attachment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -150,5 +140,3 @@ class CustomerAddresses(models.Model):
     
     class Meta:
         db_table = customeraddressestable
-
-    

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import *
+from apps.products.serializers import PictureSerializer
 from apps.masters.serializers import *
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -22,6 +23,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     firm_status = ModFirmStatusesSerializers(source='firm_status_id', read_only=True)
     territory = ModTerritorySerializers(source='territory_id', read_only=True)
+    picture = PictureSerializer(many=True)
     customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
     gst_category = GstCategoriesSerializers(source='gst_category_id', read_only=True)
     payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
@@ -30,29 +32,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = '__all__'  
-        
-    def create(self, validated_data):
-            picture = validated_data.pop('picture', None)
-            instance = super().create(validated_data)
-            if picture:
-                instance.picture = picture
-                instance.save()
-            return instance
-   
-    def update(self, instance, validated_data):
-        picture = validated_data.pop('picture', None)
-        if picture:
-            # Delete the previous picture file and its directory if they exist
-            if instance.picture:
-                picture_path = instance.picture.path
-                if os.path.exists(picture_path):
-                    os.remove(picture_path)
-                    picture_dir = os.path.dirname(picture_path)
-                    if not os.listdir(picture_dir):
-                        os.rmdir(picture_dir)
-            instance.picture = picture
-            instance.save()
-        return super().update(instance, validated_data)      
+           
         
 class ModCustomersSerializer(serializers.ModelSerializer):
     class Meta:
@@ -102,12 +82,13 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     phone = serializers.SerializerMethodField()
     customer_addresses = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField() 
-    ledger_account_id = ModLedgerAccountsSerializers()
+    ledger_account = serializers.SerializerMethodField()
+
 
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account_id', 'created_at', 'customer_addresses']
+        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
@@ -136,9 +117,9 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
         }
         
         if billing_address:
-            customer_addresses["billing_address"] = f"{billing_address.address}, {billing_address.city_id.city_name}, {billing_address.state_id.state_name}, {billing_address.country_id.country_name}, {billing_address.pin_code}, Phone: {billing_address.phone}"
+            customer_addresses["billing_address"] = f"{billing_address.address}, {billing_address.city_id.city_name}, {billing_address.state_id.state_name}, {billing_address.country_id.country_name}, {billing_address.pin_code}, Phone: {billing_address.phone},email: {billing_address.email}"
         if shipping_address:
-            customer_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone}"
+            customer_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone},email: {shipping_address.email}"
 
         return email, phone, city, customer_addresses
 
@@ -156,6 +137,11 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
 
     def get_customer_addresses(self, obj):
         return self.get_customer_details(obj)[3]
+    
+    def get_ledger_account(self, obj):
+        if obj.ledger_account_id:
+            return ModLedgerAccountsSerializers(obj.ledger_account_id).data
+        return None
     
         
     def get_customer_summary(customers):
