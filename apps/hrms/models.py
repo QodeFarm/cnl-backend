@@ -1,7 +1,8 @@
 import uuid
 from django.db import models
-from config.utils_variables import *
+from config.utils_variables import jobtypes,designations,jobcodes,departments,shifts,employees,employeesalary,salarycomponents,employeesalarycomponents,leavetypes,employeeleaves,leaveapprovals,employeeleavebalance,employeeattendance,swipes,biometric
 from phonenumber_field.modelfields import PhoneNumberField
+from django.utils.timezone import now
 
 class JobTypes(models.Model):
     job_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -70,15 +71,21 @@ class Employees(models.Model):
     employee_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     first_name =  models.CharField(max_length=55)
     last_name =  models.CharField(max_length=55)
-    email = models.EmailField(max_length=255)
-    phone = PhoneNumberField(blank=True, null=True, default=None, help_text="Enter the phone number with country code, e.g., +91 XXXXXXXXXX")
+    phone = PhoneNumberField(help_text="Enter the phone number with country code, e.g., +91 XXXXXXXXXX")
+    email = models.EmailField(max_length=255, null=True, default=None)
     address = models.CharField(max_length=255, null=True, default=None)
     hire_date = models.DateField(null=True, default=None)
+    date_of_birth = models.DateField(null=True, default=None)
+    gender = models.CharField(max_length=20)
+    nationality = models.CharField(max_length=20, null=True, default=None)
+    emergency_contact = models.CharField(max_length=20, null=True, default=None)
+    emergency_contact_relationship = models.CharField(max_length=55, null=True, default=None)
     job_type_id = models.ForeignKey(JobTypes, on_delete=models.CASCADE, db_column='job_type_id')
-    designation_id = models.ForeignKey(Designations, on_delete=models.CASCADE, db_column='designation_id')
-    job_code_id = models.ForeignKey(JobCodes, on_delete=models.CASCADE, db_column='job_code_id')
-    department_id = models.ForeignKey(Departments, on_delete=models.CASCADE, db_column='department_id')
-    shift_id = models.ForeignKey(Shifts, on_delete=models.CASCADE, db_column='shift_id')
+    designation_id = models.ForeignKey(Designations, on_delete=models.CASCADE, db_column='designation_id', null=True, default=None)
+    job_code_id = models.ForeignKey(JobCodes, on_delete=models.CASCADE, db_column='job_code_id', null=True, default=None)
+    department_id = models.ForeignKey(Departments, on_delete=models.CASCADE, db_column='department_id', null=True, default=None)
+    shift_id = models.ForeignKey(Shifts, on_delete=models.CASCADE, db_column='shift_id', null=True, default=None)
+    manager_id = models.ForeignKey('self', on_delete=models.CASCADE, db_column='manager_id', null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -88,24 +95,6 @@ class Employees(models.Model):
     def __str__(self):
         return f"{self.first_name} {self.last_name}"  
 
-
-class EmployeeDetails(models.Model):
-    employee_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    date_of_birth = models.DateField()
-    gender = models.CharField(max_length=20, null=True, default=None)
-    nationality = models.CharField(max_length=20, null=True, default=None)
-    emergency_contact = models.CharField(max_length=20, null=True, default=None)
-    emergency_contact_relationship = models.CharField(max_length=55, null=True, default=None)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = employeedetails
-        
-    def __str__(self):
-        return f"{self.employee_detail_id}" 
-                
 class EmployeeSalary(models.Model):
     salary_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     salary_amount = models.FloatField()
@@ -169,7 +158,6 @@ class EmployeeLeaves(models.Model):
     leave_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     start_date = models.DateField()
     end_date = models.DateField()
-    status_id = models.ForeignKey('masters.Statuses', on_delete=models.CASCADE, db_column='status_id')
     comments = models.CharField(max_length=255, null=True, blank=True)
     employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
     leave_type_id = models.ForeignKey(LeaveTypes, on_delete=models.CASCADE, db_column='leave_type_id')
@@ -185,7 +173,6 @@ class EmployeeLeaves(models.Model):
 class LeaveApprovals(models.Model):
     approval_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     approval_date = models.DateTimeField(null=True, default =None)
-    comments = models.CharField(max_length=255, null=True, default=None)
     status_id = models.ForeignKey('masters.Statuses', on_delete=models.CASCADE, db_column='status_id')
     leave_id = models.ForeignKey(EmployeeLeaves, on_delete=models.CASCADE, db_column='leave_id')
     approver_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='approver_id')
@@ -196,14 +183,17 @@ class LeaveApprovals(models.Model):
         db_table = leaveapprovals
         
     def __str__(self):
-        return f"Approval ID: {self.approval_id}, Comments: {self.comments}"
-        
+        return f"Approval ID: {self.approval_id}, Approval Date: {self.approval_date}"
+
+def get_current_year():
+    return str(now().year)
+
 class EmployeeLeaveBalance(models.Model):
     balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
     leave_type_id = models.ForeignKey(LeaveTypes, on_delete=models.CASCADE, db_column='leave_type_id')
     leave_balance = models.DecimalField(max_digits=10, decimal_places=2)
-    year = models.CharField(max_length=45)
+    year = models.CharField(max_length=45, default=get_current_year)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -216,23 +206,25 @@ class EmployeeLeaveBalance(models.Model):
 
 # =====================attendance====================================      
 
-class Attendance(models.Model):
-    attendance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+class EmployeeAttendance(models.Model):
+    employee_attendance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE,db_column = 'employee_id')
     attendance_date = models.DateField()
-    clock_in_time = models.DateTimeField(null=True, default=None) 
-    clock_out_time = models.DateTimeField(null=True, default=None) 
-    status_id = models.ForeignKey('masters.Statuses', on_delete=models.CASCADE,default=None,null=True,db_column = 'status_id')
-    department_id = models.ForeignKey(Departments, on_delete=models.CASCADE,default=None,null=True,db_column = 'department_id')
-    shift_id = models.ForeignKey(Shifts, on_delete=models.CASCADE,default=None,null=True,db_column = 'shift_id')
+    absent = models.BooleanField(null=True, default=None)
+    LEAVE_DURATION_CHOICES = [
+        ('First Half', 'First Half'),
+        ('Full Day', 'Full Day'),
+        ('Second Half', 'Second Half'),
+    ]
+    leave_duration = models.CharField(max_length=20,choices=LEAVE_DURATION_CHOICES,null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = attendance
+        db_table = employeeattendance
 
     def __str__(self):
-        return f'Empoyee ID: {self.employee_id} IN: {self.clock_in_time} OUT: {self.clock_out_time}'
+        return f'Empoyee ID: {self.employee_id} ABSENT: {self.absent} '
         
 class Swipes(models.Model):
     swipe_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
