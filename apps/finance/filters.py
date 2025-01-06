@@ -214,7 +214,7 @@ class BudgetFilter(filters.FilterSet):
 
 
 class ExpenseClaimFilter(filters.FilterSet):
-    employee_id = filters.CharFilter(field_name='employee_id__name', lookup_expr='iexact')
+    employee_id = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='iexact')
     claim_date = filters.DateFromToRangeFilter()
     description = filters.CharFilter(lookup_expr='icontains')
     total_amount = filters.RangeFilter()

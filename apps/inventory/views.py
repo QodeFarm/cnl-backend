@@ -12,11 +12,11 @@ from rest_framework.filters import OrderingFilter
 
 # Create your views here.
 class WarehousesViewSet(viewsets.ModelViewSet):
-    queryset = Warehouses.objects.all()
+    queryset = Warehouses.objects.all().order_by('-created_at')	
     serializer_class = WarehousesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = WarehousesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Warehouses,*args, **kwargs)
@@ -28,7 +28,7 @@ class WarehousesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class WarehouseLocationsViewSet(viewsets.ModelViewSet):
-    queryset = WarehouseLocations.objects.all()
+    queryset = WarehouseLocations.objects.all().order_by('-created_at')	
     serializer_class = WarehouseLocationsSerializer
 
     def list(self, request, *args, **kwargs):

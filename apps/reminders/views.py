@@ -22,11 +22,11 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 
 class NotificationFrequenciesViewSet(viewsets.ModelViewSet):
-    queryset = NotificationFrequencies.objects.all()
+    queryset = NotificationFrequencies.objects.all().order_by('-created_at')	
     serializer_class = NotificationFrequenciesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = NotificationFrequenciesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -39,11 +39,11 @@ class NotificationFrequenciesViewSet(viewsets.ModelViewSet):
 		
 		
 class NotificationMethodsViewSet(viewsets.ModelViewSet):
-    queryset = NotificationMethods.objects.all()
+    queryset = NotificationMethods.objects.all().order_by('-created_at')
     serializer_class = NotificationMethodsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = NotificationMethodsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -55,11 +55,11 @@ class NotificationMethodsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 		
 class ReminderTypesViewSet(viewsets.ModelViewSet):
-    queryset = ReminderTypes.objects.all()
+    queryset = ReminderTypes.objects.all().order_by('-created_at')
     serializer_class = ReminderTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ReminderTypesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -71,11 +71,11 @@ class ReminderTypesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 		
 class RemindersViewSet(viewsets.ModelViewSet):
-    queryset = Reminders.objects.all()
+    queryset = Reminders.objects.all().order_by('-created_at')
     serializer_class = RemindersSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = RemindersFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -87,11 +87,11 @@ class RemindersViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 		
 class ReminderRecipientsViewSet(viewsets.ModelViewSet):
-    queryset = ReminderRecipients.objects.all()
+    queryset = ReminderRecipients.objects.all().order_by('-created_at')
     serializer_class = ReminderRecipientsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ReminderRecipientsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -103,11 +103,11 @@ class ReminderRecipientsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 		
 class ReminderSettingsViewSet(viewsets.ModelViewSet):
-    queryset = ReminderSettings.objects.all()
+    queryset = ReminderSettings.objects.all().order_by('-created_at')
     serializer_class = ReminderSettingsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ReminderSettingsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -120,11 +120,11 @@ class ReminderSettingsViewSet(viewsets.ModelViewSet):
 		
 		
 class ReminderLogsViewSet(viewsets.ModelViewSet):
-    queryset = ReminderLogs.objects.all()
+    queryset = ReminderLogs.objects.all().order_by('-created_at')
     serializer_class = ReminderLogsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ReminderLogsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -156,7 +156,7 @@ class ReminderView(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             logger.info("Retrieving all lead")
-            queryset = Reminders.objects.all()
+            queryset = Reminders.objects.all().order_by('-created_at')
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 

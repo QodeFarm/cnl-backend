@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class BOMViewSet(viewsets.ModelViewSet):
-    queryset = BOM.objects.all()
+    queryset = BOM.objects.all().order_by('-created_at')
     serializer_class = BOMSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = BOMFilter
@@ -38,7 +38,7 @@ class BOMViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class BillOfMaterialsViewSet(viewsets.ModelViewSet):
-    queryset = BillOfMaterials.objects.all()
+    queryset = BillOfMaterials.objects.all().order_by('-created_at')
     serializer_class = BillOfMaterialsSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = MaterialFilter
@@ -53,7 +53,7 @@ class BillOfMaterialsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
         
 class ProductionStatusViewSet(viewsets.ModelViewSet):
-    queryset = ProductionStatus.objects.all()
+    queryset = ProductionStatus.objects.all().order_by('-created_at')
     serializer_class = ProductionStatusSerializer
 
     def list(self, request, *args, **kwargs):
@@ -66,7 +66,7 @@ class ProductionStatusViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
-    queryset = WorkOrder.objects.all()
+    queryset = WorkOrder.objects.all().order_by('-created_at')
     serializer_class = WorkOrderSerializer
 
     def list(self, request, *args, **kwargs):
@@ -92,7 +92,7 @@ class CompletedQuantityViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
         
 class MachineViewSet(viewsets.ModelViewSet):
-    queryset = Machine.objects.all()
+    queryset = Machine.objects.all().order_by('-created_at')
     serializer_class = MachineSerializer
 
     def list(self, request, *args, **kwargs):
@@ -187,7 +187,7 @@ class WorkOrderAPIView(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            instances = WorkOrder.objects.all()
+            instances = WorkOrder.objects.all().order_by('-created_at')	
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
             total_count = WorkOrder.objects.count()            
@@ -213,7 +213,7 @@ class WorkOrderAPIView(APIView):
                 logger.info("Retrieving Work Order summary")
                 
                 # Apply filters to the queryset for the summary case
-                workorders = WorkOrder.objects.all()
+                workorders = WorkOrder.objects.all()	
                 filterset = WorkOrderFilter(request.GET, queryset=workorders)
                 if filterset.is_valid():
                     workorders = filterset.qs  # Filtered queryset for summary
@@ -223,7 +223,7 @@ class WorkOrderAPIView(APIView):
 
             # Apply filters manually
             if request.query_params:
-                queryset = WorkOrder.objects.all()
+                queryset = WorkOrder.objects.all().order_by('-created_at')
                 filterset = WorkOrderFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
@@ -572,7 +572,8 @@ class BOMView(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            instance = BOM.objects.all()
+            instance = BOM.objects.all().order_by('-created_at')	
+
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
@@ -580,7 +581,7 @@ class BOMView(APIView):
 
             # Apply filters manually
             if request.query_params:
-                queryset = BOM.objects.all()
+                queryset = BOM.objects.all().order_by('-created_at')	
                 filterset = BOMFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
