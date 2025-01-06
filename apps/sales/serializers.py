@@ -255,6 +255,8 @@ class ModQuickPackItemSerializer(serializers.ModelSerializer):
 class QuickPackItemSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id', read_only=True)
     quickpack = ModQuickPackSerializer(source='quick_pack_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True) 
 
     class Meta:
         model = QuickPackItems

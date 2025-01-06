@@ -25,7 +25,7 @@ class RawMaterial(models.Model):
 class BOM(models.Model):
     bom_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     bom_name = models.CharField(max_length=100)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
+    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id', related_name='bom')
     notes = models.TextField(default=None, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

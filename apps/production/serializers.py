@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import *
-from apps.products.serializers import ColorSerializer, ModColorSerializer, ModproductsSerializer, ModSizeSerializer
+from apps.products.serializers import ColorSerializer, ModColorSerializer, ModStockJournalProductSerializer, ModproductsSerializer, ModSizeSerializer
 from apps.hrms.serializers import ModEmployeesSerializer
 from apps.sales.serializers import ModFlowstatusSerializer
 
@@ -41,6 +41,14 @@ class BillOfMaterialsSerializer(serializers.ModelSerializer):
         model = BillOfMaterials
         fields = '__all__'
 
+class ModBillOfMaterialsSerializer(serializers.ModelSerializer):
+    product = ModStockJournalProductSerializer(source='product_id', read_only=True)
+    size = ModSizeSerializer(source='size_id',read_only=True)
+    color = ModColorSerializer(source='color_id',read_only=True)
+    class Meta:
+        model = BillOfMaterials
+        fields = ['material_id','product','size','color','quantity']
+
 class ProductionStatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionStatus
@@ -59,6 +67,44 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     
     def get_pending_qty(self, obj):
         return obj.quantity - obj.completed_qty
+    
+    def get_bom_data(pk, product_id):
+        return {
+            "work_order_id" : pk,
+            "finished_product" : product_id.name,
+            "bom": BOM.objects.filter(product_id=product_id.product_id).values(),
+            "bom_components" : BillOfMaterials.objects.filter(reference_id=pk).values()
+        }
+
+class StockJournalSerializer(serializers.ModelSerializer):
+    product = ModStockJournalProductSerializer(source='product_id', read_only=True)
+    size = ModSizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)
+    status = ModProductionStatusSerializer(source='status_id', read_only=True)
+    material = serializers.SerializerMethodField()
+    bom_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkOrder
+        fields = ['work_order_id', 'quantity','product', 'size', 'color', 'status', 'material', 'bom_name']
+    
+    def get_material(self, obj):
+        # Replace pk with the actual primary key of the instance, typically obj.pk
+        materials = BillOfMaterials.objects.filter(reference_id=obj.pk)
+        return ModBillOfMaterialsSerializer(materials, many=True).data
+    
+    def get_bom_name(self, obj):
+        materials = BOM.objects.filter(product_id=obj.product_id_id).values_list('bom_name', flat=True) # Filter BOM objects for the given product_id
+        # If there's at least one result, return the first bom_name as a string; otherwise, return None or an empty string
+        return materials[0] if materials else None
+
+    def get_bom_data(pk, product_id):
+        return {
+            "work_order_id" : pk,
+            "finished_product" : product_id.name,
+            "bom": BOM.objects.filter(product_id=product_id.product_id).values(),
+            "bom_components" : BillOfMaterials.objects.filter(reference_id=pk).values()
+        }
 
 class CompletedQuantitySerializer(serializers.ModelSerializer):
     class Meta:
@@ -132,3 +178,15 @@ class WorkOrderOptionsSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+    
+class WorkOrderStockJournalSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    bom_components = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkOrder
+        fields = ['product', 'quantity', 'bom_components']
+
+    def get_bom_components(self, obj):
+        # Access pre-fetched BOM data
+        return BillOfMaterials.objects.filter(reference_id=obj.pk).values()

@@ -14,7 +14,7 @@ import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.core.mail import EmailMessage
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status
@@ -211,6 +211,11 @@ def increment_order_number(order_type_prefix):
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
 
 #=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
+def normalize_value(value):
+    '''Check if the value is a list containing exactly one empty dictionary or [empty_dict, None]'''
+    if value == [{}] or value is None or value == [{}, None]:
+        return []
+    return value
 
 def get_object_or_none(model, **kwargs):
     """
@@ -455,14 +460,27 @@ def product_stock_verification(parent_model, child_model, data):
     Verifies if sufficient stock is available for the product when a Sale/Purchase/work Order is being created.
     Raises a ValidationError if the product's available stock is less than the quantity being ordered.
     """
-    def assign_error(balance, order_qty, stock_error, product):
+    def assign_error(balance, order_qty, stock_error, product, size=None, color=None):
         # Ensure balance is an integer and order_qty is also an integer
+        from apps.products.models import Products, Size, Color
+        product_name = Products.objects.get(product_id=product).name
         if balance <= 0:
-            stock_error[f'{product}'] = f"Product with ID :'{product}' is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
-        
+            stock_error[f'{product_name}'] = f"Product is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
+
         # Validate if the order_qty is greater than the available stock balance
         elif int(order_qty) > balance:
-            stock_error[f'{product}'] = f'Insufficient stock for this product. Available: {balance}, Ordered: {order_qty}'
+            stock_error[f'{product_name}'] = f'Insufficient stock for this product. Available: {balance}, Ordered: {order_qty}'
+
+        # Product variation verification.
+        try:
+            if size or color: # if both are none, then it is direct product.
+            # Update each product variation stock (Subtract/Add the order QTY from stock)
+                product_variation_instance = child_model.objects.get(product_id=product, size_id=size, color_id=color)
+        except Exception:
+            size_name = (Size.objects.filter(size_id=size).first().size_name if size else None)
+            color_name = (Color.objects.filter(color_id=color).first().color_name if color else None)
+            logger.error(f"Product variation with size :{size_name} , color :{color_name} does not exist.")
+            stock_error[f'{product_name}'] = f"Product variation with size :{size_name} , color :{color_name} does not exist."
     
     stock_error = {}
     
@@ -481,7 +499,7 @@ def product_stock_verification(parent_model, child_model, data):
                 logger.info('product_balance = %s', product_balance)
                 
                 # Call the error handling function if stock is insufficient
-                assign_error(product_balance, order_qty, stock_error, product)
+                assign_error(product_balance, order_qty, stock_error, product, size, color)
 
             else:
                 # Get the product variation (assuming only one variation exists for the combination)
@@ -492,11 +510,12 @@ def product_stock_verification(parent_model, child_model, data):
                 )
                 
                 # Validate the variation quantity
-                assign_error(product_variation.quantity, order_qty, stock_error, product)
+                assign_error(product_variation.quantity, order_qty, stock_error, product, size, color)
 
         except parent_model.DoesNotExist:
             logger.error(f'Product with ID {product} not found in Products model.')
         except child_model.DoesNotExist:
+            assign_error(0, order_qty, stock_error, product, size, color)
             logger.error(f'Variation with product_id {product}, size_id {size}, color_id {color} not found in Product Variations.')
         except Exception as e:
             logger.error(f'Unexpected error: {str(e)}')
@@ -531,6 +550,7 @@ def previous_product_instance_verification(model_name, data): # In case of Produ
                 stock_error[f'{product}'] = 'This product variation is unavailable or has been removed.'
     return stock_error
 
+@transaction.atomic
 def update_product_stock(parent_model, child_model, data, operation):
     for item in data:
         product = item.get('product_id',None)
