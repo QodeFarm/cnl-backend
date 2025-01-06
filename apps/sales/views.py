@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 class SaleOrderView(viewsets.ModelViewSet):
-    queryset = SaleOrder.objects.all()
+    queryset = SaleOrder.objects.all().order_by('-created_at')
     serializer_class = SaleOrderSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SaleOrderFilter
@@ -1431,7 +1431,7 @@ class QuickPackCreateViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10))   
 
-            queryset = QuickPacks.objects.all()
+            queryset = QuickPacks.objects.all().order_by('-created_at')	
 
             # Apply filters manually
             if request.query_params:
@@ -1668,7 +1668,7 @@ class SaleReceiptCreateViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleReceipt.objects.all()
+            queryset = SaleReceipt.objects.all().order_by('-created_at')	
 
             # Apply filters manually
             if request.query_params:
@@ -1880,7 +1880,7 @@ class WorkflowCreateViewSet(APIView):
             return self.retrieve(request, *args, **kwargs)
         try:
             logger.info("Retrieving all workflows")
-            queryset = Workflow.objects.all()
+            queryset = Workflow.objects.all().order_by('-created_at')	
             serializer = WorkflowSerializer(queryset, many=True)
             logger.info("Workflow data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
@@ -2164,7 +2164,7 @@ class SaleCreditNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             print("try block is triggering")
-            queryset = SaleCreditNotes.objects.all()
+            queryset = SaleCreditNotes.objects.all().order_by('-created_at')
             serializer = SaleCreditNoteSerializers(queryset, many=True)
             logger.info("salecreditnote data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
@@ -2395,7 +2395,7 @@ class SaleDebitNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             print("try block is triggering")
-            queryset = SaleDebitNotes.objects.all()
+            queryset = SaleDebitNotes.objects.all().order_by('-created_at')	
             serializer = SaleDebitNoteSerializers(queryset, many=True)
             logger.info("salecreditnote data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)

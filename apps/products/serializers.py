@@ -188,7 +188,7 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Products
-        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'balance', 'hsn_code']
+        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'balance', 'hsn_code','created_at']
 
 class SizeSerializer(serializers.ModelSerializer):
     class Meta:

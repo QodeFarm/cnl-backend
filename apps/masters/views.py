@@ -59,11 +59,11 @@ class FileUploadView(APIView):
                 return Response({'count':len(files), 'msg':'No Files uploaded', 'data':[]}, status=status.HTTP_400_BAD_REQUEST) 
 
 class CountryViewSet(viewsets.ModelViewSet):
-    queryset = Country.objects.all()
+    queryset = Country.objects.all().order_by('-created_at')	
     serializer_class = CountrySerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CountryFilters
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -75,11 +75,11 @@ class CountryViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class StateViewSet(viewsets.ModelViewSet):
-    queryset = State.objects.all()
+    queryset = State.objects.all().order_by('-created_at')	
     serializer_class = StateSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = StateFilters
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -91,11 +91,11 @@ class StateViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class CityViewSet(viewsets.ModelViewSet):
-    queryset = City.objects.all()
+    queryset = City.objects.all().order_by('-created_at')	
     serializer_class = CitySerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CityFilters
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -108,7 +108,7 @@ class CityViewSet(viewsets.ModelViewSet):
 
 
 class StatusesViewset(viewsets.ModelViewSet):
-    queryset = Statuses.objects.all()
+    queryset = Statuses.objects.all().order_by('-created_at')	
     serializer_class = StatusesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -121,7 +121,7 @@ class StatusesViewset(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class LedgerGroupsViews(viewsets.ModelViewSet):
-    queryset = LedgerGroups.objects.all()
+    queryset = LedgerGroups.objects.all().order_by('-created_at')	
     serializer_class = LedgerGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LedgerGroupsFilters
@@ -137,7 +137,7 @@ class LedgerGroupsViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class FirmStatusesViews(viewsets.ModelViewSet):
-    queryset = FirmStatuses.objects.all()
+    queryset = FirmStatuses.objects.all().order_by('-created_at')	
     serializer_class = FirmStatusesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FirmStatusesFilters
@@ -153,7 +153,7 @@ class FirmStatusesViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class TerritoryViews(viewsets.ModelViewSet):
-    queryset = Territory.objects.all()
+    queryset = Territory.objects.all().order_by('-created_at')	
     serializer_class = TerritorySerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TerritoryFilters
@@ -169,7 +169,7 @@ class TerritoryViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class CustomerCategoriesViews(viewsets.ModelViewSet):
-    queryset = CustomerCategories.objects.all()
+    queryset = CustomerCategories.objects.all().order_by('-created_at')	
     serializer_class = CustomerCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerCategoriesFilters
@@ -185,7 +185,7 @@ class CustomerCategoriesViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class GstCategoriesViews(viewsets.ModelViewSet):
-    queryset = GstCategories.objects.all()
+    queryset = GstCategories.objects.all().order_by('-created_at')	
     serializer_class = GstCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GstCategoriesFilters
@@ -202,7 +202,7 @@ class GstCategoriesViews(viewsets.ModelViewSet):
 
   
 class CustomerPaymentTermsViews(viewsets.ModelViewSet):
-    queryset = CustomerPaymentTerms.objects.all()
+    queryset = CustomerPaymentTerms.objects.all().order_by('-created_at')	
     serializer_class = CustomerPaymentTermsSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerPaymentTermsFilters
@@ -219,7 +219,7 @@ class CustomerPaymentTermsViews(viewsets.ModelViewSet):
  
 
 class PriceCategoriesViews(viewsets.ModelViewSet):
-    queryset = PriceCategories.objects.all()
+    queryset = PriceCategories.objects.all().order_by('-created_at')	
     serializer_class = PriceCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PriceCategoriesFilters
@@ -236,7 +236,7 @@ class PriceCategoriesViews(viewsets.ModelViewSet):
 
 
 class TransportersViews(viewsets.ModelViewSet):
-    queryset = Transporters.objects.all()
+    queryset = Transporters.objects.all().order_by('-created_at')	
     serializer_class = TransportersSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TransportersFilters
@@ -253,7 +253,7 @@ class TransportersViews(viewsets.ModelViewSet):
 
 
 class ProductTypesViewSet(viewsets.ModelViewSet):
-    queryset = ProductTypes.objects.all()
+    queryset = ProductTypes.objects.all().order_by('-created_at')	
     serializer_class = ProductTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductTypesFilter
@@ -269,7 +269,7 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
-    queryset = ProductUniqueQuantityCodes.objects.all()
+    queryset = ProductUniqueQuantityCodes.objects.all().order_by('-created_at')	
     serializer_class = ProductUniqueQuantityCodesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductUniqueQuantityCodesFilter
@@ -285,7 +285,7 @@ class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class UnitOptionsViewSet(viewsets.ModelViewSet):
-    queryset = UnitOptions.objects.all()
+    queryset = UnitOptions.objects.all().order_by('-created_at')	
     serializer_class = UnitOptionsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UnitOptionsFilter
@@ -301,7 +301,7 @@ class UnitOptionsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductDrugTypesViewSet(viewsets.ModelViewSet):
-    queryset = ProductDrugTypes.objects.all()
+    queryset = ProductDrugTypes.objects.all().order_by('-created_at')	
     serializer_class = ProductDrugTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductDrugTypesFilter
@@ -317,7 +317,7 @@ class ProductDrugTypesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductItemTypeViewSet(viewsets.ModelViewSet):
-    queryset = ProductItemType.objects.all()
+    queryset = ProductItemType.objects.all().order_by('-created_at')	
     serializer_class = ProductItemTypeSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductItemTypeFilter
@@ -333,7 +333,7 @@ class ProductItemTypeViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class BrandSalesmanViewSet(viewsets.ModelViewSet):
-    queryset = BrandSalesman.objects.all()
+    queryset = BrandSalesman.objects.all().order_by('-created_at')	
     serializer_class = BrandSalesmanSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BrandSalesmanFilter
@@ -349,7 +349,7 @@ class BrandSalesmanViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class ProductBrandsViewSet(viewsets.ModelViewSet):
-    queryset = ProductBrands.objects.all()
+    queryset = ProductBrands.objects.all().order_by('-created_at')	
     serializer_class = ProductBrandsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductBrandsFilter
@@ -365,7 +365,7 @@ class ProductBrandsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class PurchaseTypesViewSet(viewsets.ModelViewSet):
-    queryset = PurchaseTypes.objects.all()
+    queryset = PurchaseTypes.objects.all().order_by('-created_at')	
     serializer_class = PurchaseTypesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -378,7 +378,7 @@ class PurchaseTypesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ShippingCompaniesView(viewsets.ModelViewSet):
-    queryset = ShippingCompanies.objects.all()
+    queryset = ShippingCompanies.objects.all().order_by('-created_at')	
     serializer_class = ShippingCompaniesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -392,7 +392,7 @@ class ShippingCompaniesView(viewsets.ModelViewSet):
 
 
 class SaleTypesView(viewsets.ModelViewSet):
-    queryset = SaleTypes.objects.all()
+    queryset = SaleTypes.objects.all().order_by('-created_at')	
     serializer_class = SaleTypesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -405,7 +405,7 @@ class SaleTypesView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class GstTypesView(viewsets.ModelViewSet):
-    queryset = GstTypes.objects.all()
+    queryset = GstTypes.objects.all().order_by('-created_at')	
     serializer_class = GstTypesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -418,7 +418,7 @@ class GstTypesView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ShippingModesView(viewsets.ModelViewSet):
-    queryset = ShippingModes.objects.all()
+    queryset = ShippingModes.objects.all().order_by('-created_at')	
     serializer_class = ShippingModesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -431,7 +431,7 @@ class ShippingModesView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class OrdersSalesmanView(viewsets.ModelViewSet):
-    queryset = OrdersSalesman.objects.all()
+    queryset = OrdersSalesman.objects.all().order_by('-created_at')	
     serializer_class = OrdersSalesmanSerializer
 
     def list(self, request, *args, **kwargs):
@@ -445,7 +445,7 @@ class OrdersSalesmanView(viewsets.ModelViewSet):
     
 
 class PaymentLinkTypesView(viewsets.ModelViewSet):
-    queryset = PaymentLinkTypes.objects.all()
+    queryset = PaymentLinkTypes.objects.all().order_by('-created_at')	
     serializer_class = PaymentLinkTypesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -458,7 +458,7 @@ class PaymentLinkTypesView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class OrderStatusesView(viewsets.ModelViewSet):
-    queryset = OrderStatuses.objects.all()
+    queryset = OrderStatuses.objects.all().order_by('-created_at')	
     serializer_class = OrderStatusesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -471,7 +471,7 @@ class OrderStatusesView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class OrderTypesView(viewsets.ModelViewSet):
-    queryset = OrderTypes.objects.all()
+    queryset = OrderTypes.objects.all().order_by('-created_at')	
     serializer_class = OrderTypesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -537,7 +537,7 @@ def get_next_order_number(order_type_prefix):
 
     
 class TaskPrioritiesViewSet(viewsets.ModelViewSet):
-    queryset = TaskPriorities.objects.all()
+    queryset = TaskPriorities.objects.all().order_by('-created_at')	
     serializer_class = TaskPrioritiesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -603,7 +603,7 @@ class DocumentGeneratorView(APIView):
         return build_response(1, pdf_send_response , [], status.HTTP_200_OK)
 
 class ReturnOptionsViewset(viewsets.ModelViewSet):
-    queryset = ReturnOptions.objects.all()
+    queryset = ReturnOptions.objects.all().order_by('-created_at')	
     serializer_class = ReturnOptionsSerializers
 
     def list(self, request, *args, **kwargs):
@@ -616,7 +616,7 @@ class ReturnOptionsViewset(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class FieldTypeViewSet(viewsets.ModelViewSet):
-    queryset = FieldType.objects.all()
+    queryset = FieldType.objects.all().order_by('-created_at')	
     serializer_class = FieldTypeSerializer
 
     def list(self, request, *args, **kwargs):
@@ -632,7 +632,7 @@ class EntitiesViewSet(viewsets.ModelViewSet):
     """
     ViewSet for CRUD operations on Entity model.
     """
-    queryset = Entities.objects.all()
+    queryset = Entities.objects.all().order_by('-created_at')	
     serializer_class = EntitiesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -645,7 +645,7 @@ class EntitiesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class UserGroupsViewset(viewsets.ModelViewSet):
-    queryset = UserGroups.objects.all()
+    queryset = UserGroups.objects.all().order_by('-created_at')	
     serializer_class = UserGroupsSerializer
 
     def list(self, request, *args, **kwargs):
@@ -658,7 +658,7 @@ class UserGroupsViewset(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class UserGroupMembersViewset(viewsets.ModelViewSet):
-    queryset = UserGroupMembers.objects.all()
+    queryset = UserGroupMembers.objects.all().order_by('-created_at')	
     serializer_class = UserGroupMembersSerializer
 
     def list(self, request, *args, **kwargs):
@@ -671,7 +671,7 @@ class UserGroupMembersViewset(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class PackageUnitViewSet(viewsets.ModelViewSet):
-    queryset = PackageUnit.objects.all()
+    queryset = PackageUnit.objects.all().order_by('-created_at')
     serializer_class = PackageUnitSerializer
 
     def list(self, request, *args, **kwargs):
@@ -685,7 +685,7 @@ class PackageUnitViewSet(viewsets.ModelViewSet):
 
 
 class GPackageUnitViewSet(viewsets.ModelViewSet):
-    queryset = GPackageUnit.objects.all()
+    queryset = GPackageUnit.objects.all().order_by('-created_at')
     serializer_class = GPackageUnitSerializer
 
     def list(self, request, *args, **kwargs):
@@ -698,7 +698,7 @@ class GPackageUnitViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class FlowStatusViews(viewsets.ModelViewSet):
-    queryset = FlowStatus.objects.all()
+    queryset = FlowStatus.objects.all().order_by('-created_at')	
     serializer_class = FlowStatusSerializers
 
     def list(self, request, *args, **kwargs):

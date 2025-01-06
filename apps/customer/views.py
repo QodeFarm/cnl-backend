@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 
 class LedgerAccountsViews(viewsets.ModelViewSet):
-    queryset = LedgerAccounts.objects.all()
+    queryset = LedgerAccounts.objects.all().order_by('-created_at')
     serializer_class = LedgerAccountsSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LedgerAccountsFilters
@@ -43,7 +43,7 @@ class LedgerAccountsViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class CustomerViews(viewsets.ModelViewSet):
-    queryset = Customer.objects.all()
+    queryset = Customer.objects.all().order_by('-created_at')	
     serializer_class = CustomerSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerFilters
@@ -120,12 +120,12 @@ class CustomerCreateViews(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving customer summary")
-                customers = Customer.objects.all()
+                customers = Customer.objects.all().order_by('-created_at')	
                 data = CustomerOptionSerializer.get_customer_summary(customers)
                 return Response(data, status=status.HTTP_200_OK)
  
             logger.info("Retrieving all customers")
-            queryset = Customer.objects.all()
+            queryset = Customer.objects.all().order_by('-created_at')	
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 

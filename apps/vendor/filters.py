@@ -15,7 +15,7 @@ class VendorFilter(FilterSet): #verified
     ledger_account = filters.CharFilter(field_name='ledger_account_id__name', lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -43,5 +43,5 @@ class VendorFilter(FilterSet): #verified
     class Meta:
         model = Vendor
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account','created_at', 'city_id','email', 'phone','period_name','search','sort','page','limit']
+        fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account','created_at', 'city_id','email', 'phone','period_name','s','sort','page','limit']
 

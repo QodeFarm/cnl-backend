@@ -2592,8 +2592,11 @@ CREATE TABLE report_definition (
 CREATE TABLE IF NOT EXISTS inventory_block_config (
     config_id INT AUTO_INCREMENT PRIMARY KEY,
     block_duration_hours INT DEFAULT 24 COMMENT 'Duration (in hours) to block inventory',
+    product_id CHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+
 );
 
 CREATE TABLE IF NOT EXISTS blocked_inventory (

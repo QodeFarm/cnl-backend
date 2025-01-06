@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Create your views here.
 class ProductGroupsViewSet(viewsets.ModelViewSet):
-    queryset = ProductGroups.objects.all()
+    queryset = ProductGroups.objects.all().order_by('-created_at')	
     serializer_class = ProductGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGroupsFilter
@@ -41,7 +41,7 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductCategoriesViewSet(viewsets.ModelViewSet):
-    queryset = ProductCategories.objects.all()
+    queryset = ProductCategories.objects.all().order_by('-created_at')	
     serializer_class = ProductCategoriesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductCategoriesFilter
@@ -57,7 +57,7 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductStockUnitsViewSet(viewsets.ModelViewSet):
-    queryset = ProductStockUnits.objects.all()
+    queryset = ProductStockUnits.objects.all().order_by('-created_at')	
     serializer_class = ProductStockUnitsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductStockUnitsFilter
@@ -73,7 +73,7 @@ class ProductStockUnitsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
-    queryset = ProductGstClassifications.objects.all()
+    queryset = ProductGstClassifications.objects.all().order_by('-created_at')	
     serializer_class = ProductGstClassificationsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGstClassificationsFilter
@@ -89,7 +89,7 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductSalesGlViewSet(viewsets.ModelViewSet):
-    queryset = ProductSalesGl.objects.all()
+    queryset = ProductSalesGl.objects.all().order_by('-created_at')	
     serializer_class = ProductSalesGlSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductSalesGlFilter
@@ -105,7 +105,7 @@ class ProductSalesGlViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
-    queryset = ProductPurchaseGl.objects.all()
+    queryset = ProductPurchaseGl.objects.all().order_by('-created_at')	
     serializer_class = ProductPurchaseGlSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductPurchaseGlFilter
@@ -121,7 +121,7 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class productsViewSet(viewsets.ModelViewSet):
-    queryset = Products.objects.all()
+    queryset = Products.objects.all().order_by('-created_at')
     serializer_class = productsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductsFilter
@@ -176,11 +176,11 @@ class productsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
   
 class ProductItemBalanceViewSet(viewsets.ModelViewSet):
-    queryset = ProductItemBalance.objects.all()
+    queryset = ProductItemBalance.objects.all().order_by('-created_at')	
     serializer_class = ProductItemBalanceSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductItemBalanceFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -264,12 +264,12 @@ class ProductViewSet(APIView):
         try:
             summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
             if summary:
-                product = Products.objects.all()
+                product = Products.objects.all().order_by('-created_at')	
                 data = ProductOptionsSerializer.get_product_summary(product)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             else:
                 logger.info("Retrieving all products")
-                queryset = Products.objects.all()
+                queryset = Products.objects.all().order_by('-created_at')	
 
                 page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
                 limit = int(request.query_params.get('limit', 10)) 

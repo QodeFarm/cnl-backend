@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 
 class BankAccountViewSet(viewsets.ModelViewSet):
-    queryset = BankAccount.objects.all()
+    queryset = BankAccount.objects.all().order_by('-created_at')
     serializer_class = BankAccountSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BankAccountFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, BankAccount,*args, **kwargs)
@@ -37,11 +37,11 @@ class BankAccountViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ChartOfAccountsViewSet(viewsets.ModelViewSet):
-    queryset = ChartOfAccounts.objects.all()
+    queryset = ChartOfAccounts.objects.all().order_by('-created_at')
     serializer_class = ChartOfAccountsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ChartOfAccountsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ChartOfAccounts,*args, **kwargs)
@@ -53,11 +53,11 @@ class ChartOfAccountsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class JournalEntryViewSet(viewsets.ModelViewSet):
-    queryset = JournalEntry.objects.all()
+    queryset = JournalEntry.objects.all().order_by('-created_at')
     serializer_class = JournalEntrySerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = JournalEntryFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -82,11 +82,11 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
-    queryset = PaymentTransaction.objects.all()
+    queryset = PaymentTransaction.objects.all().order_by('-created_at')
     serializer_class = PaymentTransactionSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PaymentTransactionFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, PaymentTransaction,*args, **kwargs)
@@ -98,11 +98,11 @@ class PaymentTransactionViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class TaxConfigurationViewSet(viewsets.ModelViewSet):
-    queryset = TaxConfiguration.objects.all()
+    queryset = TaxConfiguration.objects.all().order_by('-created_at')
     serializer_class = TaxConfigurationSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TaxConfigurationFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, TaxConfiguration,*args, **kwargs)
@@ -114,11 +114,11 @@ class TaxConfigurationViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class BudgetViewSet(viewsets.ModelViewSet):
-    queryset = Budget.objects.all()
+    queryset = Budget.objects.all().order_by('-created_at')
     serializer_class = BudgetSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BudgetFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Budget,*args, **kwargs)
@@ -130,11 +130,11 @@ class BudgetViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ExpenseClaimViewSet(viewsets.ModelViewSet):
-    queryset = ExpenseClaim.objects.all()
+    queryset = ExpenseClaim.objects.all().order_by('-created_at')
     serializer_class = ExpenseClaimSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ExpenseClaimFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ExpenseClaim,*args, **kwargs)
@@ -146,11 +146,11 @@ class ExpenseClaimViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class FinancialReportViewSet(viewsets.ModelViewSet):
-    queryset = FinancialReport.objects.all()
+    queryset = FinancialReport.objects.all().order_by('-created_at')
     serializer_class = FinancialReportSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FinancialReportFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, FinancialReport,*args, **kwargs)
@@ -181,7 +181,7 @@ class JournalEntryView(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             logger.info("Retrieving all JournalEntry")
-            queryset = JournalEntry.objects.all()
+            queryset = JournalEntry.objects.all().order_by('-created_at')
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 

@@ -152,7 +152,7 @@ class PurchaseOrderViewSet(APIView):
                 data = PurchaseOrdersOptionsSerializer.get_purchase_orders_summary(purchaseorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
-            instance = PurchaseOrders.objects.all()
+            instance = PurchaseOrders.objects.all().order_by('-created_at')
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
