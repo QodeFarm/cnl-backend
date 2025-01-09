@@ -76,7 +76,11 @@ class Employees(models.Model):
     address = models.CharField(max_length=255, null=True, default=None)
     hire_date = models.DateField(null=True, default=None)
     date_of_birth = models.DateField(null=True, default=None)
-    gender = models.CharField(max_length=20)
+    GENDER_CHOICES = [
+        ('Female', 'Female'),
+        ('Male', 'Male'),
+    ]
+    gender = models.CharField(max_length=20,choices=GENDER_CHOICES,null=True, default=None)
     nationality = models.CharField(max_length=20, null=True, default=None)
     emergency_contact = models.CharField(max_length=20, null=True, default=None)
     emergency_contact_relationship = models.CharField(max_length=55, null=True, default=None)

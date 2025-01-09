@@ -1677,7 +1677,7 @@ CREATE TABLE IF NOT EXISTS employees (
     address VARCHAR(255),
     hire_date date,
     date_of_birth date,
-    gender varchar(20) NOT NULL,
+    gender ENUM('Female', 'Male') NOT NULL,
     nationality varchar(20),
     emergency_contact varchar(20),
     emergency_contact_relationship varchar(55),
