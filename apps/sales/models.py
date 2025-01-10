@@ -66,10 +66,14 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     class Meta:
         db_table = saleorders
         
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs):            
         from apps.masters.views import increment_order_number
         
         is_new_record = self._state.adding
+        
+        # Set default order status if not provided
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Assign default stage for new orders
         if is_new_record or self.flow_status_id is None:
@@ -358,13 +362,17 @@ class SaleInvoiceOrders(OrderNumberMixin):
     def __str__(self):
         return str(self.sale_invoice_id)
     
-    def save(self, *args, **kwargs):
+    def save(self, *args, **kwargs):          
         from apps.masters.views import increment_order_number
         """
         Override save to ensure the order number is only generated on creation, not on updates.
         """
         # Determine if this is a new record based on the `adding` state
         is_new_record = self._state.adding
+        
+        # Ensure the order status is set if not already set
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Only generate and set the order number if this is a new record
         if is_new_record:
