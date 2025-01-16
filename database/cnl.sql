@@ -350,7 +350,7 @@ CREATE TABLE IF NOT EXISTS ledger_groups (
     code VARCHAR(50),
     inactive BOOLEAN,
     under_group VARCHAR(255),
-    nature VARCHAR(255),
+    nature ENUM('Asset', 'Liability', 'Income', 'Expense') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     is_subledger BOOLEAN,
     ledger_group_id CHAR(36) NOT NULL,
     inactive BOOLEAN,
-    type ENUM("customer", "Bank", "Cash"),
+    type ENUM("customer", "Bank", "Cash") NOT NULL,
     account_no VARCHAR(50),
     rtgs_ifsc_code VARCHAR(50),
     classification VARCHAR(50),
@@ -376,6 +376,30 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (ledger_group_id) REFERENCES ledger_groups(ledger_group_id)
 );
+
+/* journal table */
+-- Record financial transactions (headers for double-entry) 
+CREATE TABLE IF NOT EXISTS journal (
+    journal_id CHAR(36) PRIMARY KEY,
+    date DATE NOT NULL,
+    description VARCHAR(255),
+    total_debit DECIMAL(18, 2),
+    total_credit DECIMAL(18, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* journal_details */
+--Store debit/credit entries linked to the journal table.
+CREATE TABLE IF NOT EXISTS journal_details (
+    journal_detail_id CHAR(36) PRIMARY KEY,
+    journal_id CHAR(36) NOT NULL,
+    ledger_account_id CHAR(36) NOT NULL,
+    debit DECIMAL(18, 2) DEFAULT 0.00,
+    credit DECIMAL(18, 2) DEFAULT 0.00,
+    FOREIGN KEY (journal_id) REFERENCES journal(journal_id),
+    FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id)
+);
+
 
 /* Firm Statuses Table */
 -- Stores information about different statuses of firms.

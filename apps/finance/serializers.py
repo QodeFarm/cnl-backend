@@ -67,3 +67,13 @@ class FinancialReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = FinancialReport
         fields = '__all__'
+
+class JournalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Journal
+        fields = ['journal_id', 'date', 'description', 'total_debit', 'total_credit', 'created_at']
+
+class JournalDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JournalDetail
+        fields = ['journal_detail_id', 'journal_id', 'ledger_account_id', 'debit', 'credit']
