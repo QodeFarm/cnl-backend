@@ -193,6 +193,8 @@ journalentrylines = 'journal_entry_lines'
 journalentries = 'journal_entries'
 chartofaccounts = 'chart_of_accounts'
 bankaccounts = 'bank_accounts'
+journal = 'journal'
+journaldetail = 'journal_details'
 
 #custom db tables
 customfields = 'custom_fields'
