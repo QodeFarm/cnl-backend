@@ -11,6 +11,10 @@ from config.utils_methods import build_response, generic_data_creation, list_all
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
+from rest_framework.response import Response
+from .models import Journal
+from .serializers import JournalSerializer
+from uuid import uuid4
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -391,4 +395,130 @@ class JournalEntryView(APIView):
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
         except Exception:
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+#FOR LEDGERS
+class JournalListCreateAPIView(APIView):
+    """
+    List all journal entries, or create a new journal entry.
+    """
+    def get(self, request):
+        journals = Journal.objects.all()
+        serializer = JournalSerializer(journals, many=True)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def post(self, request):
+        # Generate a new UUID for journal_id
+        journal_id = str(uuid4())
+        data = request.data.copy()
+        data['journal_id'] = journal_id
+
+        serializer = JournalSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, "Records updated successfully", serializer.data, status.HTTP_201_CREATED)
+        return build_response(1, "Records Not Created", serializer.errors, status.HTTP_400_BAD_REQUEST) 
+
+
+class JournalRetrieveUpdateDeleteAPIView(APIView):
+    """
+    Retrieve, update or delete a journal entry by journal_id.
+    """
+    def get_object(self, journal_id):
+        try:
+            return Journal.objects.get(journal_id=journal_id)
+        except Journal.DoesNotExist:
+            return None
+
+    def get(self, request, journal_id):
+        journal = self.get_object(journal_id)
+        if journal is None:
+            return build_response(0, "Record Not found.", {}, status.HTTP_404_NOT_FOUND) 
+        
+        serializer = JournalSerializer(journal)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def put(self, request, journal_id):
+        journal = self.get_object(journal_id)
+        if journal is None:
+            return build_response(0, "Record Not found.", {}, status.HTTP_404_NOT_FOUND) 
+
+        serializer = JournalSerializer(journal, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(len(serializer.data), "Records updated successfully", serializer.data, status.HTTP_200_OK)
+        return build_response(len(serializer.data), "Records Not updated", serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, journal_id):
+        try:
+            # Get the Journal Id instance
+            instance = Journal.objects.get(pk=journal_id)
+            instance.delete()
+
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except Journal.DoesNotExist:
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class JournalDetailListCreateAPIView(APIView):
+    """
+    List all journal details, or create a new journal detail entry.
+    """
+    def get(self, request):
+        journal_details = JournalDetail.objects.all()
+        serializer = JournalDetailSerializer(journal_details, many=True)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def post(self, request):
+        # Generate a new UUID for journal_detail_id
+        journal_detail_id = str(uuid4())
+        data = request.data.copy()
+        data['journal_detail_id'] = journal_detail_id
+
+        serializer = JournalDetailSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, "Records updated successfully", serializer.data, status.HTTP_201_CREATED)
+        return build_response(1, "Records Not Created", serializer.errors, status.HTTP_400_BAD_REQUEST) 
+
+
+class JournalDetailRetrieveUpdateDeleteAPIView(APIView):
+    """
+    Retrieve, update or delete a journal detail entry by journal_detail_id.
+    """
+    def get_object(self, journal_detail_id):
+        try:
+            return JournalDetail.objects.get(journal_detail_id=journal_detail_id)
+        except JournalDetail.DoesNotExist:
+            return None
+
+    def get(self, request, journal_detail_id):
+        journal_detail = self.get_object(journal_detail_id)
+        if journal_detail is None:
+            return build_response(0, "Record Not found.", {}, status.HTTP_404_NOT_FOUND)
+        
+        serializer = JournalDetailSerializer(journal_detail)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def put(self, request, journal_detail_id):
+        journal_detail = self.get_object(journal_detail_id)
+        if journal_detail is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = JournalDetailSerializer(journal_detail, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(len(serializer.data), "Records updated successfully", serializer.data, status.HTTP_200_OK)
+        return build_response(len(serializer.data), "Records Not updated", serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+    def delete(self, request, journal_detail_id):
+        journal_detail = self.get_object(journal_detail_id)
+        if journal_detail is None:
+            return build_response(0, "Record Not found.", "", status.HTTP_404_NOT_FOUND)
+        
+        journal_detail.delete()
+        return build_response(0, "Records Deleted successfully", "", status.HTTP_204_NO_CONTENT)
 
