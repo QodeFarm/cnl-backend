@@ -1778,7 +1778,7 @@ CREATE TABLE IF NOT EXISTS employee_leaves (
 
 CREATE TABLE IF NOT EXISTS leave_approvals ( 
     approval_id CHAR(36) PRIMARY KEY,
-    approval_date datetime,
+    approval_date date,
     status_id CHAR(36) NOT NULL,
     leave_id CHAR(36) NOT NULL,
     approver_id CHAR(36) NOT NULL,
