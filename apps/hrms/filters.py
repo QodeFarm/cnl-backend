@@ -118,8 +118,9 @@ class EmployeeLeavesFilter(filters.FilterSet):
 
 
 class LeaveApprovalsFilter(filters.FilterSet):
-    approval_date = DateFromToRangeFilter()
+    approval_date = filters.DateFilter()
     status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
+    status_name = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
     leave_id = filters.CharFilter(field_name='leave_id__comments', lookup_expr='icontains')
     approver = filters.CharFilter(field_name='approver_id__first_name', lookup_expr='icontains')
     approver_id = filters.CharFilter(method=filter_uuid)
@@ -148,7 +149,7 @@ class LeaveApprovalsFilter(filters.FilterSet):
     class Meta:
         model = LeaveApprovals
         #do not change "approval_date",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['approval_date','status_id','leave_id','approver','approver_id','created_at','period_name','search','sort','page','limit']
+        fields =['created_at','approval_date','leave_id','approver','approver_id','period_name','search','page','limit']
 
 
 class EmployeeLeaveBalanceFilter(filters.FilterSet):
