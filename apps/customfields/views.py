@@ -1,4 +1,5 @@
 from rest_framework import viewsets
+from apps.customfields.filters import CustomFieldValuesFilters
 from config.utils_methods import create_instance, list_all_objects, update_instance
 from .models import CustomField, CustomFieldOption, CustomFieldValue
 from .serializers import  CustomFieldSerializer, CustomFieldOptionSerializer, CustomFieldValueSerializer
@@ -9,6 +10,8 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from django.http import Http404
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter
 import logging
 from config.utils_methods import update_multi_instances, validate_input_pk, delete_multi_instance, build_response, validate_put_method_data, generic_data_creation
 logger = logging.getLogger(__name__)
@@ -42,6 +45,8 @@ class CustomFieldOptionViewSet(viewsets.ModelViewSet):
 class CustomFieldValueViewSet(viewsets.ModelViewSet):
     queryset = CustomFieldValue.objects.all()
     serializer_class = CustomFieldValueSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = CustomFieldValuesFilters 
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
