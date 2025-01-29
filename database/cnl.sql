@@ -2166,6 +2166,7 @@ CREATE TABLE IF NOT EXISTS custom_field_values (
     custom_field_value_id CHAR(36) PRIMARY KEY,
     custom_field_id CHAR(36) NOT NULL,
     entity_id CHAR(36) NOT NULL, 
+    entity_data_id CHAR(36) DEFAULT NULL;
     field_value VARCHAR(255),
     field_value_type VARCHAR(50), 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
