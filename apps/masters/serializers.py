@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.hrms.serializers import ModEmployeesSerializer
 from .models import *
 
 #Create serializers
@@ -323,4 +324,48 @@ class ModEntitiesSerializer(serializers.ModelSerializer):
 class EntitiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Entities
+        fields = '__all__'
+
+
+class ModUserGroupsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserGroups
+        fields = ['group_id', 'group_name','description']
+
+class UserGroupsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserGroups
+        fields = '__all__'
+
+class ModUserGroupMembersSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserGroupMembers
+        fields = ['member_id', 'group_id','employee_id']
+
+class UserGroupMembersSerializer(serializers.ModelSerializer):
+    group = ModUserGroupsSerializer(source='group_id', read_only=True)
+    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
+    class Meta:
+        model = UserGroupMembers
+        fields = '__all__'
+
+class PackageUnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PackageUnit
+        fields = '__all__'
+
+class GPackageUnitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GPackageUnit
+        fields = '__all__'
+
+class ModFlowstatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FlowStatus
+        fields = ['flow_status_id', 'flow_status_name']
+
+class FlowStatusSerializers(serializers.ModelSerializer):
+    # flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
+    class Meta:
+        model = FlowStatus
         fields = '__all__'

@@ -10,7 +10,7 @@ from rest_framework.filters import OrderingFilter
 
 # Create your views here.
 class AssetStatusesViewSet(viewsets.ModelViewSet):
-    queryset = AssetStatuses.objects.all()
+    queryset = AssetStatuses.objects.all().order_by('-created_at')	
     serializer_class = AssetStatusesSerializers
 
     def list(self, request, *args, **kwargs):
@@ -23,7 +23,7 @@ class AssetStatusesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 		
 class AssetCategoriesViewSet(viewsets.ModelViewSet):
-    queryset = AssetCategories.objects.all()
+    queryset = AssetCategories.objects.all().order_by('-created_at')	
     serializer_class = AssetCategoriesSerializers
 
     def list(self, request, *args, **kwargs):
@@ -36,7 +36,7 @@ class AssetCategoriesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 		
 class LocationsViewSet(viewsets.ModelViewSet):
-    queryset = Locations.objects.all()
+    queryset = Locations.objects.all().order_by('-created_at')	
     serializer_class = LocationsSerializers
 
     def list(self, request, *args, **kwargs):
@@ -49,11 +49,11 @@ class LocationsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class AssetsViewSet(viewsets.ModelViewSet):
-    queryset = Assets.objects.all()
+    queryset = Assets.objects.all().order_by('-created_at')	
     serializer_class = AssetsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
 
     def list(self, request, *args, **kwargs):
@@ -66,11 +66,11 @@ class AssetsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 		
 class AssetMaintenanceViewSet(viewsets.ModelViewSet):
-    queryset = AssetMaintenance.objects.all()
+    queryset = AssetMaintenance.objects.all().order_by('-created_at')	
     serializer_class = AssetMaintenanceSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetMaintenanceFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, AssetMaintenance,*args, **kwargs)

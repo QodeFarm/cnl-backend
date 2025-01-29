@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class LeadStatusesView(viewsets.ModelViewSet):
-    queryset = LeadStatuses.objects.all()
+    queryset = LeadStatuses.objects.all().order_by('-created_at')	
     serializer_class = LeadStatusesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -34,7 +34,7 @@ class LeadStatusesView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class InteractionTypesView(viewsets.ModelViewSet):
-    queryset = InteractionTypes.objects.all()
+    queryset = InteractionTypes.objects.all().order_by('-created_at')	
     serializer_class = InteractionTypesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -47,11 +47,11 @@ class InteractionTypesView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class LeadsView(viewsets.ModelViewSet):
-    queryset = Leads.objects.all()
+    queryset = Leads.objects.all().order_by('-created_at')	
     serializer_class = LeadsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LeadsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -63,7 +63,7 @@ class LeadsView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class LeadInteractionsView(viewsets.ModelViewSet):
-    queryset = LeadInteractions.objects.all()
+    queryset = LeadInteractions.objects.all().order_by('-created_at')	
     serializer_class = LeadInteractionsSerializer
 
     def list(self, request, *args, **kwargs):
@@ -76,7 +76,7 @@ class LeadInteractionsView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class LeadAssignmentHistoryView(viewsets.ModelViewSet):
-    queryset = LeadAssignmentHistory.objects.all()
+    queryset = LeadAssignmentHistory.objects.all().order_by('-created_at')	
     serializer_class = LeadAssignmentHistorySerializer
 
     def list(self, request, *args, **kwargs):
@@ -108,7 +108,7 @@ class LeadsViewSet(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             logger.info("Retrieving all lead")
-            queryset = Leads.objects.all()
+            queryset = Leads.objects.all().order_by('-created_at')	
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 

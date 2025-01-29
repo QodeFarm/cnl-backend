@@ -1,7 +1,8 @@
 from django.db import models
 import uuid
 from apps.hrms.models import Employees
-from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports
+from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal
+from apps.customer.models import LedgerAccounts
 
 # Create your models here.
 
@@ -208,3 +209,30 @@ class FinancialReport(models.Model):
 
     def __str__(self):
         return f"Report: {self.report_name} ({self.report_type})"
+
+class Journal(models.Model):
+    journal_id =  models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    date = models.DateField()
+    description = models.CharField(max_length=255, blank=True, null=True)
+    total_debit = models.DecimalField(max_digits=18, decimal_places=2)
+    total_credit = models.DecimalField(max_digits=18, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = journal
+
+    def __str__(self):
+        return f"Journal {self.journal_id}"
+    
+class JournalDetail(models.Model):
+    journal_detail_id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    debit = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    credit = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    journal_id = models.ForeignKey(Journal, related_name="journal_details", on_delete=models.CASCADE, db_column='journal_id')
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE,  db_column='ledger_account_id')
+
+    class Meta:
+        db_table = journaldetail
+
+    def __str__(self):
+        return f"Journal Detail {self.journal_detail_id}"

@@ -28,11 +28,11 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 
 class VendorsView(viewsets.ModelViewSet):
-    queryset = Vendor.objects.all()
+    queryset = Vendor.objects.all().order_by('-created_at')	
     serializer_class = VendorSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -44,7 +44,7 @@ class VendorsView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class VendorCategoryView(viewsets.ModelViewSet):
-    queryset = VendorCategory.objects.all()
+    queryset = VendorCategory.objects.all().order_by('-created_at')	
     serializer_class = VendorCategorySerializer 
 
     def list(self, request, *args, **kwargs):
@@ -57,7 +57,7 @@ class VendorCategoryView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class VendorPaymentTermsView(viewsets.ModelViewSet):
-    queryset = VendorPaymentTerms.objects.all()
+    queryset = VendorPaymentTerms.objects.all().order_by('-created_at')	
     serializer_class = VendorPaymentTermsSerializer
 
     def list(self, request, *args, **kwargs):
@@ -70,7 +70,7 @@ class VendorPaymentTermsView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)    
 
 class VendorAgentView(viewsets.ModelViewSet):
-    queryset = VendorAgent.objects.all()
+    queryset = VendorAgent.objects.all().order_by('-created_at')	
     serializer_class = VendorAgentSerializer   
 
     def list(self, request, *args, **kwargs):
@@ -127,12 +127,12 @@ class VendorViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true&" 
             if summary:
                 logger.info("Retrieving vendors summary")
-                vendors = Vendor.objects.all()
+                vendors = Vendor.objects.all().order_by('-created_at')
                 data = VendorsOptionsSerializer.get_vendors_summary(vendors)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
  
             logger.info("Retrieving all vendors")
-            queryset = Vendor.objects.all()
+            queryset = Vendor.objects.all().order_by('-created_at')
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 

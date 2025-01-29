@@ -1,6 +1,7 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter, NumberFilter
 import datetime,django_filters
-from .models import ProductGstClassifications, ProductItemBalance, Products
+from django_filters import BooleanFilter
+from .models import ProductGstClassifications, ProductItemBalance, Products, ProductVariation
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -65,9 +66,16 @@ class ProductsFilter(FilterSet):
     dis_amount = filters.RangeFilter()
     hsn_code = filters.CharFilter(lookup_expr='icontains')
     print_name = filters.CharFilter(lookup_expr='icontains')
+    balance = filters.NumberFilter()
     unit_options_id = filters.CharFilter(method=filter_uuid)
     unit_options = filters.CharFilter(field_name='unit_options_id__unit_name', lookup_expr='icontains')
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    stock_unit_id = filters.CharFilter(method=filter_uuid)
+    stock_unit_name = filters.CharFilter(field_name='stock_unit_id__stock_unit_name', lookup_expr='icontains')
+    pack_unit_id = filters.CharFilter(method=filter_uuid)
+    pack_unit_name = filters.CharFilter(field_name='pack_unit_id__stock_unit_name', lookup_expr='icontains') 
+    g_pack_unit_id = filters.CharFilter(method=filter_uuid)
+    g_pack_unit_name = filters.CharFilter(field_name='g_pack_unit_id__stock_unit_name', lookup_expr='icontains')         
     search = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
@@ -91,7 +99,7 @@ class ProductsFilter(FilterSet):
     class Meta:
         model = Products
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'created_at','period_name','search','sort','page','limit']
+        fields =['name','code','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'created_at','period_name','search','sort','page','limit']
 
 
 class ProductItemBalanceFilter(FilterSet):
@@ -106,3 +114,18 @@ class ProductItemBalanceFilter(FilterSet):
     class Meta:
         model = ProductItemBalance
         fields =[]
+
+class ProductVariationFilter(FilterSet):
+    product_variation_id = filters.CharFilter(method=filter_uuid)
+    product_id = filters.CharFilter(method=filter_uuid)
+    product_name = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
+    size_id = filters.CharFilter(method=filter_uuid)
+    size_name = filters.CharFilter(field_name='size_id__size_name', lookup_expr='icontains')
+    color_id = filters.CharFilter(method=filter_uuid)
+    color_name = filters.CharFilter(field_name='color_id__color_name', lookup_expr='icontains')    
+    size_isnull = BooleanFilter(field_name='size_id', lookup_expr='isnull')
+    color_isnull = BooleanFilter(field_name='color_id', lookup_expr='isnull')       
+
+    class Meta:
+        model = ProductVariation
+        fields =[]        

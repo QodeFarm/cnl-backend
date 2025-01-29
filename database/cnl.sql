@@ -198,6 +198,15 @@ CREATE TABLE IF NOT EXISTS branch_bank_details (
     FOREIGN KEY (branch_id) REFERENCES branches(branch_id)
 ) ENGINE=InnoDB;
 
+/* Roles Table */
+-- Lists the roles that can be assigned to users, determining permissions and access levels within the ERP system.
+CREATE TABLE IF NOT EXISTS roles (
+    role_id CHAR(36) PRIMARY KEY,
+    role_name VARCHAR(255) NOT NULL UNIQUE,
+    description VARCHAR(512),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
 
 /* Users Table */
 -- Contains user profiles, including authentication details, contact information, and role within the ERP system.
@@ -217,6 +226,7 @@ CREATE TABLE IF NOT EXISTS users (
     timezone VARCHAR(100),
     language VARCHAR(10),
 	is_active TINYINT,
+    role_id CHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     last_login TIMESTAMP,
@@ -225,19 +235,12 @@ CREATE TABLE IF NOT EXISTS users (
     title ENUM('Mr.','Ms.'),
     INDEX idx_branch_id (branch_id),
     INDEX idx_status_id (status_id),
+    INDEX idx_role_id (role_id),
     FOREIGN KEY (branch_id) REFERENCES branches(branch_id),
-    FOREIGN KEY (status_id) REFERENCES statuses(status_id)
+    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
+    FOREIGN KEY (role_id) REFERENCES roles(role_id)
 ) ENGINE=InnoDB;
 
-/* Roles Table */
--- Lists the roles that can be assigned to users, determining permissions and access levels within the ERP system.
-CREATE TABLE IF NOT EXISTS roles (
-    role_id CHAR(36) PRIMARY KEY,
-    role_name VARCHAR(255) NOT NULL UNIQUE,
-    description VARCHAR(512),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
 
 /* User_roles Table */
 -- Maintain user roles many to many relations
@@ -257,6 +260,8 @@ CREATE TABLE IF NOT EXISTS modules (
     module_id CHAR(36) PRIMARY KEY,
     module_name VARCHAR(255) UNIQUE NOT NULL,
     description VARCHAR(512),
+    mod_icon VARCHAR(255),
+    mod_link VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -267,6 +272,8 @@ CREATE TABLE IF NOT EXISTS module_sections (
     section_id CHAR(36) PRIMARY KEY,
     module_id CHAR(36) NOT NULL,
     section_name VARCHAR(255) NOT NULL,
+    sec_icon VARCHAR(255),
+    sec_link VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (module_id) REFERENCES modules(module_id)
@@ -343,7 +350,7 @@ CREATE TABLE IF NOT EXISTS ledger_groups (
     code VARCHAR(50),
     inactive BOOLEAN,
     under_group VARCHAR(255),
-    nature VARCHAR(255),
+    nature ENUM('Asset', 'Liability', 'Income', 'Expense') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -357,7 +364,7 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     is_subledger BOOLEAN,
     ledger_group_id CHAR(36) NOT NULL,
     inactive BOOLEAN,
-    type ENUM("customer", "Bank", "Cash"),
+    type ENUM("customer", "Bank", "Cash") NOT NULL,
     account_no VARCHAR(50),
     rtgs_ifsc_code VARCHAR(50),
     classification VARCHAR(50),
@@ -369,6 +376,30 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (ledger_group_id) REFERENCES ledger_groups(ledger_group_id)
 );
+
+/* journal table */
+-- Record financial transactions (headers for double-entry) 
+CREATE TABLE IF NOT EXISTS journal (
+    journal_id CHAR(36) PRIMARY KEY,
+    date DATE NOT NULL,
+    description VARCHAR(255),
+    total_debit DECIMAL(18, 2),
+    total_credit DECIMAL(18, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* journal_details */
+--Store debit/credit entries linked to the journal table.
+CREATE TABLE IF NOT EXISTS journal_details (
+    journal_detail_id CHAR(36) PRIMARY KEY,
+    journal_id CHAR(36) NOT NULL,
+    ledger_account_id CHAR(36) NOT NULL,
+    debit DECIMAL(18, 2) DEFAULT 0.00,
+    credit DECIMAL(18, 2) DEFAULT 0.00,
+    FOREIGN KEY (journal_id) REFERENCES journal(journal_id),
+    FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id)
+);
+
 
 /* Firm Statuses Table */
 -- Stores information about different statuses of firms.
@@ -691,6 +722,16 @@ CREATE TABLE IF NOT EXISTS product_brands (
     FOREIGN KEY (brand_salesman_id) REFERENCES brand_salesman(brand_salesman_id)
 );
 
+CREATE TABLE IF NOT EXISTS package_units (
+    pack_unit_id CHAR(36) PRIMARY KEY,
+    unit_name VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS g_package_units (
+    g_pack_unit_id CHAR(36) PRIMARY KEY,
+    unit_name VARCHAR(50) NOT NULL
+);
+
 /* Products Table */
 -- Stores information about products.
 CREATE TABLE IF NOT EXISTS products (
@@ -734,19 +775,27 @@ CREATE TABLE IF NOT EXISTS products (
     status ENUM('Active', 'Inactive'),
     print_name VARCHAR(255),
     hsn_code VARCHAR(15),
+    balance INT DEFAULT 0,
+	pack_unit_id CHAR(36) NULL,
+	pack_vs_stock INT DEFAULT 0,
+	g_pack_unit_id CHAR(36) NULL,
+	g_pack_vs_pack INT DEFAULT 0,
+	packet_barcode VARCHAR(50) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_group_id) REFERENCES product_groups(product_group_id),
     FOREIGN KEY (category_id) REFERENCES product_categories(category_id),
     FOREIGN KEY (type_id) REFERENCES product_types(type_id),
     FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
-    FOREIGN KEY (stock_unit_id) REFERENCES product_stock_units(stock_unit_id),
     FOREIGN KEY (gst_classification_id) REFERENCES product_gst_classifications(gst_classification_id),
     FOREIGN KEY (sales_gl_id) REFERENCES product_sales_gl(sales_gl_id),
     FOREIGN KEY (purchase_gl_id) REFERENCES product_purchase_gl(purchase_gl_id),
     FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
     FOREIGN KEY (drug_type_id) REFERENCES product_drug_types(drug_type_id),
-    FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id)
+    FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id),
+    FOREIGN KEY (stock_unit_id) REFERENCES product_stock_units(stock_unit_id),
+	FOREIGN KEY (pack_unit_id) REFERENCES product_stock_units(stock_unit_id),
+	FOREIGN KEY (g_pack_unit_id) REFERENCES product_stock_units(stock_unit_id)
 );
 
 /* Sizes Table */
@@ -779,8 +828,8 @@ CREATE TABLE IF NOT EXISTS colors (
 CREATE TABLE IF NOT EXISTS product_variations (
     product_variation_id CHAR(36) PRIMARY KEY,
     product_id CHAR(36) NOT NULL,
-    size_id CHAR(36) NOT NULL,
-    color_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,
     sku VARCHAR(100) UNIQUE,  -- A stock keeping unit (SKU) is a unique alphanumeric code that retailers use to identify and track products in their inventory
     price DECIMAL(10, 2) NOT NULL,
     quantity INT DEFAULT 0,
@@ -791,16 +840,53 @@ CREATE TABLE IF NOT EXISTS product_variations (
     FOREIGN KEY (color_id) REFERENCES colors(color_id)
 );
 
+/* Warehouse Table */
+-- Stores information about warehouses.
+CREATE TABLE IF NOT EXISTS warehouses (
+    warehouse_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(255),
+    item_type_id CHAR(36),
+    address VARCHAR(255),
+    city_id CHAR(36) NOT NULL,
+	state_id CHAR(36) NOT NULL,
+	country_id CHAR(36),
+    pin_code VARCHAR(50),
+    phone VARCHAR(50),
+    email VARCHAR(255),
+    longitude DECIMAL(10, 6),
+    latitude DECIMAL(10, 6),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
+    FOREIGN KEY (city_id) REFERENCES city(city_id),
+	FOREIGN KEY (state_id) REFERENCES state(state_id),
+	FOREIGN KEY (country_id) REFERENCES country(country_id)
+);
+
+
+/* Warehouse_Locations Table */
+-- Stores information about warehouse locations.
+CREATE TABLE IF NOT EXISTS warehouse_locations (
+    location_id CHAR(36) PRIMARY KEY,
+    warehouse_id CHAR(36) NOT NULL,
+    location_name VARCHAR(255) NOT NULL,
+    description VARCHAR(512),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
+);
+
 /* Product_item_balance Table */
 -- Stores information about product_item_balance.
 CREATE TABLE IF NOT EXISTS product_item_balance (
     product_item_balance_id CHAR(36) PRIMARY KEY,
-    product_variation_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
     warehouse_location_id CHAR(36) NOT NULL,
     quantity INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (product_variation_id) REFERENCES product_variations(product_variation_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
     FOREIGN KEY (warehouse_location_id) REFERENCES warehouse_locations(location_id)
 );
 
@@ -963,39 +1049,6 @@ CREATE TABLE IF NOT EXISTS sale_types (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* Warehouse Table */
--- Stores information about warehouses.
-CREATE TABLE IF NOT EXISTS warehouses (
-    warehouse_id CHAR(36) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    code VARCHAR(255),
-    item_type_id CHAR(36),
-    address VARCHAR(255),
-    city_id CHAR(36) NOT NULL,
-	state_id CHAR(36) NOT NULL,
-	country_id CHAR(36),
-    pin_code VARCHAR(50),
-    phone VARCHAR(50),
-    email VARCHAR(255),
-    longitude DECIMAL(10, 6),
-    latitude DECIMAL(10, 6),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (item_type_id) REFERENCES product_item_type(item_type_id),
-    FOREIGN KEY (city_id) REFERENCES city(city_id),
-	FOREIGN KEY (state_id) REFERENCES state(state_id),
-	FOREIGN KEY (country_id) REFERENCES country(country_id)
-);
-
-CREATE TABLE IF NOT EXISTS warehouse_locations (
-    location_id CHAR(36) PRIMARY KEY,
-    warehouse_id CHAR(36) NOT NULL,
-    location_name VARCHAR(255) NOT NULL,
-    description VARCHAR(512),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (warehouse_id) REFERENCES warehouses(warehouse_id)
-);
 
 /* GST Types Table */
 -- Stores information about different types of GST.
@@ -1048,6 +1101,16 @@ CREATE TABLE IF NOT EXISTS return_options (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
+/* Workflows Table */
+-- Stores details about different workflows used in the ERP system.
+CREATE TABLE IF NOT EXISTS workflows (
+    workflow_id CHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
 /* Sales Order Table */
 -- Stores information about sales orders.
 CREATE TABLE IF NOT EXISTS sale_orders(
@@ -1062,6 +1125,7 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     ref_no VARCHAR(255),
     ref_date DATE NOT NULL,
     tax ENUM('Exclusive','Inclusive'),
+    sale_estimate ENUM('Yes', 'No') DEFAULT 'No',
     customer_address_id CHAR(36),
     payment_term_id CHAR(36),
     remarks VARCHAR(1024),
@@ -1077,9 +1141,8 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     doc_amount DECIMAL(18, 2),
     vehicle_name VARCHAR(255),
     total_boxes INT,
-    flow_status VARCHAR(255),
+    flow_status_id CHAR(36),
 	order_status_id CHAR(36),
-    workflow_id CHAR(36),
     sale_return_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
@@ -1092,8 +1155,8 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     FOREIGN KEY (sale_type_id) REFERENCES sale_types(sale_type_id),
     FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id),
 	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
-    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id),
-    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
+    FOREIGN KEY (flow_status_id) REFERENCES flow_status(flow_status_id),/*,
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)*/
 );
 
 /* Order Items Table */
@@ -1103,6 +1166,8 @@ CREATE TABLE IF NOT EXISTS sale_order_items (
     sale_order_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
 	unit_options_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,	
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
 	total_boxes INT,
@@ -1110,12 +1175,15 @@ CREATE TABLE IF NOT EXISTS sale_order_items (
     amount DECIMAL(18, 2),
 	tax DECIMAL(18, 2),
 	remarks VARCHAR(255),
+    invoiced VARCHAR(3) DEFAULT 'NO',
     discount DECIMAL(18, 2),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
+	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)	
 );
 
 /* Invoices Table */
@@ -1174,6 +1242,8 @@ CREATE TABLE IF NOT EXISTS sale_invoice_items (
     sale_invoice_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
 	unit_options_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,    
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
 	total_boxes INT,
@@ -1186,7 +1256,9 @@ CREATE TABLE IF NOT EXISTS sale_invoice_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
+	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)    
 );
 
 /* Sale Retuns Table */
@@ -1247,6 +1319,8 @@ CREATE TABLE IF NOT EXISTS sale_return_items (
     sale_return_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
 	unit_options_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,     
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
 	total_boxes INT,
@@ -1259,7 +1333,9 @@ CREATE TABLE IF NOT EXISTS sale_return_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
+	FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
 );
 
 /* Payment Transactions Table */
@@ -1310,7 +1386,7 @@ CREATE TABLE IF NOT EXISTS order_shipments (
     destination VARCHAR(255),
     shipping_mode_id CHAR(36),
     shipping_company_id CHAR(36),
-    shipping_tracking_no VARCHAR(20) NOT NULL,  -- ex pattern: SHIP-2406-00001
+    shipping_tracking_no VARCHAR(20) NOT NULL UNIQUE,  -- ex pattern: SHIP-2406-00001
     shipping_date DATE NOT NULL,
     shipping_charges DECIMAL(10, 2),
     vehicle_vessel VARCHAR(255),
@@ -1343,7 +1419,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     purchase_order_id CHAR(36) PRIMARY KEY,
 	purchase_type_id CHAR(36),
 	order_date DATE NOT NULL,
-	order_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: PO-2406-00001
+	order_no VARCHAR(20),  -- ex pattern: PO-2406-00001
     gst_type_id CHAR(36),
     vendor_id CHAR(36) NOT NULL,
     email VARCHAR(255),
@@ -1388,6 +1464,8 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     purchase_order_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
     unit_options_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,     
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
     total_boxes INT,
@@ -1400,7 +1478,9 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(purchase_order_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
+    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)    
 );
 
 /* Purchase Invoices Table */
@@ -1409,7 +1489,7 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_orders (
     purchase_invoice_id CHAR(36) PRIMARY KEY,
 	purchase_type_id CHAR(36),
 	invoice_date DATE NOT NULL,
-    invoice_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: PO-INV-2406-00001
+    invoice_no VARCHAR(20),  -- ex pattern: PO-INV-2406-00001
     gst_type_id CHAR(36),
     vendor_id CHAR(36) NOT NULL,
     email VARCHAR(255),
@@ -1456,6 +1536,8 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
     purchase_invoice_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
     unit_options_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,     
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
     total_boxes INT,
@@ -1468,7 +1550,9 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoice_orders(purchase_invoice_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
+    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)    
 );
 
 /* Purchase Returns Table */
@@ -1477,7 +1561,7 @@ CREATE TABLE IF NOT EXISTS purchase_return_orders (
     purchase_return_id CHAR(36) PRIMARY KEY,
 	purchase_type_id CHAR(36),
 	return_date DATE NOT NULL,
-    return_no VARCHAR(20) UNIQUE NOT NULL,  -- ex pattern: PR-2406-00001
+    return_no VARCHAR(20),  -- ex pattern: PR-2406-00001
     gst_type_id CHAR(36),
     vendor_id CHAR(36) NOT NULL,
     email VARCHAR(255),
@@ -1521,6 +1605,8 @@ CREATE TABLE IF NOT EXISTS purchase_return_items (
     purchase_return_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
     unit_options_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,     
     print_name CHAR(255),
     quantity DECIMAL(18, 2),
     total_boxes INT,
@@ -1533,7 +1619,9 @@ CREATE TABLE IF NOT EXISTS purchase_return_items (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (purchase_return_id) REFERENCES purchase_return_orders(purchase_return_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id)
+    FOREIGN KEY (unit_options_id) REFERENCES unit_options(unit_options_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)    
 );
 
 /* Sales Price List Table */
@@ -1564,6 +1652,211 @@ CREATE TABLE IF NOT EXISTS purchase_price_list (
     FOREIGN KEY (brand_id) REFERENCES product_brands(brand_id)
 );
 
+/* ======== HRMS Management ======== */
+
+CREATE TABLE IF NOT EXISTS job_types (
+    job_type_id CHAR(36) PRIMARY KEY,
+    job_type_name varchar(55) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS designations (
+    designation_id CHAR(36) PRIMARY KEY,
+    designation_name varchar(55) NOT NULL,
+    responsibilities varchar(255) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS job_codes (
+    job_code_id CHAR(36) PRIMARY KEY,
+    job_code varchar(55) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS departments (
+    department_id CHAR(36) PRIMARY KEY,
+    department_name VARCHAR(55) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS shifts (
+    shift_id CHAR(36) PRIMARY KEY,
+    shift_name VARCHAR(55) NOT NULL,
+    start_time timestamp NOT NULL,
+    end_time timestamp NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS employees (
+    employee_id CHAR(36) PRIMARY KEY,
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(255),
+    address VARCHAR(255),
+    hire_date date,
+    date_of_birth date,
+    gender ENUM('Female', 'Male') NOT NULL,
+    nationality varchar(20),
+    emergency_contact varchar(20),
+    emergency_contact_relationship varchar(55),
+    job_type_id CHAR(36) NOT NULL,
+    designation_id CHAR(36),
+    job_code_id CHAR(36),
+    department_id CHAR(36),
+    shift_id CHAR(36),
+    manager_id CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (job_type_id) REFERENCES job_types(job_type_id),
+    FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
+    FOREIGN KEY (job_code_id) REFERENCES job_codes(job_code_id),
+    FOREIGN KEY (department_id) REFERENCES departments(department_id),
+    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id),
+    FOREIGN KEY (manager_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS employee_salary (
+    salary_id CHAR(36) PRIMARY KEY,
+    salary_amount float NOT NULL,
+    salary_currency varchar(45) NOT NULL,
+    salary_start_date DATE NOT NULL,
+    salary_end_date DATE NOT NULL,
+    employee_id CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS salary_components (
+    component_id CHAR(36) PRIMARY KEY,
+    component_name varchar(100) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS employee_salary_components (
+    employee_component_id CHAR(36) PRIMARY KEY,
+    component_id CHAR(36) NOT NULL,
+    component_amount float,
+    salary_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (component_id) REFERENCES salary_components(component_id),
+    FOREIGN KEY (salary_id) REFERENCES employee_salary(salary_id)
+);
+
+/* ======== leaves ======== */
+
+CREATE TABLE IF NOT EXISTS leave_types (
+    leave_type_id CHAR(36) PRIMARY KEY,
+    leave_type_name VARCHAR(55) NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    max_days_allowed int NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS employee_leaves (
+    leave_id CHAR(36) PRIMARY KEY,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    comments varchar(255),
+    employee_id CHAR(36) NOT NULL,
+    leave_type_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (leave_type_id) REFERENCES leave_types(leave_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS leave_approvals ( 
+    approval_id CHAR(36) PRIMARY KEY,
+    approval_date date,
+    status_id CHAR(36) NOT NULL,
+    leave_id CHAR(36) NOT NULL,
+    approver_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
+    FOREIGN KEY (leave_id) REFERENCES employee_leaves(leave_id),
+    FOREIGN KEY (approver_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS employee_leave_balance (
+    balance_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    leave_type_id CHAR(36) NOT NULL,
+    leave_balance decimal(10,2) NOT NULL,
+    year varchar(45) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    FOREIGN KEY (leave_type_id) REFERENCES leave_types(leave_type_id)
+);
+
+/* ======== attendance ======== */
+
+CREATE TABLE IF NOT EXISTS employee_attendance (
+    employee_attendance_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    attendance_date DATE NOT NULL DEFAULT (CURRENT_DATE),
+    absent BOOLEAN,
+    leave_duration ENUM('First Half', 'Full Day', 'Second Half'),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS swipes (
+    swipe_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    swipe_time datetime,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+CREATE TABLE IF NOT EXISTS biometric (
+    biometric_id CHAR(36) PRIMARY KEY,
+    employee_id CHAR(36) NOT NULL,
+    biometric_entry_id int,
+    template_data text NOT NULL,
+    entry_stamp timestamp,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+);
+
+/* User Groups Table */
+-- Stores information about different groups.
+CREATE TABLE IF NOT EXISTS user_groups (
+    group_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
+    group_name VARCHAR(100) UNIQUE NOT NULL,
+    description VARCHAR(1024),  -- Description length set to 1024 characters
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* User Group Members Table */
+-- Tracks the members belonging to each group.
+CREATE TABLE IF NOT EXISTS user_group_members (
+    member_id CHAR(36) PRIMARY KEY,  -- UUID stored as a CHAR(36)
+    group_id CHAR(36) NOT NULL,
+    employee_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (group_id) REFERENCES user_groups(group_id) ON DELETE CASCADE,
+	FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
+    UNIQUE (group_id, employee_id)
+);
+
 /* Task Priorities Table */
 -- Stores possible priorities for tasks.
 CREATE TABLE IF NOT EXISTS task_priorities (
@@ -1577,7 +1870,8 @@ CREATE TABLE IF NOT EXISTS task_priorities (
 -- Stores tasks assigned to users with their status, priority, and other details.
 CREATE TABLE IF NOT EXISTS tasks (
     task_id CHAR(36) PRIMARY KEY,
-    user_id CHAR(36) NOT NULL,
+    user_id CHAR(36) NULL,
+    group_id CHAR(36) NULL,
     status_id CHAR(36) NOT NULL,
     priority_id CHAR(36) NOT NULL,
     title VARCHAR(255) NOT NULL,
@@ -1587,7 +1881,8 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (status_id) REFERENCES statuses(status_id),
-    FOREIGN KEY (priority_id) REFERENCES task_priorities(priority_id)
+    FOREIGN KEY (priority_id) REFERENCES task_priorities(priority_id),
+    FOREIGN KEY (group_id) REFERENCES user_groups(group_id)
 );
 
 /* Task Comments Table */
@@ -1623,12 +1918,14 @@ CREATE TABLE IF NOT EXISTS task_history (
     task_id CHAR(36) NOT NULL,
     status_id CHAR(36) NOT NULL,
     changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    user_id CHAR(36) NOT NULL,
+    user_id CHAR(36) NULL,
+    group_id CHAR(36) NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(task_id),
     FOREIGN KEY (status_id) REFERENCES statuses(status_id),
-    FOREIGN KEY (user_id) REFERENCES users(user_id)
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (group_id) REFERENCES user_groups(group_id)
 );
 
 /* Quick Packs Table */
@@ -1651,48 +1948,17 @@ CREATE TABLE IF NOT EXISTS quick_pack_items (
     quick_pack_item_id CHAR(36) PRIMARY KEY,
     quick_pack_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,
     quantity INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (quick_pack_id) REFERENCES quick_packs(quick_pack_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
 );
 
-
-/* ======== HRMS Management ======== */
-
-/* designations Table */
--- Lookup table for employee designations.
-CREATE TABLE IF NOT EXISTS designations (
-   designation_id CHAR(36) PRIMARY KEY,
-   designation_name VARCHAR(50) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-/* departments Table */
--- Lookup table for employee departments.
-CREATE TABLE IF NOT EXISTS departments (
-   department_id CHAR(36) PRIMARY KEY,
-   department_name VARCHAR(50) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-/* employees Table */
--- Stores information about employees.
-CREATE TABLE IF NOT EXISTS employees (
-   employee_id CHAR(36) PRIMARY KEY,
-   name VARCHAR(255) NOT NULL,
-   email VARCHAR(255) NOT NULL,
-   phone VARCHAR(20),
-   designation_id CHAR(36) NOT NULL,
-   department_id CHAR(36) NOT NULL,
-   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-   FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
-   FOREIGN KEY (department_id) REFERENCES departments(department_id)
-);
 
 /* ======== LEAD Management ======== */
 
@@ -1822,38 +2088,23 @@ CREATE TABLE IF NOT EXISTS asset_maintenance (
 );
 
 /* ======== Manufacturing/Production ======== */
+
+CREATE TABLE IF NOT EXISTS bom (
+    bom_id CHAR(36) PRIMARY KEY,
+    bom_name VARCHAR(100) NOT NULL,
+    product_id CHAR(36),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    ); 
+
 CREATE TABLE IF NOT EXISTS raw_materials (
    raw_material_id  CHAR(36) PRIMARY KEY,
    name VARCHAR(255) NOT NULL,
    description TEXT,
    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS work_order_stages (
-    work_stage_id CHAR(36) PRIMARY KEY,
-    work_order_id CHAR(36),
-    stage_name VARCHAR(255) NOT NULL,
-    stage_description TEXT,
-	stage_start_date DATE,
-	stage_end_date DATE,
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
-);
-
-/* Bill of Materials (BOM) Table */
--- Stores the list of materials and components required to produce each product.
-CREATE TABLE IF NOT EXISTS bill_of_materials (
-  bom_id CHAR(36) PRIMARY KEY,
-  product_id CHAR(36),
-  component_name VARCHAR(100),
-  quantity_required DECIMAL(10,2),
-  order_id CHAR(36),
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
 
 /* Production Statuses Table */
@@ -1871,15 +2122,64 @@ CREATE TABLE IF NOT EXISTS production_statuses (
 CREATE TABLE IF NOT EXISTS work_orders (
     work_order_id CHAR(36) PRIMARY KEY,
     product_id CHAR(36),
-    quantity DECIMAL(10, 2),
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,    
+    quantity INT NOT NULL DEFAULT 0,
+    completed_qty INT NULL DEFAULT 0,
+    pending_qty INT NULL DEFAULT 0,
     status_id CHAR(36),
     start_date DATE,
     end_date DATE,
+    sale_order_id CHAR(36) DEFAULT NULL,
+    sync_qty BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(product_id),
-    FOREIGN KEY (status_id) REFERENCES production_statuses(status_id)
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id),  
+    FOREIGN KEY (status_id) REFERENCES production_statuses(status_id),
+    FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id)
 );
+
+CREATE TABLE IF NOT EXISTS completed_quantity (
+    quantity_id CHAR(36) PRIMARY KEY,
+    quantity INT NULL,
+    sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    work_order_id CHAR(36) NOT NULL,
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+    );
+
+CREATE TABLE IF NOT EXISTS work_order_stages (
+    work_stage_id CHAR(36) PRIMARY KEY,
+    work_order_id CHAR(36),
+    stage_name VARCHAR(255) NOT NULL,
+    stage_description TEXT,
+	stage_start_date DATE,
+	stage_end_date DATE,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+);
+
+/* Bill of Materials (BOM) Table */
+-- Stores the list of materials and components required to produce each product.
+CREATE TABLE IF NOT EXISTS bill_of_materials (
+    material_id CHAR(36) PRIMARY KEY,
+    product_id  CHAR(36),
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    unit_cost DECIMAL(10, 2) NOT NULL,
+    total_cost DECIMAL(10, 2) NOT NULL,
+    notes TEXT,  
+    reference_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
+    );
 
 /* Machines Table */
 -- Stores information about the machines used in production.
@@ -1915,26 +2215,33 @@ FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
 FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
 );
 
-/* Workflows Table */
--- Stores details about different workflows used in the ERP system.
-CREATE TABLE IF NOT EXISTS workflows (
-    workflow_id CHAR(36) PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
+
+/* Workflow Stages Table */
+-- Defines stages within each workflow, specifying the order and description for each stage.
+CREATE TABLE IF NOT EXISTS workflowstages (
+    workflow_stage_id CHAR(36) PRIMARY KEY,
+    workflow_id CHAR(36) NOT NULL,
+    stage_order INT NOT NULL,
+    description VARCHAR(255),
+    section_id CHAR(36) NOT NULL,
+    flow_status_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id),
+    FOREIGN KEY (section_id) REFERENCES module_sections(section_id) ,
+    FOREIGN KEY (flow_status_id) REFERENCES flow_status(flow_status_id)
+);
+
+
+/* Flow Status Table */
+-- Defines different statuses within a workflow, such as "Pending," "In Progress," or "Completed."
+CREATE TABLE IF NOT EXISTS flow_status (
+    flow_status_id CHAR(36) PRIMARY KEY,    
+    flow_status_name VARCHAR(255) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-/* Workflow Stages Table */
--- Defines stages within each workflow, including the order of the stages.
-CREATE TABLE IF NOT EXISTS workflow_stages (
-    stage_id CHAR(36) PRIMARY KEY,    
-    workflow_id CHAR(36) NOT NULL,
-    stage_name VARCHAR(255) NOT NULL,
-    stage_order INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (workflow_id) REFERENCES workflows(workflow_id)
-);
 
 /* Sale Receipts Table */
 -- Stores receipts associated with sale invoices.
@@ -2193,7 +2500,7 @@ CREATE TABLE IF NOT EXISTS sale_debit_notes (
     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id),
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
 	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id),
-    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id)
+    FOREIGN KEY (sale_return_id) REFERENCES sale_return_orders(sale_return_id),
 	FOREIGN KEY (order_status_id) REFERENCES order_statuses(order_status_id)
 );
 
@@ -2209,5 +2516,123 @@ CREATE TABLE IF NOT EXISTS sale_debit_note_items (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (debit_note_id) REFERENCES sale_debit_notes(debit_note_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);
+
+/* Notification Frequencies Table */
+-- Stores available notification frequencies for reminders.
+CREATE TABLE IF NOT EXISTS notification_frequencies (
+frequency_id CHAR(36) PRIMARY KEY,
+frequency_name VARCHAR(50) NOT NULL UNIQUE,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Notification Methods Table */
+-- Stores available notification methods for reminders and settings.
+CREATE TABLE IF NOT EXISTS notification_methods (
+method_id CHAR(36) PRIMARY KEY,
+method_name VARCHAR(50) NOT NULL UNIQUE,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Reminder Types Table */
+-- Stores different types of reminders.
+CREATE TABLE IF NOT EXISTS reminder_types (
+reminder_type_id CHAR(36) PRIMARY KEY,
+type_name VARCHAR(100) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+/* Reminders Table */
+-- Stores the main reminder details.
+CREATE TABLE IF NOT EXISTS reminders (
+reminder_id CHAR(36) PRIMARY KEY,
+reminder_type_id CHAR(36) NOT NULL,
+subject VARCHAR(255) NOT NULL,
+description TEXT,
+reminder_date TIMESTAMP NOT NULL,
+is_recurring BOOLEAN DEFAULT FALSE,
+recurring_frequency ENUM('Daily', 'Monthly', 'Weekly', 'Yearly') NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (reminder_type_id) REFERENCES reminder_types(reminder_type_id)
+);
+
+/* Reminder Recipients Table */
+-- Stores details of recipients for a reminder.
+CREATE TABLE IF NOT EXISTS reminder_recipients (
+recipient_id CHAR(36) PRIMARY KEY,
+reminder_id CHAR(36) NOT NULL,
+recipient_user_id CHAR(36) NOT NULL,
+recipient_email VARCHAR(255),
+notification_method_id CHAR(36) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id),
+FOREIGN KEY (recipient_user_id) REFERENCES employees(employee_id),
+FOREIGN KEY (notification_method_id) REFERENCES notification_methods(method_id)
+);
+
+/* Reminder Settings Table */
+-- Stores settings related to how reminders are sent to users.
+CREATE TABLE IF NOT EXISTS reminder_settings (
+setting_id CHAR(36) PRIMARY KEY,
+user_id CHAR(36) NOT NULL,
+notification_frequency_id CHAR(36) NOT NULL,
+notification_method_id CHAR(36) NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (user_id) REFERENCES employees(employee_id),
+FOREIGN KEY (notification_frequency_id) REFERENCES notification_frequencies(frequency_id),
+FOREIGN KEY (notification_method_id) REFERENCES notification_methods(method_id)
+);
+
+/* Reminder Logs Table */
+-- Logs each reminder activity for tracking.
+CREATE TABLE IF NOT EXISTS reminder_logs (
+log_id CHAR(36) PRIMARY KEY,
+reminder_id CHAR(36) NOT NULL,
+log_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+log_action ENUM('Cancelled',  'Created', 'Dismissed', 'Rescheduled', 'Viewed') NOT NULL,
+created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
+);
+
+/* For Dashboard Reports*/
+-- Storing Standard Queries For Chart
+CREATE TABLE report_definition (
+    query_id CHAR(36) PRIMARY KEY,
+    query TEXT NOT NULL,
+    query_name CHAR(50) NOT NULL,
+    visualization_type CHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+/* stroing Hours configuration tables */
+CREATE TABLE IF NOT EXISTS inventory_block_config (
+    config_id INT AUTO_INCREMENT PRIMARY KEY,
+    block_duration_hours INT DEFAULT 24 COMMENT 'Duration (in hours) to block inventory',
+    product_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+);
+
+CREATE TABLE IF NOT EXISTS blocked_inventory (
+    block_id INT AUTO_INCREMENT PRIMARY KEY,
+    sale_order_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    blocked_qty INT DEFAULT 0,
+    expiration_time TIMESTAMP NOT NULL COMMENT 'Timestamp when the block expires',
+    is_expired BOOLEAN DEFAULT FALSE COMMENT 'True if block duration has passed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
 );

@@ -19,7 +19,7 @@ class SaleOrderFilter(filters.FilterSet):
     advance_amount = filters.RangeFilter()
     tax = filters.ChoiceFilter(field_name='tax', choices=SaleOrder.TAX_CHOICES)
     amount = filters.RangeFilter(field_name='item_value', lookup_expr='icontains')
-    flow_status = filters.CharFilter(field_name='flow_status', lookup_expr='iexact')
+    flow_status = filters.CharFilter(field_name='flow_status_id__flow_status_name', lookup_expr='iexact')
     status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     search = filters.CharFilter(method='filter_by_search', label="Search")
@@ -45,11 +45,12 @@ class SaleOrderFilter(filters.FilterSet):
     class Meta:
         model = SaleOrder 
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
+        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','flow_status','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    sale_order_id = filters.CharFilter(method=filter_uuid)
     invoice_date = filters.DateFilter()
     total_amount = filters.RangeFilter()
     tax_amount = filters.RangeFilter()
@@ -83,7 +84,7 @@ class SaleInvoiceOrdersFilter(filters.FilterSet):
     class Meta:
         model = SaleInvoiceOrders
         #do not change "invoice_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['invoice_no','customer_id','customer','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
+        fields =['invoice_no','customer_id','customer','sale_order_id','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','search','sort','page','limit']
 
 class SaleReturnOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)

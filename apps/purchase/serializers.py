@@ -4,7 +4,7 @@ from .serializers import *
 from apps.vendor.serializers import ModVendorSerializer,ModVendorAgentSerializer,VendorAddressSerializer,ModVendorPaymentTermsSerializer
 from apps.masters.serializers import ModOrderStatusesSerializer, ModProductBrandsSerializer, ModUnitOptionsSerializer, PurchaseTypesSerializer, ModGstTypesSerializer, ModPurchaseTypesSerializer
 from apps.customer.serializers import ModLedgerAccountsSerializers,ModCustomersSerializer
-from apps.products.serializers import ModproductsSerializer
+from apps.products.serializers import ColorSerializer, ModproductsSerializer, SizeSerializer
 
 
 class ModPurchaseOrdersSerializer(serializers.ModelSerializer):
@@ -35,6 +35,8 @@ class PurchaseorderItemsSerializer(serializers.ModelSerializer):
     purchaseorder = ModPurchaseOrdersSerializer(source='purchase_order_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)    
     class Meta:
         model = PurchaseorderItems
         fields = '__all__'
@@ -67,6 +69,8 @@ class PurchaseInvoiceItemSerializer(serializers.ModelSerializer):
     purchase_invoice = ModPurchaseInvoiceOrdersSerializer(source='purchase_invoice_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)      
     class Meta:
         model = PurchaseInvoiceItem
         fields = '__all__'
@@ -98,6 +102,8 @@ class PurchaseReturnItemsSerializer(serializers.ModelSerializer):
     purchase_return = ModPurchaseReturnOrdersSerializer(source='purchase_return_id',read_only=True)
     product = ModproductsSerializer(source='product_id',read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)      
     class Meta:
         model = PurchaseReturnItems
         fields = '__all__'

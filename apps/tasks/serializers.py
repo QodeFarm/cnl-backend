@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.masters.serializers import ModStatusesSerializer, ModTaskPrioritiesSerializer
+from apps.masters.serializers import ModStatusesSerializer, ModTaskPrioritiesSerializer, ModUserGroupsSerializer
 from apps.users.serializers import ModUserSerializer
 from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
 
@@ -13,6 +13,7 @@ class TasksSerializer(serializers.ModelSerializer):
     user = ModUserSerializer(source='user_id', read_only=True)
     status = ModStatusesSerializer(source='status_id', read_only=True)
     priority = ModTaskPrioritiesSerializer(source='priority_id', read_only=True)
+    group = ModUserGroupsSerializer(source='group_id', read_only=True)
     class Meta:
         model = Tasks
         fields = '__all__'
@@ -43,11 +44,12 @@ class TaskAttachmentsSerializer(serializers.ModelSerializer):
 class ModTaskHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskHistory
-        fields = ['history_id','task_id','status_id','user_id']
+        fields = ['history_id','task_id','status_id']
 
 class TaskHistorySerializer(serializers.ModelSerializer):
     task = ModTasksSerializer(source='task_id', read_only=True)
     user = ModUserSerializer(source='user_id', read_only=True)
+    group = ModUserGroupsSerializer(source='group_id', read_only=True)
     status = ModStatusesSerializer(source='status_id', read_only=True)
     class Meta:
         model = TaskHistory

@@ -57,6 +57,9 @@ urlpatterns = [
     path('api/v1/production/', include('apps.production.urls')),
     path('api/v1/finance/', include('apps.finance.urls')),
     path('api/v1/customfields/', include('apps.customfields.urls')),
+    path('api/v1/reminders/', include('apps.reminders.urls')),
+    path('api/v1/dashboard/', include('apps.dashboard.urls')),
+
     path('', api_links, name='api_links'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
 ]

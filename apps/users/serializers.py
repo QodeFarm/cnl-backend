@@ -19,8 +19,23 @@ class ModRoleSerializer(serializers.ModelSerializer):
 class ModModulesSerializer(serializers.ModelSerializer):
     class Meta:
         model = Modules
-        fields = ['module_id','module_name']
+        fields = ['module_id', 'module_name', 'mod_link', 'mod_icon']
 
+class ModUserAccessModuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Modules
+        fields = ['module_name', 'mod_link', 'mod_icon']
+
+class ModUserAccessSectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ModuleSections
+        fields = ['section_name', 'sec_link', 'sec_icon']
+
+class ModuleSectionChildSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ModuleSections
+        fields = ['sec_link', 'section_name', 'sec_icon']
+        
 class ModActionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = Actions
@@ -29,7 +44,7 @@ class ModActionsSerializer(serializers.ModelSerializer):
 class ModModuleSectionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = ModuleSections
-        fields = ['section_id','section_name']
+        fields = ['section_id','section_name', 'sec_link', 'sec_icon']
 
 class ModUserTimeRestrictionsSerializer(serializers.ModelSerializer):
     class Meta:
@@ -49,7 +64,7 @@ class ModRolePermissionsSerializer(serializers.ModelSerializer):
 class ModUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['user_id','first_name']
+        fields = ['user_id','first_name','last_name','username']
         
 class ModUserRoleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -92,11 +107,41 @@ class ModuleSectionsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ModulesSerializer(serializers.ModelSerializer):
-    module_sections = ModuleSectionsSerializer(many=True, read_only=True, source='modulesections_set')
+    # module_sections = ModuleSectionsSerializer(many=True, read_only=True, source='modulesections_set') //commented for future references
 
     class Meta:
         model = Modules
         fields = '__all__'
+
+# class UserAccessSerializer(serializers.ModelSerializer):
+#     # role = ModRoleSerializer(source='role_id', read_only = True)
+#     module = ModUserAccessModuleSerializer(source='module_id', read_only = True)
+#     # action =  ModActionsSerializer(source='action_id', read_only = True)
+#     section = ModUserAccessSectionSerializer(source='section_id', read_only = True)
+
+#     class Meta:
+#         model = RolePermissions
+#         fields = ['module', 'section']
+
+
+class UserAccessModuleSerializer(serializers.ModelSerializer):
+    child = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Modules
+        fields = ['module_name', 'mod_icon', 'child']
+
+    def get_child(self, obj):
+        # Get the sections related to this module
+        sections = ModuleSections.objects.filter(module_id=obj.module_id)
+        return ModuleSectionChildSerializer(sections, many=True).data
+
+class UserAccessSerializer(serializers.ModelSerializer):
+    module = UserAccessModuleSerializer(source='module_id', read_only=True)
+
+    class Meta:
+        model = RolePermissions
+        fields = ['module']
 
 class RolePermissionsSerializer(serializers.ModelSerializer):
     role = ModRoleSerializer(source='role_id', read_only = True)

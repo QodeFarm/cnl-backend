@@ -11,6 +11,10 @@ from config.utils_methods import build_response, generic_data_creation, list_all
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
+from rest_framework.response import Response
+from .models import Journal
+from .serializers import JournalSerializer
+from uuid import uuid4
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -21,11 +25,11 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 
 class BankAccountViewSet(viewsets.ModelViewSet):
-    queryset = BankAccount.objects.all()
+    queryset = BankAccount.objects.all().order_by('-created_at')
     serializer_class = BankAccountSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BankAccountFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, BankAccount,*args, **kwargs)
@@ -37,11 +41,11 @@ class BankAccountViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ChartOfAccountsViewSet(viewsets.ModelViewSet):
-    queryset = ChartOfAccounts.objects.all()
+    queryset = ChartOfAccounts.objects.all().order_by('-created_at')
     serializer_class = ChartOfAccountsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ChartOfAccountsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ChartOfAccounts,*args, **kwargs)
@@ -53,11 +57,11 @@ class ChartOfAccountsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class JournalEntryViewSet(viewsets.ModelViewSet):
-    queryset = JournalEntry.objects.all()
+    queryset = JournalEntry.objects.all().order_by('-created_at')
     serializer_class = JournalEntrySerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = JournalEntryFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -82,11 +86,11 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
-    queryset = PaymentTransaction.objects.all()
+    queryset = PaymentTransaction.objects.all().order_by('-created_at')
     serializer_class = PaymentTransactionSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PaymentTransactionFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, PaymentTransaction,*args, **kwargs)
@@ -98,11 +102,11 @@ class PaymentTransactionViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class TaxConfigurationViewSet(viewsets.ModelViewSet):
-    queryset = TaxConfiguration.objects.all()
+    queryset = TaxConfiguration.objects.all().order_by('-created_at')
     serializer_class = TaxConfigurationSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TaxConfigurationFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, TaxConfiguration,*args, **kwargs)
@@ -114,11 +118,11 @@ class TaxConfigurationViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class BudgetViewSet(viewsets.ModelViewSet):
-    queryset = Budget.objects.all()
+    queryset = Budget.objects.all().order_by('-created_at')
     serializer_class = BudgetSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BudgetFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Budget,*args, **kwargs)
@@ -130,11 +134,11 @@ class BudgetViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ExpenseClaimViewSet(viewsets.ModelViewSet):
-    queryset = ExpenseClaim.objects.all()
+    queryset = ExpenseClaim.objects.all().order_by('-created_at')
     serializer_class = ExpenseClaimSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ExpenseClaimFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ExpenseClaim,*args, **kwargs)
@@ -146,11 +150,11 @@ class ExpenseClaimViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class FinancialReportViewSet(viewsets.ModelViewSet):
-    queryset = FinancialReport.objects.all()
+    queryset = FinancialReport.objects.all().order_by('-created_at')
     serializer_class = FinancialReportSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FinancialReportFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, FinancialReport,*args, **kwargs)
@@ -181,7 +185,7 @@ class JournalEntryView(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             logger.info("Retrieving all JournalEntry")
-            queryset = JournalEntry.objects.all()
+            queryset = JournalEntry.objects.all().order_by('-created_at')
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
@@ -391,4 +395,130 @@ class JournalEntryView(APIView):
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
         except Exception:
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+#FOR LEDGERS
+class JournalListCreateAPIView(APIView):
+    """
+    List all journal entries, or create a new journal entry.
+    """
+    def get(self, request):
+        journals = Journal.objects.all()
+        serializer = JournalSerializer(journals, many=True)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def post(self, request):
+        # Generate a new UUID for journal_id
+        journal_id = str(uuid4())
+        data = request.data.copy()
+        data['journal_id'] = journal_id
+
+        serializer = JournalSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, "Records updated successfully", serializer.data, status.HTTP_201_CREATED)
+        return build_response(1, "Records Not Created", serializer.errors, status.HTTP_400_BAD_REQUEST) 
+
+
+class JournalRetrieveUpdateDeleteAPIView(APIView):
+    """
+    Retrieve, update or delete a journal entry by journal_id.
+    """
+    def get_object(self, journal_id):
+        try:
+            return Journal.objects.get(journal_id=journal_id)
+        except Journal.DoesNotExist:
+            return None
+
+    def get(self, request, journal_id):
+        journal = self.get_object(journal_id)
+        if journal is None:
+            return build_response(0, "Record Not found.", {}, status.HTTP_404_NOT_FOUND) 
+        
+        serializer = JournalSerializer(journal)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def put(self, request, journal_id):
+        journal = self.get_object(journal_id)
+        if journal is None:
+            return build_response(0, "Record Not found.", {}, status.HTTP_404_NOT_FOUND) 
+
+        serializer = JournalSerializer(journal, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(len(serializer.data), "Records updated successfully", serializer.data, status.HTTP_200_OK)
+        return build_response(len(serializer.data), "Records Not updated", serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, journal_id):
+        try:
+            # Get the Journal Id instance
+            instance = Journal.objects.get(pk=journal_id)
+            instance.delete()
+
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except Journal.DoesNotExist:
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class JournalDetailListCreateAPIView(APIView):
+    """
+    List all journal details, or create a new journal detail entry.
+    """
+    def get(self, request):
+        journal_details = JournalDetail.objects.all()
+        serializer = JournalDetailSerializer(journal_details, many=True)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def post(self, request):
+        # Generate a new UUID for journal_detail_id
+        journal_detail_id = str(uuid4())
+        data = request.data.copy()
+        data['journal_detail_id'] = journal_detail_id
+
+        serializer = JournalDetailSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, "Records updated successfully", serializer.data, status.HTTP_201_CREATED)
+        return build_response(1, "Records Not Created", serializer.errors, status.HTTP_400_BAD_REQUEST) 
+
+
+class JournalDetailRetrieveUpdateDeleteAPIView(APIView):
+    """
+    Retrieve, update or delete a journal detail entry by journal_detail_id.
+    """
+    def get_object(self, journal_detail_id):
+        try:
+            return JournalDetail.objects.get(journal_detail_id=journal_detail_id)
+        except JournalDetail.DoesNotExist:
+            return None
+
+    def get(self, request, journal_detail_id):
+        journal_detail = self.get_object(journal_detail_id)
+        if journal_detail is None:
+            return build_response(0, "Record Not found.", {}, status.HTTP_404_NOT_FOUND)
+        
+        serializer = JournalDetailSerializer(journal_detail)
+        return build_response(len(serializer.data), "Records Retrieved successfully", serializer.data, status.HTTP_200_OK)
+
+    def put(self, request, journal_detail_id):
+        journal_detail = self.get_object(journal_detail_id)
+        if journal_detail is None:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = JournalDetailSerializer(journal_detail, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(len(serializer.data), "Records updated successfully", serializer.data, status.HTTP_200_OK)
+        return build_response(len(serializer.data), "Records Not updated", serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+    def delete(self, request, journal_detail_id):
+        journal_detail = self.get_object(journal_detail_id)
+        if journal_detail is None:
+            return build_response(0, "Record Not found.", "", status.HTTP_404_NOT_FOUND)
+        
+        journal_detail.delete()
+        return build_response(0, "Records Deleted successfully", "", status.HTTP_204_NO_CONTENT)
 

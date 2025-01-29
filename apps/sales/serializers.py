@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
-from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers
-from apps.products.serializers import ModProductGroupsSerializer, ModproductsSerializer
+from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers, ModFlowstatusSerializer
+from apps.products.serializers import ColorSerializer, ModProductGroupsSerializer, ModproductsSerializer, SizeSerializer
+from apps.users.serializers import ModModuleSectionsSerializer
 from .models import *
 from django.conf import settings
 
@@ -10,7 +11,7 @@ from django.conf import settings
 class ModSaleOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id','customer_id','order_date','delivery_date']
+        fields = ['sale_order_id','customer_id','order_date','delivery_date', 'sale_estimate']
 
 class ModSaleReturnOrdersSerializer(serializers.ModelSerializer):
     class Meta:
@@ -42,8 +43,9 @@ class SaleOrderSerializer(serializers.ModelSerializer):
     sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
-    workflow = ModWorkflowSerializer(source='workflow_id',read_only=True)
+    # workflow = ModWorkflowSerializer(source='workflow_id',read_only=True)
     sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
+    flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
     
     class Meta:
         model = SaleOrder
@@ -60,6 +62,8 @@ class SaleInvoiceItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)       
 
     class Meta:
         model = SaleInvoiceItems
@@ -77,6 +81,8 @@ class SaleOrderItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)    
 
     class Meta:
         model = SaleOrderItems
@@ -116,6 +122,8 @@ class SaleReturnItemsSerializer(serializers.ModelSerializer):
     sale_return = ModSaleReturnOrdersSerializer(source='sale_return_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)
     
     class Meta:
         model = SaleReturnItems
@@ -142,11 +150,13 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
     sale_type = ModSaleTypesSerializer(source='sale_type_id', read_only=True)
     amount = serializers.SerializerMethodField()
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
-
+    flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
+    products = serializers.SerializerMethodField()  # New field for products
+    invoice_no = serializers.SerializerMethodField()
 
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'order_date', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'sale_type', 'order_status', 'flow_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['sale_order_id', 'order_no', 'order_date', 'sale_estimate', 'tax', 'tax_amount', 'amount', 'advance_amount', 'customer', 'products', 'sale_type', 'order_status', 'flow_status', 'remarks', 'invoice_no', 'created_at', 'updated_at']
 
     def get_sale_order_details(self, obj):
         sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
@@ -163,6 +173,35 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
     def get_amount(self, obj):
         return self.get_sale_order_details(obj)
     
+    def get_products(self, obj):
+        # Fetch sale order items and their associated products
+        sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
+        products = []
+        
+        for item in sale_order_items:
+            product = item.product_id 
+            if product:
+                product_data = {
+                    "product_id": product.product_id,
+                    "product_name": product.name,
+                    "quantity": item.quantity,
+                }
+                products.append(product_data)
+        
+        return products
+    
+    def get_invoice_no(self, obj):
+    # Retrieve all associated SaleInvoiceOrders instances
+        sale_invoices = SaleInvoiceOrders.objects.filter(sale_order_id=obj.sale_order_id)
+        
+        if sale_invoices.exists():
+            # Collect all invoice numbers and return as a list
+            return [invoice.invoice_no for invoice in sale_invoices]
+        else:
+            # Return None if no invoices are associated
+            return None
+
+        
     @staticmethod
     def get_sale_order_summary(sale_order):
         serializer = SaleOrderOptionsSerializer(sale_order, many=True)
@@ -216,6 +255,8 @@ class ModQuickPackItemSerializer(serializers.ModelSerializer):
 class QuickPackItemSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id', read_only=True)
     quickpack = ModQuickPackSerializer(source='quick_pack_id', read_only=True)
+    size = SizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True) 
 
     class Meta:
         model = QuickPackItems
@@ -228,6 +269,9 @@ class WorkflowSerializer(serializers.ModelSerializer):
 
 class WorkflowStageSerializer(serializers.ModelSerializer):
     workflow = ModWorkflowSerializer(source='workflow_id', read_only=True)
+    section = ModModuleSectionsSerializer(source='section_id', read_only=True)
+    flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
+
     class Meta:
         model = WorkflowStage
         fields = '__all__'

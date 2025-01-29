@@ -15,7 +15,7 @@ from apps.inventory.serializers import WarehouseLocationsSerializer
 from apps.inventory.models import WarehouseLocations
 from .serializers import *
 from .models import *
-from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter
+from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # Create your views here.
 class ProductGroupsViewSet(viewsets.ModelViewSet):
-    queryset = ProductGroups.objects.all()
+    queryset = ProductGroups.objects.all().order_by('-created_at')	
     serializer_class = ProductGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGroupsFilter
@@ -41,7 +41,7 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductCategoriesViewSet(viewsets.ModelViewSet):
-    queryset = ProductCategories.objects.all()
+    queryset = ProductCategories.objects.all().order_by('-created_at')	
     serializer_class = ProductCategoriesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductCategoriesFilter
@@ -57,7 +57,7 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductStockUnitsViewSet(viewsets.ModelViewSet):
-    queryset = ProductStockUnits.objects.all()
+    queryset = ProductStockUnits.objects.all().order_by('-created_at')	
     serializer_class = ProductStockUnitsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductStockUnitsFilter
@@ -73,7 +73,7 @@ class ProductStockUnitsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
-    queryset = ProductGstClassifications.objects.all()
+    queryset = ProductGstClassifications.objects.all().order_by('-created_at')	
     serializer_class = ProductGstClassificationsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGstClassificationsFilter
@@ -89,7 +89,7 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ProductSalesGlViewSet(viewsets.ModelViewSet):
-    queryset = ProductSalesGl.objects.all()
+    queryset = ProductSalesGl.objects.all().order_by('-created_at')	
     serializer_class = ProductSalesGlSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductSalesGlFilter
@@ -105,7 +105,7 @@ class ProductSalesGlViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 	
 class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
-    queryset = ProductPurchaseGl.objects.all()
+    queryset = ProductPurchaseGl.objects.all().order_by('-created_at')	
     serializer_class = ProductPurchaseGlSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductPurchaseGlFilter
@@ -121,7 +121,7 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class productsViewSet(viewsets.ModelViewSet):
-    queryset = Products.objects.all()
+    queryset = Products.objects.all().order_by('-created_at')
     serializer_class = productsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductsFilter
@@ -176,11 +176,11 @@ class productsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
   
 class ProductItemBalanceViewSet(viewsets.ModelViewSet):
-    queryset = ProductItemBalance.objects.all()
+    queryset = ProductItemBalance.objects.all().order_by('-created_at')	
     serializer_class = ProductItemBalanceSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductItemBalanceFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -220,6 +220,9 @@ class ColorViewSet(viewsets.ModelViewSet):
 class ProductVariationViewSet(viewsets.ModelViewSet):
     queryset = ProductVariation.objects.all()
     serializer_class = ProductVariationSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = ProductVariationFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -236,6 +239,16 @@ class ProductViewSet(APIView):
     """
     API ViewSet for handling Lead creation and related data.
     """
+    def validate_sku(self,data):
+        # Extract the list of SKUs from the product variations
+        skus = [variation['sku'] for variation in data]
+
+        # Find duplicates by comparing the length of the set and the list
+        if len(skus) != len(set(skus)):
+            logger.error('Error: Duplicate SKU found in product variations.')
+            return False
+        else:
+            return True    
 
     def get_object(self, pk):
         try:
@@ -251,12 +264,12 @@ class ProductViewSet(APIView):
         try:
             summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
             if summary:
-                product = Products.objects.all()
+                product = Products.objects.all().order_by('-created_at')	
                 data = ProductOptionsSerializer.get_product_summary(product)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             else:
                 logger.info("Retrieving all products")
-                queryset = Products.objects.all()
+                queryset = Products.objects.all().order_by('-created_at')	
 
                 page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
                 limit = int(request.query_params.get('limit', 10)) 
@@ -276,10 +289,10 @@ class ProductViewSet(APIView):
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+
     def retrieve(self, request, *args, **kwargs):
             """
-            Retrieves a products and its related data (warehouse_locations, and product_item_balance).
+            Retrieves a products and its related data (ProductVariation)
             """
             try:
                 pk = kwargs.get('pk')
@@ -292,19 +305,16 @@ class ProductViewSet(APIView):
                 products_serializer = productsSerializer(product)
 
                 # Retrieve 'product_variations'
-                product_variations_data = self.get_related_data(ProductVariation, ProductVariationSerializer, 'product_id', pk)
-                product_variation_id = None
-                if product_variations_data:
-                    product_variation_id = product_variations_data[0].get('product_variation_id')
+                product_variations_data = get_related_data(ProductVariation, ProductVariationSerializer, 'product_id', pk)
 
                 # Retrieve 'product_item_balance'
-                product_item_balance_data = self.get_related_data(ProductItemBalance, ProductItemBalanceSerializer, 'product_variation_id', product_variation_id)
+                product_balance_data = get_related_data(ProductItemBalance, ProductItemBalanceSerializer, 'product_id', pk)
 
                 # Customizing the response data
                 custom_data = {
                     "products": products_serializer.data,
-                    "product_variations":product_variations_data[0] if product_variations_data else {},
-                    "product_item_balance": product_item_balance_data if product_item_balance_data else []
+                    "product_variations":product_variations_data if product_variations_data else [],
+                    "product_item_balance":product_balance_data if product_balance_data else [],
                     }
                 logger.info("product and related data retrieved successfully.")
                 return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -316,21 +326,6 @@ class ProductViewSet(APIView):
                 logger.exception(
                     "An error occurred while retrieving product with pk %s: %s", pk, str(e))
                 return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def get_related_data(self, model, serializer_class, filter_field, filter_value):
-        """
-        Retrieves related data for a given model, serializer, and filter field.
-        """
-        try:
-            related_data = model.objects.filter(**{filter_field: filter_value})
-            serializer = serializer_class(related_data, many=True)
-            logger.debug("Retrieved related data for model %s with filter %s=%s.",
-                         model.__name__, filter_field, filter_value)
-            return serializer.data
-        except Exception as e:
-            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
-                             model.__name__, filter_field, filter_value, str(e))
-            return []
 
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):
@@ -372,20 +367,26 @@ class ProductViewSet(APIView):
         # Validate 'product_variations' data
         product_variations_data = given_data.pop('product_variations', None)
         if product_variations_data:
-            variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer, ['product_id'])
-            if variations_error:
-                errors["product_variations"] = variations_error
-
+            try:
+                mark = self.validate_sku(product_variations_data)
+                if mark==True:
+                    variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer, ['product_id'])
+                    if variations_error:
+                        errors["product_variations"] = variations_error
+                else:
+                    return  build_response(0, "ValidationError", [], status.HTTP_400_BAD_REQUEST,errors='Check Duplicate SKU is entered.')
+            except KeyError:
+                product_variations_data = None
         # Validate product_item_balance Data
         product_item_balance_data = given_data.pop('product_item_balance', None)
         if product_item_balance_data:
-            product_item_error = validate_multiple_data(self, product_item_balance_data, ProductItemBalanceSerializer, ['product_variation_id'])
+            product_item_error = validate_multiple_data(self, product_item_balance_data, ProductItemBalanceSerializer, ['product_id'])
             if product_item_error:
                 errors["product_item_balance"] = product_item_error
 
         if errors:
-            return build_response(0, "ValidationError :", None, status.HTTP_400_BAD_REQUEST, errors=errors)
-        logger.info("***Validation Passed***")
+            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+        logger.info("*** (POST) Validation Passed***")
 
         # ---------------------- D A T A   C R E A T I O N ---------------------------- #
         """
@@ -395,7 +396,7 @@ class ProductViewSet(APIView):
         # Hence the data is validated , further it can be created.
         custom_data = {
             'products':{},
-            'product_variations':{},
+            'product_variations':[],
             'product_item_balance':[]
             }
 
@@ -408,25 +409,22 @@ class ProductViewSet(APIView):
 
         # Create 'product_variations' data
         if product_variations_data:
-            variations_data = generic_data_creation(self, [product_variations_data], ProductVariationSerializer, {'product_id':product_id})
-            custom_data["product_variations"] = variations_data[0]
+            variations_data = generic_data_creation(self, product_variations_data, ProductVariationSerializer, {'product_id':product_id})
+            custom_data["product_variations"] = variations_data
             logger.info('ProductVariation - created*')
-
-            # get 'product_variation_id' from 'product_variations_data'
-            product_variation_id = variations_data[0].get('product_variation_id')
 
         # Create 'product_item_balance' data
         if product_item_balance_data:
-            update_fields = {'product_variation_id':product_variation_id}
+            update_fields = {'product_id':product_id}
             product_balance_data = generic_data_creation(self, product_item_balance_data, ProductItemBalanceSerializer, update_fields)
             custom_data["product_item_balance"] = product_balance_data
-            logger.info('ProductItemBalance - created*')            
+            logger.info('ProductItemBalance - created*') 
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-    
+
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
-    
+
     @transaction.atomic
     def update(self, request, pk, *args, **kwargs):
 
@@ -442,17 +440,9 @@ class ProductViewSet(APIView):
 
         errors = {}
 
-        # Validate products Data
+        # Validate 'products' Data
         products_data = given_data.pop('products', None)  # parent_data
-        picture_data = products_data.get('picture', None)
-        if picture_data:
-            if not isinstance(picture_data, list):
-                return build_response(0, "'picture' field in customer_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
-
-            for attachment in picture_data:
-                if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
-                    return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
-                
+        if products_data:
             products_data['product_id'] = pk
             products_error = validate_multiple_data(self, products_data, productsSerializer, [])
             if products_error:
@@ -461,52 +451,50 @@ class ProductViewSet(APIView):
         # Validate 'product_variations' data
         product_variations_data = given_data.pop('product_variations', None)
         if product_variations_data:
+            mark = self.validate_sku(product_variations_data)
+            if mark==True:
+                variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer, ['product_id','sku'])
+                if variations_error:
+                    errors["product_variations"] = variations_error
+            else:
+                return  build_response(0, "ValidationError", [], status.HTTP_400_BAD_REQUEST,errors='Check Duplicate SKU is entered.')            
             variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer,['sku','product_id'])
             if variations_error:
                 errors["product_variations"] = variations_error
 
-        # Validate product_item_balance Data
-        product_item_balance_data = given_data.pop('product_item_balance', None)
-        if product_item_balance_data:
-            product_item_error = validate_multiple_data(self, product_item_balance_data, ProductItemBalanceSerializer, ['product_variation_id'])
-            if product_item_error:
-                errors["product_item_balance"] = product_item_error
-
-        if not product_variations_data and product_item_balance_data:
-            logger.error("'product_variations' data is mandatory")
-            return build_response(0, "'product_variations' data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+        # Validate 'product_item_balance' Data
+        product_balance_data = given_data.pop('product_item_balance', None)
+        if product_balance_data:
+            bal_error = validate_multiple_data(self, product_balance_data, ProductItemBalanceSerializer, [])
+            if products_error:
+                errors['product_item_balance'] = bal_error
 
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
-        logger.info("***Validation Passed***")
 
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
         custom_data = {
             "products":{},
-            "product_variations":{},
+            "product_variations":[],
             "product_item_balance":[]
             }
-        
+
         try:
             # update 'Products'
             product_data = update_multi_instances(self, pk, products_data, Products, productsSerializer, [], main_model_related_field='product_id', current_model_pk_field='product_id')
             product_data = product_data[0] if len(product_data)==1 else product_data
             custom_data['products'] = product_data
 
-            # update 'product_variations'
             update_fields = {'product_id':pk}
+
+            # update 'product_variations'
             variations_data = update_multi_instances(self, pk, product_variations_data, ProductVariation, ProductVariationSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_variation_id')
-            variations_data = variations_data[0] if len(variations_data)==1 else {}
             custom_data['product_variations'] = variations_data
 
-            # get 'product_variation_id' from 'product_variations_data'
-            product_variation_id = variations_data.get('product_variation_id',None)
-
             # update 'product_item_balance'
-            update_fields = {'product_variation_id':product_variation_id}
-            product_balance_data = update_multi_instances(self, product_variation_id, product_item_balance_data, ProductItemBalance, ProductItemBalanceSerializer, update_fields, main_model_related_field='product_variation_id', current_model_pk_field='product_item_balance_id')
-            product_balance_data = product_balance_data[0] if len(product_balance_data)==1 else product_balance_data
-            custom_data['product_item_balance'] = product_balance_data        
+            item_bal_data = update_multi_instances(self, pk, product_balance_data, ProductItemBalance, ProductItemBalanceSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_item_balance_id')
+            custom_data['product_item_balance'] = item_bal_data
+
         except Exception as e:
             logger.error(f'Error: {e}')
             return build_response(0, "An error occurred while updating the data. Please try again.", [], status.HTTP_400_BAD_REQUEST)
@@ -529,4 +517,4 @@ class ProductViewSet(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error deleting Leads with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR) 
+            return build_response(0, f"Record deletion failed due to an error : {e}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)

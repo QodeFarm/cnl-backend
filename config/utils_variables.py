@@ -61,6 +61,8 @@ salecreditnote = 'sale_credit_notes'
 salecreditnoteitems = 'sale_credit_note_items'
 saledebitnote = 'sale_debit_notes'
 saledebitnoteitems = 'sale_debit_note_items'
+config_block = 'inventory_block_config'
+inventory_blocked = 'blocked_inventory'
 
 #purchase db_tables
 purchaseorderstable = 'purchase_orders'
@@ -116,6 +118,10 @@ taskprioritiestable ='task_priorities'
 returnoptions = 'return_options'
 entities = 'entities'
 fieldtypes = 'field_types'
+usergroupstable = 'user_groups'
+usergroupmemberstable = 'user_group_members'
+packageunits = 'package_units' 
+gpackageunits = 'g_package_units'
 
 #Authentication db_tables
 userstable = 'users'
@@ -139,15 +145,28 @@ leadinteractions = 'lead_interactions'
 leadassignmenthistory = 'lead_assignment_history'
 
 # HRMS
+jobtypes = 'job_types'
 designations = 'designations'
+jobcodes = 'job_codes'
 departments = 'departments'
-employees = 'employees'
+shifts = 'shifts'
+employees = 'employees' 
+employeesalary = 'employee_salary'
+salarycomponents = 'salary_components'
+employeesalarycomponents = 'employee_salary_components'
+leavetypes = 'leave_types'
+employeeleaves = 'employee_leaves'
+leaveapprovals = 'leave_approvals'
+employeeleavebalance = 'employee_leave_balance'
+employeeattendance = 'employee_attendance'
+swipes = 'swipes'
+biometric = 'biometric'
 
 # Production
+bom = 'bom'
 billofmaterials = 'bill_of_materials'
 productionstatuses = 'production_statuses'
 workorders = 'work_orders'
-inventory = 'inventory'
 machines = 'machines'
 productionworkers = 'production_workers'
 rawmaterials = 'raw_materials'
@@ -155,6 +174,7 @@ workorderstages = 'work_order_stages'
 defaultmachinery = 'default_machinery'
 workordermachines = 'work_order_machines'
 labor = 'labor'
+completedquantity = 'completed_quantity'
 
 #workflow tables
 workflow = 'workflows'
@@ -173,11 +193,22 @@ journalentrylines = 'journal_entry_lines'
 journalentries = 'journal_entries'
 chartofaccounts = 'chart_of_accounts'
 bankaccounts = 'bank_accounts'
+journal = 'journal'
+journaldetail = 'journal_details'
 
 #custom db tables
 customfields = 'custom_fields'
 customfieldoptions = 'custom_field_options'
 customfieldvalues = 'custom_field_values'
+
+# reminders db_tables
+notificationfrequenciestable ='notification_frequencies'
+notificationmethodstable ='notification_methods'
+remindertypestable = 'reminder_types'
+reminderstable = 'reminders'
+reminderrecipientstable = 'reminder_recipients'
+remindersettingstable = 'reminder_settings'
+reminderlogstable = 'reminder_logs'
 
 
 # Define the stages for the default workflow

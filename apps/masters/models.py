@@ -3,6 +3,7 @@ import uuid
 from django.db import models
 from django.dispatch import receiver
 from django.db.models.signals import pre_delete
+from apps.hrms.models import Employees
 from config.utils_methods import *
 from config.utils_variables import *
 from django.core.validators import RegexValidator
@@ -53,6 +54,7 @@ class City(models.Model):
 class Statuses(models.Model):
     status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     status_name = models.CharField(max_length=50, unique=True, default='Pending')
+    created_at = models.DateTimeField(auto_now_add=True) 
 
     def __str__(self):
         return f"{self.status_name}"
@@ -467,3 +469,71 @@ class Entities(models.Model):
     
     class Meta:
         db_table = entities
+
+
+class UserGroups(models.Model):
+    group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group_name = models.CharField(max_length=100,  unique=True)
+    description = models.CharField(max_length=1024, null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = usergroupstable
+
+    def __str__(self):
+        return self.group_name
+    
+
+class UserGroupMembers(models.Model):
+    member_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    group_id = models.ForeignKey(UserGroups, on_delete=models.CASCADE, db_column='group_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('group_id', 'employee_id')
+        db_table = usergroupmemberstable
+
+    def __str__(self):
+        return f"{self.member_id}"
+        # return f'{self.group} - {self.employee}'
+
+
+class PackageUnit(models.Model):
+    pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit_name = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True) 
+
+
+    class Meta:
+        db_table = packageunits
+
+    def __str__(self):
+        return self.unit_name
+
+
+class GPackageUnit(models.Model):
+    g_pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    unit_name = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True) 
+
+
+    class Meta:
+        db_table = gpackageunits
+
+    def __str__(self):
+        return self.unit_name
+
+class FlowStatus(models.Model):
+    flow_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    flow_status_name = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.flow_status_name
+    
+    class Meta:
+        db_table = 'flow_status'

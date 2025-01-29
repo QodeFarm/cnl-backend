@@ -1,4 +1,4 @@
-from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
+from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
@@ -18,6 +18,10 @@ from rest_framework import viewsets
 from rest_framework import status
 from django.utils import timezone
 import json
+from collections import defaultdict
+from django_filters.rest_framework import DjangoFilterBackend 
+from rest_framework.filters import OrderingFilter
+from .filters import RolePermissionsFilter
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -128,6 +132,9 @@ class UserAllowedWeekdaysViewSet(viewsets.ModelViewSet):
 class RolePermissionsViewSet(viewsets.ModelViewSet):
     queryset = RolePermissions.objects.all()
     serializer_class = RolePermissionsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = RolePermissionsFilter
+    # ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -137,6 +144,90 @@ class RolePermissionsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+
+class UserAccessAPIView(APIView):
+    def get(self, request, role_id):
+        try:
+            # Check if the user has a role assigned
+            if role_id:
+
+                # Fetch all permissions related to the user's role
+                permissions = RolePermissions.objects.filter(role_id=role_id).select_related('module_id','section_id','action_id').order_by('module_id__created_at','section_id__created_at','action_id__created_at')
+                if permissions.exists():
+                    # Use defaultdict to group permissions by module
+                    module_dict = defaultdict(list)
+
+                    for permission in permissions:
+                        module_name = permission.module_id.module_name
+                        mod_icon = permission.module_id.mod_icon
+
+                        # Action data to be grouped under each section
+                        action_data = {
+                            'action_id': permission.action_id.action_id,
+                            'action_name': permission.action_id.action_name
+                        }
+                        
+                        # Section data with an added list of actions
+                        section_data = {
+                            'sec_link': permission.section_id.sec_link,
+                            'section_name': permission.section_id.section_name,
+                            'sec_icon': permission.section_id.sec_icon or None,
+                            'actions': []  # Placeholder for actions
+                        }
+
+                        # Check if the section already exists for this module
+                        section_exists = False
+                        for existing_section in module_dict[(module_name, mod_icon)]:
+                            if existing_section['section_name'] == section_data['section_name']:
+                                # Append the action to the existing section
+                                existing_section['actions'].append(action_data)
+                                section_exists = True
+                                break
+
+                        # If the section doesn't exist, add the section and the action
+                        if not section_exists:
+                            section_data['actions'].append(action_data)
+                            module_dict[(module_name, mod_icon)].append(section_data)
+
+                    # Prepare the response data in the desired format
+                    data = []
+                    for (module_name, mod_icon), sections in module_dict.items():
+                        data.append({
+                            "module_name": module_name,
+                            "mod_icon": mod_icon,
+                            "module_sections": sections
+                        })
+
+                    # Return the structured response
+                    return Response({
+                        'count': len(data),       
+                        'message': None,                 
+                        'role_id': str(role_id),
+                        'data': data
+                    }, status=status.HTTP_200_OK)
+                else:
+                    # If no permissions exist for the role
+                    return Response({
+                        'role_id': str(role_id),
+                        'message': 'No permissions found for this role',
+                        'data': [],
+                    }, status=status.HTTP_200_OK)
+            else:
+                # If the user has no role assigned
+                return Response({
+                    'message': 'Role not assigned to user'
+                }, status=status.HTTP_404_NOT_FOUND)
+        except User.DoesNotExist:
+            # If the user is not found in the database
+            return Response({
+                'message': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Roles.DoesNotExist:
+            # If the role is not found in the database
+            return Response({
+                'message': 'Role not found'
+            }, status=status.HTTP_404_NOT_FOUND)
 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
 def get_tokens_for_user(user):
@@ -147,19 +238,10 @@ def get_tokens_for_user(user):
         profile_picture_url = user.profile_picture_url
 
     try:
-        roles_id = UserRoles.objects.filter(
-            user_id=user.user_id).values_list('role_id', flat=True)
-        role_permissions_id = RolePermissions.objects.filter(role_id__in=roles_id)
-        role_permissions_json = RolePermissionsSerializer(
-            role_permissions_id, many=True)
-        Final_data = json.dumps(role_permissions_json.data,
-                                default=str).replace("\\", "")
-        role_permissions = json.loads(Final_data)
-        role_permissions = role_permissions[0]
-        remove_fields(role_permissions)
+        role_id = user.role_id.role_id
 
     except (ObjectDoesNotExist, IndexError, KeyError) as e:
-            role_permissions = "Role not assigned yet"
+            role_id = "Role not assigned yet"
 
     return {
         'username': user.username,
@@ -172,7 +254,7 @@ def get_tokens_for_user(user):
         'refresh_token': str(refresh),
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
-        'role_permissions': role_permissions
+        'role_id': str(role_id)
     }
 
 #====================================USER-LOGIN-VIEW=============================================================
@@ -237,7 +319,6 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
                
                 # Set the profile_picture_url field in request data as a list of objects
                 request.data['profile_picture_url'] = attachment_data_list
-                print("Using profile_picture_url data: ", request.data['profile_picture_url'])
             else:
                 # Handle case where 'profile_picture_url' list is empty
                 return build_response(0, "'profile_picture_url' list is empty.", [], status.HTTP_400_BAD_REQUEST)

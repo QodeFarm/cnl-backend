@@ -32,12 +32,20 @@ router.register(r'orders_salesman', OrdersSalesmanView)
 router.register(r'payment_link_type', PaymentLinkTypesView)
 router.register(r'order_status', OrderStatusesView)
 router.register(r'order_types', OrderTypesView)
+router.register(r'package_units', PackageUnitViewSet)
+router.register(r'g_package_units', GPackageUnitViewSet)
 
 router.register(r'task_priorities', TaskPrioritiesViewSet)
 router.register(r'return_options', ReturnOptionsViewset)
 
 router.register(r'fieldtypes', FieldTypeViewSet)
 router.register(r'entities', EntitiesViewSet)
+
+router.register(r'user_groups', UserGroupsViewset)
+router.register(r'user_group_members', UserGroupMembersViewset)
+
+router.register(r'flow_status', FlowStatusViews)
+
 urlpatterns = [
     path('', include(router.urls)),
     path('uploads/', FileUploadView.as_view(), name='file_uploads'),
