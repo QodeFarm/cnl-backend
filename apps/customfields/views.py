@@ -1,5 +1,5 @@
 from rest_framework import viewsets
-from apps.customfields.filters import CustomFieldValuesFilters
+from apps.customfields.filters import CustomFieldOptionsFilters, CustomFieldValuesFilters
 from config.utils_methods import create_instance, list_all_objects, update_instance
 from .models import CustomField, CustomFieldOption, CustomFieldValue
 from .serializers import  CustomFieldSerializer, CustomFieldOptionSerializer, CustomFieldValueSerializer
@@ -32,6 +32,8 @@ class CustomFieldViewSet(viewsets.ModelViewSet):
 class CustomFieldOptionViewSet(viewsets.ModelViewSet):
     queryset = CustomFieldOption.objects.all()
     serializer_class = CustomFieldOptionSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = CustomFieldOptionsFilters 
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
