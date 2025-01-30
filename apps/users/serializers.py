@@ -163,6 +163,8 @@ class GetUserDataSerializer(serializers.ModelSerializer):
 
 #====================================USER-CREATE-SERIALIZER=============================================================
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
+    status = ModStatusesSerializer(source='status_id', read_only = True)
+    role = ModRoleSerializer(source='role_id', read_only = True)
     class Meta(BaseUserCreateSerializer.Meta):
         profile_picture_url = PictureSerializer(many=True)
         model = User
@@ -170,6 +172,8 @@ class CustomUserCreateSerializer(BaseUserCreateSerializer):
 
 #====================================USER-UPDATE-SERIALIZER=============================================================
 class CustomUserUpdateSerializer(DjoserUserSerializer):
+    status = ModStatusesSerializer(source='status_id', read_only = True)
+    role = ModRoleSerializer(source='role_id', read_only = True)
     class Meta:
         model = User
         fields = DjoserUserSerializer.Meta.fields 
