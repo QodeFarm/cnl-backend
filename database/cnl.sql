@@ -2480,6 +2480,7 @@ CREATE TABLE IF NOT EXISTS custom_field_values (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id),
     FOREIGN KEY (entity_id) REFERENCES entities(entity_id) 
+    FOREIGN KEY (entity_data_id) REFERENCES customers(customer_id)
 );
 
 
