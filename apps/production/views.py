@@ -212,7 +212,7 @@ class WorkOrderAPIView(APIView):
                 if filterset.is_valid():
                     workorders = filterset.qs  # Filtered queryset for summary
                 
-                data = WorkOrderOptionsSerializer.get_work_order_summary(workorders)
+                data = WorkOrderOptionsSerializer.get_work_order_summary(workorders).get('data', [])
                 return filter_response(len(data),"Success", data, page, limit, total_count, status.HTTP_200_OK)
 
             # Apply filters manually

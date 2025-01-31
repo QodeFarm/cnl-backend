@@ -2,7 +2,7 @@ from rest_framework import serializers
 from .models import *
 from apps.products.serializers import ColorSerializer, ModColorSerializer, ModStockJournalProductSerializer, ModproductsSerializer, ModSizeSerializer
 from apps.hrms.serializers import ModEmployeesSerializer
-from apps.sales.serializers import ModFlowstatusSerializer
+from apps.sales.serializers import ModFlowstatusSerializer, UdfSaleOrderSerializer
 
 
 class ModProductionStatusSerializer(serializers.ModelSerializer):
@@ -59,6 +59,7 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     size = ModSizeSerializer(source='size_id',read_only=True)
     color = ColorSerializer(source='color_id',read_only=True)    
     status = ModProductionStatusSerializer(source='status_id', read_only=True)
+    sale_order = UdfSaleOrderSerializer(source='sale_order_id', read_only=True)
     pending_qty = serializers.SerializerMethodField()
 
     class Meta:
