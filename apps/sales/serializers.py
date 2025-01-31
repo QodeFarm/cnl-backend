@@ -13,6 +13,15 @@ class ModSaleOrderSerializer(serializers.ModelSerializer):
         model = SaleOrder
         fields = ['sale_order_id','customer_id','order_date','delivery_date', 'sale_estimate']
 
+class UdfSaleOrderSerializer(serializers.ModelSerializer):
+    status_name = serializers.SerializerMethodField()
+    class Meta:
+        model = SaleOrder
+        fields = ['sale_order_id','order_no','flow_status_id','status_name']
+
+    def get_status_name(self, obj):
+        return obj.flow_status_id.flow_status_name if obj.flow_status_id else None
+
 class ModSaleReturnOrdersSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleReturnOrders
