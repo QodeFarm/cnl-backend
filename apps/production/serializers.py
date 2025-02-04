@@ -174,11 +174,7 @@ class WorkOrderOptionsSerializer(serializers.ModelSerializer):
     @staticmethod
     def get_work_order_summary(work_orders):
         serializer = WorkOrderOptionsSerializer(work_orders, many=True)
-        return {
-            "count": len(serializer.data),
-            "msg": "SUCCESS",
-            "data": serializer.data
-        }
+        return serializer.data
     
 class WorkOrderStockJournalSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id', read_only=True)
