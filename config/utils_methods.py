@@ -622,7 +622,7 @@ def send_pdf_via_email(to_email, pdf_relative_path):
     pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
     
     subject = 'Your Requested Documents'
-    body = 'Please find your requested documents.'
+    body = 'Please Find Your Requested Documents.'
     email = EmailMessage(subject, body, to=[to_email])
 
     # Ensure the PDF file exists before attempting to open it
@@ -631,7 +631,7 @@ def send_pdf_via_email(to_email, pdf_relative_path):
 
     # Read the PDF file from the provided full path
     with open(pdf_full_path, 'rb') as pdf_file:
-        email.attach('Documents.pdf', pdf_file.read(), 'application/pdf')
+        email.attach('Document.pdf', pdf_file.read(), 'application/pdf')
     
     # Send the email
     email.send()
