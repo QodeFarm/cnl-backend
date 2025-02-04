@@ -9,6 +9,7 @@ from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
+from django.utils.decorators import method_decorator
 from django_ratelimit.decorators import ratelimit
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import AllowAny
@@ -548,10 +549,6 @@ class RolePermissionsCreateView(APIView):
          # Convert QuerySet to a list of dictionaries
         permissions_list = list(permissions)
         return build_response(len(permissions_list), "Records", permissions_list, status.HTTP_200_OK)
-
-
-from django.utils.decorators import method_decorator
-
 
 class UserUpdateByAdminOnlyAPIView(APIView):
     '''This API is designed for updating user information, and it is admin-only. To use it, you need to pass the Target User ID in the URL.
