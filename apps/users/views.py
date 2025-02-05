@@ -399,6 +399,27 @@ class UserManageView(APIView):
             with transaction.atomic():
                 # Get the cursor object to execute raw SQL queries
                 with connection.cursor() as cursor:
+
+                    # 1. Delete TaskHistory entries related to user_id
+                    cursor.execute("DELETE FROM task_history WHERE user_id = %s", [user_id_str])
+
+                    # 2. Fetch all tasks associated with the user
+                    cursor.execute("SELECT task_id FROM tasks WHERE user_id = %s", [user_id_str])
+                    task_ids = [row[0] for row in cursor.fetchall()]
+
+                    if task_ids:
+                        # 3. Delete TaskComments related to the tasks
+                        cursor.execute("DELETE FROM task_comments WHERE task_id IN %s", [tuple(task_ids)])
+
+                        # 4. Delete TaskAttachments related to the tasks
+                        cursor.execute("DELETE FROM task_attachments WHERE task_id IN %s", [tuple(task_ids)])
+
+                        # 5. Delete TaskHistory related to the tasks
+                        cursor.execute("DELETE FROM task_history WHERE task_id IN %s", [tuple(task_ids)])
+
+                        # 6. Finally, delete tasks associated with the user
+                        cursor.execute("DELETE FROM tasks WHERE user_id = %s", [user_id_str])
+
                     # Check if the user exists in the database
                     cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = %s", [user_id_str])
                     user_exists = cursor.fetchone()[0]
@@ -419,7 +440,8 @@ class UserManageView(APIView):
                     return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
 
         except Exception as e:
-            return build_response(0, "An error occurred while deleting the user.", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(str(e))
+            return build_response(0, "An error occurred while deleting the user.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #====================================USER-ACTIVATION-VIEW=============================================================
 class CustomUserActivationViewSet(DjoserUserViewSet):
