@@ -18,6 +18,7 @@ from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .filters import RolePermissionsFilter
+from apps.company.models import Companies
 from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
@@ -235,6 +236,10 @@ class UserAccessAPIView(APIView):
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
 
+    company = Companies.objects.first()  # Get the first company
+    company_name = company.name if company else "N/A"
+    company_code = company.code if company else "N/A"
+
     profile_picture_url = None
     if user.profile_picture_url:
         profile_picture_url = user.profile_picture_url
@@ -259,7 +264,9 @@ def get_tokens_for_user(user):
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
         'role_id': str(role_id),
-        'role_name' : role_name
+        'role_name' : role_name,
+        'company_name' : company_name,
+        'company_code' : company_code
         }
 
 #====================================USER-LOGIN-VIEW=============================================================
