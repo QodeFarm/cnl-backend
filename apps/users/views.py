@@ -1,4 +1,3 @@
-import uuid
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
@@ -242,9 +241,11 @@ def get_tokens_for_user(user):
 
     try:
         role_id = user.role_id.role_id
+        role_name = user.role_id.role_name
 
     except (ObjectDoesNotExist, IndexError, KeyError) as e:
             role_id = "Role not assigned yet"
+            role_name = "Role not assigned yet"
 
     return {
         'username': user.username,
@@ -257,8 +258,9 @@ def get_tokens_for_user(user):
         'refresh_token': str(refresh),
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
-        'role_id': str(role_id)
-    }
+        'role_id': str(role_id),
+        'role_name' : role_name
+        }
 
 #====================================USER-LOGIN-VIEW=============================================================
 class UserLoginView(APIView):
