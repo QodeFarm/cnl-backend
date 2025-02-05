@@ -2,7 +2,7 @@ from django.urls import path
 from django.contrib.auth import get_user_model
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt import views as jwtview
-from apps.users.views import UserManageView, RolePermissionsCreateView, CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet, UserAccessAPIView
+from apps.users.views import UserManageView, RolePermissionsCreateView, CustomUserActivationViewSet, CustomUserCreateViewSet, RoleViewSet, ModulesViewSet, ActionsViewSet, ModuleSectionsViewSet, RolePermissionsViewSet, SendPasswordResetEmailView, UserChangePasswordView, UserPasswordResetView, UserTimeRestrictionsViewSet, UserAllowedWeekdaysViewSet, UserLoginView, UserRoleViewSet, UserAccessAPIView, UserUpdateByAdminOnlyAPIView
 
 router = DefaultRouter()
 
@@ -32,6 +32,7 @@ urlpatterns = [
     path('user/<uuid:user_id>/', UserManageView.as_view(), name='get/update-perticuler-user'),
     path('user/', UserManageView.as_view(), name='get-all-users'),
     path('user_access/<str:role_id>/', UserAccessAPIView.as_view(), name='user-access'),
+    path('users_update/<uuid:user_id>/', UserUpdateByAdminOnlyAPIView.as_view(), name='update-user-by-admin'),
 ]
 urlpatterns  += router.urls
 

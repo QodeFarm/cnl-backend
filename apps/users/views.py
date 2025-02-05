@@ -1,27 +1,30 @@
-from .serializers import RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
+import uuid
+from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.decorators import permission_classes
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
+from django.utils.decorators import method_decorator
+from django_ratelimit.decorators import ratelimit
+from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
 from django.db import connection, transaction
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from .filters import RolePermissionsFilter
 from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
+from collections import defaultdict
 from rest_framework import status
 from django.utils import timezone
-import json
-from collections import defaultdict
-from django_filters.rest_framework import DjangoFilterBackend 
-from rest_framework.filters import OrderingFilter
-from .filters import RolePermissionsFilter
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -546,3 +549,57 @@ class RolePermissionsCreateView(APIView):
          # Convert QuerySet to a list of dictionaries
         permissions_list = list(permissions)
         return build_response(len(permissions_list), "Records", permissions_list, status.HTTP_200_OK)
+
+class UserUpdateByAdminOnlyAPIView(APIView):
+    '''This API is designed for updating user information, and it is admin-only. To use it, you need to pass the Target User ID in the URL.
+        I have provided two methods for this: PUT and PATCH.
+        The PUT method requires the following mandatory fields: username, email, mobile, first_name, status_id, and role_id. These fields are necessary for updating the user information.
+        The PATCH method allows for partial updates, where you can send any of the fields (including optional ones) except for the password. Additionally, you can update the signals field in the PATCH method.
+    '''
+    permission_classes = [IsAuthenticated]
+    def check_admin_permission(self, user):
+        return user.role_id.role_name == 'Admin'
+
+    def get_target_user(self, user_id):
+        return get_object_or_404(User, pk=user_id)
+
+    # Apply ratelimit to all HTTP methods or only 'PUT','PATCH
+    @method_decorator(ratelimit(key='ip', rate='5/m', method=['PUT','PATCH'], block=True))
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    
+    def put(self, request, user_id):
+        # Check if request user is admin
+        if not self.check_admin_permission(request.user):
+            return build_response(0, "You do not have permission to perform this action.",  [], status.HTTP_403_FORBIDDEN)
+
+        # Get target user
+        target_user = self.get_target_user(user_id)
+        if not target_user:
+            return build_response(0, "Invalid Request.",  [], status.HTTP_404_NOT_FOUND)
+    
+        # Full update
+        serializer = UserUpdateByAdminOnlySerializer(target_user, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            final_PUT_data = serializer.data
+            return build_response(len(final_PUT_data), "User Updated Successfully!",  final_PUT_data, status.HTTP_200_OK)
+        return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, user_id):
+        # Check if request user is admin
+        if not self.check_admin_permission(request.user):
+            return build_response(0, "You do not have permission to perform this action.",  [], status.HTTP_403_FORBIDDEN)
+
+        # Get target user
+        target_user = self.get_target_user(user_id)
+        if not target_user:
+            return build_response(0, "Invalid Request.",  [], status.HTTP_404_NOT_FOUND)
+
+        # Partial update
+        serializer = UserUpdateByAdminOnlySerializer(target_user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            final_PATCH_data = serializer.data
+            return build_response(len(final_PATCH_data), "User Updated Successfully!",  final_PATCH_data, status.HTTP_200_OK)
+        return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
