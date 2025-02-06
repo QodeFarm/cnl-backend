@@ -1,4 +1,5 @@
 import logging
+from django.utils import timezone
 from django.db import transaction
 from django.forms import ValidationError
 from django.http import Http404
@@ -10,6 +11,7 @@ from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
+from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from config.utils_filter_methods import filter_response
 from .filters import *
 from apps.purchase.models import PurchaseOrders
@@ -23,7 +25,7 @@ from rest_framework.filters import OrderingFilter
 from django.apps import apps
 
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from config.utils_methods import workflow_progression_dict 
 workflow_progression_dict = {}
 # Set up basic configuration for logging
@@ -35,12 +37,12 @@ logger = logging.getLogger(__name__)
 
 
 class SaleOrderView(viewsets.ModelViewSet):
-    queryset = SaleOrder.objects.all()
+    queryset = SaleOrder.objects.all().order_by('-created_at')
     serializer_class = SaleOrderSerializer
-    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SaleOrderFilter
     ordering_fields = ['num_employees', 'created_at', 'updated_at', 'name']
-
+    
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
@@ -268,6 +270,7 @@ class SaleDebitNoteItemsViews(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+from django.db.models import F
 
 class SaleOrderViewSet(APIView):
     """
@@ -289,7 +292,7 @@ class SaleOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Sale order summary")
-                saleorders = SaleOrder.objects.all().order_by('-created_at', '-updated_at')
+                saleorders = SaleOrder.objects.all().order_by('-created_at')
                 data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
                 return Response(data, status=status.HTTP_200_OK)
 
@@ -298,7 +301,7 @@ class SaleOrderViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleOrder.objects.all().order_by('-created_at', '-updated_at')
+            queryset = SaleOrder.objects.all().order_by('-created_at')
 
             # Apply filters manually
             if request.query_params:
@@ -513,14 +516,78 @@ class SaleOrderViewSet(APIView):
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
 
+        # custom_data = {
+        #     "sale_order": new_sale_order_data,
+        #     "sale_order_items": items_data,
+        #     "order_attachments": order_attachments,
+        #     "order_shipments": order_shipments,
+        # }
+
+        # -------------------- Inventory Blocking ----------------------------------------------
+        if sale_order_data.get("sale_estimate", "").lower() != "yes":
+            block_duration = InventoryBlockConfig.objects.filter(product_id__isnull=True).first()
+            block_duration_hours = getattr(block_duration, 'block_duration_hours', 24)
+            # expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+            expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+
+            # blocked_inventory_data = [
+            #     BlockedInventory(
+            #         # sale_order_id=sale_order_id,
+            #         sale_order_id=SaleOrder.objects.get(sale_order_id=sale_order_id),
+            #         product_id=Products.objects.get(product_id=item.get("product_id")),
+            #         blocked_qty=item.get("quantity"),
+            #         expiration_time=expiration_time
+            #     ) for item in sale_order_items_data
+            # ]
+            # BlockedInventory.objects.bulk_create(blocked_inventory_data, ignore_conflicts=True)
+            # logger.info("Inventory blocked for sale order %s.", sale_order_id)
+            
+            # Subtract product quantities and block inventory
+            blocked_inventory_data = []
+            for item in sale_order_items_data:
+                product_id = item.get("product_id")
+                ordered_qty = item.get("quantity")
+
+                product = Products.objects.filter(product_id=product_id).first()
+                print("Product data : ", product)
+                if product:
+                    if product.balance >= ordered_qty:
+                        product.balance = F('balance') - ordered_qty
+                        product.save(update_fields=['balance'])
+                    else:
+                        return build_response(
+                            0,
+                            f"Insufficient stock for product {product.product_name}. Available: {product.quantity}, Ordered: {ordered_qty}",
+                            [],
+                            status.HTTP_400_BAD_REQUEST
+                        )
+                    blocked_inventory_data.append(BlockedInventory(
+                        sale_order_id=SaleOrder.objects.get(sale_order_id=sale_order_id),
+                        product_id=Products.objects.get(product_id=product_id),
+                        blocked_qty=ordered_qty,
+                        expiration_time=expiration_time
+                    ))
+                else:
+                    return build_response(
+                        0,
+                        f"Product with ID {product_id} not found.",
+                        [],
+                        status.HTTP_404_NOT_FOUND
+                    )
+
+            BlockedInventory.objects.bulk_create(blocked_inventory_data, ignore_conflicts=True)
+            logger.info("Inventory blocked for sale order %s.", sale_order_id)
+
+        # ---------------------- R E S P O N S E ----------------------------#
+
+        # Response
         custom_data = {
             "sale_order": new_sale_order_data,
             "sale_order_items": items_data,
             "order_attachments": order_attachments,
             "order_shipments": order_shipments,
         }
-
-        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+        return build_response(1, "Sale Order created successfully", custom_data, status.HTTP_201_CREATED)  
 
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
@@ -626,6 +693,8 @@ class SaleOrderViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+#-------------------- Sale Order End ----------------------------------------------------    
+
 
 class SaleInvoiceOrdersViewSet(APIView):
     """
@@ -647,7 +716,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale invoice order summary")
-                saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('-created_at', '-updated_at')
+                saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('-created_at')
                 data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
@@ -656,7 +725,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleInvoiceOrders.objects.all().order_by('-created_at', '-updated_at')
+            queryset = SaleInvoiceOrders.objects.all().order_by('-created_at')
 
             # Apply filters manually
             if request.query_params:
@@ -990,7 +1059,7 @@ class SaleReturnOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true" + "&"
             if summary:
                 logger.info("Retrieving sale return orders summary")
-                salereturnorders = SaleReturnOrders.objects.all().order_by('-created_at', '-updated_at')
+                salereturnorders = SaleReturnOrders.objects.all().order_by('-created_at')
                 data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
              
@@ -999,7 +1068,7 @@ class SaleReturnOrdersViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
             
-            queryset = SaleReturnOrders.objects.all().order_by('-created_at', '-updated_at')
+            queryset = SaleReturnOrders.objects.all().order_by('-created_at')
 
             # Apply filters manually
             if request.query_params:
@@ -1361,7 +1430,7 @@ class QuickPackCreateViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10))   
 
-            queryset = QuickPacks.objects.all()
+            queryset = QuickPacks.objects.all().order_by('-created_at')	
 
             # Apply filters manually
             if request.query_params:
@@ -1598,7 +1667,7 @@ class SaleReceiptCreateViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
 
-            queryset = SaleReceipt.objects.all()
+            queryset = SaleReceipt.objects.all().order_by('-created_at')	
 
             # Apply filters manually
             if request.query_params:
@@ -1810,7 +1879,7 @@ class WorkflowCreateViewSet(APIView):
             return self.retrieve(request, *args, **kwargs)
         try:
             logger.info("Retrieving all workflows")
-            queryset = Workflow.objects.all()
+            queryset = Workflow.objects.all().order_by('-created_at')	
             serializer = WorkflowSerializer(queryset, many=True)
             logger.info("Workflow data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
@@ -2094,7 +2163,7 @@ class SaleCreditNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             print("try block is triggering")
-            queryset = SaleCreditNotes.objects.all()
+            queryset = SaleCreditNotes.objects.all().order_by('-created_at')
             serializer = SaleCreditNoteSerializers(queryset, many=True)
             logger.info("salecreditnote data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
@@ -2325,7 +2394,7 @@ class SaleDebitNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             print("try block is triggering")
-            queryset = SaleDebitNotes.objects.all()
+            queryset = SaleDebitNotes.objects.all().order_by('-created_at')	
             serializer = SaleDebitNoteSerializers(queryset, many=True)
             logger.info("salecreditnote data retrieved successfully.")
             return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
@@ -2549,6 +2618,55 @@ class MoveToNextStageGenericView(APIView):
     def post(self, request, module_name, object_id):
         # Existing code for the sequential stage progression...
         try:
+            ModelClass = self.get_model_class(module_name)
+            obj = ModelClass.objects.get(pk=object_id)
+
+            # Find the current workflow stage
+            current_stage = WorkflowStage.objects.filter(flow_status_id=obj.flow_status_id).first()
+
+            if not current_stage:
+                return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Check for "Production" stage
+            production_stage = WorkflowStage.objects.filter(
+                workflow_id=current_stage.workflow_id_id,
+                flow_status_id__flow_status_name="Production"
+            ).first()
+
+            if current_stage == production_stage:
+                # If in "Production", move back to Stage 1
+                next_stage = WorkflowStage.objects.filter(
+                    workflow_id=current_stage.workflow_id_id,
+                    stage_order=1
+                ).first()
+            else:
+                # Otherwise, move to the next stage
+                next_stage = WorkflowStage.objects.filter(
+                    workflow_id=current_stage.workflow_id_id,
+                    stage_order__gt=current_stage.stage_order
+                ).order_by('stage_order').first()
+
+            if next_stage:
+                obj.flow_status_id = next_stage.flow_status_id
+                obj.save()
+
+                return Response({
+                    "message": f"{module_name} moved to the next stage.",
+                    "current_stage": current_stage.flow_status_id.flow_status_name,
+                    "next_stage": next_stage.flow_status_id.flow_status_name
+                }, status=status.HTTP_200_OK)
+
+            return Response({"message": f"{module_name} has reached the final stage."}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def patch(self, request, module_name, object_id):
+        """
+        Partially update the object's fields, including setting a specific flow status.
+        """
+        try:
             # Dynamically load the model based on module_name
             ModelClass = self.get_model_class(module_name)
             if not ModelClass:
@@ -2556,54 +2674,21 @@ class MoveToNextStageGenericView(APIView):
 
             # Fetch the object from the appropriate model
             obj = ModelClass.objects.get(pk=object_id)
-            print(f"Current flow_status_id: {obj.flow_status_id}")
+            print(f"Updating fields for: {module_name} with ID {object_id}")
 
-            # Find the current workflow stage based on the current flow_status_id
-            current_stage = WorkflowStage.objects.filter(flow_status_id=obj.flow_status_id).first()
-            if not current_stage:
-                return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
+            # Update fields with the data from the request
+            for field, value in request.data.items():
+                if hasattr(obj, field):
+                    setattr(obj, field, value)
+                    print(f"Updated {field} to {value}")
 
-            print(f"Current Stage: {current_stage}")
+            # Save the updated object
+            obj.save()
 
-            # Check if the current stage is "Production"
-            production_stage = WorkflowStage.objects.filter(
-                workflow_id=current_stage.workflow_id_id,
-                flow_status_id__flow_status_name="Production"  # Assuming "Production" stage has this name
-            ).first()
-
-            # Define the next stage logic
-            if current_stage == production_stage:
-                # If currently in "Production", move back to "Review Inventory" (Stage 1)
-                next_stage = WorkflowStage.objects.filter(
-                    workflow_id=current_stage.workflow_id_id,
-                    stage_order=1  # Move back to stage 1
-                ).first()
-            else:
-                # Otherwise, get the next stage in sequence
-                next_stage = WorkflowStage.objects.filter(
-                    workflow_id=current_stage.workflow_id_id,
-                    stage_order__gt=current_stage.stage_order
-                ).order_by('stage_order').first()
-
-            if next_stage:
-                # Update the object's flow_status_id to the next stage's flow_status_id
-                obj.flow_status_id = next_stage.flow_status_id
-                obj.save()
-
-                # Log workflow progression details in the global dictionary
-                workflow_progression_dict[obj.pk] = {
-                    "current_stage": current_stage.flow_status_id.flow_status_name,
-                    "next_stage": next_stage.flow_status_id.flow_status_name,
-                    "timestamp": str(datetime.now())
-                }
-
-                return Response({
-                    "message": f"{module_name} moved to the next stage.",
-                    "current_stage": current_stage.flow_status_id.flow_status_name,
-                    "next_stage": next_stage.flow_status_id.flow_status_name
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({"message": f"{module_name} has reached the final stage."}, status=status.HTTP_200_OK)
+            return Response({
+                "message": f"{module_name} partially updated successfully.",
+                "updated_fields": request.data
+            }, status=status.HTTP_200_OK)
 
         except ModelClass.DoesNotExist:
             return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)

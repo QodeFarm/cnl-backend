@@ -48,6 +48,8 @@ class BOMFilter(filters.FilterSet):
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
+
 
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)

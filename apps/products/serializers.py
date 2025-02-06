@@ -128,9 +128,15 @@ class ProductPurchaseGlSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ModproductsSerializer(serializers.ModelSerializer):
+    unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
     class Meta:
         model = Products
-        fields = ['product_id','name', 'code']
+        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount']
+
+class ModStockJournalProductSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Products
+        fields = ['product_id','name']
 
 class ModSizeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -163,8 +169,8 @@ class productsSerializer(serializers.ModelSerializer):
     item_type = ProductItemTypeSerializer(source='item_type_id',read_only=True)
     drug_type = ProductDrugTypesSerializer(source='drug_type_id',read_only=True)
     brand = ModProductBrandsSerializer(source='brand_id',read_only=True)
-    pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)  # PackageUnitSerializer(source='pack_unit_id',read_only=True)
-    g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True) #GPackageUnitSerializer(source='g_pack_unit_id',read_only=True)
+    pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)
+    g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True)
     
     class Meta:
         model = Products
@@ -179,21 +185,10 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
 
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
-    # product_balance = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
-        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'balance', 'hsn_code']
-
-    # def get_product_details(self, obj):
-    #     return productsSerializer().get_total_product_balance(obj)
-
-    # def get_product_balance(self, obj):
-    #     return self.get_product_details(obj)
- 
-    # def get_product_summary(products):
-    #     serializer = ProductOptionsSerializer(products, many=True)
-    #     return serializer.data
+        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'dis_amount', 'balance', 'hsn_code','created_at']
 
 class SizeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -207,7 +202,7 @@ class ColorSerializer(serializers.ModelSerializer):
 
 class ProductVariationSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id',read_only=True)
-    size = SizeSerializer(source='size_id',read_only=True)
+    size = ModSizeSerializer(source='size_id',read_only=True)
     color = ColorSerializer(source='color_id',read_only=True)
 
     class Meta:

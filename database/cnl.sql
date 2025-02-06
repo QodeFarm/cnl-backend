@@ -350,7 +350,7 @@ CREATE TABLE IF NOT EXISTS ledger_groups (
     code VARCHAR(50),
     inactive BOOLEAN,
     under_group VARCHAR(255),
-    nature VARCHAR(255),
+    nature ENUM('Asset', 'Liability', 'Income', 'Expense') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     is_subledger BOOLEAN,
     ledger_group_id CHAR(36) NOT NULL,
     inactive BOOLEAN,
-    type ENUM("customer", "Bank", "Cash"),
+    type ENUM("customer", "Bank", "Cash") NOT NULL,
     account_no VARCHAR(50),
     rtgs_ifsc_code VARCHAR(50),
     classification VARCHAR(50),
@@ -376,6 +376,30 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (ledger_group_id) REFERENCES ledger_groups(ledger_group_id)
 );
+
+/* journal table */
+-- Record financial transactions (headers for double-entry) 
+CREATE TABLE IF NOT EXISTS journal (
+    journal_id CHAR(36) PRIMARY KEY,
+    date DATE NOT NULL,
+    description VARCHAR(255),
+    total_debit DECIMAL(18, 2),
+    total_credit DECIMAL(18, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* journal_details */
+--Store debit/credit entries linked to the journal table.
+CREATE TABLE IF NOT EXISTS journal_details (
+    journal_detail_id CHAR(36) PRIMARY KEY,
+    journal_id CHAR(36) NOT NULL,
+    ledger_account_id CHAR(36) NOT NULL,
+    debit DECIMAL(18, 2) DEFAULT 0.00,
+    credit DECIMAL(18, 2) DEFAULT 0.00,
+    FOREIGN KEY (journal_id) REFERENCES journal(journal_id),
+    FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id)
+);
+
 
 /* Firm Statuses Table */
 -- Stores information about different statuses of firms.
@@ -1672,35 +1696,29 @@ CREATE TABLE IF NOT EXISTS employees (
     employee_id CHAR(36) PRIMARY KEY,
     first_name VARCHAR(255) NOT NULL,
     last_name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    phone VARCHAR(20),
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(255),
     address VARCHAR(255),
     hire_date date,
+    date_of_birth date,
+    gender ENUM('Female', 'Male') NOT NULL,
+    nationality varchar(20),
+    emergency_contact varchar(20),
+    emergency_contact_relationship varchar(55),
     job_type_id CHAR(36) NOT NULL,
-    designation_id CHAR(36) NOT NULL,
-    job_code_id CHAR(36) NOT NULL,
-    department_id CHAR(36) NOT NULL,
-    shift_id CHAR(36) NOT NULL,
+    designation_id CHAR(36),
+    job_code_id CHAR(36),
+    department_id CHAR(36),
+    shift_id CHAR(36),
+    manager_id CHAR(36),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (job_type_id) REFERENCES job_types(job_type_id),
     FOREIGN KEY (designation_id) REFERENCES designations(designation_id),
     FOREIGN KEY (job_code_id) REFERENCES job_codes(job_code_id),
     FOREIGN KEY (department_id) REFERENCES departments(department_id),
-    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id)
-);
-
-CREATE TABLE IF NOT EXISTS employee_details (
-    employee_detail_id CHAR(36) PRIMARY KEY,
-    date_of_birth date NOT NULL,
-    gender varchar(20) NULL,
-    nationality varchar(20) NULL,
-    emergency_contact varchar(20) NULL,
-    emergency_contact_relationship varchar(55) NULL,
-    employee_id CHAR(36) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
+    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id),
+    FOREIGN KEY (manager_id) REFERENCES employees(employee_id)
 );
 
 CREATE TABLE IF NOT EXISTS employee_salary (
@@ -1748,7 +1766,6 @@ CREATE TABLE IF NOT EXISTS employee_leaves (
     leave_id CHAR(36) PRIMARY KEY,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    status_id CHAR(36) NOT NULL,
     comments varchar(255),
     employee_id CHAR(36) NOT NULL,
     leave_type_id CHAR(36) NOT NULL,
@@ -1761,8 +1778,7 @@ CREATE TABLE IF NOT EXISTS employee_leaves (
 
 CREATE TABLE IF NOT EXISTS leave_approvals ( 
     approval_id CHAR(36) PRIMARY KEY,
-    approval_date datetime,
-    comments varchar(255),
+    approval_date date,
     status_id CHAR(36) NOT NULL,
     leave_id CHAR(36) NOT NULL,
     approver_id CHAR(36) NOT NULL,
@@ -1787,21 +1803,15 @@ CREATE TABLE IF NOT EXISTS employee_leave_balance (
 
 /* ======== attendance ======== */
 
-CREATE TABLE IF NOT EXISTS attendance (
-    attendance_id CHAR(36) PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS employee_attendance (
+    employee_attendance_id CHAR(36) PRIMARY KEY,
     employee_id CHAR(36) NOT NULL,
-    attendance_date DATE,
-    clock_in_time datetime,
-    clock_out_time datetime,
-    status_id CHAR(36),
-    department_id CHAR(36),
-    shift_id CHAR(36),
+    attendance_date DATE NOT NULL DEFAULT (CURRENT_DATE),
+    absent BOOLEAN,
+    leave_duration ENUM('First Half', 'Full Day', 'Second Half'),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (employee_id) REFERENCES employees(employee_id),
-    FOREIGN KEY (status_id) REFERENCES statuses(status_id),
-    FOREIGN KEY (department_id) REFERENCES departments(department_id),
-    FOREIGN KEY (shift_id) REFERENCES shifts(shift_id)
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id)
 );
 
 CREATE TABLE IF NOT EXISTS swipes (
@@ -1938,11 +1948,15 @@ CREATE TABLE IF NOT EXISTS quick_pack_items (
     quick_pack_item_id CHAR(36) PRIMARY KEY,
     quick_pack_id CHAR(36) NOT NULL,
     product_id CHAR(36) NOT NULL,
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,
     quantity INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (quick_pack_id) REFERENCES quick_packs(quick_pack_id),
-    FOREIGN KEY (product_id) REFERENCES products(product_id)
+    FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id)
 );
 
 
@@ -2079,7 +2093,6 @@ CREATE TABLE IF NOT EXISTS bom (
     bom_id CHAR(36) PRIMARY KEY,
     bom_name VARCHAR(100) NOT NULL,
     product_id CHAR(36),
-    quantity INT NOT NULL DEFAULT 1,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2109,17 +2122,32 @@ CREATE TABLE IF NOT EXISTS production_statuses (
 CREATE TABLE IF NOT EXISTS work_orders (
     work_order_id CHAR(36) PRIMARY KEY,
     product_id CHAR(36),
-    quantity DECIMAL(10, 2),
+    size_id CHAR(36) NULL,
+    color_id CHAR(36) NULL,    
+    quantity INT NOT NULL DEFAULT 0,
+    completed_qty INT NULL DEFAULT 0,
+    pending_qty INT NULL DEFAULT 0,
     status_id CHAR(36),
     start_date DATE,
     end_date DATE,
     sale_order_id CHAR(36) DEFAULT NULL,
+    sync_qty BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (product_id) REFERENCES products(product_id),
+    FOREIGN KEY (size_id) REFERENCES sizes(size_id),
+    FOREIGN KEY (color_id) REFERENCES colors(color_id),  
     FOREIGN KEY (status_id) REFERENCES production_statuses(status_id),
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id)
 );
+
+CREATE TABLE IF NOT EXISTS completed_quantity (
+    quantity_id CHAR(36) PRIMARY KEY,
+    quantity INT NULL,
+    sync_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    work_order_id CHAR(36) NOT NULL,
+    FOREIGN KEY (work_order_id) REFERENCES work_orders(work_order_id)
+    );
 
 CREATE TABLE IF NOT EXISTS work_order_stages (
     work_stage_id CHAR(36) PRIMARY KEY,
@@ -2445,12 +2473,14 @@ CREATE TABLE IF NOT EXISTS custom_field_values (
     custom_field_value_id CHAR(36) PRIMARY KEY,
     custom_field_id CHAR(36) NOT NULL,
     entity_id CHAR(36) NOT NULL, 
+    entity_data_id CHAR(36) DEFAULT NULL;
     field_value VARCHAR(255),
     field_value_type VARCHAR(50), 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id),
     FOREIGN KEY (entity_id) REFERENCES entities(entity_id) 
+    FOREIGN KEY (entity_data_id) REFERENCES customers(customer_id)
 );
 
 
@@ -2573,3 +2603,37 @@ updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 FOREIGN KEY (reminder_id) REFERENCES reminders(reminder_id)
 );
 
+/* For Dashboard Reports*/
+-- Storing Standard Queries For Chart
+CREATE TABLE report_definition (
+    query_id CHAR(36) PRIMARY KEY,
+    query TEXT NOT NULL,
+    query_name CHAR(50) NOT NULL,
+    visualization_type CHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+/* stroing Hours configuration tables */
+CREATE TABLE IF NOT EXISTS inventory_block_config (
+    config_id INT AUTO_INCREMENT PRIMARY KEY,
+    block_duration_hours INT DEFAULT 24 COMMENT 'Duration (in hours) to block inventory',
+    product_id CHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+
+);
+
+CREATE TABLE IF NOT EXISTS blocked_inventory (
+    block_id INT AUTO_INCREMENT PRIMARY KEY,
+    sale_order_id CHAR(36) NOT NULL,
+    product_id CHAR(36) NOT NULL,
+    blocked_qty INT DEFAULT 0,
+    expiration_time TIMESTAMP NOT NULL COMMENT 'Timestamp when the block expires',
+    is_expired BOOLEAN DEFAULT FALSE COMMENT 'True if block duration has passed',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
+    FOREIGN KEY (product_id) REFERENCES products(product_id)
+);

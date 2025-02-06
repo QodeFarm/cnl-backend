@@ -1,5 +1,6 @@
 import uuid
 from django.db import models
+from apps.customer.models import Customer
 from config.utils_variables import  customfields, customfieldoptions, customfieldvalues
 from apps.masters.models import FieldType, Entities
 
@@ -48,8 +49,9 @@ class CustomFieldValue(models.Model):
     custom_field_value_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     custom_field_id = models.ForeignKey(CustomField, on_delete=models.CASCADE, db_column='custom_field_id')
     entity_id = models.ForeignKey(Entities, on_delete=models.CASCADE, db_column='entity_id')  # UUID of the entity (e.g., customer, vendor, etc.)
+    entity_data_id = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name="custom_field_values", db_column='entity_data_id')  # Correct naming
     field_value = models.CharField(max_length=255)
-    field_value_type = models.CharField(max_length=50)  # e.g., 'string', 'number', 'date'
+    field_value_type = models.CharField(max_length=50, null=True)  # e.g., 'string', 'number', 'date'
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

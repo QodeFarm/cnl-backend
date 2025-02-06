@@ -280,3 +280,20 @@ class ModulesOptionsSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+
+class UserUpdateByAdminOnlySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = '__all__'
+        read_only_fields = (
+            'user_id', 
+            'created_at', 
+            'updated_at', 
+            'last_login', 
+        )
+        extra_kwargs = {
+            'password': {
+                'write_only': True,
+                'required': False  # Makes password optional in requests
+            }
+        }
