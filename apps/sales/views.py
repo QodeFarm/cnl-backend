@@ -555,13 +555,13 @@ class SaleOrderViewSet(APIView):
                     if product.balance >= ordered_qty:
                         product.balance = F('balance') - ordered_qty
                         product.save(update_fields=['balance'])
-                    else:
-                        return build_response(
-                            0,
-                            f"Insufficient stock for product {product.product_name}. Available: {product.quantity}, Ordered: {ordered_qty}",
-                            [],
-                            status.HTTP_400_BAD_REQUEST
-                        )
+                    # else:
+                    #     return build_response(
+                    #         0,
+                    #         f"Insufficient stock for product {product.name}. Available: {product.balance}, Ordered: {ordered_qty}",
+                    #         [],
+                    #         status.HTTP_400_BAD_REQUEST
+                    #     )
                     blocked_inventory_data.append(BlockedInventory(
                         sale_order_id=SaleOrder.objects.get(sale_order_id=sale_order_id),
                         product_id=Products.objects.get(product_id=product_id),
