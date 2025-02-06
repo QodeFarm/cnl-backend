@@ -18,6 +18,7 @@ from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from .filters import RolePermissionsFilter
+from apps.company.models import Companies
 from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
@@ -235,6 +236,10 @@ class UserAccessAPIView(APIView):
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
 
+    company = Companies.objects.first()  # Get the first company
+    company_name = company.name if company else "N/A"
+    company_code = company.code if company else "N/A"
+
     profile_picture_url = None
     if user.profile_picture_url:
         profile_picture_url = user.profile_picture_url
@@ -259,7 +264,9 @@ def get_tokens_for_user(user):
         'access_token': str(refresh.access_token),
         'user_id': str(user.user_id),
         'role_id': str(role_id),
-        'role_name' : role_name
+        'role_name' : role_name,
+        'company_name' : company_name,
+        'company_code' : company_code
         }
 
 #====================================USER-LOGIN-VIEW=============================================================
@@ -344,34 +351,92 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
        
         except ValidationError as e:
             return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
+
+ #=============================================================UPDATE USER BY ADMIN ONLY &&& UPDATE PROFILE=====================================================   
+    ''' In the code below, we update the user's data using two methods:
+        1.If the payload contains a flag admin_update, the update will only be allowed if the user has 
+            admin privileges.
+        2.If the admin_update flag is not present, the code will execute a normal update process, 
+            allowing the user to update their own data.
+    '''
+    def check_admin_permission(self, user):
+        return user.role_id.role_name == 'Admin'
     
+    def get_target_user(self, user_id):
+        return get_object_or_404(User, pk=user_id)
+
     def update(self, request, *args, **kwargs):
+        flag = request.data.get("flag", None)
+
+        # If 'admin_update' flag is passed, execute admin update logic
+        if flag == "admin_update":
+            user_id = kwargs.get("user_id")  # Get user ID from URL
+
+            if not self.check_admin_permission(request.user):
+                return build_response(0, "You do not have permission to perform this action.", [], status.HTTP_403_FORBIDDEN)
+
+            target_user = self.get_target_user(user_id)
+            if not target_user:
+                return build_response(0, "Invalid Request.", [], status.HTTP_404_NOT_FOUND)
+
+            serializer = UserUpdateByAdminOnlySerializer(target_user, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return build_response(1, "User Updated Successfully!", serializer.data, status.HTTP_200_OK)
+
+            return build_response(0, "User Not Updated!", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+        # Else, execute the regular user update logic
         try:
-            # Retrieve the user instance
             partial = kwargs.pop('partial', False)
             instance = self.get_object()
-
-            # Use the custom serializer for updates
             serializer = CustomUserUpdateSerializer(instance, data=request.data, partial=partial)
             serializer.is_valid(raise_exception=True)
             self.perform_update(serializer)
 
-            custom_response_data = {
+            return Response({
                 'count': '1',
                 'msg': 'Success! Your user account has been updated.',
                 'data': [serializer.data]
-            }
-            return Response(custom_response_data, status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
         except ValidationError as e:
-            error_response_data = {
+            return Response({
                 'count': '1',
                 'msg': 'User update failed due to validation errors.',
                 'data': [e.detail]
-            }
-            return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
-
+            }, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+    # def update(self, request, *args, **kwargs):
+    #     try:
+    #         # Retrieve the user instance
+    #         partial = kwargs.pop('partial', False)
+    #         instance = self.get_object()
+
+    #         # Use the custom serializer for updates
+    #         serializer = CustomUserUpdateSerializer(instance, data=request.data, partial=partial)
+    #         serializer.is_valid(raise_exception=True)
+    #         self.perform_update(serializer)
+
+    #         custom_response_data = {
+    #             'count': '1',
+    #             'msg': 'Success! Your user account has been updated.',
+    #             'data': [serializer.data]
+    #         }
+    #         return Response(custom_response_data, status=status.HTTP_200_OK)
+    #     except ValidationError as e:
+    #         error_response_data = {
+    #             'count': '1',
+    #             'msg': 'User update failed due to validation errors.',
+    #             'data': [e.detail]
+    #         }
+    #         return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
+
+    #     except User.DoesNotExist:
+    #         return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
 # =============================USER GET ,  USER GET-All  ,  USER DELETE===================================================
 class UserManageView(APIView):    
@@ -574,56 +639,58 @@ class RolePermissionsCreateView(APIView):
         permissions_list = list(permissions)
         return build_response(len(permissions_list), "Records", permissions_list, status.HTTP_200_OK)
 
-class UserUpdateByAdminOnlyAPIView(APIView):
-    '''This API is designed for updating user information, and it is admin-only. To use it, you need to pass the Target User ID in the URL.
-        I have provided two methods for this: PUT and PATCH.
-        The PUT method requires the following mandatory fields: username, email, mobile, first_name, status_id, and role_id. These fields are necessary for updating the user information.
-        The PATCH method allows for partial updates, where you can send any of the fields (including optional ones) except for the password. Additionally, you can update the signals field in the PATCH method.
-    '''
-    permission_classes = [IsAuthenticated]
-    def check_admin_permission(self, user):
-        return user.role_id.role_name == 'Admin'
+#Let it be as it is in future will remove this code
 
-    def get_target_user(self, user_id):
-        return get_object_or_404(User, pk=user_id)
+# class UserUpdateByAdminOnlyAPIView(APIView):
+#     '''This API is designed for updating user information, and it is admin-only. To use it, you need to pass the Target User ID in the URL.
+#         I have provided two methods for this: PUT and PATCH.
+#         The PUT method requires the following mandatory fields: username, email, mobile, first_name, status_id, and role_id. These fields are necessary for updating the user information.
+#         The PATCH method allows for partial updates, where you can send any of the fields (including optional ones) except for the password. Additionally, you can update the signals field in the PATCH method.
+#     '''
+#     permission_classes = [IsAuthenticated]
+#     def check_admin_permission(self, user):
+#         return user.role_id.role_name == 'Admin'
 
-    # Apply ratelimit to all HTTP methods or only 'PUT','PATCH
-    @method_decorator(ratelimit(key='ip', rate='5/m', method=['PUT','PATCH'], block=True))
-    def dispatch(self, *args, **kwargs):
-        return super().dispatch(*args, **kwargs)
+#     def get_target_user(self, user_id):
+#         return get_object_or_404(User, pk=user_id)
+
+#     # Apply ratelimit to all HTTP methods or only 'PUT','PATCH
+#     @method_decorator(ratelimit(key='ip', rate='5/m', method=['PUT','PATCH'], block=True))
+#     def dispatch(self, *args, **kwargs):
+#         return super().dispatch(*args, **kwargs)
     
-    def put(self, request, user_id):
-        # Check if request user is admin
-        if not self.check_admin_permission(request.user):
-            return build_response(0, "You do not have permission to perform this action.",  [], status.HTTP_403_FORBIDDEN)
+#     def put(self, request, user_id):
+#         # Check if request user is admin
+#         if not self.check_admin_permission(request.user):
+#             return build_response(0, "You do not have permission to perform this action.",  [], status.HTTP_403_FORBIDDEN)
 
-        # Get target user
-        target_user = self.get_target_user(user_id)
-        if not target_user:
-            return build_response(0, "Invalid Request.",  [], status.HTTP_404_NOT_FOUND)
+#         # Get target user
+#         target_user = self.get_target_user(user_id)
+#         if not target_user:
+#             return build_response(0, "Invalid Request.",  [], status.HTTP_404_NOT_FOUND)
     
-        # Full update
-        serializer = UserUpdateByAdminOnlySerializer(target_user, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            final_PUT_data = serializer.data
-            return build_response(len(final_PUT_data), "User Updated Successfully!",  final_PUT_data, status.HTTP_200_OK)
-        return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
+#         # Full update
+#         serializer = UserUpdateByAdminOnlySerializer(target_user, data=request.data)
+#         if serializer.is_valid():
+#             serializer.save()
+#             final_PUT_data = serializer.data
+#             return build_response(len(final_PUT_data), "User Updated Successfully!",  final_PUT_data, status.HTTP_200_OK)
+#         return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
 
-    def patch(self, request, user_id):
-        # Check if request user is admin
-        if not self.check_admin_permission(request.user):
-            return build_response(0, "You do not have permission to perform this action.",  [], status.HTTP_403_FORBIDDEN)
+#     def patch(self, request, user_id):
+#         # Check if request user is admin
+#         if not self.check_admin_permission(request.user):
+#             return build_response(0, "You do not have permission to perform this action.",  [], status.HTTP_403_FORBIDDEN)
 
-        # Get target user
-        target_user = self.get_target_user(user_id)
-        if not target_user:
-            return build_response(0, "Invalid Request.",  [], status.HTTP_404_NOT_FOUND)
+#         # Get target user
+#         target_user = self.get_target_user(user_id)
+#         if not target_user:
+#             return build_response(0, "Invalid Request.",  [], status.HTTP_404_NOT_FOUND)
 
-        # Partial update
-        serializer = UserUpdateByAdminOnlySerializer(target_user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            final_PATCH_data = serializer.data
-            return build_response(len(final_PATCH_data), "User Updated Successfully!",  final_PATCH_data, status.HTTP_200_OK)
-        return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
+#         # Partial update
+#         serializer = UserUpdateByAdminOnlySerializer(target_user, data=request.data, partial=True)
+#         if serializer.is_valid():
+#             serializer.save()
+#             final_PATCH_data = serializer.data
+#             return build_response(len(final_PATCH_data), "User Updated Successfully!",  final_PATCH_data, status.HTTP_200_OK)
+#         return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
