@@ -47,14 +47,14 @@ class VendorAgent(models.Model):
     commission_rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     
     RATE_ON_CHOICES = [
-        ('Qty', 'Quantity'),
         ('Amount', 'Amount'),
+        ('Qty', 'Quantity'),
     ]
     rate_on = models.CharField(max_length=20, choices=RATE_ON_CHOICES, null=True, default=None)
     
     AMOUNT_TYPE_CHOICES = [
-        ('Taxable', 'Taxable'),
         ('BillAmount', 'Bill Amount'),
+        ('Taxable', 'Taxable'),
     ]
     amount_type = models.CharField(max_length=20, choices=AMOUNT_TYPE_CHOICES, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)

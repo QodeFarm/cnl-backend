@@ -1,4 +1,6 @@
 import uuid
+
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
@@ -18,13 +20,21 @@ from django.db import connection, transaction
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .filters import RolePermissionsFilter
+from .filters import RolePermissionsFilter, RolesFilter, UserFilter
 from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
 from collections import defaultdict
 from rest_framework import status
 from django.utils import timezone
+
+import logging
+# Set up basic configuration for logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Create a logger object
+logger = logging.getLogger(__name__)
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -43,9 +53,12 @@ class UserRoleViewSet(viewsets.ModelViewSet):
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Roles.objects.all()
     serializer_class = RoleSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = RolesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Roles,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -373,18 +386,57 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
 
 # =============================USER GET ,  USER GET-All  ,  USER DELETE===================================================
 class UserManageView(APIView):    
+    # def get(self, request, user_id=None):
+    #     """
+    #     Retrieve a specific user if user_id is provided, otherwise retrieve all users.
+    #     """
+    #     if user_id:
+    #         user = get_object_or_404(User, user_id=user_id)
+    #         serializer = GetUserDataSerializer(user)
+    #         return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+    #     else:
+    #         users = User.objects.all()
+    #         serializer = GetUserDataSerializer(users, many=True)
+    #         return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+        
     def get(self, request, user_id=None):
         """
-        Retrieve a specific user if user_id is provided, otherwise retrieve all users.
+        Retrieve a specific user if user_id is provided, otherwise retrieve all users with pagination and filtering.
         """
-        if user_id:
-            user = get_object_or_404(User, user_id=user_id)
-            serializer = GetUserDataSerializer(user)
-            return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
-        else:
-            users = User.objects.all()
-            serializer = GetUserDataSerializer(users, many=True)
-            return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+        try:
+            if user_id:
+                user = get_object_or_404(User, user_id=user_id)
+                serializer = GetUserDataSerializer(user)
+                return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+            else:
+                logger.info("Retrieving all users")
+
+                # Get pagination parameters
+                page = int(request.query_params.get('page', 1))  # Default to page 1
+                limit = int(request.query_params.get('limit', 10))  # Default limit 10
+
+                # Initial queryset
+                queryset = User.objects.all().order_by('-created_at')
+
+                # Apply filters manually
+                if request.query_params:
+                    filterset = UserFilter(request.GET, queryset=queryset)
+                    if filterset.is_valid():
+                        queryset = filterset.qs
+
+                total_count = User.objects.count()
+
+
+                serializer = GetUserDataSerializer(queryset, many=True)
+                logger.info("User data retrieved successfully.")
+
+                return filter_response(
+                    queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK
+                )
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def delete(self, request, user_id):
         """

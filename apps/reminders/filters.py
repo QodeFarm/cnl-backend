@@ -8,29 +8,77 @@ logger = logging.getLogger(__name__)
 class NotificationFrequenciesFilter(filters.FilterSet):
     frequency_id = filters.CharFilter(method=filter_uuid)
     frequency_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     created_at = filters.DateFromToRangeFilter()
- 
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
         model = NotificationFrequencies 
-        fields = ['frequency_id','frequency_name','created_at']
+        fields = ['frequency_id','frequency_name','created_at','search', 'sort','page','limit']
 
 class NotificationMethodsFilter(filters.FilterSet):
     method_id = filters.CharFilter(method=filter_uuid)
     method_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     created_at = filters.DateFromToRangeFilter()
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
  
     class Meta:
         model = NotificationMethods 
-        fields = ['method_id','method_name','created_at']
+        fields = ['method_id','method_name','created_at','search', 'sort','page','limit']
 		
 class ReminderTypesFilter(filters.FilterSet):
     reminder_type_id = filters.CharFilter(method=filter_uuid)
     type_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     created_at = filters.DateFromToRangeFilter()
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
  
     class Meta:
         model = ReminderTypes 
-        fields = ['reminder_type_id','type_name','created_at']
+        fields = ['reminder_type_id','type_name','created_at','search', 'sort','page','limit']
 
 class RemindersFilter(filters.FilterSet):
     reminder_id = filters.CharFilter(method=filter_uuid)
@@ -83,14 +131,30 @@ class ReminderRecipientsFilter(filters.FilterSet):
 
 class ReminderSettingsFilter(filters.FilterSet):
     setting_id = filters.CharFilter(method=filter_uuid)
-    user_id = filters.CharFilter(field_name='employee_id__name', lookup_expr='icontains')
+    user_id = filters.CharFilter(field_name='user_id__first_name', lookup_expr='icontains')
     notification_frequency_id = filters.CharFilter(field_name='notification_frequency_id__frequency_name', lookup_expr='icontains')
     notification_method_id = filters.CharFilter(field_name='notification_method_id__method_name', lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     created_at = filters.DateFromToRangeFilter()
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
  
     class Meta:
         model = ReminderSettings 
-        fields = ['setting_id','user_id','notification_frequency_id','notification_method_id','created_at']
+        fields = ['setting_id','user_id','notification_frequency_id','notification_method_id','created_at','search','sort','page','limit']
 
 
 class ReminderLogsFilter(filters.FilterSet):

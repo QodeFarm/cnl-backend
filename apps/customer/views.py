@@ -7,7 +7,7 @@ from apps import customer
 from apps.customer.filters import LedgerAccountsFilters, CustomerFilters, CustomerAddressesFilters, CustomerAttachmentsFilters
 from apps.customfields.models import CustomField, CustomFieldValue
 from apps.customfields.serializers import CustomFieldSerializer, CustomFieldValueSerializer
-from config.utils_filter_methods import filter_response
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from .serializers import *
 from config.utils_methods import *
@@ -36,7 +36,7 @@ class LedgerAccountsViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, LedgerAccounts,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
