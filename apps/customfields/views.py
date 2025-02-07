@@ -1,5 +1,6 @@
 from rest_framework import viewsets
-from apps.customfields.filters import CustomFieldOptionsFilters, CustomFieldValuesFilters
+from apps.customfields.filters import CustomFieldFilter, CustomFieldOptionsFilters, CustomFieldValuesFilters
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from config.utils_methods import create_instance, list_all_objects, update_instance
 from .models import CustomField, CustomFieldOption, CustomFieldValue
 from .serializers import  CustomFieldSerializer, CustomFieldOptionSerializer, CustomFieldValueSerializer
@@ -19,9 +20,12 @@ logger = logging.getLogger(__name__)
 class CustomFieldViewSet(viewsets.ModelViewSet):
     queryset = CustomField.objects.all()
     serializer_class = CustomFieldSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = CustomFieldFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, CustomField,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -78,15 +82,29 @@ class CustomFieldCreateViewSet(APIView):
 
         try:
             logger.info("Retrieving all custom fields")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10))
+
             queryset = CustomField.objects.all()
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = CustomFieldFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
+
+            total_count = CustomField.objects.count()
+
             serializer = CustomFieldSerializer(queryset, many=True)
             logger.info("Custom field data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+        
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+        
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a custom field and its related options.

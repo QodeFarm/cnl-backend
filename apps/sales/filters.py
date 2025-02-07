@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from .models import QuickPacks, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders
+from .models import QuickPacks, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
@@ -11,6 +11,8 @@ class SaleOrderFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
     # order_date = filters.DateFromToRangeFilter()
+    sale_estimate = filters.RangeFilter(field_name='sale_estimate')
+    flow_status_name = filters.CharFilter(field_name='flow_status_id__flow_status_name', lookup_expr='iexact')
     order_date = filters.DateFilter()
     sale_type_id = filters.CharFilter(method=filter_uuid)
     sale_type = filters.CharFilter(field_name='sale_type_id__name', lookup_expr='icontains')
@@ -45,7 +47,7 @@ class SaleOrderFilter(filters.FilterSet):
     class Meta:
         model = SaleOrder 
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['order_no','order_date','customer_id','customer','sale_type_id','sale_type','order_status_id','flow_status','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
+        fields = ['order_no','order_date','sale_estimate','flow_status_name','customer_id','customer','sale_type_id','sale_type','order_status_id','flow_status','status_name','created_at','advance_amount','tax','amount','period_name','search','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
@@ -196,3 +198,28 @@ class SaleReceiptFilter(filters.FilterSet):
         model = SaleReceipt
         #do not change "sale_invoice_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields =['sale_invoice_id','sale_invoice','receipt_name','description','created_at','period_name','search','sort','page','limit']
+
+class WorkflowFilter(FilterSet):
+    name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = DateFromToRangeFilter()
+
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = Workflow 
+        fields = ['name','created_at','search', 'sort','page','limit']
