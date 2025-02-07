@@ -408,37 +408,63 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
         except User.DoesNotExist:
             return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
+#=============================================================USER DELETE=====================================================   
+    # Add the destroy method for user deletion (Admin only)
+    def destroy(self, request, *args, **kwargs):
+        """
+        Delete a user and related data (Admin only).
+        """
+        # Check if the requesting user is an Admin
+        if not self.check_admin_permission(request.user):
+            print("NOT admin")
+            return build_response(0, "Permission denied: Only Admins can delete users.", [], status.HTTP_403_FORBIDDEN)
 
+        user_id = kwargs.get("user_id")  # Get user ID from URL
+        target_user = self.get_target_user(user_id)
+        if not target_user:
+            return build_response(0, "Invalid Request.", [], status.HTTP_404_NOT_FOUND)
+        
+        user_id_str = str(target_user.user_id).replace("-", "")  # Format if needed
+        
+        try:
+            # Start a database transaction
+            with transaction.atomic():
+                # Get the cursor for raw SQL execution
+                with connection.cursor() as cursor:
+                    # 1. Delete user's TaskHistory
+                    cursor.execute("DELETE FROM task_history WHERE user_id = %s", [user_id_str])
 
-    # def update(self, request, *args, **kwargs):
-    #     try:
-    #         # Retrieve the user instance
-    #         partial = kwargs.pop('partial', False)
-    #         instance = self.get_object()
+                    # 2. Fetch all tasks associated with the user
+                    cursor.execute("SELECT task_id FROM tasks WHERE user_id = %s", [user_id_str])
+                    task_ids = [row[0] for row in cursor.fetchall()]
 
-    #         # Use the custom serializer for updates
-    #         serializer = CustomUserUpdateSerializer(instance, data=request.data, partial=partial)
-    #         serializer.is_valid(raise_exception=True)
-    #         self.perform_update(serializer)
+                    if task_ids:
+                        # 3. Delete TaskComments
+                        cursor.execute("DELETE FROM task_comments WHERE task_id IN %s", [tuple(task_ids)])
 
-    #         custom_response_data = {
-    #             'count': '1',
-    #             'msg': 'Success! Your user account has been updated.',
-    #             'data': [serializer.data]
-    #         }
-    #         return Response(custom_response_data, status=status.HTTP_200_OK)
-    #     except ValidationError as e:
-    #         error_response_data = {
-    #             'count': '1',
-    #             'msg': 'User update failed due to validation errors.',
-    #             'data': [e.detail]
-    #         }
-    #         return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
+                        # 4. Delete TaskAttachments
+                        cursor.execute("DELETE FROM task_attachments WHERE task_id IN %s", [tuple(task_ids)])
 
-    #     except User.DoesNotExist:
-    #         return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+                        # 5. Delete TaskHistory for tasks
+                        cursor.execute("DELETE FROM task_history WHERE task_id IN %s", [tuple(task_ids)])
 
-# =============================USER GET ,  USER GET-All  ,  USER DELETE===================================================
+                        # 6. Delete the tasks themselves
+                        cursor.execute("DELETE FROM tasks WHERE user_id = %s", [user_id_str])
+
+                    # 7. Finally, delete the user
+                    cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id_str])
+                    
+                    # Check if deletion was successful
+                    if cursor.rowcount == 0:
+                        return build_response(0, "User not found or already deleted.", {}, status.HTTP_404_NOT_FOUND)
+
+                    return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
+
+        except Exception as e:
+            print(f"Error during user deletion: {str(e)}")
+            return build_response(0, "Deletion failed due to an internal error.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# =============================USER GET ,  USER GET-All ===================================================
 class UserManageView(APIView):    
     def get(self, request, user_id=None):
         """
@@ -452,61 +478,6 @@ class UserManageView(APIView):
             users = User.objects.all()
             serializer = GetUserDataSerializer(users, many=True)
             return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
-
-    def delete(self, request, user_id):
-        """
-        Delete a specific user identified by user_id.
-        """
-        user_id_str = str(user_id).replace("-", "")
-        # user = get_object_or_404(User, user_id=user_id)
-        try:
-        # Start a database transaction
-            with transaction.atomic():
-                # Get the cursor object to execute raw SQL queries
-                with connection.cursor() as cursor:
-
-                    # 1. Delete TaskHistory entries related to user_id
-                    cursor.execute("DELETE FROM task_history WHERE user_id = %s", [user_id_str])
-
-                    # 2. Fetch all tasks associated with the user
-                    cursor.execute("SELECT task_id FROM tasks WHERE user_id = %s", [user_id_str])
-                    task_ids = [row[0] for row in cursor.fetchall()]
-
-                    if task_ids:
-                        # 3. Delete TaskComments related to the tasks
-                        cursor.execute("DELETE FROM task_comments WHERE task_id IN %s", [tuple(task_ids)])
-
-                        # 4. Delete TaskAttachments related to the tasks
-                        cursor.execute("DELETE FROM task_attachments WHERE task_id IN %s", [tuple(task_ids)])
-
-                        # 5. Delete TaskHistory related to the tasks
-                        cursor.execute("DELETE FROM task_history WHERE task_id IN %s", [tuple(task_ids)])
-
-                        # 6. Finally, delete tasks associated with the user
-                        cursor.execute("DELETE FROM tasks WHERE user_id = %s", [user_id_str])
-
-                    # Check if the user exists in the database
-                    cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = %s", [user_id_str])
-                    user_exists = cursor.fetchone()[0]
-
-                    if not user_exists:
-                        # If the user does not exist, return a 404 response
-                        return build_response(0, "User not found!", {}, status.HTTP_404_NOT_FOUND)
-
-                    # Execute the deletion query
-                    cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id_str])
-
-                    # Check if the deletion was successful
-                    if cursor.rowcount == 0:
-                        # If no rows were deleted, return an error response
-                        return build_response(0, "Failed to delete the user!", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-                    # If successful, return a success response
-                    return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
-
-        except Exception as e:
-            print(str(e))
-            return build_response(0, "An error occurred while deleting the user.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #====================================USER-ACTIVATION-VIEW=============================================================
 class CustomUserActivationViewSet(DjoserUserViewSet):
