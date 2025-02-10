@@ -18,5 +18,11 @@ router.register(r'financial_reports', FinancialReportViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('journal_entries/', JournalEntryView.as_view(), name='journal_entries-list-create'),
-    path('journal_entries/<str:pk>/', JournalEntryView.as_view(), name='journal_entries-detail-update-delete')
+    path('journal_entries/<str:pk>/', JournalEntryView.as_view(), name='journal_entries-detail-update-delete'),
+
+    path('journals/', JournalListCreateAPIView.as_view(), name='journal-list-create'),
+    path('journals/<str:journal_id>/', JournalRetrieveUpdateDeleteAPIView.as_view(), name='journal-retrieve-update-delete'),
+
+    path('journal_details/', JournalDetailListCreateAPIView.as_view(), name='journal-detail-list-create'),
+    path('journal_details/<str:journal_detail_id>/', JournalDetailRetrieveUpdateDeleteAPIView.as_view(), name='journal-detail-retrieve-update-delete'),
 ]

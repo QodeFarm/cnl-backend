@@ -11,9 +11,9 @@ from config.utils_variables import *
 
 class LedgerAccounts(models.Model):
     TYPE_CHOICES = (
-        ('customer', 'Customer'),
         ('Bank', 'Bank'),
         ('Cash', 'Cash'),
+        ('Customer', 'Customer'),
     )
     ledger_account_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -60,7 +60,7 @@ class Customer(models.Model):
     print_name = models.CharField(max_length=255)
     identification = models.CharField(max_length=255, null=True, default=None)
     code = models.CharField(max_length=50)
-    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE, db_column='ledger_account_id')
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE, null=True, db_column='ledger_account_id')
     customer_common_for_sales_purchase = models.BooleanField(default=False, null=True)
     is_sub_customer = models.BooleanField(default=False, null=True)
     firm_status_id = models.ForeignKey(FirmStatuses, on_delete=models.CASCADE, null=True, default=None, db_column='firm_status_id')
@@ -68,6 +68,7 @@ class Customer(models.Model):
     customer_category_id = models.ForeignKey(CustomerCategories, on_delete=models.CASCADE, null=True, default=None, db_column='customer_category_id')
     contact_person = models.CharField(max_length=255, null=True, default=None,)
     picture = models.JSONField(null=True)
+    # customfield_values = models.JSONField(default=dict, blank=True)
     gst = models.CharField(max_length=50, null=True, default=None)
     registration_date = models.DateField(auto_now_add=True, null=True)
     cin = models.CharField(max_length=50, null=True, default=None)

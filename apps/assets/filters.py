@@ -72,48 +72,76 @@ class AssetMaintenanceFilter(filters.FilterSet):
         model = AssetMaintenance
         #do not change "asset_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields =['asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','s','sort','page','limit']
-        
-        
-class AssetCategoriesFilter(filters.FilterSet):
-    category_name = filters.CharFilter(lookup_expr='icontains')  
-    created_at = filters.DateFromToRangeFilter() 
-    updated_at = filters.DateFromToRangeFilter() 
-    s = filters.CharFilter(method='filter_by_search', label="Search")
+
+class AssetStatusesFilter(FilterSet):
+    status_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
-        model = AssetCategories
-        fields = ['category_name', 'created_at', 'updated_at', 's']
-        
-        
-class AssetStatusesFilter(filters.FilterSet):
-    asset_status_id = filters.UUIDFilter(field_name='asset_status_id')  # Filter by asset_status_id
-    status_name = filters.CharFilter(lookup_expr='icontains')  # Case-insensitive search for status_name
-    created_at = filters.DateFromToRangeFilter()  # Date range filter for created_at
-    updated_at = filters.DateFromToRangeFilter()  # Date range filter for updated_at
+        model = AssetStatuses 
+        fields = ['status_name','created_at','search', 'sort','page','limit']
+
+class AssetCategoriesFilter(FilterSet):
+    category_name = filters.CharFilter(lookup_expr='icontains')
     s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
-        model = AssetStatuses
-        fields = ['asset_status_id','status_name', 'created_at', 'updated_at', 's']  
-        
-        
-class LocationsFilter(filters.FilterSet):
-    location_id = filters.UUIDFilter(field_name='location_id') 
-    location_name = filters.CharFilter(lookup_expr='icontains')  
-    address = filters.CharFilter(lookup_expr='icontains')  
-    created_at = filters.DateFromToRangeFilter() 
-    updated_at = filters.DateFromToRangeFilter()  
+        model = AssetCategories 
+        fields = ['category_name','created_at','s', 'sort','page','limit']
+
+class LocationsFilter(FilterSet):
+    location_name = filters.CharFilter(lookup_expr='icontains')
+    address = filters.CharFilter(lookup_expr='icontains')
     s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
-        model = Locations
-        fields = ['location_id', 'location_name', 'address', 'created_at', 'updated_at', 's']              
+        model = Locations 
+        fields = ['location_name','address','created_at','s', 'sort','page','limit']

@@ -621,8 +621,8 @@ def send_pdf_via_email(to_email, pdf_relative_path):
     # Construct the full path to the PDF file
     pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
     
-    subject = 'Your Sales Order Receipt'
-    body = 'Please find attached your sales order receipt.'
+    subject = 'Your Requested Documents'
+    body = 'Please Find Your Requested Documents.'
     email = EmailMessage(subject, body, to=[to_email])
 
     # Ensure the PDF file exists before attempting to open it
@@ -631,7 +631,7 @@ def send_pdf_via_email(to_email, pdf_relative_path):
 
     # Read the PDF file from the provided full path
     with open(pdf_full_path, 'rb') as pdf_file:
-        email.attach('sales_order_receipt.pdf', pdf_file.read(), 'application/pdf')
+        email.attach('Document.pdf', pdf_file.read(), 'application/pdf')
     
     # Send the email
     email.send()

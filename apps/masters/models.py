@@ -504,8 +504,6 @@ class UserGroupMembers(models.Model):
 class PackageUnit(models.Model):
     pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     unit_name = models.CharField(max_length=50)
-    created_at = models.DateTimeField(auto_now_add=True) 
-
 
     class Meta:
         db_table = packageunits
@@ -517,8 +515,6 @@ class PackageUnit(models.Model):
 class GPackageUnit(models.Model):
     g_pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     unit_name = models.CharField(max_length=50)
-    created_at = models.DateTimeField(auto_now_add=True) 
-
 
     class Meta:
         db_table = gpackageunits

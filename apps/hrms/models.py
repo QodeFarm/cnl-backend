@@ -76,7 +76,11 @@ class Employees(models.Model):
     address = models.CharField(max_length=255, null=True, default=None)
     hire_date = models.DateField(null=True, default=None)
     date_of_birth = models.DateField(null=True, default=None)
-    gender = models.CharField(max_length=20)
+    GENDER_CHOICES = [
+        ('Female', 'Female'),
+        ('Male', 'Male'),
+    ]
+    gender = models.CharField(max_length=20,choices=GENDER_CHOICES,null=True, default=None)
     nationality = models.CharField(max_length=20, null=True, default=None)
     emergency_contact = models.CharField(max_length=20, null=True, default=None)
     emergency_contact_relationship = models.CharField(max_length=55, null=True, default=None)
@@ -172,7 +176,7 @@ class EmployeeLeaves(models.Model):
         
 class LeaveApprovals(models.Model):
     approval_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    approval_date = models.DateTimeField(null=True, default =None)
+    approval_date = models.DateField(null=True, default =None)
     status_id = models.ForeignKey('masters.Statuses', on_delete=models.CASCADE, db_column='status_id')
     leave_id = models.ForeignKey(EmployeeLeaves, on_delete=models.CASCADE, db_column='leave_id')
     approver_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='approver_id')

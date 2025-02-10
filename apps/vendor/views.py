@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 
 from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorFilter, VendorPaymentTermsFilter
-from config.utils_filter_methods import filter_response
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorsOptionsSerializer
 from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
@@ -45,13 +45,13 @@ class VendorsView(viewsets.ModelViewSet):
 
 class VendorCategoryView(viewsets.ModelViewSet):
     queryset = VendorCategory.objects.all().order_by('-created_at')	
-    serializer_class = VendorCategorySerializer
+    serializer_class = VendorCategorySerializer 
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorCategoryFilter
-    ordering_fields = ['created_at']  
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, VendorCategory,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -64,11 +64,10 @@ class VendorPaymentTermsView(viewsets.ModelViewSet):
     serializer_class = VendorPaymentTermsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorPaymentTermsFilter
-    ordering_fields = ['created_at']  
-
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, VendorPaymentTerms,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -78,13 +77,13 @@ class VendorPaymentTermsView(viewsets.ModelViewSet):
 
 class VendorAgentView(viewsets.ModelViewSet):
     queryset = VendorAgent.objects.all().order_by('-created_at')	
-    serializer_class = VendorAgentSerializer 
+    serializer_class = VendorAgentSerializer   
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorAgentFilter
-    ordering_fields = ['created_at']  
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, VendorAgent,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

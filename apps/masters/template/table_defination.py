@@ -118,21 +118,33 @@ def customer_details(cust_name, city, country, phone, destination):
     ]))
     return table
 
+def format_numeric(cell):
+    try:
+        return "{:.2f}".format(float(cell))
+    except (ValueError, TypeError):
+        return str(cell)
+
 def product_details(data):
     style_normal = getSampleStyleSheet()['Normal']
     tbl_3_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
     table_3_heading = [["Idx", "Product", "Qty", "Unit Name", "Rate", "Amount", "Discount", "Tax"]]
     
+    EXPECTED_FIELDS = 8
+    
     for index, item in enumerate(data):
+        if len(item) < EXPECTED_FIELDS:
+            print(f"Skipping row {index}: Insufficient fields")
+            continue
+            
         row = [
             str(index + 1),                   # Index
-            item[1],                          # Product
-            item[2],                          # Quantity
-            item[3],                          # Unit Name
-            item[4],                          # Rate
-            item[5],                          # Amount
-            item[6],                          # Discount
-            item[7]                           # Tax
+            str(item[1]),                     # Product (force string)
+            format_numeric(item[2]),          # Qty
+            str(item[3]),                     # Unit Name
+            format_numeric(item[4]),          # Rate
+            format_numeric(item[5]),          # Amount
+            format_numeric(item[6]),          # Discount
+            format_numeric(item[7])           # Tax
         ]
         # Convert each cell into a Paragraph with normal style
         wrapped_row = [Paragraph(cell, style_normal) for cell in row]

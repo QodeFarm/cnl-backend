@@ -32,11 +32,10 @@ class WarehouseLocationsViewSet(viewsets.ModelViewSet):
     serializer_class = WarehouseLocationsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = WarehouseLocationsFilter
-    ordering_fields = ['created_at']
-
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, WarehouseLocations,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

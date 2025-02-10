@@ -9,22 +9,35 @@ logger = logging.getLogger(__name__)
 
 class LedgerAccountsFilters(filters.FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
-    code = filters.CharFilter(lookup_expr='icontains')  
-    inactive = filters.BooleanFilter() 
+    code = filters.CharFilter(lookup_expr='exact')
+    inactive = filters.BooleanFilter()
     type = filters.CharFilter(lookup_expr='exact')
-    ledger_group_id = filters.CharFilter(field_name='ledger_group_id__name', lookup_expr='exact')
-    is_loan_account = filters.BooleanFilter() 
-    account_no = filters.NumberFilter(lookup_expr='exact')
-    address = filters.CharFilter(lookup_expr='icontains') 
+    account_no = filters.CharFilter(lookup_expr='exact')
+    is_loan_account = filters.BooleanFilter()
     pan = filters.CharFilter(lookup_expr='exact')
-    s = filters.CharFilter(method='filter_by_search', label="Search") 
-    
+    address = filters.CharFilter(lookup_expr='icontains')
+    ledger_group_id = filters.CharFilter(field_name='ledger_group_id__name', lookup_expr='exact')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
-        return filter_by_search(queryset, self, value)  
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
-        model = LedgerAccounts
-        fields = ['name','code','type','inactive','ledger_group_id', 'account_no','is_loan_account','address','pan','s']
+        model = LedgerAccounts 
+        fields = ['name','code','inactive','type','account_no','is_loan_account','pan','address','ledger_group_id','created_at','search', 'sort','page','limit']
 
 class CustomerFilters(filters.FilterSet):
     identification = filters.CharFilter(lookup_expr='exact')

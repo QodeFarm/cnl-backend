@@ -42,9 +42,16 @@ class JournalEntryLinesSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class PaymentTransactionSerializer(serializers.ModelSerializer):
+    invoice = serializers.SerializerMethodField()
     class Meta:
         model = PaymentTransaction
         fields = '__all__'
+
+    def get_invoice(self, obj):
+        return {
+            "invoice_id": obj.invoice_id,
+            "invoice_no": obj.invoice_id  # Using the same value for both
+        }
 
 class TaxConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -67,3 +74,13 @@ class FinancialReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = FinancialReport
         fields = '__all__'
+
+class JournalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Journal
+        fields = ['journal_id', 'date', 'description', 'total_debit', 'total_credit', 'created_at']
+
+class JournalDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JournalDetail
+        fields = ['journal_detail_id', 'journal_id', 'ledger_account_id', 'debit', 'credit']

@@ -14,10 +14,10 @@ class AssetStatusesViewSet(viewsets.ModelViewSet):
     serializer_class = AssetStatusesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetStatusesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, AssetStatuses,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -30,11 +30,10 @@ class AssetCategoriesViewSet(viewsets.ModelViewSet):
     serializer_class = AssetCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetCategoriesFilter
-    ordering_fields = []
-
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, AssetCategories,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -47,11 +46,10 @@ class LocationsViewSet(viewsets.ModelViewSet):
     serializer_class = LocationsSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LocationsFilter
-    ordering_fields = []
-
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Locations,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

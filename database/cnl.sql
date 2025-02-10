@@ -350,7 +350,7 @@ CREATE TABLE IF NOT EXISTS ledger_groups (
     code VARCHAR(50),
     inactive BOOLEAN,
     under_group VARCHAR(255),
-    nature VARCHAR(255),
+    nature ENUM('Asset', 'Liability', 'Income', 'Expense') NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     is_subledger BOOLEAN,
     ledger_group_id CHAR(36) NOT NULL,
     inactive BOOLEAN,
-    type ENUM("customer", "Bank", "Cash"),
+    type ENUM("Bank", "Cash", "Customer",) NOT NULL,
     account_no VARCHAR(50),
     rtgs_ifsc_code VARCHAR(50),
     classification VARCHAR(50),
@@ -376,6 +376,30 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (ledger_group_id) REFERENCES ledger_groups(ledger_group_id)
 );
+
+/* journal table */
+-- Record financial transactions (headers for double-entry) 
+CREATE TABLE IF NOT EXISTS journal (
+    journal_id CHAR(36) PRIMARY KEY,
+    date DATE NOT NULL,
+    description VARCHAR(255),
+    total_debit DECIMAL(18, 2),
+    total_credit DECIMAL(18, 2),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+/* journal_details */
+--Store debit/credit entries linked to the journal table.
+CREATE TABLE IF NOT EXISTS journal_details (
+    journal_detail_id CHAR(36) PRIMARY KEY,
+    journal_id CHAR(36) NOT NULL,
+    ledger_account_id CHAR(36) NOT NULL,
+    debit DECIMAL(18, 2) DEFAULT 0.00,
+    credit DECIMAL(18, 2) DEFAULT 0.00,
+    FOREIGN KEY (journal_id) REFERENCES journal(journal_id),
+    FOREIGN KEY (ledger_account_id) REFERENCES ledger_accounts(ledger_account_id)
+);
+
 
 /* Firm Statuses Table */
 -- Stores information about different statuses of firms.
@@ -897,8 +921,8 @@ CREATE TABLE IF NOT EXISTS vendor_agent (
     code VARCHAR(50),
     name VARCHAR(255) NOT NULL,
     commission_rate DECIMAL(18, 2),
-    rate_on ENUM("Qty", "Amount"),
-    amount_type ENUM("Taxable", "BillAmount"),
+    rate_on ENUM("Amount", "Qty"),
+    amount_type ENUM("BillAmount", "Taxable"),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -1677,7 +1701,7 @@ CREATE TABLE IF NOT EXISTS employees (
     address VARCHAR(255),
     hire_date date,
     date_of_birth date,
-    gender varchar(20) NOT NULL,
+    gender ENUM('Female', 'Male') NOT NULL,
     nationality varchar(20),
     emergency_contact varchar(20),
     emergency_contact_relationship varchar(55),
@@ -1754,7 +1778,7 @@ CREATE TABLE IF NOT EXISTS employee_leaves (
 
 CREATE TABLE IF NOT EXISTS leave_approvals ( 
     approval_id CHAR(36) PRIMARY KEY,
-    approval_date datetime,
+    approval_date date,
     status_id CHAR(36) NOT NULL,
     leave_id CHAR(36) NOT NULL,
     approver_id CHAR(36) NOT NULL,
@@ -2163,7 +2187,7 @@ CREATE TABLE IF NOT EXISTS machines (
     machine_id CHAR(36) PRIMARY KEY,
     machine_name VARCHAR(100) NOT NULL,
     description TEXT,
-    status ENUM('Operational', 'Under Maintenance', 'Out of Service') DEFAULT 'Operational',
+    status ENUM('Operational', 'Out of Service', 'Under Maintenance') DEFAULT 'Operational',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -2449,12 +2473,14 @@ CREATE TABLE IF NOT EXISTS custom_field_values (
     custom_field_value_id CHAR(36) PRIMARY KEY,
     custom_field_id CHAR(36) NOT NULL,
     entity_id CHAR(36) NOT NULL, 
+    entity_data_id CHAR(36) DEFAULT NULL;
     field_value VARCHAR(255),
     field_value_type VARCHAR(50), 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (custom_field_id) REFERENCES custom_fields(custom_field_id),
     FOREIGN KEY (entity_id) REFERENCES entities(entity_id) 
+    FOREIGN KEY (entity_data_id) REFERENCES customers(customer_id)
 );
 
 

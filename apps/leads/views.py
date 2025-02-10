@@ -5,7 +5,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
 from apps.leads.filters import InteractionTypesFilter, LeadStatusesFilter, LeadsFilter
-from config.utils_filter_methods import filter_response
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from .serializers import *
 from config.utils_methods import build_response, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data
@@ -25,10 +25,10 @@ class LeadStatusesView(viewsets.ModelViewSet):
     serializer_class = LeadStatusesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LeadStatusesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, LeadStatuses,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -41,10 +41,10 @@ class InteractionTypesView(viewsets.ModelViewSet):
     serializer_class = InteractionTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = InteractionTypesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, InteractionTypes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

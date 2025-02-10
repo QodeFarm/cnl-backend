@@ -1,3 +1,4 @@
+from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
 from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data
@@ -112,10 +113,10 @@ class StatusesViewset(viewsets.ModelViewSet):
     serializer_class = StatusesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = StatusesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Statuses,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -131,7 +132,7 @@ class LedgerGroupsViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, LedgerGroups,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -147,7 +148,7 @@ class FirmStatusesViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, FirmStatuses,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -163,7 +164,7 @@ class TerritoryViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Territory,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -195,7 +196,7 @@ class GstCategoriesViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
     
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, GstCategories,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -212,7 +213,7 @@ class CustomerPaymentTermsViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, CustomerPaymentTerms,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -229,7 +230,7 @@ class PriceCategoriesViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
     
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, PriceCategories,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -246,7 +247,7 @@ class TransportersViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
     
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Transporters,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -263,7 +264,7 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductTypes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -279,7 +280,7 @@ class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
     ordering_fields = ['quantity_code_name','created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductUniqueQuantityCodes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -295,7 +296,7 @@ class UnitOptionsViewSet(viewsets.ModelViewSet):
     ordering_fields = ['unit_name','created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, UnitOptions,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -327,7 +328,7 @@ class ProductItemTypeViewSet(viewsets.ModelViewSet):
     ordering_fields = ['item_name','created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductItemType,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -359,7 +360,7 @@ class ProductBrandsViewSet(viewsets.ModelViewSet):
     ordering_fields = ['brand_name','code','brand_salesman_id','created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductBrands,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -372,10 +373,10 @@ class PurchaseTypesViewSet(viewsets.ModelViewSet):
     serializer_class = PurchaseTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PurchaseTypesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, PurchaseTypes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -402,11 +403,10 @@ class SaleTypesView(viewsets.ModelViewSet):
     serializer_class = SaleTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = SaleTypesFilter
-    ordering_fields = []
-
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, SaleTypes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -419,11 +419,10 @@ class GstTypesView(viewsets.ModelViewSet):
     serializer_class = GstTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GstTypesFilter
-    ordering_fields = []
-
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, GstTypes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -463,11 +462,10 @@ class PaymentLinkTypesView(viewsets.ModelViewSet):
     serializer_class = PaymentLinkTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PaymentLinkTypesFilter
-    ordering_fields = []
-
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, PaymentLinkTypes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -480,10 +478,10 @@ class OrderStatusesView(viewsets.ModelViewSet):
     serializer_class = OrderStatusesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = OrderStatusesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, OrderStatuses,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -496,10 +494,10 @@ class OrderTypesView(viewsets.ModelViewSet):
     serializer_class = OrderTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = OrderTypesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, OrderTypes,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -565,10 +563,10 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
     serializer_class = TaskPrioritiesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TaskPrioritiesFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, TaskPriorities,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -676,10 +674,10 @@ class UserGroupsViewset(viewsets.ModelViewSet):
     serializer_class = UserGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UserGroupsFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, UserGroups,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -692,7 +690,10 @@ class UserGroupMembersViewset(viewsets.ModelViewSet):
     serializer_class = UserGroupMembersSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UserGroupMembersFilter
-    ordering_fields = []
+    ordering_fields = ['created_at']
+
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, UserGroupMembers,*args, **kwargs)
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -704,14 +705,14 @@ class UserGroupMembersViewset(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class PackageUnitViewSet(viewsets.ModelViewSet):
-    queryset = PackageUnit.objects.all().order_by('-created_at')
+    queryset = PackageUnit.objects.all().order_by()
     serializer_class = PackageUnitSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PackageUnitFilter
     ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, PackageUnit,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -721,14 +722,14 @@ class PackageUnitViewSet(viewsets.ModelViewSet):
 
 
 class GPackageUnitViewSet(viewsets.ModelViewSet):
-    queryset = GPackageUnit.objects.all().order_by('-created_at')
+    queryset = GPackageUnit.objects.all().order_by()
     serializer_class = GPackageUnitSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GPackageUnitFilter
     ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, GPackageUnit,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

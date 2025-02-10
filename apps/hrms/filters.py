@@ -118,8 +118,9 @@ class EmployeeLeavesFilter(filters.FilterSet):
 
 
 class LeaveApprovalsFilter(filters.FilterSet):
-    approval_date = DateFromToRangeFilter()
+    approval_date = filters.DateFilter()
     status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
+    status_name = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
     leave_id = filters.CharFilter(field_name='leave_id__comments', lookup_expr='icontains')
     approver = filters.CharFilter(field_name='approver_id__first_name', lookup_expr='icontains')
     approver_id = filters.CharFilter(method=filter_uuid)
@@ -148,7 +149,7 @@ class LeaveApprovalsFilter(filters.FilterSet):
     class Meta:
         model = LeaveApprovals
         #do not change "approval_date",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['approval_date','status_id','leave_id','approver','approver_id','created_at','period_name','s','sort','page','limit']
+        fields =['created_at','approval_date','leave_id','approver','approver_id','period_name','s','page','limit']
 
 
 class EmployeeLeaveBalanceFilter(filters.FilterSet):
@@ -249,129 +250,204 @@ class SwipesFilter(filters.FilterSet):
         model = Swipes
         #do not change "employee_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields =['employee_id','swipe_time','created_at','period_name','s','sort','page','limit']
-        
-        
+
+
 class JobTypesFilter(filters.FilterSet):
-    job_type_id = filters.UUIDFilter() 
-    job_type_name = filters.CharFilter(lookup_expr='icontains') 
-    created_at = filters.DateFromToRangeFilter() 
-    updated_at = filters.DateFromToRangeFilter() 
-    s = filters.CharFilter(method='filter_by_search', label="Search")  
+    job_type_name = filters.CharFilter(lookup_expr='icontains')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
-    class Meta:
-        model = JobTypes  
-        fields = ['job_type_id', 'job_type_name', 'created_at', 'updated_at', 's']         
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
 
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = JobTypes 
+        fields = ['job_type_name','created_at','s', 'sort','page','limit']
 
 class DesignationsFilter(filters.FilterSet):
-    designation_id = filters.UUIDFilter() 
-    designation_name = filters.CharFilter(lookup_expr='icontains')  
-    responsibilities = filters.CharFilter(lookup_expr='icontains') 
-    created_at = filters.DateFromToRangeFilter()  
-    updated_at = filters.DateFromToRangeFilter()  
-    s = filters.CharFilter(method='filter_by_search', label="Search") 
+    designation_name = filters.CharFilter(lookup_expr='icontains')
+    responsibilities = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
         model = Designations 
-        fields = ['designation_id', 'designation_name', 'responsibilities', 'created_at', 'updated_at', 's']  
-        
-        
+        fields = ['designation_name','responsibilities','created_at','search', 'sort','page','limit']
+
+
 class JobCodesFilter(filters.FilterSet):
-    job_code_id = filters.UUIDFilter() 
-    job_code = filters.CharFilter(lookup_expr='icontains') 
-    created_at = filters.DateFromToRangeFilter()  
-    updated_at = filters.DateFromToRangeFilter()  
-    s = filters.CharFilter(method='filter_by_search', label="Search")  
+    job_code = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
-        model = JobCodes  
-        fields = ['job_code_id', 'job_code', 'created_at', 'updated_at', 's']    
-        
-            
+        model = JobCodes 
+        fields = ['job_code','created_at','search', 'sort','page','limit']
+
 class DepartmentsFilter(filters.FilterSet):
-    department_id = filters.UUIDFilter() 
-    department_name = filters.CharFilter(lookup_expr='icontains')  
-    created_at = filters.DateFromToRangeFilter() 
-    updated_at = filters.DateFromToRangeFilter() 
-    s = filters.CharFilter(method='filter_by_search', label="Search") 
+    department_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
         model = Departments 
-        fields = ['department_id', 'department_name', 'created_at', 'updated_at', 's']        
-            
-            
+        fields = ['department_name','created_at','search', 'sort','page','limit']
+
 class ShiftsFilter(filters.FilterSet):
-    shift_id = filters.UUIDFilter()  
-    shift_name = filters.CharFilter(lookup_expr='icontains')  
-    start_time = filters.DateTimeFromToRangeFilter() 
-    end_time = filters.DateTimeFromToRangeFilter()  
-    created_at = filters.DateFromToRangeFilter()  
-    updated_at = filters.DateFromToRangeFilter() 
-    s = filters.CharFilter(method='filter_by_search', label="Search")  
+    shift_name = filters.CharFilter(lookup_expr='icontains')
+    start_time = filters.DateTimeFilter()
+    end_time = filters.DateTimeFilter()
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
         model = Shifts 
-        fields = ['shift_id', 'shift_name', 'start_time', 'end_time', 'created_at', 'updated_at', 's'] 
-              
+        fields = ['shift_name','start_time','end_time','created_at','search', 'sort','page','limit']
+
 class SalaryComponentsFilter(filters.FilterSet):
-    component_id = filters.UUIDFilter()  
-    component_name = filters.CharFilter(lookup_expr='icontains')  
-    created_at = filters.DateFromToRangeFilter()  
-    updated_at = filters.DateFromToRangeFilter() 
-    s = filters.CharFilter(method='filter_by_search', label="Search") 
+    component_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
-        model = SalaryComponents  
-        fields = ['component_id', 'component_name', 'created_at', 'updated_at', 's']
-        
+        model = SalaryComponents 
+        fields = ['component_name','created_at','search', 'sort','page','limit']
 
 class EmployeeSalaryComponentsFilter(filters.FilterSet):
-    employee_component_id = filters.UUIDFilter()
-    component_amount = filters.RangeFilter() 
-    component_id = filters.UUIDFilter(field_name='component_id__component_name')  # Correct field name here
-    salary_id = filters.UUIDFilter(field_name='salary_id__salary_amount')  # Correct field name here
-    created_at = filters.DateFromToRangeFilter()  # Date range filter for created_at
-    updated_at = filters.DateFromToRangeFilter()  # Date range filter for updated_at
-    s = filters.CharFilter(method='filter_by_search', label="Search")
+    component_id = filters.CharFilter(field_name='component_id__component_name', lookup_expr='icontains')
+    component_amount = filters.RangeFilter()
+    salary_id = filters.CharFilter(field_name='salary_id__salary_amount', lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
-        # Implement custom search logic or delegate to an existing function
         return filter_by_search(queryset, self, value)
 
-    class Meta:
-        model = EmployeeSalaryComponents
-        fields = ['employee_component_id', 'component_amount', 'component_id', 'salary_id', 'created_at', 'updated_at', 's']
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
 
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = EmployeeSalaryComponents 
+        fields = ['component_id','component_amount','salary_id','created_at','search', 'sort','page','limit']
 
 class LeaveTypesFilter(filters.FilterSet):
-    leave_type_name = filters.CharFilter(lookup_expr='icontains')  # Case-insensitive search for leave type name
-    description = filters.CharFilter(lookup_expr='icontains')  # Case-insensitive search for description
-    max_days_allowed = filters.RangeFilter()  # Range filter for max days allowed
-    created_at = filters.DateFromToRangeFilter()  # Date range filter for created_at
-    updated_at = filters.DateFromToRangeFilter()  # Date range filter for updated_at
-    s = filters.CharFilter(method='filter_by_search', label="Search")
+    leave_type_name = filters.CharFilter(lookup_expr='icontains')
+    description = filters.CharFilter(lookup_expr='icontains')
+    max_days_allowed = filters.NumberFilter()
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
-        model = LeaveTypes
-        fields = ['leave_type_name', 'description', 'max_days_allowed', 'created_at', 'updated_at', 's']
+        model = LeaveTypes 
+        fields = ['leave_type_name','description','max_days_allowed','created_at','search', 'sort','page','limit']
