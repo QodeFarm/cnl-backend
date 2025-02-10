@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import viewsets
 from config.utils_filter_methods import list_filtered_objects
-from apps.inventory.filters import WarehousesFilter
+from apps.inventory.filters import WarehouseLocationsFilter, WarehousesFilter
 from .models import *
 from .serializers import *
 from config.utils_methods import *
@@ -30,6 +30,10 @@ class WarehousesViewSet(viewsets.ModelViewSet):
 class WarehouseLocationsViewSet(viewsets.ModelViewSet):
     queryset = WarehouseLocations.objects.all().order_by('-created_at')	
     serializer_class = WarehouseLocationsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = WarehouseLocationsFilter
+    ordering_fields = ['created_at']
+
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

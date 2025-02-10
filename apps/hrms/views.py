@@ -11,7 +11,7 @@ from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
 from apps.masters.models import Statuses
-from apps.hrms.filters import EmployeesFilter, EmployeeSalaryFilter, EmployeeLeavesFilter, LeaveApprovalsFilter, EmployeeLeaveBalanceFilter, EmployeeAttendanceFilter, SwipesFilter
+from apps.hrms.filters import DepartmentsFilter, DesignationsFilter, EmployeeSalaryComponentsFilter, EmployeesFilter, EmployeeSalaryFilter, EmployeeLeavesFilter, JobCodesFilter, JobTypesFilter, LeaveApprovalsFilter, EmployeeLeaveBalanceFilter, EmployeeAttendanceFilter, LeaveTypesFilter, SalaryComponentsFilter, ShiftsFilter, SwipesFilter
 from django.utils.timezone import now
 from datetime import datetime
 
@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 class JobTypesViewSet(viewsets.ModelViewSet):
     queryset = JobTypes.objects.all().order_by('-created_at')	
     serializer_class = JobTypesSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = JobTypesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -40,6 +43,10 @@ class JobTypesViewSet(viewsets.ModelViewSet):
 class DesignationsViewSet(viewsets.ModelViewSet):
     queryset = Designations.objects.all().order_by('-created_at')
     serializer_class = DesignationsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = DesignationsFilter
+    ordering_fields = []
+
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -53,6 +60,9 @@ class DesignationsViewSet(viewsets.ModelViewSet):
 class JobCodesViewSet(viewsets.ModelViewSet):
     queryset = JobCodes.objects.all().order_by('-created_at')
     serializer_class = JobCodesSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = JobCodesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -66,6 +76,9 @@ class JobCodesViewSet(viewsets.ModelViewSet):
 class DepartmentsViewSet(viewsets.ModelViewSet):
     queryset = Departments.objects.all().order_by('-created_at')
     serializer_class = DepartmentsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = DepartmentsFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -79,6 +92,9 @@ class DepartmentsViewSet(viewsets.ModelViewSet):
 class ShiftsViewSet(viewsets.ModelViewSet):
     queryset = Shifts.objects.all().order_by('-created_at')
     serializer_class = ShiftsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ShiftsFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -124,6 +140,9 @@ class EmployeeSalaryViewSet(viewsets.ModelViewSet):
 class SalaryComponentsViewSet(viewsets.ModelViewSet):
     queryset = SalaryComponents.objects.all().order_by('-created_at')	
     serializer_class = SalaryComponentsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SalaryComponentsFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -136,7 +155,11 @@ class SalaryComponentsViewSet(viewsets.ModelViewSet):
 
 class EmployeeSalaryComponentsViewSet(viewsets.ModelViewSet):
     queryset = EmployeeSalaryComponents.objects.all().order_by('-created_at')	
-    serializer_class = EmployeeSalaryComponentsSerializer 
+    serializer_class = EmployeeSalaryComponentsSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = EmployeeSalaryComponentsFilter
+    ordering_fields = []
+     
     
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -152,6 +175,10 @@ class EmployeeSalaryComponentsViewSet(viewsets.ModelViewSet):
 class LeaveTypesViewSet(viewsets.ModelViewSet):
     queryset = LeaveTypes.objects.all().order_by('-created_at')
     serializer_class = LeavesTypesSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = LeaveTypesFilter
+    ordering_fields = []
+     
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

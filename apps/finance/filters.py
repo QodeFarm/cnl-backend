@@ -15,7 +15,7 @@ class BankAccountFilter(filters.FilterSet):
     account_type = filters.ChoiceFilter(field_name='account_type',choices=[('Current', 'Current'),('Savings', 'Savings')])
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -38,7 +38,7 @@ class BankAccountFilter(filters.FilterSet):
     class Meta:
         model = BankAccount 
         #do not change "account_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['account_name','account_number','bank_name','branch_name','account_type','created_at','period_name','search','sort','page','limit']
+        fields = ['account_name','account_number','bank_name','branch_name','account_type','created_at','period_name','s','sort','page','limit']
 
 
 class ChartOfAccountsFilter(filters.FilterSet):
@@ -47,10 +47,10 @@ class ChartOfAccountsFilter(filters.FilterSet):
     account_name = filters.CharFilter(lookup_expr='icontains')
     account_type = filters.ChoiceFilter(choices=[('Asset', 'Asset'),('Equity', 'Equity'), ('Expense', 'Expense'), ('Liability', 'Liability'), ('Revenue', 'Revenue')])
     parent_account_id = filters.CharFilter(field_name='parent_account_id__account_name', lookup_expr='icontains')
-    bank_account_id = filters.CharFilter(field_name='bank_account_id__account_name', lookup_expr='icontains')
+    bank_account_id = filters.CharFilter(field_name='bank_account_id__bank_name', lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -73,7 +73,7 @@ class ChartOfAccountsFilter(filters.FilterSet):
     class Meta:
         model = ChartOfAccounts 
         #do not change "account_code",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['account_code','account_name','account_type','parent_account_id','bank_account_id','created_at','period_name','search','sort','page','limit']
+        fields = ['account_code','account_name','account_type','parent_account_id','bank_account_id','created_at','period_name','s','sort','page','limit']
         
 
 class JournalEntryFilter(filters.FilterSet):
@@ -82,7 +82,7 @@ class JournalEntryFilter(filters.FilterSet):
     description = filters.CharFilter(lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -105,7 +105,7 @@ class JournalEntryFilter(filters.FilterSet):
     class Meta:
         model = JournalEntry 
         #do not change "entry_date",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['entry_date','reference','description','created_at','period_name','search','sort','page','limit']
+        fields = ['entry_date','reference','description','created_at','period_name','s','sort','page','limit']
 
 
 class PaymentTransactionFilter(filters.FilterSet):
@@ -121,7 +121,7 @@ class PaymentTransactionFilter(filters.FilterSet):
     notes = filters.CharFilter(lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -144,7 +144,7 @@ class PaymentTransactionFilter(filters.FilterSet):
     class Meta:
         model = PaymentTransaction 
         #do not change "invoice_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['invoice_id','order_type','payment_date','payment_method','payment_status','amount','reference_number','currency','transaction_type','notes','created_at','period_name','search','sort','page','limit']
+        fields = ['invoice_id','order_type','payment_date','payment_method','payment_status','amount','reference_number','currency','transaction_type','notes','created_at','period_name','s','sort','page','limit']
 
 
 class TaxConfigurationFilter(filters.FilterSet):
@@ -154,7 +154,7 @@ class TaxConfigurationFilter(filters.FilterSet):
     is_active = filters.BooleanFilter()
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -177,7 +177,7 @@ class TaxConfigurationFilter(filters.FilterSet):
     class Meta:
         model = TaxConfiguration 
         #do not change "tax_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['tax_name','tax_rate','tax_type','is_active','created_at','period_name','search','sort','page','limit']
+        fields = ['tax_name','tax_rate','tax_type','is_active','created_at','period_name','s','sort','page','limit']
 
 
 class BudgetFilter(filters.FilterSet):
@@ -187,7 +187,7 @@ class BudgetFilter(filters.FilterSet):
     spent_amount = filters.RangeFilter()
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -210,7 +210,7 @@ class BudgetFilter(filters.FilterSet):
     class Meta:
         model = Budget 
         #do not change "account_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['account_id','fiscal_year','allocated_amount','spent_amount','created_at','period_name','search','sort','page','limit']
+        fields = ['account_id','fiscal_year','allocated_amount','spent_amount','created_at','period_name','s','sort','page','limit']
 
 
 class ExpenseClaimFilter(filters.FilterSet):
@@ -221,7 +221,7 @@ class ExpenseClaimFilter(filters.FilterSet):
     status = filters.ChoiceFilter(choices=ExpenseClaim.STATUS_CHOICES)
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -244,7 +244,7 @@ class ExpenseClaimFilter(filters.FilterSet):
     class Meta:
         model = ExpenseClaim 
         #do not change "employee_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['employee_id','claim_date','description','total_amount','status','created_at','period_name','search','sort','page','limit']
+        fields = ['employee_id','claim_date','description','total_amount','status','created_at','period_name','s','sort','page','limit']
 
 
 class FinancialReportFilter(filters.FilterSet):
@@ -253,7 +253,7 @@ class FinancialReportFilter(filters.FilterSet):
     generated_at = filters.DateFromToRangeFilter()
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -276,4 +276,4 @@ class FinancialReportFilter(filters.FilterSet):
     class Meta:
         model = FinancialReport 
         #do not change "report_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['report_name','report_type','generated_at','created_at','period_name','search','sort','page','limit']
+        fields = ['report_name','report_type','generated_at','created_at','period_name','s','sort','page','limit']

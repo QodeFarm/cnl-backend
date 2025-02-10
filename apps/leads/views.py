@@ -4,7 +4,7 @@ from django.http import Http404
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
-from apps.leads.filters import LeadsFilter
+from apps.leads.filters import InteractionTypesFilter, LeadStatusesFilter, LeadsFilter
 from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 class LeadStatusesView(viewsets.ModelViewSet):
     queryset = LeadStatuses.objects.all().order_by('-created_at')	
     serializer_class = LeadStatusesSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = LeadStatusesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -36,6 +39,9 @@ class LeadStatusesView(viewsets.ModelViewSet):
 class InteractionTypesView(viewsets.ModelViewSet):
     queryset = InteractionTypes.objects.all().order_by('-created_at')	
     serializer_class = InteractionTypesSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = InteractionTypesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

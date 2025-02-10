@@ -15,7 +15,7 @@ from apps.inventory.serializers import WarehouseLocationsSerializer
 from apps.inventory.models import WarehouseLocations
 from .serializers import *
 from .models import *
-from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter
+from .filters import ColorFilter, ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter, SizeFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -29,7 +29,7 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
     serializer_class = ProductGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGroupsFilter
-    ordering_fields = ['group_name']
+    ordering_fields = ['group_name','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -45,7 +45,7 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
     serializer_class = ProductCategoriesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductCategoriesFilter
-    ordering_fields = ['category_name','code']
+    ordering_fields = ['category_name','code','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -77,7 +77,7 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
     serializer_class = ProductGstClassificationsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGstClassificationsFilter
-    ordering_fields = ['type','code','hsn_or_sac_code']
+    ordering_fields = ['type','code','hsn_or_sac_code','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -192,8 +192,11 @@ class ProductItemBalanceViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class SizeViewSet(viewsets.ModelViewSet):
-    queryset = Size.objects.all()
+    queryset = Size.objects.all().order_by('-created_at')	
     serializer_class = SizeSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SizeFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -205,8 +208,12 @@ class SizeViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)    
 
 class ColorViewSet(viewsets.ModelViewSet):
-    queryset = Color.objects.all()
+    queryset = Color.objects.all().order_by('-created_at')
     serializer_class = ColorSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ColorFilter
+    ordering_fields = []
+
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

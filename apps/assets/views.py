@@ -1,6 +1,6 @@
 from django.shortcuts import render
 from rest_framework import viewsets
-from apps.assets.filters import AssetMaintenanceFilter, AssetsFilter
+from apps.assets.filters import AssetCategoriesFilter, AssetMaintenanceFilter, AssetStatusesFilter, AssetsFilter, LocationsFilter
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import list_all_objects,create_instance,update_instance
 from apps.assets.serializers import AssetStatusesSerializers, AssetCategoriesSerializers, LocationsSerializers, AssetsSerializer, AssetMaintenanceSerializer
@@ -12,6 +12,9 @@ from rest_framework.filters import OrderingFilter
 class AssetStatusesViewSet(viewsets.ModelViewSet):
     queryset = AssetStatuses.objects.all().order_by('-created_at')	
     serializer_class = AssetStatusesSerializers
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = AssetStatusesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -25,6 +28,10 @@ class AssetStatusesViewSet(viewsets.ModelViewSet):
 class AssetCategoriesViewSet(viewsets.ModelViewSet):
     queryset = AssetCategories.objects.all().order_by('-created_at')	
     serializer_class = AssetCategoriesSerializers
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = AssetCategoriesFilter
+    ordering_fields = []
+
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -38,6 +45,10 @@ class AssetCategoriesViewSet(viewsets.ModelViewSet):
 class LocationsViewSet(viewsets.ModelViewSet):
     queryset = Locations.objects.all().order_by('-created_at')	
     serializer_class = LocationsSerializers
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = LocationsFilter
+    ordering_fields = []
+
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

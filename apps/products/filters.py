@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter, NumberFilter
 import datetime,django_filters
 from django_filters import BooleanFilter
-from .models import ProductGstClassifications, ProductItemBalance, Products, ProductVariation
+from .models import Color, ProductCategories, ProductGroups, ProductGstClassifications, ProductItemBalance, ProductPurchaseGl, ProductSalesGl, ProductStockUnits, Products, ProductVariation, Size
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -9,20 +9,65 @@ logger = logging.getLogger(__name__)
 
 class ProductGroupsFilter(FilterSet):
     group_name = filters.CharFilter(lookup_expr='icontains')
+    description = django_filters.CharFilter(lookup_expr='icontains')
+    created_at = django_filters.DateFromToRangeFilter(label="Created At")
+    updated_at = django_filters.DateFromToRangeFilter(label="Updated At")
+    s = django_filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = ProductGroups
+        fields = ['group_name', 'description', 'created_at', 'updated_at', 's']
 
 class ProductCategoriesFilter(FilterSet):
+    category_id = filters.CharFilter(method='filter_uuid')
     category_name = filters.CharFilter(lookup_expr='icontains')
     code = filters.CharFilter(lookup_expr='icontains')
+    created_at = filters.DateFromToRangeFilter()
+    updated_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+    
+    class Meta:
+        model = ProductCategories
+        fields = [ 'category_id','category_name','code','created_at', 'updated_at','s',]
 
 class ProductStockUnitsFilter(FilterSet):
+    stock_unit_id = filters.CharFilter(method='filter_uuid')
     stock_unit_name = filters.CharFilter(lookup_expr='icontains')
-    quantity_code_id = filters.NumberFilter()
-    quantity_code_name = CharFilter(field_name='quantity_code_id__quantity_code_name', lookup_expr='exact')
+    description = filters.CharFilter(lookup_expr='icontains')
+    quantity_code_name = filters.CharFilter(method='filter_quantity_code_name', label="Quantity Code Name")
+    quantity_code_id = filters.UUIDFilter(field_name='quantity_code_id__quantity_code_name') 
+    created_at = filters.DateFromToRangeFilter()
+    updated_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+    class Meta:
+        model = ProductStockUnits
+        fields = ['stock_unit_id','stock_unit_name' ,'description','quantity_code_name', 'created_at', 'updated_at','s']
+    
 
 class ProductGstClassificationsFilter(FilterSet):
     type = filters.ChoiceFilter(choices=ProductGstClassifications.TYPE_CHOICES, field_name='type')
     code = filters.CharFilter(lookup_expr='icontains')
     hsn_or_sac_code = filters.CharFilter(lookup_expr='icontains')
+    hsn_description = django_filters.CharFilter(lookup_expr='icontains', label="HSN Description")
+    created_at = django_filters.DateFromToRangeFilter(label="Created At")
+    updated_at = django_filters.DateFromToRangeFilter(label="Updated At")
+    s = django_filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = ProductGstClassifications
+        fields = ['type', 'code', 'hsn_or_sac_code', 'hsn_description', 'created_at', 'updated_at', 's']
 
 class ProductSalesGlFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
@@ -34,6 +79,15 @@ class ProductSalesGlFilter(FilterSet):
     address = filters.CharFilter(lookup_expr='icontains')
     pan = filters.CharFilter(lookup_expr='exact')
     employee = filters.BooleanFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = ProductSalesGl
+        fields = ['name','code','sales_accounts','type','account_no','rtgs_ifsc_code','address','pan','employee','s']
+
 
 class ProductPurchaseGlFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
@@ -45,6 +99,16 @@ class ProductPurchaseGlFilter(FilterSet):
     address = filters.CharFilter(lookup_expr='icontains')
     pan = filters.CharFilter(lookup_expr='exact')
     employee = filters.BooleanFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    created_at = filters.DateFromToRangeFilter() 
+    updated_at = filters.DateFromToRangeFilter() 
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+    
+    class Meta:
+        model = ProductPurchaseGl
+        fields = ['name', 'purchase_accounts', 'code', 'type', 'account_no', 'rtgs_ifsc_code', 'address', 'pan', 'employee', 'created_at', 'updated_at']
 
 class ProductsFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
@@ -75,8 +139,13 @@ class ProductsFilter(FilterSet):
     pack_unit_id = filters.CharFilter(method=filter_uuid)
     pack_unit_name = filters.CharFilter(field_name='pack_unit_id__stock_unit_name', lookup_expr='icontains') 
     g_pack_unit_id = filters.CharFilter(method=filter_uuid)
-    g_pack_unit_name = filters.CharFilter(field_name='g_pack_unit_id__stock_unit_name', lookup_expr='icontains')         
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    g_pack_unit_name = filters.CharFilter(field_name='g_pack_unit_id__stock_unit_name', lookup_expr='icontains')    
+    purchase_rate = filters.RangeFilter()
+    wholesale_rate = filters.RangeFilter()
+    dealer_rate = filters.RangeFilter()
+    created_at = filters.DateFromToRangeFilter() 
+    updated_at = filters.DateFromToRangeFilter()  
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -99,21 +168,25 @@ class ProductsFilter(FilterSet):
     class Meta:
         model = Products
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'created_at','period_name','search','sort','page','limit']
+        fields =['name','code','balance','purchase_rate','wholesale_rate','dealer_rate','unit_options_id','created_at','updated_at','unit_options','stock_unit_id','stock_unit_name','sales_rate','category_name','mrp','discount','dis_amount','hsn_code','print_name','barcode','created_at','period_name','s','sort','page','limit']
 
 
 class ProductItemBalanceFilter(FilterSet):
-    product_balance_id = filters.CharFilter(method=filter_uuid)
-    product_id = filters.CharFilter(method=filter_uuid)
-    product_name = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
-    balance = django_filters.NumberFilter(field_name='balance', lookup_expr='exact')
-    location_id = filters.CharFilter(lookup_expr='icontains')
-    warehouse_id = filters.CharFilter(method=filter_uuid)
-    warehouse_name = filters.CharFilter(field_name='warehouse_id__name', lookup_expr='icontains')
-
+    product_id = filters.UUIDFilter(field_name='product_id__product_id', lookup_expr='exact', label="Product ID") 
+    warehouse_location_id = filters.UUIDFilter(field_name='warehouse_location_id__warehouse_location_id', lookup_expr='exact', label="Warehouse Location ID")  # Exact match for warehouse_location_id
+    quantity = filters.NumberFilter(field_name='quantity', lookup_expr='exact', label="Quantity") 
+    quantity_gt = filters.NumberFilter(field_name='quantity', lookup_expr='gt', label="Quantity Greater Than")  
+    quantity_lt = filters.NumberFilter(field_name='quantity', lookup_expr='lt', label="Quantity Less Than") 
+    created_at = filters.DateFromToRangeFilter(label="Created At")  
+    updated_at = filters.DateFromToRangeFilter(label="Updated At")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+    
     class Meta:
         model = ProductItemBalance
-        fields =[]
+        fields =['product_id', 'warehouse_location_id', 'quantity', 'created_at', 'updated_at']
 
 class ProductVariationFilter(FilterSet):
     product_variation_id = filters.CharFilter(method=filter_uuid)
@@ -129,3 +202,38 @@ class ProductVariationFilter(FilterSet):
     class Meta:
         model = ProductVariation
         fields =[]        
+        
+
+
+class SizeFilter(filters.FilterSet):
+    size_name = filters.CharFilter(lookup_expr='icontains') 
+    size_category = filters.CharFilter(lookup_expr='exact') 
+    size_system = filters.CharFilter(lookup_expr='icontains')  # Partial match for size_system
+    length = filters.RangeFilter()  # Range filter for length
+    height = filters.RangeFilter()  # Range filter for height
+    width = filters.RangeFilter()  # Range filter for width
+    size_unit = filters.CharFilter(lookup_expr='icontains')  # Partial match for size_unit
+    description = filters.CharFilter(lookup_expr='icontains')  # Partial match for description
+    s = filters.CharFilter(method='filter_by_search', label="Search")  # Custom search filter
+    created_at = filters.DateFromToRangeFilter()  # Date range filter for created_at
+    updated_at = filters.DateFromToRangeFilter()  # Date range filter for updated_at
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = Size
+        fields = ['size_name', 'size_category', 'size_system',  'length', 'height', 'width', 'size_unit', 'description', 'created_at', 'updated_at','s']
+        
+class ColorFilter(filters.FilterSet):
+    color_name = filters.CharFilter(lookup_expr='icontains')  
+    created_at = filters.DateFromToRangeFilter() 
+    updated_at = filters.DateFromToRangeFilter()  
+    s = filters.CharFilter(method='filter_by_search', label="Search") 
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = Color
+        fields = ['color_name', 'created_at', 'updated_at', 's']        

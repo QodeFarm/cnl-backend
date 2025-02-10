@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters
 import uuid
 from django.db.models import Q
-from apps.customer.models import Customer
+from apps.customer.models import Customer, LedgerAccounts
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -9,10 +9,22 @@ logger = logging.getLogger(__name__)
 
 class LedgerAccountsFilters(filters.FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
+    code = filters.CharFilter(lookup_expr='icontains')  
+    inactive = filters.BooleanFilter() 
     type = filters.CharFilter(lookup_expr='exact')
     ledger_group_id = filters.CharFilter(field_name='ledger_group_id__name', lookup_expr='exact')
-    account_no = filters.CharFilter(lookup_expr='exact')
+    is_loan_account = filters.BooleanFilter() 
+    account_no = filters.NumberFilter(lookup_expr='exact')
+    address = filters.CharFilter(lookup_expr='icontains') 
     pan = filters.CharFilter(lookup_expr='exact')
+    s = filters.CharFilter(method='filter_by_search', label="Search") 
+    
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)  
+    class Meta:
+        model = LedgerAccounts
+        fields = ['name','code','type','inactive','ledger_group_id', 'account_no','is_loan_account','address','pan','s']
 
 class CustomerFilters(filters.FilterSet):
     identification = filters.CharFilter(lookup_expr='exact')
@@ -27,7 +39,7 @@ class CustomerFilters(filters.FilterSet):
     gst = filters.CharFilter(lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -55,7 +67,7 @@ class CustomerFilters(filters.FilterSet):
     class Meta:
         model = Customer
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name','search','sort','page','limit']
+        fields = ['name','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name','s','sort','page','limit']
 
     
 class CustomerAttachmentsFilters(filters.FilterSet):

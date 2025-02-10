@@ -16,7 +16,7 @@ class TasksFilter(filters.FilterSet):
     due_date = filters.DateFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -39,4 +39,4 @@ class TasksFilter(filters.FilterSet):
     class Meta:
         model = Tasks
         #do not change "title",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['title','user_id','group_id','description','priority_id','status_id','due_date','created_at','period_name','search','sort','page','limit']
+        fields =['title','user_id','group_id','description','priority_id','status_id','due_date','created_at','period_name','s','sort','page','limit']

@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 from rest_framework.filters import OrderingFilter
-from apps.production.filters import BOMFilter, MaterialFilter, WorkOrderFilter
+from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, WorkOrderFilter
 from config.utils_filter_methods import filter_response
 from .models import *
 from apps.products.models import Products, ProductVariation
@@ -57,6 +57,8 @@ class BillOfMaterialsViewSet(viewsets.ModelViewSet):
 class ProductionStatusViewSet(viewsets.ModelViewSet):
     queryset = ProductionStatus.objects.all().order_by('-created_at')
     serializer_class = ProductionStatusSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = ProductionStatusFilter
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -70,6 +72,8 @@ class ProductionStatusViewSet(viewsets.ModelViewSet):
 class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all().order_by('-created_at')
     serializer_class = WorkOrderSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = WorkOrderFilter
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -96,6 +100,9 @@ class CompletedQuantityViewSet(viewsets.ModelViewSet):
 class MachineViewSet(viewsets.ModelViewSet):
     queryset = Machine.objects.all().order_by('-created_at')
     serializer_class = MachineSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = MachineFilter
+
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

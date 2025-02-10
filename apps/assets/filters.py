@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.assets.models import AssetMaintenance, Assets
+from apps.assets.models import AssetCategories, AssetMaintenance, AssetStatuses, Assets, Locations
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -15,7 +15,7 @@ class AssetsFilter(filters.FilterSet):
     price = DateFromToRangeFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -38,7 +38,7 @@ class AssetsFilter(filters.FilterSet):
     class Meta:
         model = Assets
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','price','purchase_date','asset_category_id','unit_options_id','asset_status_id','location_id','created_at','period_name','search','sort','page','limit']
+        fields =['name','price','purchase_date','asset_category_id','unit_options_id','asset_status_id','location_id','created_at','period_name','s','sort','page','limit']
 
 
 class AssetMaintenanceFilter(filters.FilterSet):
@@ -48,7 +48,7 @@ class AssetMaintenanceFilter(filters.FilterSet):
     cost = DateFromToRangeFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -71,4 +71,49 @@ class AssetMaintenanceFilter(filters.FilterSet):
     class Meta:
         model = AssetMaintenance
         #do not change "asset_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','search','sort','page','limit']
+        fields =['asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','s','sort','page','limit']
+        
+        
+class AssetCategoriesFilter(filters.FilterSet):
+    category_name = filters.CharFilter(lookup_expr='icontains')  
+    created_at = filters.DateFromToRangeFilter() 
+    updated_at = filters.DateFromToRangeFilter() 
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = AssetCategories
+        fields = ['category_name', 'created_at', 'updated_at', 's']
+        
+        
+class AssetStatusesFilter(filters.FilterSet):
+    asset_status_id = filters.UUIDFilter(field_name='asset_status_id')  # Filter by asset_status_id
+    status_name = filters.CharFilter(lookup_expr='icontains')  # Case-insensitive search for status_name
+    created_at = filters.DateFromToRangeFilter()  # Date range filter for created_at
+    updated_at = filters.DateFromToRangeFilter()  # Date range filter for updated_at
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = AssetStatuses
+        fields = ['asset_status_id','status_name', 'created_at', 'updated_at', 's']  
+        
+        
+class LocationsFilter(filters.FilterSet):
+    location_id = filters.UUIDFilter(field_name='location_id') 
+    location_name = filters.CharFilter(lookup_expr='icontains')  
+    address = filters.CharFilter(lookup_expr='icontains')  
+    created_at = filters.DateFromToRangeFilter() 
+    updated_at = filters.DateFromToRangeFilter()  
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = Locations
+        fields = ['location_id', 'location_name', 'address', 'created_at', 'updated_at', 's']              

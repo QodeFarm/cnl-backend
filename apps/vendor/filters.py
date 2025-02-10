@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.vendor.models import Vendor
+from apps.vendor.models import Vendor, VendorAgent, VendorCategory, VendorPaymentTerms
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from django_filters import rest_framework as filters
@@ -45,3 +45,59 @@ class VendorFilter(FilterSet): #verified
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account','created_at', 'city_id','email', 'phone','period_name','s','sort','page','limit']
 
+
+class VendorAgentFilter(filters.FilterSet):
+    vendor_agent_id = filters.CharFilter(method='filter_uuid')
+    code = filters.CharFilter(lookup_expr='icontains')
+    name = filters.CharFilter(lookup_expr='icontains')
+    commission_rate = filters.NumberFilter()
+    rate_on = filters.ChoiceFilter(choices=VendorAgent.RATE_ON_CHOICES)
+    amount_type = filters.ChoiceFilter(choices=VendorAgent.AMOUNT_TYPE_CHOICES)
+    created_at = filters.DateFromToRangeFilter()
+    updated_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = VendorAgent
+        fields = ['vendor_agent_id','code','name','commission_rate','rate_on','amount_type','created_at','updated_at','s']
+        
+        
+class VendorCategoryFilter(filters.FilterSet):
+    vendor_category_id = filters.CharFilter(method='filter_uuid')
+    code = filters.CharFilter(lookup_expr='icontains')
+    name = filters.CharFilter(lookup_expr='icontains')
+    created_at = filters.DateFromToRangeFilter()
+    updated_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = VendorCategory
+        fields = ['vendor_category_id', 'code', 'name', 'created_at', 'updated_at', 's']
+        
+        
+class VendorPaymentTermsFilter(filters.FilterSet):
+    payment_term_id = filters.CharFilter(method='filter_uuid')
+    name = filters.CharFilter(lookup_expr='icontains')
+    code = filters.CharFilter(lookup_expr='icontains')
+    fixed_days = filters.NumberFilter()
+    no_of_fixed_days = filters.NumberFilter()
+    payment_cycle = filters.CharFilter(lookup_expr='icontains')
+    run_on = filters.CharFilter(lookup_expr='icontains')
+    created_at = filters.DateFromToRangeFilter()
+    updated_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    class Meta:
+        model = VendorPaymentTerms
+        fields = ['payment_term_id', 'name', 'code', 'fixed_days', 'no_of_fixed_days', 'payment_cycle', 'run_on','created_at', 'updated_at', 's']
+        
+        
