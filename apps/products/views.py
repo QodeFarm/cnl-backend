@@ -8,14 +8,14 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import transaction
-from config.utils_filter_methods import filter_response
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from config.utils_variables import *
 from config.utils_methods import *
 from apps.inventory.serializers import WarehouseLocationsSerializer
 from apps.inventory.models import WarehouseLocations
 from .serializers import *
 from .models import *
-from .filters import ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter
+from .filters import ColorFilter, ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter, SizeFilter
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,7 +32,7 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
     ordering_fields = ['group_name']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductGroups,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -48,7 +48,7 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
     ordering_fields = ['category_name','code']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductCategories,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -64,7 +64,7 @@ class ProductStockUnitsViewSet(viewsets.ModelViewSet):
     ordering_fields = ['stock_unit_name','quantity_code_id']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductStockUnits,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -80,7 +80,7 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
     ordering_fields = ['type','code','hsn_or_sac_code']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductGstClassifications,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -96,7 +96,7 @@ class ProductSalesGlViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name','sales_accounts','code','type','account_no','rtgs_ifsc_code','address','pan','employee']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductSalesGl,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -112,7 +112,7 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
     ordering_fields = ['name','purchase_accounts','code','type','account_no','rtgs_ifsc_code','address','pan','employee']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductPurchaseGl,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -183,7 +183,7 @@ class ProductItemBalanceViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductItemBalance,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -194,9 +194,12 @@ class ProductItemBalanceViewSet(viewsets.ModelViewSet):
 class SizeViewSet(viewsets.ModelViewSet):
     queryset = Size.objects.all()
     serializer_class = SizeSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = SizeFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Size,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -207,9 +210,12 @@ class SizeViewSet(viewsets.ModelViewSet):
 class ColorViewSet(viewsets.ModelViewSet):
     queryset = Color.objects.all()
     serializer_class = ColorSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ColorFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Color,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

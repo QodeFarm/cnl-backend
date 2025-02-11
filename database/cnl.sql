@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS ledger_accounts (
     is_subledger BOOLEAN,
     ledger_group_id CHAR(36) NOT NULL,
     inactive BOOLEAN,
-    type ENUM("customer", "Bank", "Cash") NOT NULL,
+    type ENUM("Bank", "Cash", "Customer",) NOT NULL,
     account_no VARCHAR(50),
     rtgs_ifsc_code VARCHAR(50),
     classification VARCHAR(50),
@@ -921,8 +921,8 @@ CREATE TABLE IF NOT EXISTS vendor_agent (
     code VARCHAR(50),
     name VARCHAR(255) NOT NULL,
     commission_rate DECIMAL(18, 2),
-    rate_on ENUM("Qty", "Amount"),
-    amount_type ENUM("Taxable", "BillAmount"),
+    rate_on ENUM("Amount", "Qty"),
+    amount_type ENUM("BillAmount", "Taxable"),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -2187,7 +2187,7 @@ CREATE TABLE IF NOT EXISTS machines (
     machine_id CHAR(36) PRIMARY KEY,
     machine_name VARCHAR(100) NOT NULL,
     description TEXT,
-    status ENUM('Operational', 'Under Maintenance', 'Out of Service') DEFAULT 'Operational',
+    status ENUM('Operational', 'Out of Service', 'Under Maintenance') DEFAULT 'Operational',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

@@ -10,8 +10,8 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 from rest_framework.filters import OrderingFilter
-from apps.production.filters import BOMFilter, MaterialFilter, WorkOrderFilter
-from config.utils_filter_methods import filter_response
+from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, WorkOrderFilter
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from apps.products.models import Products, ProductVariation
 from apps.products.serializers import ProductVariationSerializer, productsSerializer
@@ -57,9 +57,12 @@ class BillOfMaterialsViewSet(viewsets.ModelViewSet):
 class ProductionStatusViewSet(viewsets.ModelViewSet):
     queryset = ProductionStatus.objects.all().order_by('-created_at')
     serializer_class = ProductionStatusSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ProductionStatusFilter
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, ProductionStatus,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -96,9 +99,12 @@ class CompletedQuantityViewSet(viewsets.ModelViewSet):
 class MachineViewSet(viewsets.ModelViewSet):
     queryset = Machine.objects.all().order_by('-created_at')
     serializer_class = MachineSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = MachineFilter
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Machine,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -212,8 +218,8 @@ class WorkOrderAPIView(APIView):
                 if filterset.is_valid():
                     workorders = filterset.qs  # Filtered queryset for summary
                 
-                data = WorkOrderOptionsSerializer.get_work_order_summary(workorders).get('data', [])
-                return filter_response(len(data),"Success", data, page, limit, total_count, status.HTTP_200_OK)
+                data = WorkOrderOptionsSerializer.get_work_order_summary(workorders)
+                return filter_response(len(data),"Success", data, page, limit, len(data), status.HTTP_200_OK)
 
             # Apply filters manually
             if request.query_params:

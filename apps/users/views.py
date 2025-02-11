@@ -1,3 +1,5 @@
+import uuid
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
@@ -17,7 +19,7 @@ from django.db import connection, transaction
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .filters import RolePermissionsFilter
+from .filters import RolePermissionsFilter, RolesFilter, UserFilter
 from apps.company.models import Companies
 from rest_framework.views import APIView
 from .renderers import UserRenderer
@@ -25,6 +27,14 @@ from rest_framework import viewsets
 from collections import defaultdict
 from rest_framework import status
 from django.utils import timezone
+
+import logging
+# Set up basic configuration for logging
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Create a logger object
+logger = logging.getLogger(__name__)
 
 class UserRoleViewSet(viewsets.ModelViewSet):
     queryset = UserRoles.objects.all()
@@ -43,9 +53,12 @@ class UserRoleViewSet(viewsets.ModelViewSet):
 class RoleViewSet(viewsets.ModelViewSet):
     queryset = Roles.objects.all()
     serializer_class = RoleSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = RolesFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Roles,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
@@ -408,64 +421,30 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
         except User.DoesNotExist:
             return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-
-
-    # def update(self, request, *args, **kwargs):
-    #     try:
-    #         # Retrieve the user instance
-    #         partial = kwargs.pop('partial', False)
-    #         instance = self.get_object()
-
-    #         # Use the custom serializer for updates
-    #         serializer = CustomUserUpdateSerializer(instance, data=request.data, partial=partial)
-    #         serializer.is_valid(raise_exception=True)
-    #         self.perform_update(serializer)
-
-    #         custom_response_data = {
-    #             'count': '1',
-    #             'msg': 'Success! Your user account has been updated.',
-    #             'data': [serializer.data]
-    #         }
-    #         return Response(custom_response_data, status=status.HTTP_200_OK)
-    #     except ValidationError as e:
-    #         error_response_data = {
-    #             'count': '1',
-    #             'msg': 'User update failed due to validation errors.',
-    #             'data': [e.detail]
-    #         }
-    #         return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
-
-    #     except User.DoesNotExist:
-    #         return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
-
-# =============================USER GET ,  USER GET-All  ,  USER DELETE===================================================
-class UserManageView(APIView):    
-    def get(self, request, user_id=None):
+#=============================================================USER DELETE=====================================================   
+    # Add the destroy method for user deletion (Admin only)
+    def destroy(self, request, *args, **kwargs):
         """
-        Retrieve a specific user if user_id is provided, otherwise retrieve all users.
+        Delete a user and related data (Admin only).
         """
-        if user_id:
-            user = get_object_or_404(User, user_id=user_id)
-            serializer = GetUserDataSerializer(user)
-            return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
-        else:
-            users = User.objects.all()
-            serializer = GetUserDataSerializer(users, many=True)
-            return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+        # Check if the requesting user is an Admin
+        if not self.check_admin_permission(request.user):
+            print("NOT admin")
+            return build_response(0, "Permission denied: Only Admins can delete users.", [], status.HTTP_403_FORBIDDEN)
 
-    def delete(self, request, user_id):
-        """
-        Delete a specific user identified by user_id.
-        """
-        user_id_str = str(user_id).replace("-", "")
-        # user = get_object_or_404(User, user_id=user_id)
+        user_id = kwargs.get("user_id")  # Get user ID from URL
+        target_user = self.get_target_user(user_id)
+        if not target_user:
+            return build_response(0, "Invalid Request.", [], status.HTTP_404_NOT_FOUND)
+        
+        user_id_str = str(target_user.user_id).replace("-", "")  # Format if needed
+        
         try:
-        # Start a database transaction
+            # Start a database transaction
             with transaction.atomic():
-                # Get the cursor object to execute raw SQL queries
+                # Get the cursor for raw SQL execution
                 with connection.cursor() as cursor:
-
-                    # 1. Delete TaskHistory entries related to user_id
+                    # 1. Delete user's TaskHistory
                     cursor.execute("DELETE FROM task_history WHERE user_id = %s", [user_id_str])
 
                     # 2. Fetch all tasks associated with the user
@@ -473,40 +452,96 @@ class UserManageView(APIView):
                     task_ids = [row[0] for row in cursor.fetchall()]
 
                     if task_ids:
-                        # 3. Delete TaskComments related to the tasks
+                        # 3. Delete TaskComments
                         cursor.execute("DELETE FROM task_comments WHERE task_id IN %s", [tuple(task_ids)])
 
-                        # 4. Delete TaskAttachments related to the tasks
+                        # 4. Delete TaskAttachments
                         cursor.execute("DELETE FROM task_attachments WHERE task_id IN %s", [tuple(task_ids)])
 
-                        # 5. Delete TaskHistory related to the tasks
+                        # 5. Delete TaskHistory for tasks
                         cursor.execute("DELETE FROM task_history WHERE task_id IN %s", [tuple(task_ids)])
 
-                        # 6. Finally, delete tasks associated with the user
+                        # 6. Delete the tasks themselves
                         cursor.execute("DELETE FROM tasks WHERE user_id = %s", [user_id_str])
 
-                    # Check if the user exists in the database
-                    cursor.execute("SELECT COUNT(*) FROM users WHERE user_id = %s", [user_id_str])
-                    user_exists = cursor.fetchone()[0]
-
-                    if not user_exists:
-                        # If the user does not exist, return a 404 response
-                        return build_response(0, "User not found!", {}, status.HTTP_404_NOT_FOUND)
-
-                    # Execute the deletion query
+                    # 7. Finally, delete the user
                     cursor.execute("DELETE FROM users WHERE user_id = %s", [user_id_str])
-
-                    # Check if the deletion was successful
+                    
+                    # Check if deletion was successful
                     if cursor.rowcount == 0:
-                        # If no rows were deleted, return an error response
-                        return build_response(0, "Failed to delete the user!", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        return build_response(0, "User not found or already deleted.", {}, status.HTTP_404_NOT_FOUND)
 
-                    # If successful, return a success response
                     return build_response(1, "User Deleted Successfully!", {}, status.HTTP_204_NO_CONTENT)
 
         except Exception as e:
-            print(str(e))
-            return build_response(0, "An error occurred while deleting the user.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Error during user deletion: {str(e)}")
+            return build_response(0, "Deletion failed due to an internal error.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# =============================USER GET ,  USER GET-All ===================================================
+class UserManageView(APIView):    
+    # def get(self, request, user_id=None):
+    #     """
+    #     Retrieve a specific user if user_id is provided, otherwise retrieve all users.
+    #     """
+    #     if user_id:
+    #         user = get_object_or_404(User, user_id=user_id)
+    #         serializer = GetUserDataSerializer(user)
+    #         return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+    #     else:
+    #         users = User.objects.all()
+    #         serializer = GetUserDataSerializer(users, many=True)
+    #         return build_response(len(serializer.data), "All User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+        
+    def get(self, request, user_id=None):
+        """
+        Retrieve a specific user if user_id is provided, otherwise retrieve all users with pagination and filtering.
+        """
+        try:
+            if user_id:
+                user = get_object_or_404(User, user_id=user_id)
+                serializer = GetUserDataSerializer(user)
+                return build_response(1, "User Data Retrieved Successfully!", serializer.data, status.HTTP_200_OK)
+            else:
+                logger.info("Retrieving all users")
+
+                # Get pagination parameters
+                page = int(request.query_params.get('page', 1))  # Default to page 1
+                limit = int(request.query_params.get('limit', 10))  # Default limit 10
+
+                # Initial queryset
+                queryset = User.objects.all().order_by('-created_at')
+
+                # Add exclusion filter for current user
+                exclude_id = request.query_params.get('exclude_id')
+                if exclude_id:
+                    # Remove any trailing slashes from the parameter
+                    exclude_id = exclude_id.rstrip('/')
+                    try:
+                        # Validate UUID format
+                        valid_uuid = uuid.UUID(exclude_id, version=4)
+                        queryset = queryset.exclude(user_id=valid_uuid)
+                    except (ValueError, AttributeError, ValidationError):
+                        logger.warning(f"Ignoring invalid exclude_id: {exclude_id}")     
+
+                # Apply filters manually
+                if request.query_params:
+                    filterset = UserFilter(request.GET, queryset=queryset)
+                    if filterset.is_valid():
+                        queryset = filterset.qs
+
+                total_count = User.objects.count()
+
+
+                serializer = GetUserDataSerializer(queryset, many=True)
+                logger.info("User data retrieved successfully.")
+
+                return filter_response(
+                    queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK
+                )
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #====================================USER-ACTIVATION-VIEW=============================================================
 class CustomUserActivationViewSet(DjoserUserViewSet):

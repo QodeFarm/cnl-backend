@@ -12,7 +12,7 @@ from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
-from config.utils_filter_methods import filter_response
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from .filters import *
 from apps.purchase.models import PurchaseOrders
 from apps.purchase.serializers import PurchaseOrdersSerializer
@@ -1915,10 +1915,25 @@ class WorkflowCreateViewSet(APIView):
             return self.retrieve(request, *args, **kwargs)
         try:
             logger.info("Retrieving all workflows")
-            queryset = Workflow.objects.all().order_by('-created_at')	
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10))
+
+            queryset = Workflow.objects.all().order_by('-created_at')
+
+            # Apply filters manually
+            if request.query_params:
+                filterset = WorkflowFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs 
+
+            total_count = Workflow.objects.count()
+
             serializer = WorkflowSerializer(queryset, many=True)
             logger.info("Workflow data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -2097,9 +2112,12 @@ class WorkflowCreateViewSet(APIView):
 class WorkflowViewSet(viewsets.ModelViewSet):
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = WorkflowFilter
+    ordering_fields = []
 
     def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+        return list_filtered_objects(self, request, Workflow,*args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
