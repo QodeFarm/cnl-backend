@@ -511,6 +511,18 @@ class UserManageView(APIView):
                 # Initial queryset
                 queryset = User.objects.all().order_by('-created_at')
 
+                # Add exclusion filter for current user
+                exclude_id = request.query_params.get('exclude_id')
+                if exclude_id:
+                    # Remove any trailing slashes from the parameter
+                    exclude_id = exclude_id.rstrip('/')
+                    try:
+                        # Validate UUID format
+                        valid_uuid = uuid.UUID(exclude_id, version=4)
+                        queryset = queryset.exclude(user_id=valid_uuid)
+                    except (ValueError, AttributeError, ValidationError):
+                        logger.warning(f"Ignoring invalid exclude_id: {exclude_id}")     
+
                 # Apply filters manually
                 if request.query_params:
                     filterset = UserFilter(request.GET, queryset=queryset)
