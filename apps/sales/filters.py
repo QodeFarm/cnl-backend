@@ -4,6 +4,7 @@ from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
+from django.db.models import Q
 logger = logging.getLogger(__name__)
 
 class SaleOrderFilter(filters.FilterSet):
@@ -26,6 +27,26 @@ class SaleOrderFilter(filters.FilterSet):
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    # New filter to fetch all child sale orders based on parent order_no
+    parent_order_no = filters.CharFilter(method='filter_child_orders')
+    
+    # def filter_child_orders(self, queryset, name, value):
+    #     """
+    #     Fetch all child sale orders where order_no starts with the parent order number.
+    #     Example: If parent_order_no = 'SO-2501-00002', fetch 'SO-2501-00002-01', 'SO-2501-00002-02', etc.
+    #     """
+    #     if value:
+    #         return queryset.filter(order_no=value) | (order_no__startswith=f"{value}-")  # Correct filtering
+    #     return queryset
+    
+    def filter_child_orders(self, queryset, name, value):
+        """
+        Fetch all child sale orders where order_no starts with the parent order number,
+        and also include the parent order itself.
+        """
+        return queryset.filter(Q(order_no=value) | Q(order_no__startswith=f"{value}-"))  # ✅ Fetch parent + child orders
+
+
 
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
