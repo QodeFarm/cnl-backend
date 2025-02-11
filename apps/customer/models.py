@@ -11,9 +11,9 @@ from config.utils_variables import *
 
 class LedgerAccounts(models.Model):
     TYPE_CHOICES = (
-        ('customer', 'Customer'),
         ('Bank', 'Bank'),
         ('Cash', 'Cash'),
+        ('Customer', 'Customer'),
     )
     ledger_account_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)

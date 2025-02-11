@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.assets.models import AssetMaintenance, Assets
+from apps.assets.models import AssetCategories, AssetMaintenance, AssetStatuses, Assets, Locations
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -72,3 +72,76 @@ class AssetMaintenanceFilter(filters.FilterSet):
         model = AssetMaintenance
         #do not change "asset_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields =['asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','search','sort','page','limit']
+
+class AssetStatusesFilter(FilterSet):
+    status_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = AssetStatuses 
+        fields = ['status_name','created_at','search', 'sort','page','limit']
+
+class AssetCategoriesFilter(FilterSet):
+    category_name = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = AssetCategories 
+        fields = ['category_name','created_at','search', 'sort','page','limit']
+
+class LocationsFilter(FilterSet):
+    location_name = filters.CharFilter(lookup_expr='icontains')
+    address = filters.CharFilter(lookup_expr='icontains')
+    search = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    created_at = filters.DateFromToRangeFilter()
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = Locations 
+        fields = ['location_name','address','created_at','search', 'sort','page','limit']
