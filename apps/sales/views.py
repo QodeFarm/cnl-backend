@@ -694,6 +694,36 @@ class SaleOrderViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
+    def patch(self, request, pk, format=None):
+        sale_order = self.get_object(pk)
+        if not sale_order:
+            return build_response(0, "Sale Order not found", [], status.HTTP_404_NOT_FOUND)
+
+        flow_status_id = request.data.get("flow_status_id")
+        order_status_id = request.data.get("order_status_id")
+
+        if flow_status_id:
+            try:
+                new_flow_status = FlowStatus.objects.get(pk=flow_status_id)
+                sale_order.flow_status_id = new_flow_status
+            except FlowStatus.DoesNotExist:
+                return build_response(0, "Invalid flow_status_id", [], status.HTTP_400_BAD_REQUEST)
+            
+        if order_status_id:
+            try:
+                new_order_status = OrderStatuses.objects.get(pk=order_status_id)
+                sale_order.order_status_id = new_order_status
+            except OrderStatuses.DoesNotExist:
+                return build_response(0, "Invalid order_status_id", [], status.HTTP_400_BAD_REQUEST)
+
+        serializer = SaleOrderOptionsSerializer(sale_order, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
+        
+        return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
+
 #-------------------- Sale Order End ----------------------------------------------------    
 
 
