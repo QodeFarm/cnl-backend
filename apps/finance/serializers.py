@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import *
 from apps.hrms.serializers import ModEmployeesSerializer
+from apps.customer.serializers import ModCustomersSerializer
 
 class ModBankAccountSerializer(serializers.ModelSerializer):
     class Meta:
@@ -37,6 +38,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
 class JournalEntryLinesSerializer(serializers.ModelSerializer):
     journal_entry = ModJournalEntrySerializer(source='journal_entry_id', read_only=True)
     account = ModChartOfAccountsSerializer(source='account_id', read_only=True)
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
     class Meta:
         model = JournalEntryLines
         fields = '__all__'
