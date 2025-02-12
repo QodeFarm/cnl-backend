@@ -30,7 +30,7 @@ class BranchesFilters(django_filters.FilterSet):
     country = django_filters.CharFilter(field_name='country_id__country_name', lookup_expr='exact')
     created_at = django_filters.DateFromToRangeFilter()
     period_name = django_filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = django_filters.CharFilter(method='filter_by_search', label="Search")
+    s = django_filters.CharFilter(method='filter_by_search', label="Search")
     sort = django_filters.CharFilter(method='filter_by_sort', label="Sort")
     page = django_filters.NumberFilter(method='filter_by_page', label="Page")
     limit = django_filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -54,7 +54,7 @@ class BranchesFilters(django_filters.FilterSet):
     class Meta:
         model = Branches
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','code','email','phone','address','branch_id','city_id','state_id','status_id','country','created_at','period_name','search','sort','page','limit']
+        fields = ['name','code','email','phone','address','branch_id','city_id','state_id','status_id','country','created_at','period_name','s','sort','page','limit']
 
 class BranchBankDetailsFilters(django_filters.FilterSet):
     bank_detail_id = django_filters.CharFilter(method=filter_uuid)

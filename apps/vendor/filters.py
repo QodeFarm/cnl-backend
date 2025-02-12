@@ -51,7 +51,7 @@ class VendorAgentFilter(FilterSet):
     commission_rate = filters.NumberFilter()
     rate_on = filters.ChoiceFilter(choices=VendorAgent.RATE_ON_CHOICES)
     amount_type = filters.ChoiceFilter(choices=VendorAgent.AMOUNT_TYPE_CHOICES)
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -71,12 +71,12 @@ class VendorAgentFilter(FilterSet):
     
     class Meta:
         model = VendorAgent 
-        fields = ['name','code','commission_rate','rate_on','amount_type','created_at','search', 'sort','page','limit']
+        fields = ['name','code','commission_rate','rate_on','amount_type','created_at','s', 'sort','page','limit']
 
 class VendorCategoryFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
     code = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -96,7 +96,7 @@ class VendorCategoryFilter(FilterSet):
     
     class Meta:
         model = VendorCategory 
-        fields = ['name','code','created_at','search', 'sort','page','limit']
+        fields = ['name','code','created_at','s', 'sort','page','limit']
 
 class VendorPaymentTermsFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
@@ -105,7 +105,7 @@ class VendorPaymentTermsFilter(FilterSet):
     no_of_fixed_days = filters.NumberFilter()
     payment_cycle = filters.CharFilter(lookup_expr='icontains')  
     run_on = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -125,4 +125,4 @@ class VendorPaymentTermsFilter(FilterSet):
     
     class Meta:
         model = VendorPaymentTerms 
-        fields = ['name','code','fixed_days','no_of_fixed_days','payment_cycle','run_on','created_at','search', 'sort','page','limit']
+        fields = ['name','code','fixed_days','no_of_fixed_days','payment_cycle','run_on','created_at','s', 'sort','page','limit']

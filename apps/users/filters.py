@@ -17,7 +17,7 @@ class RolePermissionsFilter(filters.FilterSet):
 class RolesFilter(FilterSet):
     role_name = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -37,14 +37,14 @@ class RolesFilter(FilterSet):
     
     class Meta:
         model = Roles 
-        fields = ['role_name','description','created_at','search', 'sort','page','limit']
+        fields = ['role_name','description','created_at','s', 'sort','page','limit']
 
 class UserFilter(FilterSet):
     username = filters.CharFilter(lookup_expr='icontains')
     email = filters.CharFilter(lookup_expr='exact')
     mobile = filters.CharFilter(lookup_expr='exact')
     role = filters.CharFilter(field_name='role_id__role_name', lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -64,4 +64,4 @@ class UserFilter(FilterSet):
     
     class Meta:
         model = User 
-        fields = ['username','email','mobile','role','created_at','search', 'sort','page','limit']
+        fields = ['username','email','mobile','role','created_at','s', 'sort','page','limit']

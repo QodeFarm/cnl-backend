@@ -75,7 +75,7 @@ class AssetMaintenanceFilter(filters.FilterSet):
 
 class AssetStatusesFilter(FilterSet):
     status_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -95,7 +95,7 @@ class AssetStatusesFilter(FilterSet):
     
     class Meta:
         model = AssetStatuses 
-        fields = ['status_name','created_at','search', 'sort','page','limit']
+        fields = ['status_name','created_at','s', 'sort','page','limit']
 
 class AssetCategoriesFilter(FilterSet):
     category_name = filters.CharFilter(lookup_expr='icontains')

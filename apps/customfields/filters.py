@@ -20,7 +20,7 @@ class CustomFieldFilter(filters.FilterSet):
     entity_id = filters.CharFilter(field_name='entity_id__entity_name', lookup_expr='icontains')
     field_type_id = filters.CharFilter(field_name='field_type_id__field_type_name', lookup_expr='icontains')
     is_required = filters.BooleanFilter()
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -40,4 +40,4 @@ class CustomFieldFilter(filters.FilterSet):
     
     class Meta:
         model = CustomField 
-        fields = ['field_name','entity_id','field_type_id','is_required','created_at','search', 'sort','page','limit']
+        fields = ['field_name','entity_id','field_type_id','is_required','created_at','s', 'sort','page','limit']

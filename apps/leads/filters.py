@@ -49,7 +49,7 @@ class LeadsFilter(filters.FilterSet):
 
 class LeadStatusesFilter(FilterSet):
     status_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -69,11 +69,11 @@ class LeadStatusesFilter(FilterSet):
     
     class Meta:
         model = LeadStatuses 
-        fields = ['status_name','created_at','search', 'sort','page','limit']
+        fields = ['status_name','created_at','s', 'sort','page','limit']
 
 class InteractionTypesFilter(FilterSet):
     interaction_type = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s  = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -93,4 +93,4 @@ class InteractionTypesFilter(FilterSet):
     
     class Meta:
         model = InteractionTypes 
-        fields = ['interaction_type','created_at','search', 'sort','page','limit']
+        fields = ['interaction_type','created_at','s', 'sort','page','limit']

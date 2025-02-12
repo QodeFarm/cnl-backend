@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class ProductGroupsFilter(FilterSet):
     group_name = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -30,13 +30,13 @@ class ProductGroupsFilter(FilterSet):
     
     class Meta:
         model = ProductGroups 
-        fields = ['group_name','description','created_at','search', 'sort','page','limit']
+        fields = ['group_name','description','created_at','s', 'sort','page','limit']
 
 class ProductCategoriesFilter(FilterSet):
     category_id = filters.CharFilter(method='filter_uuid')
     category_name = filters.CharFilter(lookup_expr='icontains')
     code = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -56,14 +56,14 @@ class ProductCategoriesFilter(FilterSet):
     
     class Meta:
         model = ProductCategories 
-        fields = ['category_name','code','created_at','search', 'sort','page','limit']
+        fields = ['category_name','code','created_at','s', 'sort','page','limit']
 
 class ProductStockUnitsFilter(FilterSet):
     stock_unit_id = filters.CharFilter(method='filter_uuid')
     stock_unit_name = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
     quantity_code_id = CharFilter(field_name='quantity_code_id__quantity_code_name', lookup_expr='exact')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -83,14 +83,14 @@ class ProductStockUnitsFilter(FilterSet):
     
     class Meta:
         model = ProductStockUnits 
-        fields = ['stock_unit_name','quantity_code_id','description','created_at','search', 'sort','page','limit']
+        fields = ['stock_unit_name','quantity_code_id','description','created_at','s', 'sort','page','limit']
 
 class ProductGstClassificationsFilter(FilterSet):
     type = filters.ChoiceFilter(choices=ProductGstClassifications.TYPE_CHOICES, field_name='type')
     code = filters.CharFilter(lookup_expr='icontains')
     hsn_or_sac_code = filters.CharFilter(lookup_expr='icontains')
     hsn_description = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -110,7 +110,7 @@ class ProductGstClassificationsFilter(FilterSet):
     
     class Meta:
         model = ProductGstClassifications 
-        fields = ['type','code','hsn_or_sac_code','hsn_description','created_at','search', 'sort','page','limit']
+        fields = ['type','code','hsn_or_sac_code','hsn_description','created_at','s', 'sort','page','limit']
 
 class ProductSalesGlFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
@@ -124,7 +124,7 @@ class ProductSalesGlFilter(FilterSet):
     address = filters.CharFilter(lookup_expr='icontains')
     pan = filters.CharFilter(lookup_expr='exact')
     employee = filters.BooleanFilter()
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -144,7 +144,7 @@ class ProductSalesGlFilter(FilterSet):
     
     class Meta:
         model = ProductSalesGl 
-        fields = ['name','sales_accounts','code','inactive','type','account_no','is_loan_account','address','pan','rtgs_ifsc_code','employee','created_at','search', 'sort','page','limit']
+        fields = ['name','sales_accounts','code','inactive','type','account_no','is_loan_account','address','pan','rtgs_ifsc_code','employee','created_at','s', 'sort','page','limit']
 
 class ProductPurchaseGlFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
@@ -158,7 +158,7 @@ class ProductPurchaseGlFilter(FilterSet):
     address = filters.CharFilter(lookup_expr='icontains')
     pan = filters.CharFilter(lookup_expr='exact')
     employee = filters.BooleanFilter()
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -178,7 +178,7 @@ class ProductPurchaseGlFilter(FilterSet):
     
     class Meta:
         model = ProductPurchaseGl 
-        fields = ['name','purchase_accounts','code','inactive','type','account_no','is_loan_account','rtgs_ifsc_code','address','employee','pan','created_at','search', 'sort','page','limit']
+        fields = ['name','purchase_accounts','code','inactive','type','account_no','is_loan_account','rtgs_ifsc_code','address','employee','pan','created_at','s', 'sort','page','limit']
 
 class ProductsFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
@@ -253,7 +253,7 @@ class ProductItemBalanceFilter(FilterSet):
     product = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
     quantity = django_filters.NumberFilter(field_name='quantity', lookup_expr='exact')
     warehouse_location_id = filters.CharFilter(field_name='warehouse_location_id__location_name', lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -273,7 +273,7 @@ class ProductItemBalanceFilter(FilterSet):
 
     class Meta:
         model = ProductItemBalance
-        fields =['product','warehouse_location_id','quantity','created_at','search','sort','page','limit']
+        fields =['product','warehouse_location_id','quantity','created_at','s','sort','page','limit']
 
 class ProductVariationFilter(FilterSet):
     product_variation_id = filters.CharFilter(method=filter_uuid)
@@ -299,7 +299,7 @@ class SizeFilter(django_filters.FilterSet):
     width = django_filters.RangeFilter() 
     size_unit = django_filters.CharFilter(lookup_expr='icontains') 
     description = django_filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -320,11 +320,11 @@ class SizeFilter(django_filters.FilterSet):
 
     class Meta:
         model = Size
-        fields = ['size_name','size_category','size_system','length','height', 'width','size_unit','description', 'created_at','search','sort','page','limit']
+        fields = ['size_name','size_category','size_system','length','height', 'width','size_unit','description', 'created_at','s','sort','page','limit']
             
 class ColorFilter(FilterSet):
     color_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -344,4 +344,4 @@ class ColorFilter(FilterSet):
     
     class Meta:
         model = Color 
-        fields = ['color_name','created_at','search', 'sort','page','limit']
+        fields = ['color_name','created_at','s', 'sort','page','limit']

@@ -17,7 +17,7 @@ class LedgerAccountsFilters(filters.FilterSet):
     pan = filters.CharFilter(lookup_expr='exact')
     address = filters.CharFilter(lookup_expr='icontains')
     ledger_group_id = filters.CharFilter(field_name='ledger_group_id__name', lookup_expr='exact')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -37,7 +37,7 @@ class LedgerAccountsFilters(filters.FilterSet):
     
     class Meta:
         model = LedgerAccounts 
-        fields = ['name','code','inactive','type','account_no','is_loan_account','pan','address','ledger_group_id','created_at','search', 'sort','page','limit']
+        fields = ['name','code','inactive','type','account_no','is_loan_account','pan','address','ledger_group_id','created_at','s', 'sort','page','limit']
 
 class CustomerFilters(filters.FilterSet):
     identification = filters.CharFilter(lookup_expr='exact')
