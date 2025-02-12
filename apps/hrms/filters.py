@@ -22,7 +22,7 @@ class EmployeesFilter(filters.FilterSet):
     manager_id = filters.CharFilter(field_name='manager_id__first_name', lookup_expr='icontains')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -45,7 +45,7 @@ class EmployeesFilter(filters.FilterSet):
     class Meta:
         model = Employees
         #do not change "first_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['first_name','last_name','employee_id','email','phone','address','hire_date','job_type_id','designation_id','job_code_id','department_id','shift_id','manager_id','created_at','period_name','search','sort','page','limit']
+        fields =['hire_date','first_name','last_name','employee_id','email','phone','address','hire_date','job_type_id','designation_id','job_code_id','department_id','shift_id','manager_id','created_at','period_name','s','sort','page','limit']
 
 
 class EmployeeSalaryFilter(filters.FilterSet):
@@ -56,7 +56,7 @@ class EmployeeSalaryFilter(filters.FilterSet):
     employee_id = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -79,7 +79,7 @@ class EmployeeSalaryFilter(filters.FilterSet):
     class Meta:
         model = EmployeeSalary
         #do not change "salary_amount",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['salary_amount','salary_currency','salary_start_date','salary_end_date','employee_id','created_at','period_name','search','sort','page','limit']
+        fields =['salary_amount','salary_currency','salary_start_date','salary_end_date','employee_id','created_at','period_name','s','sort','page','limit']
 
 class EmployeeLeavesFilter(filters.FilterSet):
     start_date = filters.DateFilter()
@@ -91,7 +91,7 @@ class EmployeeLeavesFilter(filters.FilterSet):
     leave_type = filters.CharFilter(field_name='leave_type_id__leave_type_name', lookup_expr='icontains')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -114,7 +114,7 @@ class EmployeeLeavesFilter(filters.FilterSet):
     class Meta:
         model = EmployeeLeaves
         #do not change "start_date",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['employee','employee_id','leave_type','leave_type_id','start_date','end_date','comments','created_at','period_name','search','sort','page','limit']
+        fields =['employee','employee_id','leave_type','leave_type_id','start_date','end_date','comments','created_at','period_name','s','sort','page','limit']
 
 
 class LeaveApprovalsFilter(filters.FilterSet):
@@ -126,7 +126,7 @@ class LeaveApprovalsFilter(filters.FilterSet):
     approver_id = filters.CharFilter(method=filter_uuid)
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -149,7 +149,7 @@ class LeaveApprovalsFilter(filters.FilterSet):
     class Meta:
         model = LeaveApprovals
         #do not change "approval_date",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['created_at','approval_date','leave_id','approver','approver_id','period_name','search','page','limit']
+        fields =['created_at','approval_date','status_id','leave_id','approver','approver_id','period_name','s','page','limit']
 
 
 class EmployeeLeaveBalanceFilter(filters.FilterSet):
@@ -162,7 +162,7 @@ class EmployeeLeaveBalanceFilter(filters.FilterSet):
     year = filters.CharFilter(lookup_expr='icontains') 
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -185,7 +185,7 @@ class EmployeeLeaveBalanceFilter(filters.FilterSet):
     class Meta:
         model = EmployeeLeaveBalance
         #do not change "employee_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['employee_id','employee','leave_type_id','leave_type','leave_balance','leave_bal','year','created_at','period_name','search','sort','page','limit']
+        fields =['employee_id','employee','leave_type_id','leave_type','leave_balance','leave_bal','year','created_at','period_name','s','sort','page','limit']
 
 class EmployeeAttendanceFilter(filters.FilterSet):
     employee = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
@@ -226,7 +226,7 @@ class SwipesFilter(filters.FilterSet):
     swipe_time = DateFromToRangeFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -249,12 +249,12 @@ class SwipesFilter(filters.FilterSet):
     class Meta:
         model = Swipes
         #do not change "employee_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['employee_id','swipe_time','created_at','period_name','search','sort','page','limit']
+        fields =['employee_id','swipe_time','created_at','period_name','s','sort','page','limit']
 
 
 class JobTypesFilter(filters.FilterSet):
     job_type_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -274,12 +274,12 @@ class JobTypesFilter(filters.FilterSet):
     
     class Meta:
         model = JobTypes 
-        fields = ['job_type_name','created_at','search', 'sort','page','limit']
+        fields = ['job_type_name','created_at','s', 'sort','page','limit']
 
 class DesignationsFilter(filters.FilterSet):
     designation_name = filters.CharFilter(lookup_expr='icontains')
     responsibilities = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -299,12 +299,12 @@ class DesignationsFilter(filters.FilterSet):
     
     class Meta:
         model = Designations 
-        fields = ['designation_name','responsibilities','created_at','search', 'sort','page','limit']
+        fields = ['designation_name','responsibilities','created_at','s', 'sort','page','limit']
 
 
 class JobCodesFilter(filters.FilterSet):
     job_code = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -324,11 +324,11 @@ class JobCodesFilter(filters.FilterSet):
     
     class Meta:
         model = JobCodes 
-        fields = ['job_code','created_at','search', 'sort','page','limit']
+        fields = ['job_code','created_at','s', 'sort','page','limit']
 
 class DepartmentsFilter(filters.FilterSet):
     department_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -348,13 +348,13 @@ class DepartmentsFilter(filters.FilterSet):
     
     class Meta:
         model = Departments 
-        fields = ['department_name','created_at','search', 'sort','page','limit']
+        fields = ['department_name','created_at','s', 'sort','page','limit']
 
 class ShiftsFilter(filters.FilterSet):
     shift_name = filters.CharFilter(lookup_expr='icontains')
     start_time = filters.DateTimeFilter()
     end_time = filters.DateTimeFilter()
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -374,11 +374,11 @@ class ShiftsFilter(filters.FilterSet):
     
     class Meta:
         model = Shifts 
-        fields = ['shift_name','start_time','end_time','created_at','search', 'sort','page','limit']
+        fields = ['shift_name','start_time','end_time','created_at','s', 'sort','page','limit']
 
 class SalaryComponentsFilter(filters.FilterSet):
     component_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -398,13 +398,13 @@ class SalaryComponentsFilter(filters.FilterSet):
     
     class Meta:
         model = SalaryComponents 
-        fields = ['component_name','created_at','search', 'sort','page','limit']
+        fields = ['component_name','created_at','s', 'sort','page','limit']
 
 class EmployeeSalaryComponentsFilter(filters.FilterSet):
     component_id = filters.CharFilter(field_name='component_id__component_name', lookup_expr='icontains')
     component_amount = filters.RangeFilter()
     salary_id = filters.CharFilter(field_name='salary_id__salary_amount', lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -424,13 +424,13 @@ class EmployeeSalaryComponentsFilter(filters.FilterSet):
     
     class Meta:
         model = EmployeeSalaryComponents 
-        fields = ['component_id','component_amount','salary_id','created_at','search', 'sort','page','limit']
+        fields = ['component_id','component_amount','salary_id','created_at','s', 'sort','page','limit']
 
 class LeaveTypesFilter(filters.FilterSet):
     leave_type_name = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
     max_days_allowed = filters.NumberFilter()
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -450,4 +450,4 @@ class LeaveTypesFilter(filters.FilterSet):
     
     class Meta:
         model = LeaveTypes 
-        fields = ['leave_type_name','description','max_days_allowed','created_at','search', 'sort','page','limit']
+        fields = ['leave_type_name','description','max_days_allowed','created_at','s', 'sort','page','limit']

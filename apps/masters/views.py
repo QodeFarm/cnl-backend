@@ -261,7 +261,7 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
     serializer_class = ProductTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductTypesFilter
-    ordering_fields = ['type_name']
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductTypes,*args, **kwargs)
@@ -277,7 +277,7 @@ class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
     serializer_class = ProductUniqueQuantityCodesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductUniqueQuantityCodesFilter
-    ordering_fields = ['quantity_code_name']
+    ordering_fields = ['quantity_code_name','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductUniqueQuantityCodes,*args, **kwargs)
@@ -293,7 +293,7 @@ class UnitOptionsViewSet(viewsets.ModelViewSet):
     serializer_class = UnitOptionsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UnitOptionsFilter
-    ordering_fields = ['unit_name']
+    ordering_fields = ['unit_name','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, UnitOptions,*args, **kwargs)
@@ -325,7 +325,7 @@ class ProductItemTypeViewSet(viewsets.ModelViewSet):
     serializer_class = ProductItemTypeSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductItemTypeFilter
-    ordering_fields = ['item_name']
+    ordering_fields = ['item_name','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductItemType,*args, **kwargs)
@@ -357,7 +357,7 @@ class ProductBrandsViewSet(viewsets.ModelViewSet):
     serializer_class = ProductBrandsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductBrandsFilter
-    ordering_fields = ['brand_name','code','brand_salesman_id']
+    ordering_fields = ['brand_name','code','brand_salesman_id','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductBrands,*args, **kwargs)

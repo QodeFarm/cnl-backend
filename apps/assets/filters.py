@@ -15,7 +15,7 @@ class AssetsFilter(filters.FilterSet):
     price = DateFromToRangeFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -38,7 +38,7 @@ class AssetsFilter(filters.FilterSet):
     class Meta:
         model = Assets
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','price','purchase_date','asset_category_id','unit_options_id','asset_status_id','location_id','created_at','period_name','search','sort','page','limit']
+        fields =['name','price','purchase_date','asset_category_id','unit_options_id','asset_status_id','location_id','created_at','period_name','s','sort','page','limit']
 
 
 class AssetMaintenanceFilter(filters.FilterSet):
@@ -48,7 +48,7 @@ class AssetMaintenanceFilter(filters.FilterSet):
     cost = DateFromToRangeFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -71,11 +71,11 @@ class AssetMaintenanceFilter(filters.FilterSet):
     class Meta:
         model = AssetMaintenance
         #do not change "asset_id",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','search','sort','page','limit']
+        fields =['asset_id','maintenance_description','maintenance_date','cost','created_at','period_name','s','sort','page','limit']
 
 class AssetStatusesFilter(FilterSet):
     status_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -95,11 +95,11 @@ class AssetStatusesFilter(FilterSet):
     
     class Meta:
         model = AssetStatuses 
-        fields = ['status_name','created_at','search', 'sort','page','limit']
+        fields = ['status_name','created_at','s', 'sort','page','limit']
 
 class AssetCategoriesFilter(FilterSet):
     category_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -119,12 +119,12 @@ class AssetCategoriesFilter(FilterSet):
     
     class Meta:
         model = AssetCategories 
-        fields = ['category_name','created_at','search', 'sort','page','limit']
+        fields = ['category_name','created_at','s', 'sort','page','limit']
 
 class LocationsFilter(FilterSet):
     location_name = filters.CharFilter(lookup_expr='icontains')
     address = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -144,4 +144,4 @@ class LocationsFilter(FilterSet):
     
     class Meta:
         model = Locations 
-        fields = ['location_name','address','created_at','search', 'sort','page','limit']
+        fields = ['location_name','address','created_at','s', 'sort','page','limit']

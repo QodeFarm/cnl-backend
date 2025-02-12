@@ -29,7 +29,7 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
     serializer_class = ProductGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGroupsFilter
-    ordering_fields = ['group_name']
+    ordering_fields = ['group_name','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductGroups,*args, **kwargs)
@@ -45,7 +45,7 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
     serializer_class = ProductCategoriesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductCategoriesFilter
-    ordering_fields = ['category_name','code']
+    ordering_fields = ['category_name','code','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductCategories,*args, **kwargs)
@@ -77,7 +77,7 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
     serializer_class = ProductGstClassificationsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGstClassificationsFilter
-    ordering_fields = ['type','code','hsn_or_sac_code']
+    ordering_fields = ['type','code','hsn_or_sac_code','created_at']
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductGstClassifications,*args, **kwargs)
@@ -192,7 +192,7 @@ class ProductItemBalanceViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class SizeViewSet(viewsets.ModelViewSet):
-    queryset = Size.objects.all()
+    queryset = Size.objects.all().order_by('-created_at')	
     serializer_class = SizeSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = SizeFilter
@@ -208,7 +208,7 @@ class SizeViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)    
 
 class ColorViewSet(viewsets.ModelViewSet):
-    queryset = Color.objects.all()
+    queryset = Color.objects.all().order_by('-created_at')
     serializer_class = ColorSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ColorFilter

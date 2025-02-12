@@ -73,6 +73,8 @@ class ProductionStatusViewSet(viewsets.ModelViewSet):
 class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all().order_by('-created_at')
     serializer_class = WorkOrderSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = WorkOrderFilter
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

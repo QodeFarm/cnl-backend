@@ -17,7 +17,7 @@ class LedgerAccountsFilters(filters.FilterSet):
     pan = filters.CharFilter(lookup_expr='exact')
     address = filters.CharFilter(lookup_expr='icontains')
     ledger_group_id = filters.CharFilter(field_name='ledger_group_id__name', lookup_expr='exact')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -37,7 +37,7 @@ class LedgerAccountsFilters(filters.FilterSet):
     
     class Meta:
         model = LedgerAccounts 
-        fields = ['name','code','inactive','type','account_no','is_loan_account','pan','address','ledger_group_id','created_at','search', 'sort','page','limit']
+        fields = ['name','code','inactive','type','account_no','is_loan_account','pan','address','ledger_group_id','created_at','s', 'sort','page','limit']
 
 class CustomerFilters(filters.FilterSet):
     identification = filters.CharFilter(lookup_expr='exact')
@@ -52,7 +52,7 @@ class CustomerFilters(filters.FilterSet):
     gst = filters.CharFilter(lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -80,7 +80,7 @@ class CustomerFilters(filters.FilterSet):
     class Meta:
         model = Customer
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name','search','sort','page','limit']
+        fields = ['name','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name','s','sort','page','limit']
 
     
 class CustomerAttachmentsFilters(filters.FilterSet):

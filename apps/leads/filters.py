@@ -18,7 +18,7 @@ class LeadsFilter(filters.FilterSet):
     score = filters.NumberFilter()  
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="S")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -45,11 +45,11 @@ class LeadsFilter(filters.FilterSet):
     class Meta:
         model = Leads
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','phone','email','lead_status_id','lead_status','assignee_id','assignee','score','created_at','notes', 'interaction_date','period_name','search','sort','page','limit']
+        fields =['name','phone','email','lead_status_id','lead_status','assignee_id','assignee','score','created_at','notes', 'interaction_date','period_name','s','sort','page','limit']
 
 class LeadStatusesFilter(FilterSet):
     status_name = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -69,11 +69,11 @@ class LeadStatusesFilter(FilterSet):
     
     class Meta:
         model = LeadStatuses 
-        fields = ['status_name','created_at','search', 'sort','page','limit']
+        fields = ['status_name','created_at','s', 'sort','page','limit']
 
 class InteractionTypesFilter(FilterSet):
     interaction_type = filters.CharFilter(lookup_expr='icontains')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s  = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -93,4 +93,4 @@ class InteractionTypesFilter(FilterSet):
     
     class Meta:
         model = InteractionTypes 
-        fields = ['interaction_type','created_at','search', 'sort','page','limit']
+        fields = ['interaction_type','created_at','s', 'sort','page','limit']

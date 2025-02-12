@@ -16,7 +16,7 @@ class WarehousesFilter(filters.FilterSet):
     phone = filters.CharFilter(lookup_expr='exact')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -39,14 +39,14 @@ class WarehousesFilter(filters.FilterSet):
     class Meta:
         model = Warehouses
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','phone','city_id','state_id','created_at','period_name','search','sort','page','limit']
+        fields =['name','code','phone','city_id','state_id','created_at','period_name','s','sort','page','limit']
 
 class WarehouseLocationsFilter(filters.FilterSet):
     warehouse = filters.CharFilter(field_name='warehouse_id__name', lookup_expr='icontains')
     location_name = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
     created_at = DateFromToRangeFilter()
-    search = filters.CharFilter(method='filter_by_search', label="Search")
+    s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -66,4 +66,4 @@ class WarehouseLocationsFilter(filters.FilterSet):
     class Meta:
         model = WarehouseLocations
         #do not change "location_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['location_name','description','warehouse','created_at','search','sort','page','limit']
+        fields =['location_name','description','warehouse','created_at','s','sort','page','limit']

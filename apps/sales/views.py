@@ -2212,10 +2212,23 @@ class SaleCreditNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             print("try block is triggering")
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10))
+           
             queryset = SaleCreditNotes.objects.all().order_by('-created_at')
+           
+            # Apply filters manually
+            if request.query_params:
+                filterset = SaleCreditNotesFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs  
+ 
+            total_count = SaleCreditNotes.objects.count()
+   
             serializer = SaleCreditNoteSerializers(queryset, many=True)
             logger.info("salecreditnote data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -2443,10 +2456,23 @@ class SaleDebitNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             print("try block is triggering")
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10))
+            
             queryset = SaleDebitNotes.objects.all().order_by('-created_at')	
+            # Apply filters manually
+            if request.query_params:
+                filterset = SaleDebitNotesFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs  
+                    
+            total_count = SaleDebitNotes.objects.count()
+        
             serializer = SaleDebitNoteSerializers(queryset, many=True)
             logger.info("salecreditnote data retrieved successfully.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
