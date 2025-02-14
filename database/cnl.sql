@@ -2307,6 +2307,8 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
     journal_entry_line_id CHAR(36) PRIMARY KEY,
     journal_entry_id CHAR(36),
     account_id CHAR(36),
+    customer_id CHAR(36),
+    vendor_id CHAR(36),
     debit DECIMAL(15, 2) DEFAULT 0.00,
     credit DECIMAL(15, 2) DEFAULT 0.00,
     description VARCHAR(1024),
@@ -2314,6 +2316,9 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(journal_entry_id),
     FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id)
+    FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+    FOREIGN KEY (vendor_id) REFERENCES vendor(vendor_id)
+   
 );
 
 /*payment_transaction table

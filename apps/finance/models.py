@@ -3,6 +3,7 @@ import uuid
 from apps.hrms.models import Employees
 from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal
 from apps.customer.models import Customer, LedgerAccounts
+from apps.vendor.models import Vendor
 
 # Create your models here.
 
@@ -72,6 +73,7 @@ class JournalEntryLines(models.Model):
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     description = models.CharField(max_length=1024, default=None, null=True)
     customer_id  = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, db_column='customer_id')
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, db_column='vendor_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
