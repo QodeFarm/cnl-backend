@@ -1,6 +1,8 @@
 from rest_framework import serializers
+
+from apps.vendor.serializers import ModVendorSerializer
 from .models import  CustomField, CustomFieldOption, CustomFieldValue
-from apps.masters.serializers import ModFieldTypeSerializer, ModEntitiesSerializer
+from apps.masters.serializers import ModFieldTypeSerializer, ModEntitiesSerializer, ModOrderTypesSerializer
 
 
 class ModCustomFieldSerializer(serializers.ModelSerializer):
@@ -26,6 +28,7 @@ class CustomFieldValueSerializer(serializers.ModelSerializer):
     custom_field = ModCustomFieldSerializer(source='custom_field_id', read_only = True)
     entity = ModEntitiesSerializer(source='entity_id', read_only = True)
     entity_data = ModCustomFieldSerializer(source='customer_id', read_only = True)
+    vendor = ModVendorSerializer(source='vendor_id', read_only = True)
     class Meta:
         model = CustomFieldValue
         fields = '__all__'

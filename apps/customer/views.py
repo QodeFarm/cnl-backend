@@ -272,17 +272,17 @@ class CustomerCreateViews(APIView):
         else:
             addresses_error = []
             
-        # # Validate custom_field_values
-        # custom_fields_data = given_data.pop('custom_field_values', None)
-        # if custom_fields_data:
-        #     custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['entity_data_id'])
-        # else:
-        #     custom_fields_error = []
+        # Validate custom_field_values
+        custom_fields_data = given_data.get('custom_field_values', None)
+        if custom_fields_data:
+            custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['entity_data_id'])
+        else:
+            custom_fields_error = []
 
         # Check for mandatory fields
-        if not customer_data or not addresses_data:
-            logger.error("Customers and Customer Addresses are mandatory but not provided.")
-            return build_response(0, "Customers and Customer Addresses are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not customer_data or not addresses_data or not custom_fields_data :
+            logger.error("Customers, Customer Addresses and Custom Fields data are mandatory but not provided.")
+            return build_response(0, "Customers, Customer Addresses and Custom Fields dataare mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         # Collect validation errors
         errors = {}
@@ -292,8 +292,8 @@ class CustomerCreateViews(APIView):
             errors['customer_attachments'] = attachment_error
         if addresses_error:
             errors['customer_addresses'] = addresses_error
-        # if custom_fields_error:
-        #     errors['custom_field_values'] = custom_fields_error
+        if custom_fields_error:
+            errors['custom_field_values'] = custom_fields_error
         if errors:
             return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
 
