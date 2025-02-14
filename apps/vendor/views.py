@@ -7,6 +7,8 @@ from rest_framework import viewsets,status
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 
+from apps.customfields.models import CustomFieldValue
+from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorFilter, VendorPaymentTermsFilter
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
@@ -179,12 +181,16 @@ class VendorViewSet(APIView):
             # Retrieve related data
             attachments_data = self.get_related_data(VendorAttachment, VendorAttachmentSerializer, 'vendor_id', pk)
             addresses_data = self.get_related_data(VendorAddress, VendorAddressSerializer, 'vendor_id', pk)
+            
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'vendor_id', pk)
 
             # Customizing the response data
             custom_data = {
                 "vendor_data": vendor_serializer.data,
                 "vendor_attachments": attachments_data,
-                "vendor_addresses": addresses_data
+                "vendor_addresses": addresses_data,
+                "custom_field_values": custom_field_values_data  # Add custom field values
             }
             logger.info("Vendor and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -249,11 +255,11 @@ class VendorViewSet(APIView):
         # Vlidated Vendor Data
         vendors_data = given_data.pop('vendor_data', None)
         if vendors_data:            
-            # Check if 'picture' exists in customer_data and is a list
+            # Check if 'picture' exists in vendor_data and is a list
             picture_data = vendors_data.get('picture', None)
             if picture_data:
                 if not isinstance(picture_data, list):
-                    return build_response(0, "'picture' field in customer_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
+                    return build_response(0, "'picture' field in vendor_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
 
                 for attachment in picture_data:
                     if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
@@ -274,11 +280,16 @@ class VendorViewSet(APIView):
         vendor_addresses_data = given_data.pop('vendor_addresses', None)
         if vendor_addresses_data:
             addresses_error = validate_multiple_data(self, vendor_addresses_data,VendorAddressSerializer,['vendor_id'])
+            
+        # Vlidated Custom Fields Data
+        custom_fields_data = given_data.get('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data,CustomFieldValueSerializer,['vendor_id'])
 
         # Ensure mandatory data is present
-        if not vendors_data or not vendor_addresses_data:
-            logger.error("Vendor data and vendor addresses data are mandatory but not provided.")
-            return build_response(0, "Vendor and vendor addresses are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not vendors_data or not vendor_addresses_data or not custom_fields_data:
+            logger.error("Vendor data, vendor addresses data and Custom Fields data's are mandatory but not provided.")
+            return build_response(0, "Vendor, vendor addresses and Custom Fields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if vendors_error:
@@ -287,6 +298,8 @@ class VendorViewSet(APIView):
             errors["vendor_attachments"] = attachments_error
         if addresses_error:
             errors['vendor_addresses'] = addresses_error
+        if custom_error:
+            errors['custom_error'] = custom_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
 
@@ -314,11 +327,23 @@ class VendorViewSet(APIView):
         # Create VendorAddress Data
         addresses_data = generic_data_creation(self, vendor_addresses_data, VendorAddressSerializer, update_fields)
         logger.info('VendorAddress - created*')
+        
+        # Handle CustomFieldValues
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            # Link each custom field value to the new vendor
+            for custom_field in custom_fields_data:
+                custom_field['vendor_id'] = vendor_id  # Set the newly created vendor ID
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         custom_data = [
             {"vendor_data":new_vendor_data[0]},
             {"vendor_attachments":attachments_data},
-            {"vendor_addresses":addresses_data}
+            {"vendor_addresses":addresses_data},
+            {"custom_field_values": custom_fields_data}
         ]
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
@@ -353,6 +378,14 @@ class VendorViewSet(APIView):
         if vendor_addresses_data:
             exclude_fields = ['vendor_id']
             addresses_error = validate_put_method_data(self, vendor_addresses_data,VendorAddressSerializer, exclude_fields,VendorAddress, current_model_pk_field='vendor_address_id')
+            
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['vendor_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []  # Optional, so initialize as an empty list
 
         # Ensure mandatory data is present
         if not vendors_data or not vendor_addresses_data:
@@ -366,6 +399,8 @@ class VendorViewSet(APIView):
             errors["vendor_attachments"] = attachments_error
         if addresses_error:
             errors['vendor_addresses'] = addresses_error
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
@@ -382,11 +417,16 @@ class VendorViewSet(APIView):
 
         # Update VendorAddress Data
         addresses_data = update_multi_instances(self,pk, vendor_addresses_data,VendorAddress, VendorAddressSerializer, update_fields, main_model_related_field='vendor_id', current_model_pk_field='vendor_address_id')
+        
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='vendor_id', current_model_pk_field='custom_field_value_id')
 
         custom_data = [
             {"vendor_data":Vendor_data},
             {"vendor_attachments":attachments_data if attachments_data else []},
-            {"vendor_addresses":addresses_data if addresses_data else []}
+            {"vendor_addresses":addresses_data if addresses_data else []},
+            {"custom_field_values": custom_field_values_data if custom_field_values_data else []}  # Add custom field values to response
         ]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)

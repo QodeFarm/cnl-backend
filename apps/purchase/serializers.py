@@ -124,15 +124,49 @@ class PurchasePriceListSerializer(serializers.ModelSerializer):
 class PurchaseOrdersOptionsSerializer(serializers.ModelSerializer):
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
     purchase_type = ModPurchaseTypesSerializer(source='purchase_type_id', read_only=True)
+    amount = serializers.SerializerMethodField()
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
+    products = serializers.SerializerMethodField()
 
     class Meta:
         model = PurchaseOrders
-        fields = ['purchase_order_id', 'order_no', 'order_date', 'tax', 'tax_amount','total_amount', 'vendor', 'purchase_type', 'order_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['purchase_order_id', 'order_no', 'order_date', 'amount', 'products', 'tax', 'tax_amount','total_amount', 'vendor', 'purchase_type', 'order_status', 'remarks', 'created_at', 'updated_at']
  
     def get_purchase_orders_summary(purchase_orders):
         serializer = PurchaseOrdersOptionsSerializer(purchase_orders, many=True)
         return serializer.data
+    
+    def get_purchase_order_details(self, obj):
+        purchase_order_items = PurchaseorderItems.objects.filter(purchase_order_id=obj.purchase_order_id)
+        
+        amount = 0
+        
+        for purchaseorderamount in purchase_order_items:
+            item_amount = purchaseorderamount.amount
+            if item_amount is not None:
+                amount += item_amount
+        
+        return amount
+    
+    def get_amount(self, obj):
+        return self.get_purchase_order_details(obj)
+    
+    def get_products(self, obj):
+        # Fetch sale order items and their associated products
+        purchase_order_items = PurchaseorderItems.objects.filter(purchase_order_id=obj.purchase_order_id)
+        products = []
+        
+        for item in purchase_order_items:
+            product = item.product_id 
+            if product:
+                product_data = {
+                    "product_id": product.product_id,
+                    "product_name": product.name,
+                    "quantity": item.quantity,
+                }
+                products.append(product_data)
+        
+        return products
 
 class PurchaseReturnOrdersOptionsSerializer(serializers.ModelSerializer):
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
