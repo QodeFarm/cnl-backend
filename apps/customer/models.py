@@ -6,6 +6,7 @@ from django.db.models.signals import pre_delete
 from apps.masters.models import *
 from config.utils_methods import EncryptedTextField
 from config.utils_variables import *
+from config.utils_variables import customerattachmentstable, customeraddressestable, customerstable
 
 # Create your models here.
 
