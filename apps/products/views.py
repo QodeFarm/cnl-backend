@@ -245,16 +245,14 @@ class ProductViewSet(APIView):
     """
     API ViewSet for handling Lead creation and related data.
     """
-    def validate_sku(self,data):
-        # Extract the list of SKUs from the product variations
-        skus = [variation['sku'] for variation in data]
-
-        # Find duplicates by comparing the length of the set and the list
-        if len(skus) != len(set(skus)):
-            logger.error('Error: Duplicate SKU found in product variations.')
-            return False
-        else:
-            return True    
+    def validate_sku(self, data):
+        seen = set()
+        for variation in data:
+            sku = variation.get('sku')  # Get SKU, ignoring missing keys 
+            if sku in seen:
+                return build_response(0, f"Duplicate SKU found: {sku}", [], status.HTTP_400_BAD_REQUEST)
+            seen.add(sku)
+        return None  # No duplicates found, continue execution
 
     def get_object(self, pk):
         try:
@@ -373,16 +371,14 @@ class ProductViewSet(APIView):
         # Validate 'product_variations' data
         product_variations_data = given_data.pop('product_variations', None)
         if product_variations_data:
-            try:
-                mark = self.validate_sku(product_variations_data)
-                if mark==True:
-                    variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer, ['product_id'])
-                    if variations_error:
-                        errors["product_variations"] = variations_error
-                else:
-                    return  build_response(0, "ValidationError", [], status.HTTP_400_BAD_REQUEST,errors='Check Duplicate SKU is entered.')
-            except KeyError:
-                product_variations_data = None
+            sku_error = self.validate_sku(product_variations_data)
+            if sku_error is None:
+                variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer, ['product_id'])
+                if variations_error:
+                    errors["product_variations"] = variations_error
+            else:
+                return  sku_error
+
         # Validate product_item_balance Data
         product_item_balance_data = given_data.pop('product_item_balance', None)
         if product_item_balance_data:
@@ -458,15 +454,13 @@ class ProductViewSet(APIView):
         product_variations_data = given_data.pop('product_variations', None)
         if product_variations_data:
             mark = self.validate_sku(product_variations_data)
-            if mark==True:
-                variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer, ['product_id','sku'])
+
+            if mark is None:
+                variations_error = validate_put_method_data(self, product_variations_data, ProductVariationSerializer, ['product_id'],ProductVariation,'product_variation_id')
                 if variations_error:
                     errors["product_variations"] = variations_error
             else:
-                return  build_response(0, "ValidationError", [], status.HTTP_400_BAD_REQUEST,errors='Check Duplicate SKU is entered.')            
-            variations_error = validate_multiple_data(self, product_variations_data, ProductVariationSerializer,['sku','product_id'])
-            if variations_error:
-                errors["product_variations"] = variations_error
+                return mark # A duplicate SKU was found, return the error response
 
         # Validate 'product_item_balance' Data
         product_balance_data = given_data.pop('product_item_balance', None)
