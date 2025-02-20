@@ -167,7 +167,7 @@ class CustomerCreateViews(APIView):
             addresses_data = self.get_related_data(CustomerAddresses, CustomerAddressesSerializers, 'customer_id', pk)
             
             # Retrieve custom field values
-            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'entity_data_id', pk)
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
 
 
             # Customizing the response data
@@ -209,13 +209,13 @@ class CustomerCreateViews(APIView):
         try:
             # Get the Customer instance
             instance = Customer.objects.get(pk=pk)
-
+            update_field = {'custom_id': 'customer_id'}
             # Delete related CustomerAttachments and CustomerAddresses
             if not delete_multi_instance(pk, Customer, CustomerAttachments, main_model_field_name='customer_id'):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, Customer, CustomerAddresses, main_model_field_name='customer_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, Customer, CustomFieldValue, main_model_field_name='entity_data_id'):
+            if not delete_multi_instance(pk, Customer, CustomFieldValue, main_model_field_name='custom_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main Customer instance
@@ -275,7 +275,7 @@ class CustomerCreateViews(APIView):
         # Validate custom_field_values
         custom_fields_data = given_data.get('custom_field_values', None)
         if custom_fields_data:
-            custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['entity_data_id'])
+            custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
         else:
             custom_fields_error = []
 
@@ -319,7 +319,7 @@ class CustomerCreateViews(APIView):
         if custom_fields_data:
             # Link each custom field value to the new customer
             for custom_field in custom_fields_data:
-                custom_field['entity_data_id'] = customer_id  # Set the newly created customer ID
+                custom_field['custom_id'] = customer_id  # Set the newly created customer ID
             custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer)
             logger.info('CustomFieldValues - created*')
         else:
@@ -336,167 +336,6 @@ class CustomerCreateViews(APIView):
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
     
-    # def create(self, request, *args, **kwargs):
-    #     given_data = request.data
-    #     print("Given data:", given_data)
-
-    #     # Extract customer_data from the request
-    #     customer_data = given_data.pop('customer_data', None)
-
-    #     # Validate customer_data
-    #     if customer_data:
-    #         picture_data = customer_data.get('picture', None)
-    #         if picture_data:
-    #             if not isinstance(picture_data, list):
-    #                 return build_response(0, "'picture' field in customer_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
-
-    #             for attachment in picture_data:
-    #                 if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
-    #                     return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
-            
-    #         # Validate customer data with serializer
-    #         customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
-    #     else:
-    #         customer_error = ["customer_data is required."]
-
-    #     if not customer_data:
-    #         logger.error("Customers are mandatory but not provided.")
-    #         return build_response(0, "Customers are mandatory", [], status.HTTP_400_BAD_REQUEST)
-
-    #     errors = {}
-    #     if customer_error:
-    #         errors["customer_data"] = customer_error
-    #     if errors:
-    #         return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
-
-    #     # Create Customer Data
-    #     new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer)
-    #     customer_id = new_customer_data[0].get("customer_id", None)
-    #     logger.info('Customer - created*')
-
-    #     # Process CustomerAttachments, CustomerAddresses
-    #     attachments_data = given_data.pop('customer_attachments', [])
-    #     addresses_data = given_data.pop('customer_addresses', [])
-
-    #     # Create Attachments and Addresses
-    #     if attachments_data:
-    #         update_fields = {'customer_id': customer_id}
-    #         attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields)
-    #         logger.info('CustomerAttachments - created*')
-    #     else:
-    #         attachments_data = []
-
-    #     if addresses_data:
-    #         update_fields = {'customer_id': customer_id}
-    #         addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields)
-    #         logger.info('CustomerAddresses - created*')
-    #     else:
-    #         addresses_data = []
-
-    #     # Now handle CustomFieldValues
-    #     custom_fields_data = given_data.pop('custom_field_values', None)
-    #     if custom_fields_data:
-    #         # Link each custom field value to the new customer
-    #         for custom_field in custom_fields_data:
-    #             custom_field['entity_data_id'] = customer_id  # Set the newly created customer ID
-    #         custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer)
-    #         logger.info('CustomFieldValues - created*')
-    #     else:
-    #         custom_fields_data = []
-
-    #     # Build the response with all created data
-    #     custom_data = [
-    #         {"customer_data": new_customer_data[0]},
-    #         {"customer_attachments": attachments_data},
-    #         {"customer_addresses": addresses_data},
-    #         {"custom_field_values": custom_fields_data}
-    #     ]
-
-    #     return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-
-
-    
-    # def create(self, request, *args, **kwargs):
-    #     given_data = request.data
-    #     print("Given data:", given_data)
-
-    #     # Extract customer_data from the request
-    #     customer_data = given_data.pop('customer_data', None)
-
-    #     # Validate customer_data
-    #     if customer_data:
-    #         # Check if 'picture' exists in customer_data and is a list
-    #         picture_data = customer_data.get('picture', None)
-    #         if picture_data:
-    #             if not isinstance(picture_data, list):
-    #                 return build_response(0, "'picture' field in customer_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
-
-    #             for attachment in picture_data:
-    #                 if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
-    #                     return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
-            
-    #         # Validate the rest of customer_data
-    #         customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
-    #     else:
-    #         customer_error = ["customer_data is required."]
-
-    #     # Validate customer_attachments
-    #     attachments_data = given_data.pop('customer_attachments', None)
-    #     if attachments_data:
-    #         attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers, ['customer_id'])
-    #     else:
-    #         attachment_error = []
-
-    #     # Validate customer_addresses
-    #     addresses_data = given_data.pop('customer_addresses', None)
-    #     if addresses_data:
-    #         addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers, ['customer_id'])
-    #     else:
-    #         addresses_error = []
-
-    #     if not customer_data or not addresses_data:
-    #         logger.error("Customers and Customer Addresses are mandatory but not provided.")
-    #         return build_response(0, "Customers and Customer Addresses are mandatory", [], status.HTTP_400_BAD_REQUEST)
-
-    #     errors = {}
-    #     if customer_error:
-    #         errors["customer_data"] = customer_error
-    #     if attachment_error:
-    #         errors['customer_attachments'] = attachment_error
-    #     if addresses_error:
-    #         errors['customer_addresses'] = addresses_error
-    #     if errors:
-    #         return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
-
-    #     # Create Customer Data
-    #     new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer)
-    #     customer_id = new_customer_data[0].get("customer_id", None)
-    #     logger.info('Customer - created*')
-
-    #     # Create CustomerAttachment Data
-    #     update_fields = {'customer_id': customer_id}
-    #     if attachments_data:
-    #         attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields)
-    #         logger.info('CustomerAttachments - created*')
-    #     else:
-    #         attachments_data = []
-
-    #     # Create CustomerAddress Data
-    #     update_fields = {'customer_id': customer_id}
-    #     addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields)
-    #     logger.info('CustomerAddress - created*')
-
-    #     # Build the response with customer_data including picture
-    #     custom_data = [
-    #         {"customer_data": new_customer_data[0]},
-    #         {"customer_attachments": attachments_data},
-    #         {"customer_addresses": addresses_data}
-    #     ]
-
-    #     return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-
-
-
     def put(self, request, pk, *args, **kwargs):
 
             #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
