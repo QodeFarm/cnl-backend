@@ -13,7 +13,7 @@ from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorF
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorsOptionsSerializer
-from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
+from config.utils_methods import delete_multi_instance, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
@@ -183,7 +183,7 @@ class VendorViewSet(APIView):
             addresses_data = self.get_related_data(VendorAddress, VendorAddressSerializer, 'vendor_id', pk)
             
             # Retrieve custom field values
-            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'vendor_id', pk)
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
 
             # Customizing the response data
             custom_data = {
@@ -223,6 +223,14 @@ class VendorViewSet(APIView):
         try:
             # Get the vendor instance
             instance = Vendor.objects.get(pk=pk)
+            
+            # Delete related CustomerAttachments and CustomerAddresses
+            if not delete_multi_instance(pk, Vendor, VendorAttachment, main_model_field_name='vendor_id'):
+                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, Vendor, VendorAddress, main_model_field_name='vendor_id'):
+                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, Vendor, CustomFieldValue, main_model_field_name='custom_id'):
+                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main vendor instance
             instance.delete()
@@ -240,56 +248,44 @@ class VendorViewSet(APIView):
     def post(self, request, *args, **kwargs):   #To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
         return self.create(request, *args, **kwargs)
     
+    @transaction.atomic    
     def create(self, request, *args, **kwargs):
-        # Extracting data from the request
         given_data = request.data
 
         #---------------------- D A T A   V A L I D A T I O N ----------------------------------#
-        """
-        All the data in request will be validated here. it will handle the following errors:
-        - Invalid data types
-        - Invalid foreign keys
-        - nulls in required fields
-        """
-
-        # Vlidated Vendor Data
+        
+        # Extract and Validate Vendor Data
         vendors_data = given_data.pop('vendor_data', None)
         if vendors_data:            
-            # Check if 'picture' exists in vendor_data and is a list
-            picture_data = vendors_data.get('picture', None)
-            if picture_data:
-                if not isinstance(picture_data, list):
-                    return build_response(0, "'picture' field in vendor_data must be a list.", [], status.HTTP_400_BAD_REQUEST)
-
-                for attachment in picture_data:
-                    if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
-                        return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
-            
-            vendors_error = validate_payload_data(self, vendors_data , VendorSerializer)
+            vendors_error = validate_payload_data(self, vendors_data, VendorSerializer)
         else:
             vendors_error = ["vendors_data is required."]
 
-        # Vlidated VendorAttachment Data
+        # Validate Vendor Attachments
         vendor_attachments_data = given_data.pop('vendor_attachments', None)
         if vendor_attachments_data:
-            attachments_error = validate_multiple_data(self, vendor_attachments_data,VendorAttachmentSerializer,['vendor_id'])
+            attachments_error = validate_multiple_data(self, vendor_attachments_data, VendorAttachmentSerializer, ['vendor_id'])
         else:
-            attachments_error = [] # Since 'VendorAttachment' is optional, so making an error is empty list
+            attachments_error = []
 
-        # Vlidated VendorAttachment Data
+        # Validate Vendor Addresses
         vendor_addresses_data = given_data.pop('vendor_addresses', None)
         if vendor_addresses_data:
-            addresses_error = validate_multiple_data(self, vendor_addresses_data,VendorAddressSerializer,['vendor_id'])
-            
-        # Vlidated Custom Fields Data
-        custom_fields_data = given_data.get('custom_field_values', None)
+            addresses_error = validate_multiple_data(self, vendor_addresses_data, VendorAddressSerializer, ['vendor_id'])
+        else:
+            addresses_error = []
+
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
         if custom_fields_data:
-            custom_error = validate_multiple_data(self, custom_fields_data,CustomFieldValueSerializer,['vendor_id'])
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
 
         # Ensure mandatory data is present
         if not vendors_data or not vendor_addresses_data or not custom_fields_data:
-            logger.error("Vendor data, vendor addresses data and Custom Fields data's are mandatory but not provided.")
-            return build_response(0, "Vendor, vendor addresses and Custom Fields are mandatory", [], status.HTTP_400_BAD_REQUEST)
+            logger.error("Vendor data, vendor addresses data, and Custom Fields data are mandatory but not provided.")
+            return build_response(0, "Vendor, vendor addresses, and Custom Fields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if vendors_error:
@@ -299,54 +295,46 @@ class VendorViewSet(APIView):
         if addresses_error:
             errors['vendor_addresses'] = addresses_error
         if custom_error:
-            errors['custom_error'] = custom_error
+            errors['custom_field_values'] = custom_error
         if errors:
-            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
         #---------------------- D A T A   C R E A T I O N ----------------------------#
-        """
-        After the data is validated, this validated data is created as new instances.
-        """
-            
-        # Hence the data is validated , further it can be created.
-
+        
         # Create Vendor Data
         new_vendor_data = generic_data_creation(self, [vendors_data], VendorSerializer)
-        vendor_id = new_vendor_data[0].get("vendor_id",None) #Fetch vendor_id from mew instance
-        logger.info('Vendor - created*')     
+        vendor_id = new_vendor_data[0].get("vendor_id", None)  # Fetch vendor_id from new instance
+        logger.info('Vendor - created*')
 
-        # Create VendorAttachment Data
-        update_fields = {'vendor_id':vendor_id}
+        # Create Vendor Attachments
+        update_fields = {'vendor_id': vendor_id}
         if vendor_attachments_data:
             attachments_data = generic_data_creation(self, vendor_attachments_data, VendorAttachmentSerializer, update_fields)
             logger.info('VendorAttachment - created*')
         else:
-            # Since VendorAttachment Data is optional, so making it as an empty data list
             attachments_data = []
 
-        # Create VendorAddress Data
+        # Create Vendor Addresses
         addresses_data = generic_data_creation(self, vendor_addresses_data, VendorAddressSerializer, update_fields)
         logger.info('VendorAddress - created*')
-        
-        # Handle CustomFieldValues
-        custom_fields_data = given_data.pop('custom_field_values', None)
+
+        # Assign `custom_id = vendor_id` for CustomFieldValues
         if custom_fields_data:
-            # Link each custom field value to the new vendor
-            for custom_field in custom_fields_data:
-                custom_field['vendor_id'] = vendor_id  # Set the newly created vendor ID
-            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer)
+            update_fields = {'custom_id': vendor_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
             logger.info('CustomFieldValues - created*')
         else:
             custom_fields_data = []
 
-        custom_data = [
-            {"vendor_data":new_vendor_data[0]},
-            {"vendor_attachments":attachments_data},
-            {"vendor_addresses":addresses_data},
-            {"custom_field_values": custom_fields_data}
-        ]
+        custom_data = {
+            "vendor_data": new_vendor_data[0],
+            "vendor_attachments": attachments_data,
+            "vendor_addresses": addresses_data,
+            "custom_field_values": custom_fields_data
+        }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
 
     def put(self, request, pk, *args, **kwargs):
 
@@ -382,7 +370,7 @@ class VendorViewSet(APIView):
         # Validated CustomFieldValues Data
         custom_field_values_data = given_data.pop('custom_field_values', None)
         if custom_field_values_data:
-            exclude_fields = ['vendor_id']
+            exclude_fields = ['custom_id']
             custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
         else:
             custom_field_values_error = []  # Optional, so initialize as an empty list
