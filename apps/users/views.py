@@ -413,11 +413,12 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
                 'data': [serializer.data]
             }, status=status.HTTP_200_OK)
         except ValidationError as e:
-            return Response({
-                'count': '1',
-                'msg': 'User update failed due to validation errors.',
-                'data': [e.detail]
-            }, status=status.HTTP_400_BAD_REQUEST)
+            return build_response(0,'Form validation failed', [], status.HTTP_400_BAD_REQUEST, e.detail)
+            # return Response({
+            #     'count': '1',
+            #     'msg': 'User update failed due to validation errors.',
+            #     'data': [e.detail]
+            # }, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({'msg': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
