@@ -5,7 +5,71 @@ from django.conf import settings
 query = {
 "Sales_Over_the_Last_12_Months" : "SELECT DATE_FORMAT(sio.invoice_date, '%M-%Y') AS month_year, SUM(sio.total_amount) AS total_sales FROM sale_invoice_orders sio WHERE sio.invoice_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) GROUP BY YEAR(sio.invoice_date), MONTH(sio.invoice_date) ORDER BY YEAR(sio.invoice_date), MONTH(sio.invoice_date);",
 
+"Compare_weekly_sales_and_growth" : """WITH weekly_sales AS (
+    -- Current week sales
+    SELECT 
+        SUM(total_amount) as current_week_sales,
+        SUM(CASE 
+            WHEN invoice_date >= DATE_SUB(DATE(NOW()), INTERVAL WEEKDAY(NOW()) DAY) 
+                 AND invoice_date <= NOW() 
+            THEN total_amount 
+            ELSE 0 
+        END) as current_week_total,
+        -- Last week sales
+        SUM(CASE 
+            WHEN invoice_date >= DATE_SUB(DATE(NOW()), INTERVAL WEEKDAY(NOW()) + 7 DAY) 
+                 AND invoice_date < DATE_SUB(DATE(NOW()), INTERVAL WEEKDAY(NOW()) DAY) 
+            THEN total_amount 
+            ELSE 0 
+        END) as last_week_total
+    FROM sale_invoice_orders
+    WHERE invoice_date >= DATE_SUB(DATE(NOW()), INTERVAL 14 DAY) -- Limit to last 2 weeks for performance
+)
+SELECT 
+    current_week_total as current_week_sales,
+    last_week_total as last_week_sales,
+    ROUND(
+        CASE 
+            WHEN last_week_total = 0 THEN NULL
+            ELSE ((current_week_total - last_week_total) / last_week_total * 100)
+        END, 
+        2
+    ) as percentage_change
+FROM weekly_sales;""",
+
 "Purchase_Over_the_Last_12_Months" : "SELECT DATE_FORMAT(invoice_date, '%M-%Y') AS month_year, SUM(total_amount) AS monthly_purchases FROM purchase_invoice_orders WHERE invoice_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) GROUP BY YEAR(invoice_date), MONTH(invoice_date) ORDER BY YEAR(invoice_date), MONTH(invoice_date);", 
+
+"Compare_weekly_purchase_and_growth" : """WITH weekly_purchases AS (
+    -- Current week purchases
+    SELECT 
+        SUM(total_amount) as current_week_purchases,
+        SUM(CASE 
+            WHEN invoice_date >= DATE_SUB(DATE(NOW()), INTERVAL WEEKDAY(NOW()) DAY) 
+                 AND invoice_date <= NOW() 
+            THEN total_amount 
+            ELSE 0 
+        END) as current_week_total,
+        -- Last week purchases
+        SUM(CASE 
+            WHEN invoice_date >= DATE_SUB(DATE(NOW()), INTERVAL WEEKDAY(NOW()) + 7 DAY) 
+                 AND invoice_date < DATE_SUB(DATE(NOW()), INTERVAL WEEKDAY(NOW()) DAY) 
+            THEN total_amount 
+            ELSE 0 
+        END) as last_week_total
+    FROM purchase_invoice_orders
+    WHERE invoice_date >= DATE_SUB(DATE(NOW()), INTERVAL 14 DAY) -- Limit to last 2 weeks for performance
+)
+SELECT 
+    current_week_total as current_week_purchases,
+    last_week_total as last_week_purchases,
+    ROUND(
+        CASE 
+            WHEN last_week_total = 0 THEN NULL
+            ELSE ((current_week_total - last_week_total) / last_week_total * 100)
+        END, 
+        2
+    ) as percentage_purchase_change
+FROM weekly_purchases;""",
 
 "Top_5_Itmes_Sold_In_Last_30_Days" : "SELECT p.name AS product_name, SUM(i.quantity) AS total_sold_quantity FROM sale_invoice_items i JOIN products p ON i.product_id = p.product_id WHERE i.created_at >= DATE_SUB(CURDATE(), INTERVAL 300 DAY) GROUP BY i.product_id, p.name ORDER BY total_sold_quantity DESC LIMIT 5;",
 
