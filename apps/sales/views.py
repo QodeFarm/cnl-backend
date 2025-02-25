@@ -23,10 +23,10 @@ from config.utils_methods import previous_product_instance_verification, product
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
 from django.apps import apps
-
-
 from datetime import datetime, timedelta
 from config.utils_methods import workflow_progression_dict 
+
+
 workflow_progression_dict = {}
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
@@ -53,18 +53,18 @@ class SaleOrderView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 
-class PaymentTransactionsView(viewsets.ModelViewSet):
-    queryset = PaymentTransactions.objects.all()
-    serializer_class = PaymentTransactionsSerializer
+# class PaymentTransactionsView(viewsets.ModelViewSet):
+#     queryset = PaymentTransactions.objects.all()
+#     serializer_class = PaymentTransactionsSerializer
 
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
+#     def list(self, request, *args, **kwargs):
+#         return list_all_objects(self, request, *args, **kwargs)
 
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
+#     def create(self, request, *args, **kwargs):
+#         return create_instance(self, request, *args, **kwargs)
 
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
+#     def update(self, request, *args, **kwargs):
+#         return update_instance(self, request, *args, **kwargs)
 
 
 class SaleInvoiceItemsView(viewsets.ModelViewSet):
@@ -2786,3 +2786,23 @@ class MoveToNextStageGenericView(APIView):
         except LookupError:
             print(f"Model {module_name} not found.")
             return None
+
+
+# APIView for handling PaymentTransaction creation
+class PaymentTransactionAPIView(APIView):
+    """
+    API endpoint to create a new PaymentTransaction record.
+    """
+
+    def post(self, request):
+        """
+        Handle POST request to create a new payment transaction.
+        """
+        data=request.data
+        print(request.data.get('amount'))
+        #data.append({'outstanding_amount': request.user.id})
+        serializer = PaymentTransactionSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, "Payment transaction created successfully", serializer.data, status.HTTP_201_CREATED)
+        return build_response(1, "Payment transaction Failed", serializer.errors, status.HTTP_400_BAD_REQUEST)

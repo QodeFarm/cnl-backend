@@ -10,7 +10,7 @@ router.register(r'sale_order_search', SaleOrderView)
 router.register(r'sales_price_list', SalesPriceListView)
 router.register(r'sale_order_items', SaleOrderItemsView)
 router.register(r'sale_invoice_order_get',SaleInvoiceOrdersView)
-router.register(r'payment_transactions', PaymentTransactionsView)
+# router.register(r'payment_transactions', PaymentTransactionsView)
 router.register(r'sale_invoice_items', SaleInvoiceItemsView)
 router.register(r'sale_return_orders_get', SaleReturnOrdersView)
 router.register(r'sale_return_items', SaleReturnItemsView)
@@ -45,6 +45,6 @@ urlpatterns = [
     path('sale_credit_notes/', SaleCreditNoteViewset.as_view(), name='sale-credit-notes-list-create'),
     path('sale_credit_notes/<str:pk>/', SaleCreditNoteViewset.as_view(), name='sale-credit-notes-detail-update-delete-patch'),
     path('sale_debit_notes/', SaleDebitNoteViewset.as_view(), name='sale-debit-notes-list-create'),
-    path('sale_debit_notes/<str:pk>/', SaleDebitNoteViewset.as_view(), name='sale-debit-notes-detail-update-delete-patch')
-
-]
+    path('sale_debit_notes/<str:pk>/', SaleDebitNoteViewset.as_view(), name='sale-debit-notes-detail-update-delete-patch'),
+    path('payment_transactions/', PaymentTransactionAPIView.as_view(),name='payment-transaction-create')
+]      

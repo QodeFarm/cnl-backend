@@ -1,3 +1,4 @@
+from datetime import datetime
 from rest_framework import serializers
 from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
 from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers, ModFlowstatusSerializer
@@ -60,12 +61,12 @@ class SaleOrderSerializer(serializers.ModelSerializer):
         model = SaleOrder
         fields = '__all__'
         
-class PaymentTransactionsSerializer(serializers.ModelSerializer):
-    invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+# class PaymentTransactionsSerializer(serializers.ModelSerializer):
+#     invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
     
-    class Meta:
-        model = PaymentTransactions
-        fields = '__all__'
+#     class Meta:
+#         model = PaymentTransactions
+#         fields = '__all__'
 
 class SaleInvoiceItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
@@ -337,3 +338,10 @@ class SaleDebitNoteItemsSerializers(serializers.ModelSerializer):
     class Meta:
         model = SaleDebitNoteItems
         fields = '__all__'
+
+
+# Serializer for PaymentTransaction
+class PaymentTransactionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentTransactions
+        fields = ['payment_receipt_no', 'payment_date', 'payment_method', 'cheque_no', 'amount', 'payment_status', 'sale_invoice', 'customer']
