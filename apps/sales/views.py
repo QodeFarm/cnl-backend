@@ -2792,6 +2792,23 @@ class MoveToNextStageGenericView(APIView):
 class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
+    customer_id = request.data.get('customer')
+        invoice_id = request.data.get('sale_invoice', None)
+
+        if not customer_id:
+            return Response({"error": "customer_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        print("===>>",customer_id,"===>",invoice_id)
+        invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id)
+        if invoice_id:
+            invoices = invoices.filter(sale_invoice_id=invoice_id)
+
+        # Order by invoice_no in descending order
+        invoices = invoices.order_by('-invoice_no')
+
+        serializer = SaleInvoiceOrdersSerializer(invoices, many=True)
+
+        print("===>>",serializer.data)
     """
 
     def post(self, request):
@@ -2799,10 +2816,30 @@ class PaymentTransactionAPIView(APIView):
         Handle POST request to create a new payment transaction.
         """
         data=request.data
-        print(request.data.get('amount'))
-        #data.append({'outstanding_amount': request.user.id})
-        serializer = PaymentTransactionSerializer(data=data)
+        customer_id = request.data.get('customer')
+
+        if customer_id:
+            sales_invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).order_by('invoice_date')
+            # invoice_data_list = list(sales_invoices.values( 'sale_invoice_id','sale_order_id', 'invoice_date', 'invoice_no', 'customer_id',  
+            #                                             'ledger_account_id', 'total_amount', 'order_status_id'))
+            
+            pending_status = OrderStatuses.objects.filter(status_name="Pending").values_list("order_status_id", flat=True).first()
+
+            pending_orders = sales_invoices.filter(order_status_id=pending_status)
+            invoice_data_list = list(pending_orders.values('sale_invoice_id','sale_order_id', 'invoice_date', 'invoice_no', 'customer_id',  
+                                                        'ledger_account_id', 'total_amount', 'order_status_id'))
+        
+
+        serializer = PaymentTransactionSerializer(data=data)        
         if serializer.is_valid():
-            serializer.save()
-            return build_response(1, "Payment transaction created successfully", serializer.data, status.HTTP_201_CREATED)
+            payment_transaction = serializer.save()
+            serializer.data.update({'outstanding_amount': payment_transaction.outstanding_amount, "transaction_id": payment_transaction.transaction_id})
+
+            response_data = {
+            "payment_transaction": serializer.data,
+            "sales_invoices_data": invoice_data_list,
+            #"sales_invoices": invoice_data_list[0].get('sale_invoice_id')
+            }
+            
+            return build_response(1, "Payment transaction created successfully", response_data, status.HTTP_201_CREATED)
         return build_response(1, "Payment transaction Failed", serializer.errors, status.HTTP_400_BAD_REQUEST)

@@ -1371,6 +1371,7 @@ CREATE TABLE `payment_transactions` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `sale_invoice_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   `customer_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  'invoice_no' VARCHAR(20),
   PRIMARY KEY (`transaction_id`),
   KEY `fk_payment_transactions_sale_invoice` (`sale_invoice_id`),
   KEY `fk_payment_transactions_customer` (`customer_id`),

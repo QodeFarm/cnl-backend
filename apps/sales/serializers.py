@@ -342,6 +342,8 @@ class SaleDebitNoteItemsSerializers(serializers.ModelSerializer):
 
 # Serializer for PaymentTransaction
 class PaymentTransactionSerializer(serializers.ModelSerializer):
+    # transaction_id = serializers.UUIDField(read_only=True)  # Include transaction_id
+    # outstanding_amount = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)  # Include outstanding_amount
     class Meta:
         model = PaymentTransactions
-        fields = ['payment_receipt_no', 'payment_date', 'payment_method', 'cheque_no', 'amount', 'payment_status', 'sale_invoice', 'customer']
+        fields = ['transaction_id','payment_receipt_no', 'payment_date', 'payment_method', 'cheque_no', 'amount', 'payment_status', 'customer', 'outstanding_amount', 'sale_invoice','invoice_no'] 
