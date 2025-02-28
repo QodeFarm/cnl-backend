@@ -2789,7 +2789,7 @@ class MoveToNextStageGenericView(APIView):
 
 from django.db.models import F, Sum
 from django.db.models.functions import Coalesce
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import uuid
 from rest_framework import status
 from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses, Customer
@@ -2800,58 +2800,7 @@ from decimal import Decimal
 class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
-    customer_id = request.data.get('customer')
-        invoice_id = request.data.get('sale_invoice', None)
-
-        if not customer_id:
-            return Response({"error": "customer_id is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        print("===>>",customer_id,"===>",invoice_id)
-        invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id)
-        if invoice_id:
-            invoices = invoices.filter(sale_invoice_id=invoice_id)
-
-        # Order by invoice_no in descending order
-        invoices = invoices.order_by('-invoice_no')
-
-        serializer = SaleInvoiceOrdersSerializer(invoices, many=True)
-
-        print("===>>",serializer.data)
     """
-
-    # def post(self, request):
-    #     """
-    #     Handle POST request to create a new payment transaction.
-    #     """
-    #     data=request.data
-    #     customer_id = request.data.get('customer')
-
-    #     if customer_id:
-    #         sales_invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).order_by('invoice_date')
-    #         # invoice_data_list = list(sales_invoices.values( 'sale_invoice_id','sale_order_id', 'invoice_date', 'invoice_no', 'customer_id',  
-    #         #                                             'ledger_account_id', 'total_amount', 'order_status_id'))
-            
-    #         pending_status = OrderStatuses.objects.filter(status_name="Pending").values_list("order_status_id", flat=True).first()
-
-    #         pending_orders = sales_invoices.filter(order_status_id=pending_status)
-    #         invoice_data_list = list(pending_orders.values('sale_invoice_id','sale_order_id', 'invoice_date', 'invoice_no', 'customer_id',  
-    #                                                     'ledger_account_id', 'total_amount', 'order_status_id'))
-        
-
-    #     serializer = PaymentTransactionSerializer(data=data)        
-    #     if serializer.is_valid():
-    #         payment_transaction = serializer.save()
-    #         serializer.data.update({'outstanding_amount': payment_transaction.outstanding_amount, "transaction_id": payment_transaction.transaction_id})
-
-    #         response_data = {
-    #         "payment_transaction": serializer.data,
-    #         "sales_invoices_data": invoice_data_list,
-    #         #"sales_invoices": invoice_data_list[0].get('sale_invoice_id')
-    #         }
-            
-    #         return build_response(1, "Payment transaction created successfully", response_data, status.HTTP_201_CREATED)
-    #     return build_response(1, "Payment transaction Failed", serializer.errors, status.HTTP_400_BAD_REQUEST)
-
     def post(self, request):
         """
         Handle POST request to create one or more payment transactions by applying the input amount
@@ -2859,16 +2808,14 @@ class PaymentTransactionAPIView(APIView):
         """
         data = request.data
         customer_id = data.get('customer')
-        # Convert the incoming amount into a Decimal for accurate arithmetic.
-        remaining_payment = Decimal(data.get('amount', 0))
-
+        # Convert the incoming amount into a Decimal for accurate arithmetic & Round the amount to 4 decimal places
+        input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP) 
+    
         # Get pending invoices for the customer.
         if customer_id:
             sales_invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).order_by('invoice_date')
             pending_status = OrderStatuses.objects.filter(status_name="Pending").values_list("order_status_id", flat=True).first()
             pending_orders = sales_invoices.filter(order_status_id=pending_status)
-            # Each invoice dictionary contains: sale_invoice_id, sale_order_id, invoice_date, invoice_no, 
-            # customer_id, ledger_account_id, total_amount, order_status_id
             invoice_data_list = list(pending_orders.values(
                 'sale_invoice_id', 'sale_order_id', 'invoice_date', 'invoice_no', 
                 'customer_id', 'ledger_account_id', 'total_amount', 'order_status_id'
@@ -2876,14 +2823,14 @@ class PaymentTransactionAPIView(APIView):
         else:
             invoice_data_list = []
         
-        # Fetch the "Completed" status value for updating invoices.
+        # Fetch the "Completed" status_id value for updating invoices.
         completed_status = OrderStatuses.objects.filter(status_name="Completed").values_list("order_status_id", flat=True).first()
 
         payment_transactions_created = []
 
         # Iterate through the list of invoices until the payment amount is exhausted or we have no more invoices.
         for invoice in invoice_data_list:
-            if remaining_payment <= 0:
+            if input_amount <= 0:
                 break
 
             # Fetch necessary invoice fields.
@@ -2891,20 +2838,26 @@ class PaymentTransactionAPIView(APIView):
             sale_invoice_id = invoice.get('sale_invoice_id')
             invoice_no = invoice.get('invoice_no')
 
-            # For each invoice, we assume its full total is initially outstanding.
-            # In the first iteration for an invoice, outstanding_amount is set equal to invoice_total.
-            # Then, we deduct the allocated amount from the remaining payment.
-            if remaining_payment >= invoice_total:
-                # The payment covers the full invoice.
-                allocated_amount = invoice_total
-                new_outstanding = Decimal('0.00')
+            # Check for any previous payment transactions for this invoice.
+            existing_payment = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice_id).order_by('-created_at').first()
+            
+            if existing_payment:
+                # Use the last outstanding_amount as the current balance for this invoice.
+                current_outstanding = Decimal(existing_payment.outstanding_amount)
             else:
-                # Partial payment: only part of the invoice can be paid.
-                allocated_amount = remaining_payment
-                new_outstanding = invoice_total - remaining_payment
+                # If no previous payment exists, start with the total_amount.
+                current_outstanding = invoice_total
 
-            # Deduct the allocated amount from the overall remaining payment.
-            remaining_payment -= allocated_amount
+            # If the invoice is already fully paid, skip it.
+            if current_outstanding <= 0:
+                continue
+
+            # Allocate the payment amount for this invoice.
+            allocated_amount = min(input_amount, current_outstanding)
+            new_outstanding = current_outstanding - allocated_amount
+
+            # Deduct the allocated amount from the remaining payment.
+            input_amount -= allocated_amount
 
             # Create a PaymentTransactions record with the appropriate fields.
             payment_txn = PaymentTransactions.objects.create(
@@ -2912,11 +2865,11 @@ class PaymentTransactionAPIView(APIView):
                 payment_date=data.get('payment_date'),
                 payment_method=data.get('payment_method'),
                 cheque_no=data.get('cheque_no'),
-                amount=allocated_amount,            # Portion of the payment applied to this invoice.
-                outstanding_amount=new_outstanding,   # Remaining amount for this invoice after payment.
+                amount=allocated_amount,            
+                outstanding_amount=new_outstanding,   
                 payment_status=data.get('payment_status'),
                 customer_id=customer_id,
-                sale_invoice_id=sale_invoice_id,      # ForeignKey; assuming passing the ID is acceptable.
+                sale_invoice_id=sale_invoice_id,      
                 invoice_no=invoice_no,
             )
             payment_transactions_created.append(payment_txn)
@@ -2938,7 +2891,7 @@ class PaymentTransactionAPIView(APIView):
                 }
                 for txn in payment_transactions_created
             ],
-            "remaining_payment": str(remaining_payment)
+            "remaining_payment": str(input_amount)
         }
         
         return build_response(1, "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
