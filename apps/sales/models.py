@@ -832,7 +832,7 @@ class SaleDebitNoteItems(models.Model):
 class PaymentTransactions(models.Model):
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     payment_receipt_no = models.CharField(max_length=50)
-    payment_date = models.DateField()
+    payment_date = models.DateTimeField(auto_now_add=True)
     payment_method = models.CharField(max_length=100, null=True, blank=True)
     cheque_no = models.CharField(max_length=50, null=True, blank=True)
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=0.00, null=False)
