@@ -1,30 +1,27 @@
-import logging
-from django.utils import timezone
-from django.db import transaction
-from django.forms import ValidationError
-from django.http import Http404
-from django.shortcuts import render, get_object_or_404
+from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_filter_methods import filter_response, list_filtered_objects
+from apps.inventory.models import BlockedInventory, InventoryBlockConfig
+from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses
 from django_filters.rest_framework import DjangoFilterBackend
+from apps.products.models import Products, ProductVariation
 from rest_framework.filters import OrderingFilter
+from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
-from rest_framework.serializers import ValidationError
-from uuid import UUID
-from rest_framework.views import APIView
-from apps.inventory.models import BlockedInventory, InventoryBlockConfig
-from config.utils_filter_methods import filter_response, list_filtered_objects
-from .filters import *
-from apps.purchase.models import PurchaseOrders
-from apps.purchase.serializers import PurchaseOrdersSerializer
-from apps.products.models import Products, ProductVariation
-from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
-from django_filters.rest_framework import DjangoFilterBackend 
-from rest_framework.filters import OrderingFilter
+from decimal import Decimal, ROUND_HALF_UP
+from rest_framework.views import APIView
+from django.utils import timezone
+from django.db import transaction
+from rest_framework import status
+from django.http import Http404
+from datetime import timedelta
+from django.db.models import F
 from django.apps import apps
-from datetime import datetime, timedelta
-from config.utils_methods import workflow_progression_dict 
+from decimal import Decimal
+from .serializers import *
+from .filters import *
+import logging
 
 
 workflow_progression_dict = {}
@@ -51,20 +48,6 @@ class SaleOrderView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
-
-# class PaymentTransactionsView(viewsets.ModelViewSet):
-#     queryset = PaymentTransactions.objects.all()
-#     serializer_class = PaymentTransactionsSerializer
-
-#     def list(self, request, *args, **kwargs):
-#         return list_all_objects(self, request, *args, **kwargs)
-
-#     def create(self, request, *args, **kwargs):
-#         return create_instance(self, request, *args, **kwargs)
-
-#     def update(self, request, *args, **kwargs):
-#         return update_instance(self, request, *args, **kwargs)
 
 
 class SaleInvoiceItemsView(viewsets.ModelViewSet):
@@ -2786,15 +2769,6 @@ class MoveToNextStageGenericView(APIView):
         except LookupError:
             print(f"Model {module_name} not found.")
             return None
-
-from django.db.models import F, Sum
-from django.db.models.functions import Coalesce
-from decimal import Decimal, ROUND_HALF_UP
-import uuid
-from rest_framework import status
-from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses, Customer
-from .serializers import PaymentTransactionSerializer
-from decimal import Decimal
 
 # APIView for handling PaymentTransaction creation
 class PaymentTransactionAPIView(APIView):
