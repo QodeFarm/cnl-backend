@@ -1,32 +1,29 @@
-import logging
-from django.utils import timezone
-from django.db import transaction
-from django.forms import ValidationError
-from django.http import Http404
-from django.shortcuts import render, get_object_or_404
+from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_filter_methods import filter_response, list_filtered_objects
+from apps.inventory.models import BlockedInventory, InventoryBlockConfig
+from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses
 from django_filters.rest_framework import DjangoFilterBackend
+from apps.products.models import Products, ProductVariation
 from rest_framework.filters import OrderingFilter
+from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
-from rest_framework.serializers import ValidationError
-from uuid import UUID
-from rest_framework.views import APIView
-from apps.inventory.models import BlockedInventory, InventoryBlockConfig
-from config.utils_filter_methods import filter_response, list_filtered_objects
-from .filters import *
-from apps.purchase.models import PurchaseOrders
-from apps.purchase.serializers import PurchaseOrdersSerializer
-from apps.products.models import Products, ProductVariation
-from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
-from django_filters.rest_framework import DjangoFilterBackend 
-from rest_framework.filters import OrderingFilter
+from decimal import Decimal, ROUND_HALF_UP
+from rest_framework.views import APIView
+from django.utils import timezone
+from django.db import transaction
+from rest_framework import status
+from django.http import Http404
+from datetime import timedelta
+from django.db.models import F
 from django.apps import apps
+from decimal import Decimal
+from .serializers import *
+from .filters import *
+import logging
 
 
-from datetime import datetime, timedelta
-from config.utils_methods import workflow_progression_dict 
 workflow_progression_dict = {}
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
@@ -43,20 +40,6 @@ class SaleOrderView(viewsets.ModelViewSet):
     filterset_class = SaleOrderFilter
     ordering_fields = ['num_employees', 'created_at', 'updated_at', 'name']
     
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-
-
-class PaymentTransactionsView(viewsets.ModelViewSet):
-    queryset = PaymentTransactions.objects.all()
-    serializer_class = PaymentTransactionsSerializer
-
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
@@ -2786,3 +2769,103 @@ class MoveToNextStageGenericView(APIView):
         except LookupError:
             print(f"Model {module_name} not found.")
             return None
+
+# APIView for handling PaymentTransaction creation
+class PaymentTransactionAPIView(APIView):
+    """
+    API endpoint to create a new PaymentTransaction record.
+    """
+    def post(self, request):
+        """
+        Handle POST request to create one or more payment transactions by applying the input amount
+        across one or more invoices.
+        """
+        data = request.data
+        customer_id = data.get('customer')
+        # Convert the incoming amount into a Decimal for accurate arithmetic & Round the amount to 4 decimal places
+        input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP) 
+    
+        # Get pending invoices for the customer.
+        if customer_id:
+            sales_invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).order_by('invoice_date')
+            pending_status = OrderStatuses.objects.filter(status_name="Pending").values_list("order_status_id", flat=True).first()
+            pending_orders = sales_invoices.filter(order_status_id=pending_status)
+            invoice_data_list = list(pending_orders.values(
+                'sale_invoice_id', 'sale_order_id', 'invoice_date', 'invoice_no', 
+                'customer_id', 'ledger_account_id', 'total_amount', 'order_status_id'
+            ))
+        else:
+            invoice_data_list = []
+        
+        # Fetch the "Completed" status_id value for updating invoices.
+        completed_status = OrderStatuses.objects.filter(status_name="Completed").values_list("order_status_id", flat=True).first()
+
+        payment_transactions_created = []
+
+        # Iterate through the list of invoices until the payment amount is exhausted or we have no more invoices.
+        for invoice in invoice_data_list:
+            if input_amount <= 0:
+                break
+
+            # Fetch necessary invoice fields.
+            invoice_total = Decimal(invoice.get('total_amount', 0))
+            sale_invoice_id = invoice.get('sale_invoice_id')
+            invoice_no = invoice.get('invoice_no')
+
+            # Check for any previous payment transactions for this invoice.
+            existing_payment = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice_id).order_by('-created_at').first()
+            
+            if existing_payment:
+                # Use the last outstanding_amount as the current balance for this invoice.
+                current_outstanding = Decimal(existing_payment.outstanding_amount)
+            else:
+                # If no previous payment exists, start with the total_amount.
+                current_outstanding = invoice_total
+
+            # If the invoice is already fully paid, skip it.
+            if current_outstanding <= 0:
+                continue
+
+            # Allocate the payment amount for this invoice.
+            allocated_amount = min(input_amount, current_outstanding)
+            new_outstanding = current_outstanding - allocated_amount
+
+            # Deduct the allocated amount from the remaining payment.
+            input_amount -= allocated_amount
+
+            # Create a PaymentTransactions record with the appropriate fields.
+            payment_txn = PaymentTransactions.objects.create(
+                payment_receipt_no=data.get('payment_receipt_no'),
+                payment_date=data.get('payment_date'),
+                payment_method=data.get('payment_method'),
+                cheque_no=data.get('cheque_no'),
+                amount=allocated_amount,            
+                outstanding_amount=new_outstanding,   
+                payment_status=data.get('payment_status'),
+                customer_id=customer_id,
+                sale_invoice_id=sale_invoice_id,      
+                invoice_no=invoice_no,
+            )
+            payment_transactions_created.append(payment_txn)
+        
+            # If the invoice is fully paid, update its order_status_id to "Completed".
+            if new_outstanding == Decimal('0.00'):
+                SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice_id).update(order_status_id=completed_status)
+
+        # Prepare response details (you can adjust the fields as needed).
+        response_data = {
+            "payment_transactions": [
+                {
+                    "transaction_id": str(txn.transaction_id),
+                    "payment_receipt_no": txn.payment_receipt_no,
+                    "amount": str(txn.amount),
+                    "outstanding_amount": str(txn.outstanding_amount),
+                    "sale_invoice_id": txn.sale_invoice_id,
+                    "invoice_no": txn.invoice_no,
+                }
+                for txn in payment_transactions_created
+            ],
+            "remaining_payment": str(input_amount)
+        }
+        
+        return build_response(1, "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)

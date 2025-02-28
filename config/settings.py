@@ -10,10 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
-from pathlib import Path
-from datetime import timedelta
-import os
 from config.email_credentials import *
+from datetime import timedelta
+from pathlib import Path
+import os
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -136,7 +136,7 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "cnl",
+        "NAME": "cnl2",
         "USER": "root",
         "PASSWORD":"root",
         "HOST": "127.0.0.1",

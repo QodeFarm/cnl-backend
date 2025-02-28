@@ -1,10 +1,9 @@
-from rest_framework import serializers
-from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
 from apps.masters.serializers import ModCustomerCategoriesSerializers, ModGstTypesSerializer, ModProductBrandsSerializer, ModSaleTypesSerializer, ModShippingCompaniesSerializer, ModUnitOptionsSerializer, ShippingModesSerializer, ModOrdersSalesmanSerializer, ModPaymentLinkTypesSerializer, ModOrderStatusesSerializer, ModOrderTypesSerializer, ReturnOptionsSerializers, ModFlowstatusSerializer
+from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustomersSerializer, ModCustomerPaymentTermsSerializers, ModLedgerAccountsSerializers
 from apps.products.serializers import ColorSerializer, ModProductGroupsSerializer, ModproductsSerializer, SizeSerializer
 from apps.users.serializers import ModModuleSectionsSerializer
+from rest_framework import serializers
 from .models import *
-from django.conf import settings
 
 #----------Modified Serializers--------------------------
 
@@ -60,13 +59,6 @@ class SaleOrderSerializer(serializers.ModelSerializer):
         model = SaleOrder
         fields = '__all__'
         
-class PaymentTransactionsSerializer(serializers.ModelSerializer):
-    invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
-    
-    class Meta:
-        model = PaymentTransactions
-        fields = '__all__'
-
 class SaleInvoiceItemsSerializer(serializers.ModelSerializer):
     sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
     product = ModproductsSerializer(source='product_id', read_only=True)
@@ -337,3 +329,12 @@ class SaleDebitNoteItemsSerializers(serializers.ModelSerializer):
     class Meta:
         model = SaleDebitNoteItems
         fields = '__all__'
+
+
+# Serializer for PaymentTransaction
+class PaymentTransactionSerializer(serializers.ModelSerializer):
+    # transaction_id = serializers.UUIDField(read_only=True)  # Include transaction_id
+    # outstanding_amount = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)  # Include outstanding_amount
+    class Meta:
+        model = PaymentTransactions
+        fields = ['transaction_id','payment_receipt_no', 'payment_date', 'payment_method', 'cheque_no', 'amount', 'payment_status', 'customer', 'outstanding_amount', 'sale_invoice','invoice_no'] 
