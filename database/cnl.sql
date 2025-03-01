@@ -1341,43 +1341,26 @@ CREATE TABLE IF NOT EXISTS sale_return_items (
 
 /* Payment Transactions Table */
 -- Stores information about payment transactions made against invoices.
--- CREATE TABLE IF NOT EXISTS payment_transactions (
---     transaction_id CHAR(36) PRIMARY KEY,
---     sale_invoice_id CHAR(36) NOT NULL,
---     payment_date DATE,
---     amount DECIMAL(10, 2),
---     payment_method VARCHAR(100),
--- 	payment_status ENUM('Pending', 'Completed', 'Failed'),
---     reference_number VARCHAR(100),
---     notes VARCHAR(512),
---     currency VARCHAR(10),
--- 	transaction_type ENUM('Credit', 'Debit'),
--- 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
---     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
---     FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders(sale_invoice_id)
--- );
-
-CREATE TABLE `payment_transactions` (
-  `transaction_id` char(36) NOT NULL,
-  `Payment_receipt_No` varchar(50) NOT NULL,
-  `payment_date` date NOT NULL,
-  `payment_method` varchar(100) DEFAULT NULL,
-  `cheque_no` varchar(50) DEFAULT NULL,
-  `amount` decimal(18,2) NOT NULL DEFAULT '0.00',
-  'outstanding_amount' decimal(18,2) DEFAULT '0.00',
-  `adjusted_now` decimal(18,2) DEFAULT '0.00',
-  `payment_status` enum('Pending','Completed','Failed') DEFAULT 'Pending',
-  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `sale_invoice_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  `customer_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
-  'invoice_no' VARCHAR(20),
-  PRIMARY KEY (`transaction_id`),
-  KEY `fk_payment_transactions_sale_invoice` (`sale_invoice_id`),
-  KEY `fk_payment_transactions_customer` (`customer_id`),
-  CONSTRAINT `fk_payment_transactions_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_payment_transactions_sale_invoice` FOREIGN KEY (`sale_invoice_id`) REFERENCES `sale_invoice_orders` (`sale_invoice_id`) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+CREATE TABLE IF NOT EXISTS  payment_transactions (
+  transaction_id char(36) NOT NULL PRIMARY KEY,
+  Payment_receipt_No varchar(50) NOT NULL,
+  payment_date timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  payment_method varchar(100) DEFAULT NULL,
+  cheque_no varchar(50) DEFAULT NULL,
+  amount decimal(18,2) NOT NULL DEFAULT 0.00,
+  outstanding_amount decimal(18,2) DEFAULT 0.00,
+  adjusted_now decimal(18,2) DEFAULT 0.00,
+  payment_status enum(Pending,Completed,Failed) DEFAULT Pending,
+  sale_invoice_id char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  customer_id char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  invoice_no VARCHAR(20),
+  created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY fk_payment_transactions_sale_invoice (sale_invoice_id),
+  KEY fk_payment_transactions_customer (customer_id),
+  CONSTRAINT fk_payment_transactions_customer FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT fk_payment_transactions_sale_invoice FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders (sale_invoice_id) ON DELETE RESTRICT ON UPDATE CASCADE
+) 
 
 
 

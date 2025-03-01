@@ -18,6 +18,7 @@ from rest_framework import status
 from django.db.models import Sum
 from django.http import Http404
 from django.db.models import F
+from datetime import timedelta
 from django.apps import apps
 from decimal import Decimal
 from .serializers import *
@@ -2866,3 +2867,18 @@ class PaymentTransactionAPIView(APIView):
             "remaining_payment": str(remaining_amount)
         }
         return build_response(1, "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
+    
+    def get(self, request, customer_id):
+        '''Fetch All Payment Transactions for a Customer'''
+        payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).select_related('sale_invoice').order_by('-created_at')
+        
+        if not payment_transactions.exists():
+            return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND) 
+
+        try:
+            serializer = PaymentTransactionSerializer(payment_transactions, many=True)
+            return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
+        except Exception as e:
+            return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
