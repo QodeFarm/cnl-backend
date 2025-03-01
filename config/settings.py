@@ -56,7 +56,7 @@ INSTALLED_APPS = [
     #third party apps
     'rest_framework_simplejwt',
     'rest_framework',
-    # 'corsheaders',
+    'corsheaders',
     'djoser',
     'phonenumber_field',
     
@@ -90,7 +90,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    # "corsheaders.middleware.CorsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -296,19 +296,24 @@ CACHES = {
     }
 }
 
-# CORS_ALLOWED_ORIGINS = [
-#     "https://dev.qodefarm.com",
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-#     'http://localhost:4200',
-#     'http://127.0.0.1:4200',
-#     'http://localhost:8080',
-#     'http://127.0.0.1:5500',
-#     'http://195.35.20.172'
 
-# ]
+CORS_ALLOWED_ORIGINS = [
+    "https://dev.qodefarm.com",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    'http://localhost:4200',
+    'http://127.0.0.1:4200',
+    'http://localhost:8080',
+    'http://127.0.0.1:5500',
+    'http://195.35.20.172'
 
-# CORS_ALLOW_CREDENTIALS = True
+]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$"
+]
+
+CORS_ALLOW_CREDENTIALS = True
 
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
