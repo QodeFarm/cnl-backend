@@ -138,7 +138,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.mysql",
         "NAME": "cnl",
         "USER": "root",
-        "PASSWORD":"root",
+        "PASSWORD":"",
         "HOST": "127.0.0.1",
         "PORT": "3306",
     }
@@ -305,7 +305,8 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:4200',
     'http://localhost:8080',
     'http://127.0.0.1:5500',
-    'http://195.35.20.172'
+    'http://195.35.20.172',
+    'https://apicore.cnlerp.com'
 
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [
