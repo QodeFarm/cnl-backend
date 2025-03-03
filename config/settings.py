@@ -28,7 +28,8 @@ SECRET_KEY = 'django-insecure-s@))i*6!g4#%$($f!512!18d%j*&g=89zsal6ugcm=su0p%c__
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["apicore.cnlerp.com", "127.0.0.1", "localhost"]
 
 if '195.35.20.172:8000' in ALLOWED_HOSTS:
     DEBUG = False
@@ -138,7 +139,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.mysql",
         "NAME": "cnl",
         "USER": "root",
-        "PASSWORD":"",
+        "PASSWORD":"root",
         "HOST": "127.0.0.1",
         "PORT": "3306",
     }
@@ -163,13 +164,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
-    "django.contrib.auth.hashers.Argon2PasswordHasher",
-    "django.contrib.auth.hashers.ScryptPasswordHasher",
-]
+# PASSWORD_HASHERS = [
+#     "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+#     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+#     "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+#     "django.contrib.auth.hashers.Argon2PasswordHasher",
+#     "django.contrib.auth.hashers.ScryptPasswordHasher",
+# ]
 
 
 PASSWORD_HASHERS = [
