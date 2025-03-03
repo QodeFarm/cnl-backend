@@ -2773,7 +2773,6 @@ class MoveToNextStageGenericView(APIView):
             print(f"Model {module_name} not found.")
             return None
 
-# APIView for handling PaymentTransaction creation
 class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
