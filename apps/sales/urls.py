@@ -46,5 +46,7 @@ urlpatterns = [
     path('sale_credit_notes/<str:pk>/', SaleCreditNoteViewset.as_view(), name='sale-credit-notes-detail-update-delete-patch'),
     path('sale_debit_notes/', SaleDebitNoteViewset.as_view(), name='sale-debit-notes-list-create'),
     path('sale_debit_notes/<str:pk>/', SaleDebitNoteViewset.as_view(), name='sale-debit-notes-detail-update-delete-patch'),
-    path('payment_transactions/', PaymentTransactionAPIView.as_view(),name='payment-transaction-create')
+    
+    path('payment_transactions/', PaymentTransactionAPIView.as_view(),name='payment-transaction-create'),
+    path('payment_transactions/<str:customer_id>/', PaymentTransactionAPIView.as_view(), name='customer-payment-transactions-List'),
 ]      
