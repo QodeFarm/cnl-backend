@@ -2890,26 +2890,59 @@ class PaymentTransactionAPIView(APIView):
             except (ValueError, TypeError):
                 return build_response(1, "Invalid amount provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
             
-           # Fetch pending invoices in one query and their fields
-            pending_invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id,order_status_id=pending_status
-            ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
-
-            payment_transactions_created = []
-
+            # Process payment transactions
             with transaction.atomic():
                 remaining_amount = input_amount
-                for invoice in pending_invoices:
+                payment_transactions_created = []
+
+                # Step 1: Get all pending invoices (ordered by date)
+                pending_invoices = SaleInvoiceOrders.objects.filter(
+                    customer_id=customer_id,
+                    order_status_id=pending_status
+                ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
+
+                pending_invoice_ids = pending_invoices.values_list('sale_invoice_id', flat=True)
+
+                # Step 2: Find invoices that already have partial payments
+                invoices_with_partial_payments = PaymentTransactions.objects.filter(
+                    sale_invoice_id__in=pending_invoice_ids,
+                    customer_id=customer_id).values('sale_invoice_id').annotate(total_paid=Sum('amount')).order_by('sale_invoice_id')
+
+                # Step 3: Combine both lists (remove duplicates, sort by oldest)
+                invoice_dict = {invoice.sale_invoice_id: invoice for invoice in pending_invoices}
+
+                for invoice_data in invoices_with_partial_payments:
+                    sale_invoice_id = invoice_data['sale_invoice_id']
+                    if sale_invoice_id in invoice_dict:
+                        # Update the total_paid value in the dictionary
+                        invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
+                    else:
+                        # If the invoice is not already in pending_invoices, add it manually
+                        invoice_dict[sale_invoice_id] = SaleInvoiceOrders.objects.get(sale_invoice_id=sale_invoice_id)
+                        invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
+
+                # Convert dictionary to sorted list (oldest to newest based on created_at)
+                invoices_sorted = sorted(invoice_dict.values(), key=lambda x: x.created_at)
+
+                # Step 4: Allocate payments to those invoices
+                for sale_invoice in invoices_sorted:
                     if remaining_amount <= 0:
                         break
 
-                    # Calculate total paid amount for accurate outstanding balance
-                    total_paid = PaymentTransactions.objects.filter(
-                        sale_invoice_id=invoice.sale_invoice_id
-                    ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.0000')
-                    current_outstanding = invoice.total_amount - total_paid
+                    total_paid = getattr(sale_invoice, 'total_paid', Decimal('0.0000')) or Decimal('0.0000')
 
+                    # Check if invoice exists in PaymentTransactions and fetch outstanding_amount
+                    payment_transaction = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).order_by('-created_at').first()
+                    
+                    if payment_transaction:
+                        # If invoice is in PaymentTransactions, use outstanding_amount
+                        current_outstanding = max(payment_transaction.outstanding_amount - total_paid, Decimal('0.0000'))
+                    else:
+                        # If invoice is NOT in PaymentTransactions, use total_amount - total_paid
+                        current_outstanding = max(sale_invoice.total_amount - total_paid, Decimal('0.0000'))
+    
                     if current_outstanding <= 0:
-                        continue
+                        continue  # Skip invoices that are fully paid
 
                     allocated_amount = min(remaining_amount, current_outstanding)
                     new_outstanding = current_outstanding - allocated_amount
@@ -2920,20 +2953,21 @@ class PaymentTransactionAPIView(APIView):
                         payment_receipt_no=data.get('payment_receipt_no'),
                         payment_method=data.get('payment_method'),
                         cheque_no=data.get('cheque_no'),
-                        total_amount = invoice.total_amount,
+                        total_amount=sale_invoice.total_amount,
                         amount=allocated_amount,
                         outstanding_amount=new_outstanding,
                         payment_status=data.get('payment_status'),
                         customer_id=customer_id,
-                        sale_invoice_id=invoice.sale_invoice_id,
-                        invoice_no=invoice.invoice_no,
+                        sale_invoice_id=sale_invoice.sale_invoice_id,
+                        invoice_no=sale_invoice.invoice_no,
                     )
                     payment_transactions_created.append(payment_txn)
 
-                    # If the invoice is fully paid, update its order_status_id to "Completed".
+                    # Step 5: Update invoice status if fully paid
                     if new_outstanding == Decimal('0.00'):
-                        SaleInvoiceOrders.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(order_status_id=completed_status)
+                        SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                         #PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
+            
             # Prepare response
             response_data = {
                 "payment_transactions": [
