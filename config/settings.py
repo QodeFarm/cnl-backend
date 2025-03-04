@@ -28,7 +28,8 @@ SECRET_KEY = 'django-insecure-s@))i*6!g4#%$($f!512!18d%j*&g=89zsal6ugcm=su0p%c__
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["apicore.cnlerp.com", "127.0.0.1", "localhost"]
 
 if '195.35.20.172:8000' in ALLOWED_HOSTS:
     DEBUG = False
@@ -136,7 +137,7 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "cnl2",
+        "NAME": "cnl",
         "USER": "root",
         "PASSWORD":"root",
         "HOST": "127.0.0.1",
@@ -163,13 +164,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
-    "django.contrib.auth.hashers.Argon2PasswordHasher",
-    "django.contrib.auth.hashers.ScryptPasswordHasher",
-]
+# PASSWORD_HASHERS = [
+#     "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+#     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+#     "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+#     "django.contrib.auth.hashers.Argon2PasswordHasher",
+#     "django.contrib.auth.hashers.ScryptPasswordHasher",
+# ]
 
 
 PASSWORD_HASHERS = [
@@ -296,6 +297,7 @@ CACHES = {
     }
 }
 
+
 CORS_ALLOWED_ORIGINS = [
     "https://dev.qodefarm.com",
     "http://localhost:3000",
@@ -304,8 +306,13 @@ CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:4200',
     'http://localhost:8080',
     'http://127.0.0.1:5500',
-    'http://195.35.20.172'
+    'http://195.35.20.172',
+    'https://apicore.cnlerp.com'
 
+]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
