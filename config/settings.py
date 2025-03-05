@@ -29,9 +29,9 @@ SECRET_KEY = 'django-insecure-s@))i*6!g4#%$($f!512!18d%j*&g=89zsal6ugcm=su0p%c__
 # SECURITY WARNING: don't run with debug turned on in production!
 
 # ALLOWED_HOSTS = []
-ALLOWED_HOSTS = ["apicore.cnlerp.com", "127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["*"]
 
-if '195.35.20.172:8000' in ALLOWED_HOSTS:
+if 'apicore.cnlerp.com:8000' in ALLOWED_HOSTS:
     DEBUG = False
 
 else:
@@ -202,6 +202,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 STATIC_URL = 'static/'
 
+STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
@@ -297,25 +299,35 @@ CACHES = {
     }
 }
 
+CORS_ALLOW_ALL_ORIGINS = False  # Set to True only for testing
 
 CORS_ALLOWED_ORIGINS = [
     "https://dev.qodefarm.com",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    'http://localhost:4200',
-    'http://127.0.0.1:4200',
-    'http://localhost:8080',
-    'http://127.0.0.1:5500',
-    'http://195.35.20.172',
-    'https://apicore.cnlerp.com'
+    "http://localhost",
+    "http://127.0.0.1",
+    "https://apicore.cnlerp.com",  # Replace with your actual domain
 
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",
-    r"^http://127\.0\.0\.1:\d+$"
+    r"^http://127\.0\.0\.1:\d+$",
+    r"^https://apicore.cnlerp.com\d+$"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Allow all methods
+CORS_ALLOW_METHODS = [
+    "DELETE",
+    "GET",
+    "OPTIONS",
+    "PATCH",
+    "POST",
+    "PUT",
+]
+
+# Allow all headers
+CORS_ALLOW_HEADERS = ["*"]
 
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
