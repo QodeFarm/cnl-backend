@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-s@))i*6!g4#%$($f!512!18d%j*&g=89zsal6ugcm=su0p%c__
 # SECURITY WARNING: don't run with debug turned on in production!
 
 # ALLOWED_HOSTS = []
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ["apicore.cnlerp.com" ]
 
 if 'apicore.cnlerp.com:8000' in ALLOWED_HOSTS:
     DEBUG = False
@@ -202,7 +202,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 STATIC_URL = 'static/'
 
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -299,7 +299,7 @@ CACHES = {
     }
 }
 
-CORS_ALLOW_ALL_ORIGINS = False  # Set to True only for testing
+CORS_ALLOW_ALL_ORIGINS = True  # Set to True only for testing
 
 CORS_ALLOWED_ORIGINS = [
     "https://dev.qodefarm.com",
@@ -317,14 +317,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 CORS_ALLOW_CREDENTIALS = True
 
 # Allow all methods
-CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
-]
+CORS_ALLOW_METHODS = [ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
 
 # Allow all headers
 CORS_ALLOW_HEADERS = ["*"]
