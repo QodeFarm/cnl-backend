@@ -330,11 +330,16 @@ class SaleDebitNoteItemsSerializers(serializers.ModelSerializer):
         model = SaleDebitNoteItems
         fields = '__all__'
 
-
-# Serializer for PaymentTransaction
 class PaymentTransactionSerializer(serializers.ModelSerializer):
-    # transaction_id = serializers.UUIDField(read_only=True)  # Include transaction_id
-    # outstanding_amount = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)  # Include outstanding_amount
+    # Fields from SaleInvoiceOrders via the sale_invoice foreign key
+    invoice_no = serializers.CharField(source='sale_invoice.invoice_no')
+    invoice_date = serializers.DateField(source='sale_invoice.invoice_date')
+    due_date = serializers.DateField(source='sale_invoice.due_date')
+    ref_date = serializers.DateField(source='sale_invoice.ref_date')
+    total_amount = serializers.DecimalField(source='sale_invoice.total_amount', max_digits=18, decimal_places=2)
+    taxable = serializers.DecimalField(source='sale_invoice.taxable', max_digits=18, decimal_places=2)
+    tax_amount = serializers.DecimalField(source='sale_invoice.tax_amount', max_digits=18, decimal_places=2)
+
     class Meta:
         model = PaymentTransactions
-        fields = ['transaction_id','payment_receipt_no', 'payment_date', 'payment_method', 'cheque_no', 'amount', 'payment_status', 'customer', 'outstanding_amount', 'sale_invoice','invoice_no'] 
+        fields = ['invoice_no', 'invoice_date', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount', ]
