@@ -29,11 +29,18 @@ SECRET_KEY = 'django-insecure-s@))i*6!g4#%$($f!512!18d%j*&g=89zsal6ugcm=su0p%c__
 # SECURITY WARNING: don't run with debug turned on in production!
 
 # ALLOWED_HOSTS = []
-ALLOWED_HOSTS = ["apicore.cnlerp.com" ]
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "apicore.cnlerp.com",
+    "master.cnlerp.com",
+    "dev.cnlerp.com",
+    "demo.cnlerp.com"
+]
 
-if 'apicore.cnlerp.com:8000' in ALLOWED_HOSTS:
+# Set DEBUG = False for master and demo
+if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS:
     DEBUG = False
-
 else:
     DEBUG = True
 
@@ -134,10 +141,20 @@ REST_FRAMEWORK = {
 import pymysql
 pymysql.install_as_MySQLdb()
 
+DATABASE_MAPPING = {
+    "master.cnlerp.com": "cnl",
+    "dev.cnlerp.com": "devcnl",
+    "demo.cnlerp.com": "democnl",
+}
+
+def get_database(request):
+    hostname = request.get_host().split(':')[0]  # Get domain without port
+    return DATABASE_MAPPING.get(hostname, "cnl")  # Default to cnl
+
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "cnl",
+        "NAME": get_database,
         "USER": "root",
         "PASSWORD":"root",
         "HOST": "127.0.0.1",
@@ -145,6 +162,14 @@ DATABASES = {
     }
 }
 
+DOMAIN_DATABASE_MAPPING = {
+    "master.cnlerp.com": "cnl",
+    "dev.cnlerp.com": "devcnl",
+    "demo.cnlerp.com": "democnl",
+    "qa.cnlerp.com": "qacnl"
+}
+
+MIDDLEWARE.insert(1, 'middleware.middleware.DatabaseMiddleware')
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -305,6 +330,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://dev.qodefarm.com",
     "http://localhost",
     "http://127.0.0.1",
+    "https://qa.cnlerp.com",
     "https://apicore.cnlerp.com",  # Replace with your actual domain
 
 ]
