@@ -47,6 +47,7 @@ class PurchaseOrders(OrderNumberMixin):
 	
     class Meta:
         db_table = purchaseorderstable
+        ordering = ['-created_at', '-updated_at']
 
     def __str__(self):
         return f"{self.purchase_order_id}"
@@ -147,6 +148,7 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     
     class Meta:
         db_table = purchaseinvoiceorders
+        ordering = ['-created_at', '-updated_at']
 
     def __str__(self):
         return f"{self.purchase_invoice_id}"
@@ -245,6 +247,7 @@ class PurchaseReturnOrders(OrderNumberMixin):
 
     class Meta:
         db_table = purchasereturnorders
+        ordering = ['-created_at', '-updated_at']
 
     def __str__(self):
         return f"{self.purchase_return_id}"
