@@ -408,7 +408,7 @@ class VendorViewSet(APIView):
         
         # Update CustomFieldValues Data
         if custom_field_values_data:
-            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='vendor_id', current_model_pk_field='custom_field_value_id')
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
 
         custom_data = [
             {"vendor_data":Vendor_data},
