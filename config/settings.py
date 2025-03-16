@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-s@))i*6!g4#%$($f!512!18d%j*&g=89zsal6ugcm=su0p%c__
 # SECURITY WARNING: don't run with debug turned on in production!
 
 # ALLOWED_HOSTS = []
-ALLOWED_HOSTS = ["apicore.cnlerp.com" ]
+ALLOWED_HOSTS = ["apicore.cnlerp.com", "127.0.0.1" ]
 
 if 'apicore.cnlerp.com:8000' in ALLOWED_HOSTS:
     DEBUG = False
