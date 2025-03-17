@@ -527,7 +527,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
-            instance = PurchaseInvoiceOrders.objects.all()
+            instance = PurchaseInvoiceOrders.objects.all().order_by('-created_at', '-updated_at')
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
@@ -905,7 +905,7 @@ class PurchaseReturnOrderViewSet(APIView):
                 data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(purchasereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
-            instance = PurchaseReturnOrders.objects.all()
+            instance = PurchaseReturnOrders.objects.all().order_by('-created_at', '-updated_at')
             
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 

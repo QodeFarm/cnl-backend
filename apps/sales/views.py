@@ -288,14 +288,14 @@ class SaleOrderViewSet(APIView):
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Sale order summary")
                 saleorders = SaleOrder.objects.all().order_by('-created_at')
                 data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
                 return Response(data, status=status.HTTP_200_OK)
 
-            logger.info("Retrieving all sale order")
+            logger.info("Retrieving all sale orders")
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
@@ -306,14 +306,13 @@ class SaleOrderViewSet(APIView):
             if request.query_params:
                 filterset = SaleOrderFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
-                    queryset = filterset.qs   
+                    queryset = filterset.qs
 
-            total_count = SaleOrder.objects.count()
-        
+            total_count = queryset.count()
+            
             serializer = SaleOrderOptionsSerializer(queryset, many=True)
-            logger.info("sale order data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            logger.info("Sale order data retrieved successfully.")
+            return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
@@ -2807,6 +2806,7 @@ class MoveToNextStageGenericView(APIView):
     """
 
     def post(self, request, module_name, object_id):
+        # Existing code for the sequential stage progression...
         try:
             ModelClass = self.get_model_class(module_name)
             obj = ModelClass.objects.get(pk=object_id)
@@ -2851,6 +2851,39 @@ class MoveToNextStageGenericView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+    def patch(self, request, module_name, object_id):
+        """
+        Partially update the object's fields, including setting a specific flow status.
+        """
+        try:
+            # Dynamically load the model based on module_name
+            ModelClass = self.get_model_class(module_name)
+            if not ModelClass:
+                return Response({"error": f"Model {module_name} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch the object from the appropriate model
+            obj = ModelClass.objects.get(pk=object_id)
+            print(f"Updating fields for: {module_name} with ID {object_id}")
+
+            # Update fields with the data from the request
+            for field, value in request.data.items():
+                if hasattr(obj, field):
+                    setattr(obj, field, value)
+                    print(f"Updated {field} to {value}")
+
+            # Save the updated object
+            obj.save()
+
+            return Response({
+                "message": f"{module_name} partially updated successfully.",
+                "updated_fields": request.data
+            }, status=status.HTTP_200_OK)
+
+        except ModelClass.DoesNotExist:
+            return Response({"error": f"{module_name} object with ID {object_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def patch(self, request, module_name, object_id):
         """
