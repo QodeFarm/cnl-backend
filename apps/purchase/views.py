@@ -2,6 +2,8 @@ import logging
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
+from apps.customfields.models import CustomFieldValue
+from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.purchase.filters import PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
 from config.utils_filter_methods import filter_response
 from .models import *
@@ -196,13 +198,17 @@ class PurchaseOrderViewSet(APIView):
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
             shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
-              
+             
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
+             
             # Customizing the response data
             custom_data = {
                 "purchase_order_data": purchase_order_serializer.data,
                 "purchase_order_items": items_data,
                 "order_attachments": attachments_data,
-                "order_shipments": shipments_data
+                "order_shipments": shipments_data,
+                "custom_field_values": custom_field_values_data
             }
             logger.info("Purchase order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -241,6 +247,8 @@ class PurchaseOrderViewSet(APIView):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, PurchaseOrders, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, PurchaseOrders, CustomFieldValue, main_model_field_name='custom_id'):
+                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main PurchaseOrders instance
             instance.delete()
@@ -299,6 +307,13 @@ class PurchaseOrderViewSet(APIView):
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
+
         # Ensure mandatory data is present
         if not purchase_order_data or not purchase_order_items_data:
             logger.error("Purchase order and Purchase order items are mandatory but not provided.")
@@ -313,6 +328,8 @@ class PurchaseOrderViewSet(APIView):
                 errors['order_attachments'] = attachment_error
         if shipments_error:
                 errors['order_shipments'] = shipments_error
+        if custom_error:
+            errors['custom_field_values'] = custom_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
@@ -356,12 +373,21 @@ class PurchaseOrderViewSet(APIView):
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
+            
+        # Assign `custom_id = vendor_id` for CustomFieldValues
+        if custom_fields_data:
+            update_fields = {'custom_id': purchase_order_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         custom_data = {
             "purchase_order":new_purchase_order_data,
             "purchase_order_items":items_data,
             "order_attachments":order_attachments,
             "order_shipments":order_shipments,
+            "custom_field_values": custom_fields_data
         }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
@@ -411,6 +437,14 @@ class PurchaseOrderViewSet(APIView):
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['custom_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []
+
         # Ensure mandatory data is present
         if not purchase_order_data or not purchase_order_items_data:
             logger.error("Purchase order and Purchase order items are mandatory but not provided.")
@@ -425,6 +459,8 @@ class PurchaseOrderViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
 
@@ -452,11 +488,16 @@ class PurchaseOrderViewSet(APIView):
         shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
         shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
 
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+            
         custom_data = {
             "purchase_order":purchaseorder_data,
             "purchase_order_items":items_data if items_data else [],
             "order_attachments":attachment_data if attachment_data else [],
-            "order_shipments":shipment_data if shipment_data else {}
+            "order_shipments":shipment_data if shipment_data else {},
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
@@ -529,13 +570,17 @@ class PurchaseInvoiceOrderViewSet(APIView):
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
             shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
-                
+               
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
+             
             # Customizing the response data
             custom_data = {
                 "purchase_invoice_orders": purchase_invoice_order_serializer.data,
                 "purchase_invoice_items": invoice_items_data,
                 "order_attachments": attachments_data,
-                "order_shipments": shipments_data
+                "order_shipments": shipments_data,
+                "custom_field_values": custom_field_values_data
             }
             logger.info("Purchase invoice Order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -574,7 +619,8 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            if not delete_multi_instance(pk, PurchaseInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
+                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             # Delete the main PurchaseInvoiceOrders instance
             instance.delete()
 
@@ -632,6 +678,13 @@ class PurchaseInvoiceOrderViewSet(APIView):
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
+
         # Ensure mandatory data is present
         if not purchase_invoice_orders_data or not purchase_invoice_items_data:
             logger.error("Purchase invoice order and Purchase invoice items are mandatory but not provided.")
@@ -646,6 +699,8 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 errors['order_attachments'] = attachment_error
         if shipments_error:
                 errors['order_shipments'] = shipments_error
+        if custom_error:
+            errors['custom_field_values'] = custom_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
@@ -694,12 +749,21 @@ class PurchaseInvoiceOrderViewSet(APIView):
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
+            
+        # Assign `custom_id = purchase_invoice_id` for CustomFieldValues
+        if custom_fields_data:
+            update_fields = {'custom_id': purchase_invoice_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         custom_data = {
             "purchase_invoice_orders":new_purchase_invoice_orders_data,
             "purchase_invoice_items":invoice_items_data,
             "order_attachments":order_attachments,
             "order_shipments":order_shipments,
+            "custom_field_values": custom_fields_data
         }
 
         # Update Product Stock
@@ -752,6 +816,14 @@ class PurchaseInvoiceOrderViewSet(APIView):
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['custom_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []
+
         # Ensure mandatory data is present
         if not purchase_invoice_orders_data or not purchase_invoice_items_data:
             logger.error("Purchase invoice order and Purchase invoice items are mandatory but not provided.")
@@ -766,6 +838,8 @@ class PurchaseInvoiceOrderViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)        
       
@@ -793,11 +867,16 @@ class PurchaseInvoiceOrderViewSet(APIView):
         shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
         shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
 
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+
         custom_data = {
             "purchase_invoice_orders":purchaseinvoiceorder_data,
             "purchase_invoice_items":invoice_items_data if invoice_items_data else [],
             "order_attachments":attachment_data if attachment_data else [],
-            "order_shipments":shipment_data if shipment_data else {}
+            "order_shipments":shipment_data if shipment_data else {},
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
@@ -870,12 +949,16 @@ class PurchaseReturnOrderViewSet(APIView):
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
             shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
                 
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
+                
             # Customizing the response data
             custom_data = {
                 "purchase_return_orders": purchase_return_order_serializer.data,
                 "purchase_return_items": return_items_data,
                 "order_attachments": attachments_data,
-                "order_shipments": shipments_data
+                "order_shipments": shipments_data,
+                "custom_field_values": custom_field_values_data
             }
             logger.info("Purchase return Order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -914,7 +997,8 @@ class PurchaseReturnOrderViewSet(APIView):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, PurchaseReturnOrders, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            if not delete_multi_instance(pk, PurchaseReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
+                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             # Delete the main PurchaseReturnOrders instance
             instance.delete()
 
@@ -972,6 +1056,13 @@ class PurchaseReturnOrderViewSet(APIView):
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
+
         # Ensure mandatory data is present
         if not purchase_return_orders_data or not purchase_return_items_data:
             logger.error("Purchase return order and Purchase return items are mandatory but not provided.")
@@ -986,6 +1077,8 @@ class PurchaseReturnOrderViewSet(APIView):
                 errors['order_attachments'] = attachment_error
         if shipments_error:
                 errors['order_shipments'] = shipments_error
+        if custom_error:
+            errors['custom_field_values'] = custom_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
         
@@ -1037,12 +1130,21 @@ class PurchaseReturnOrderViewSet(APIView):
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
+            
+        # Assign `custom_id = purchase_return_id` for CustomFieldValues
+        if custom_fields_data:
+            update_fields = {'custom_id': purchase_return_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         custom_data = {
             "purchase_return_orders":new_purchase_return_orders_data,
             "purchase_return_items":return_items_data,
             "order_attachments":order_attachments,
             "order_shipments":order_shipments,
+            "custom_field_values": custom_fields_data
         }
 
         # Update the stock with returned products.
@@ -1095,6 +1197,14 @@ class PurchaseReturnOrderViewSet(APIView):
         else:
             shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
 
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['custom_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []
+
         # Ensure mandatory data is present
         if not purchase_return_orders_data or not purchase_return_items_data:
             logger.error("Purchase return order and Purchase return items are mandatory but not provided.")
@@ -1109,6 +1219,8 @@ class PurchaseReturnOrderViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)        
       
@@ -1136,11 +1248,16 @@ class PurchaseReturnOrderViewSet(APIView):
         shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
         shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
 
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+
         custom_data = {
             "purchase_return_orders":purchasereturnorder_data,
             "purchase_return_items":return_items_data if return_items_data else [],
             "order_attachments":attachment_data if attachment_data else [],
-            "order_shipments":shipment_data if shipment_data else {}
+            "order_shipments":shipment_data if shipment_data else {},
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
