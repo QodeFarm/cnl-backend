@@ -298,7 +298,7 @@ class UserLoginView(APIView):
             token = get_tokens_for_user(user)
             return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
         else:
-            return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_404_NOT_FOUND)
+          return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
 #====================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):

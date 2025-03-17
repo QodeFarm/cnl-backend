@@ -1,16 +1,20 @@
-import logging
-from django.utils import timezone
-from django.db import transaction
-from django.forms import ValidationError
-from django.http import Http404
-from django.shortcuts import render, get_object_or_404
+from datetime import timedelta
+from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_filter_methods import filter_response, list_filtered_objects
+from apps.inventory.models import BlockedInventory, InventoryBlockConfig
+from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses
 from django_filters.rest_framework import DjangoFilterBackend
+from apps.products.models import Products, ProductVariation
+from django.core.exceptions import  ObjectDoesNotExist
 from rest_framework.filters import OrderingFilter
+from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 from rest_framework.serializers import ValidationError
 from uuid import UUID
 from rest_framework.views import APIView
+from apps.customfields.models import CustomFieldValue
+from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .filters import *
@@ -19,14 +23,23 @@ from apps.purchase.serializers import PurchaseOrdersSerializer
 from apps.products.models import Products, ProductVariation
 from .serializers import *
 from apps.masters.models import OrderTypes
-from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
-from django_filters.rest_framework import DjangoFilterBackend 
-from rest_framework.filters import OrderingFilter
+from decimal import Decimal, ROUND_HALF_UP
+from rest_framework.views import APIView
+from django.utils import timezone
+from django.db import transaction
+from rest_framework import status
+from django.db.models import Sum
+from django.http import Http404
+from django.db.models import F
+from datetime import timedelta
 from django.apps import apps
+from decimal import Decimal
+from .serializers import *
+from .filters import *
+import logging
+import uuid
 
 
-from datetime import datetime, timedelta
-from config.utils_methods import workflow_progression_dict 
 workflow_progression_dict = {}
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
@@ -43,20 +56,6 @@ class SaleOrderView(viewsets.ModelViewSet):
     filterset_class = SaleOrderFilter
     ordering_fields = ['num_employees', 'created_at', 'updated_at', 'name']
     
-    def list(self, request, *args, **kwargs):
-        return list_all_objects(self, request, *args, **kwargs)
-
-    def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
-
-    def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)
-
-
-class PaymentTransactionsView(viewsets.ModelViewSet):
-    queryset = PaymentTransactions.objects.all()
-    serializer_class = PaymentTransactionsSerializer
-
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
 
@@ -342,13 +341,17 @@ class SaleOrderViewSet(APIView):
             shipments_data = self.get_related_data(
                 OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
             shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+            
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
 
             # Customizing the response data
             custom_data = {
                 "sale_order": sale_order_serializer.data,
                 "sale_order_items": items_data,
                 "order_attachments": attachments_data,
-                "order_shipments": shipments_data
+                "order_shipments": shipments_data,
+                "custom_field_values": custom_field_values_data
             }
             logger.info("Sale order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -390,6 +393,8 @@ class SaleOrderViewSet(APIView):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id'):
+                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main SaleOrder instance
             instance.delete()
@@ -454,6 +459,13 @@ class SaleOrderViewSet(APIView):
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
             order_shipments_data = {} #handling validation error for shipments
+            
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
 
         # Ensure mandatory data is present
         if not sale_order_data or not sale_order_items_data:
@@ -470,6 +482,8 @@ class SaleOrderViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_error:
+            errors['custom_field_values'] = custom_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
@@ -516,6 +530,14 @@ class SaleOrderViewSet(APIView):
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
+            
+        # Assign `custom_id = vendor_id` for CustomFieldValues
+        if custom_fields_data:
+            update_fields = {'custom_id': sale_order_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         # custom_data = {
         #     "sale_order": new_sale_order_data,
@@ -587,6 +609,7 @@ class SaleOrderViewSet(APIView):
             "sale_order_items": items_data,
             "order_attachments": order_attachments,
             "order_shipments": order_shipments,
+            "custom_field_values": custom_fields_data
         }
         return build_response(1, "Sale Order created successfully", custom_data, status.HTTP_201_CREATED)  
 
@@ -640,6 +663,14 @@ class SaleOrderViewSet(APIView):
         else:
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
+            
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['custom_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []
 
         # Ensure mandatory data is present
         if not sale_order_data or not sale_order_items_data:
@@ -656,6 +687,8 @@ class SaleOrderViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
@@ -685,12 +718,17 @@ class SaleOrderViewSet(APIView):
         # Update the 'shipments'
         shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
                                                update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
 
         custom_data = {
             "sale_order": saleorder_data[0] if saleorder_data else {},
             "sale_order_items": items_data if items_data else [],
             "order_attachments": attachment_data if attachment_data else [],
-            "order_shipments": shipment_data[0] if shipment_data else {}
+            "order_shipments": shipment_data[0] if shipment_data else {},
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
@@ -794,13 +832,17 @@ class SaleInvoiceOrdersViewSet(APIView):
             attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
             shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
             shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+            
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
 
             # Customizing the response data
             custom_data = {
                 "sale_invoice_order": sale_invoice_order_serializer.data,
                 "sale_invoice_items": items_data,
                 "order_attachments": attachments_data,
-                "order_shipments": shipments_data
+                "order_shipments": shipments_data,
+                "custom_field_values": custom_field_values_data
             }
             logger.info("Sale invoice order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -840,6 +882,8 @@ class SaleInvoiceOrdersViewSet(APIView):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, SaleInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, SaleInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
+                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main SaleInvoiceOrders instance
             instance.delete()
@@ -898,6 +942,13 @@ class SaleInvoiceOrdersViewSet(APIView):
         else:
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
+            
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
 
         # Ensure mandatory data is present
         if not sale_invoice_order_data or not sale_invoice_items_data:
@@ -914,6 +965,8 @@ class SaleInvoiceOrdersViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_error:
+            errors['custom_field_values'] = custom_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
@@ -962,12 +1015,21 @@ class SaleInvoiceOrdersViewSet(APIView):
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
+            
+        # Assign `custom_id = sale_inovice_id` for CustomFieldValues
+        if custom_fields_data:
+            update_fields = {'custom_id': sale_invoice_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         custom_data = {
             "sale_invoice_order": new_sale_invoice_order_data,
             "sale_invoice_items": items_data,
             "order_attachments": order_attachments,
             "order_shipments": order_shipments,
+            "custom_field_values": custom_fields_data
         }
 
         # Update Product Stock
@@ -1021,6 +1083,14 @@ class SaleInvoiceOrdersViewSet(APIView):
         else:
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
+            
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['custom_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []
 
         # Ensure mandatory data is present
         if not sale_invoice_order_data or not sale_invoice_items_data:
@@ -1036,6 +1106,8 @@ class SaleInvoiceOrdersViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
@@ -1064,12 +1136,17 @@ class SaleInvoiceOrdersViewSet(APIView):
         shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
         shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
         
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+        
 
         custom_data = {
             "sale_invoice_order": saleinvoice_order_data,
             "sale_invoice_items": invoice_items_data if invoice_items_data else [],
             "order_attachments": attachment_data if attachment_data else [],
-            "order_shipments": shipment_data if shipment_data else {}
+            "order_shipments": shipment_data if shipment_data else {},
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
@@ -1140,13 +1217,17 @@ class SaleReturnOrdersViewSet(APIView):
             shipments_data = self.get_related_data(
                 OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
             shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+            
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
 
             # Customizing the response data
             custom_data = {
                 "sale_return_order": sale_return_order_serializer.data,
                 "sale_return_items": items_data,
                 "order_attachments": attachments_data,
-                "order_shipments": shipments_data
+                "order_shipments": shipments_data,
+                "custom_field_values": custom_field_values_data
             }
             logger.info("Sale return order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -1184,10 +1265,12 @@ class SaleReturnOrdersViewSet(APIView):
             instance = SaleReturnOrders.objects.get(pk=pk)
 
             # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id'):
+            if not delete_multi_instance(pk, SaleReturnOrders, OrderAttachments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id'):
+            if not delete_multi_instance(pk, SaleReturnOrders, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            if not delete_multi_instance(pk, SaleReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
+                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main SaleOrder instance
             instance.delete()
@@ -1251,6 +1334,13 @@ class SaleReturnOrdersViewSet(APIView):
         else:
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
+            
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
 
         # Ensure mandatory data is present
         if not sale_return_order_data or not sale_return_items_data:
@@ -1267,6 +1357,8 @@ class SaleReturnOrdersViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_error:
+            errors['custom_field_values'] = custom_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
@@ -1321,12 +1413,21 @@ class SaleReturnOrdersViewSet(APIView):
         else:
             # Since OrderShipments Data is optional, so making it as an empty data list
             order_shipments = {}
+            
+        # Assign `custom_id = sale_inovice_id` for CustomFieldValues
+        if custom_fields_data:
+            update_fields = {'custom_id': sale_return_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         custom_data = {
             "sale_return_order": new_sale_return_order_data,
             "sale_return_items": items_data,
             "order_attachments": order_attachments,
             "order_shipments": order_shipments,
+            "custom_field_values": custom_fields_data
         }
 
         # Update the stock with returned products.
@@ -1383,6 +1484,14 @@ class SaleReturnOrdersViewSet(APIView):
         else:
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
+            
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['custom_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []
 
         # Ensure mandatory data is present
         if not sale_return_order_data or not sale_return_items_data:
@@ -1399,6 +1508,8 @@ class SaleReturnOrdersViewSet(APIView):
             errors['order_attachments'] = attachment_error
         if shipments_error:
             errors['order_shipments'] = shipments_error
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
@@ -1429,12 +1540,17 @@ class SaleReturnOrdersViewSet(APIView):
         # Update the 'shipments'
         shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
                                                update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+        
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
 
         custom_data = {
             "sale_return_order": return_order_data,
             "sale_return_items": items_data if items_data else [],
             "order_attachments": attachment_data if attachment_data else [],
-            "order_shipments": shipment_data[0] if shipment_data else {}
+            "order_shipments": shipment_data[0] if shipment_data else {},
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
@@ -2786,3 +2902,230 @@ class MoveToNextStageGenericView(APIView):
         except LookupError:
             print(f"Model {module_name} not found.")
             return None
+
+class PaymentTransactionAPIView(APIView):
+    """
+    API endpoint to create a new PaymentTransaction record.
+    """
+    def post(self, request):
+        """
+        Handle POST request to create one or more payment transactions by applying the input amount
+        across one or more invoices.
+        """
+        data = request.data
+        customer_id = data.get('customer')
+
+        # Validate customer_id
+        try:
+            uuid.UUID(customer_id)  # Ensure valid UUID format
+            customer_obj = Customer.objects.get(pk=customer_id)
+        except (ValueError, TypeError, Customer.DoesNotExist) as e:
+            return build_response(1, "Invalid customer ID format OR Customer does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+        
+        # Fetch Pending, Completed status IDs
+        try:
+            pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
+            completed_status = OrderStatuses.objects.get(status_name="Completed").order_status_id
+        except ObjectDoesNotExist:
+            return build_response(1, "Required order statuses 'Pending' or 'Completed' not found.", None, status.HTTP_404_NOT_FOUND)
+        
+        if data.get('adjustNow'):
+            data_list = request.data
+            
+            #Making LIST Obj
+            if isinstance(data_list, dict):
+                data_list = [data_list]
+
+            results = []
+
+            try:
+                with transaction.atomic():
+                    for data in data_list:
+                        # Validate and convert adjustNow using Decimal
+                        try:
+                            input_adjustNow = Decimal(data.get('adjustNow', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                            if input_adjustNow <= 0:
+                                return build_response(0, "Adjust Now Amount Must Be Positive.", None, status.HTTP_406_NOT_ACCEPTABLE)
+                        except (ValueError, TypeError):
+                            return build_response(0, "Invalid Adjust Now Amount Provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
+                        
+                        # Fetch sale_invoice_id using invoice_no.
+                        try:
+                            invoice = SaleInvoiceOrders.objects.get(invoice_no=data.get('invoice_no'))
+                            total_amount = invoice.total_amount
+                        except SaleInvoiceOrders.DoesNotExist:
+                            return build_response(1, f"Sale Invoice ID with invoice no '{data.get('invoice_no')}' does not exist.", None, status.HTTP_404_NOT_FOUND)
+                        
+                        # Check if the related OrderStatuses' status_name is "Completed" 
+                        if invoice.order_status_id.status_name == "Completed":
+                            return build_response(0, "Invoice Already Completed", None, status.HTTP_400_BAD_REQUEST)
+                        else:
+                            #Verifying outstanding_amount
+                            try:
+                                outstanding_amount = Decimal(data.get('outstanding_amount', 0))
+                            except (ValueError, TypeError):
+                                return build_response(0, "Invalid Outstanding Amount Provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
+                            if outstanding_amount == 0:
+                                return build_response(0, "No Outstanding Amount", None, status.HTTP_400_BAD_REQUEST)
+                            
+                            # Calculate allocated amount, new outstanding, and remaining_payment
+                            if input_adjustNow > outstanding_amount:
+                                allocated_amount = outstanding_amount
+                                new_outstanding = Decimal("0.00")
+                                remaining_payment = input_adjustNow - outstanding_amount
+                            else:
+                                allocated_amount = input_adjustNow
+                                new_outstanding = outstanding_amount - input_adjustNow
+                                remaining_payment = Decimal("0.00")
+
+                            # Create PaymentTransactions record.
+                            payment_transaction = PaymentTransactions.objects.create(
+                                payment_receipt_no=data.get('payment_receipt_no'),
+                                payment_method=data.get('payment_method'),
+                                total_amount=total_amount,
+                                outstanding_amount=new_outstanding,
+                                adjusted_now=input_adjustNow,
+                                payment_status=data.get('payment_status'),
+                                sale_invoice=invoice, 
+                                invoice_no=invoice.invoice_no,
+                                customer=customer_obj,
+                            )
+
+                            results.append({
+                                "Transaction ID": str(payment_transaction.transaction_id),
+                                "Total Invoice Amount": str(total_amount),
+                                "Allocated Amount To Invoice": str(allocated_amount),
+                                "New Outstanding": str(new_outstanding),
+                                "Payment Receipt No": payment_transaction.payment_receipt_no,
+                                "Remaining Payment" : str(remaining_payment)
+                            })
+
+                            # If the invoice is fully paid, update its order_status_id to "Completed".
+                            if new_outstanding == Decimal('0.00'):
+                                SaleInvoiceOrders.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(order_status_id=completed_status)
+                        
+            except Exception as e:
+            # General exception handling - the transaction will be rolled back.
+                return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            return build_response(len(results), "Payment transactions processed successfully", results, status.HTTP_201_CREATED)
+        else:
+            # Validate and convert amount
+            try:
+                # Convert the incoming amount into a Decimal for accurate arithmetic & Round the amount to 4 decimal places
+                input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                if input_amount <= 0:
+                    return build_response(1, "Amount must be positive", None, status.HTTP_406_NOT_ACCEPTABLE)
+            except (ValueError, TypeError):
+                return build_response(1, "Invalid amount provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
+            
+            # Process payment transactions
+            with transaction.atomic():
+                remaining_amount = input_amount
+                payment_transactions_created = []
+
+                # Step 1: Get all pending invoices (ordered by date)
+                pending_invoices = SaleInvoiceOrders.objects.filter(
+                    customer_id=customer_id,
+                    order_status_id=pending_status
+                ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
+
+                pending_invoice_ids = pending_invoices.values_list('sale_invoice_id', flat=True)
+
+                # Step 2: Find invoices that already have partial payments
+                invoices_with_partial_payments = PaymentTransactions.objects.filter(
+                    sale_invoice_id__in=pending_invoice_ids,
+                    customer_id=customer_id).values('sale_invoice_id').annotate(total_paid=Sum('amount')).order_by('sale_invoice_id')
+
+                # Step 3: Combine both lists (remove duplicates, sort by oldest)
+                invoice_dict = {invoice.sale_invoice_id: invoice for invoice in pending_invoices}
+
+                for invoice_data in invoices_with_partial_payments:
+                    sale_invoice_id = invoice_data['sale_invoice_id']
+                    if sale_invoice_id in invoice_dict:
+                        # Update the total_paid value in the dictionary
+                        invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
+                    else:
+                        # If the invoice is not already in pending_invoices, add it manually
+                        invoice_dict[sale_invoice_id] = SaleInvoiceOrders.objects.get(sale_invoice_id=sale_invoice_id)
+                        invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
+
+                # Convert dictionary to sorted list (oldest to newest based on created_at)
+                invoices_sorted = sorted(invoice_dict.values(), key=lambda x: x.created_at)
+
+                # Step 4: Allocate payments to those invoices
+                for sale_invoice in invoices_sorted:
+                    if remaining_amount <= 0:
+                        break
+
+                    total_paid = getattr(sale_invoice, 'total_paid', Decimal('0.0000')) or Decimal('0.0000')
+
+                    # Check if invoice exists in PaymentTransactions and fetch outstanding_amount
+                    payment_transaction = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).order_by('-created_at').first()
+                    
+                    if payment_transaction:
+                        # If invoice is in PaymentTransactions, use outstanding_amount
+                        current_outstanding = max(payment_transaction.outstanding_amount - total_paid, Decimal('0.0000'))
+                    else:
+                        # If invoice is NOT in PaymentTransactions, use total_amount - total_paid
+                        current_outstanding = max(sale_invoice.total_amount - total_paid, Decimal('0.0000'))
+    
+                    if current_outstanding <= 0:
+                        continue  # Skip invoices that are fully paid
+
+                    allocated_amount = min(remaining_amount, current_outstanding)
+                    new_outstanding = current_outstanding - allocated_amount
+                    remaining_amount -= allocated_amount
+
+                    # Create payment transaction
+                    payment_txn = PaymentTransactions.objects.create(
+                        payment_receipt_no=data.get('payment_receipt_no'),
+                        payment_method=data.get('payment_method'),
+                        cheque_no=data.get('cheque_no'),
+                        total_amount=sale_invoice.total_amount,
+                        amount=allocated_amount,
+                        outstanding_amount=new_outstanding,
+                        payment_status=data.get('payment_status'),
+                        customer_id=customer_id,
+                        sale_invoice_id=sale_invoice.sale_invoice_id,
+                        invoice_no=sale_invoice.invoice_no,
+                    )
+                    payment_transactions_created.append(payment_txn)
+
+                    # Step 5: Update invoice status if fully paid
+                    if new_outstanding == Decimal('0.00'):
+                        SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
+                        #PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
+            
+            # Prepare response
+            response_data = {
+                "payment_transactions": [
+                    {
+                        "Transaction ID": str(txn.transaction_id),
+                        "payment Receipt No": txn.payment_receipt_no,
+                        "Total Invoice Amount" : str(txn.total_amount),
+                        "Amount": str(txn.amount),
+                        "Outstanding Amount": str(txn.outstanding_amount),
+                        "Sale Invoice Id": txn.sale_invoice_id,
+                        "Invoice No": txn.invoice_no,
+                    }
+                    for txn in payment_transactions_created
+                ],
+                "remaining_payment": str(remaining_amount)
+            }
+            return build_response(1, "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
+        
+    def get(self, request, customer_id):
+        '''Fetch All Payment Transactions for a Customer'''
+        payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).select_related('sale_invoice').order_by('-created_at')
+        
+        if not payment_transactions.exists():
+            return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND) 
+
+        try:
+            serializer = PaymentTransactionSerializer(payment_transactions, many=True)
+            return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
+        except Exception as e:
+            return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        

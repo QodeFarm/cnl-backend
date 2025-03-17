@@ -10,10 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.0/ref/settings/
 """
 
-from pathlib import Path
-from datetime import timedelta
-import os
 from config.email_credentials import *
+from datetime import timedelta
+from pathlib import Path
+import os
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -28,11 +28,19 @@ SECRET_KEY = 'django-insecure-s@))i*6!g4#%$($f!512!18d%j*&g=89zsal6ugcm=su0p%c__
 
 # SECURITY WARNING: don't run with debug turned on in production!
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "apicore.cnlerp.com",
+    "master.cnlerp.com",
+    "dev.cnlerp.com",
+    "demo.cnlerp.com"
+]
 
-if '195.35.20.172:8000' in ALLOWED_HOSTS:
+# Set DEBUG = False for master and demo
+if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS:
     DEBUG = False
-
 else:
     DEBUG = True
 
@@ -133,10 +141,20 @@ REST_FRAMEWORK = {
 import pymysql
 pymysql.install_as_MySQLdb()
 
+DATABASE_MAPPING = {
+    "master.cnlerp.com": "cnl",
+    "dev.cnlerp.com": "devcnl",
+    "demo.cnlerp.com": "democnl",
+}
+
+def get_database(request):
+    hostname = request.get_host().split(':')[0]  # Get domain without port
+    return DATABASE_MAPPING.get(hostname, "cnl")  # Default to cnl
+
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "cnl",
+        "NAME": get_database,
         "USER": "root",
         "PASSWORD":"",
         "HOST": "127.0.0.1",
@@ -144,6 +162,14 @@ DATABASES = {
     }
 }
 
+DOMAIN_DATABASE_MAPPING = {
+    "master.cnlerp.com": "cnl",
+    "dev.cnlerp.com": "devcnl",
+    "demo.cnlerp.com": "democnl",
+    "qa.cnlerp.com": "qacnl"
+}
+
+MIDDLEWARE.insert(1, 'middleware.middleware.DatabaseMiddleware')
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
@@ -163,13 +189,13 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
-    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
-    "django.contrib.auth.hashers.Argon2PasswordHasher",
-    "django.contrib.auth.hashers.ScryptPasswordHasher",
-]
+# PASSWORD_HASHERS = [
+#     "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+#     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+#     "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+#     "django.contrib.auth.hashers.Argon2PasswordHasher",
+#     "django.contrib.auth.hashers.ScryptPasswordHasher",
+# ]
 
 
 PASSWORD_HASHERS = [
@@ -200,6 +226,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # https://docs.djangoproject.com/en/5.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+# STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
@@ -296,19 +324,29 @@ CACHES = {
     }
 }
 
+CORS_ALLOW_ALL_ORIGINS = True  # Set to True only for testing
+
 CORS_ALLOWED_ORIGINS = [
     "https://dev.qodefarm.com",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    'http://localhost:4200',
-    'http://127.0.0.1:4200',
-    'http://localhost:8080',
-    'http://127.0.0.1:5500',
-    'http://195.35.20.172'
+    "http://localhost",
+    "http://127.0.0.1",
+    "https://qa.cnlerp.com",
+    "https://apicore.cnlerp.com",  # Replace with your actual domain
 
+]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+    r"^https://apicore.cnlerp.com\d+$"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Allow all methods
+CORS_ALLOW_METHODS = [ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+
+# Allow all headers
+CORS_ALLOW_HEADERS = ["*"]
 
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
