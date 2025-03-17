@@ -4,9 +4,11 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework import viewsets,status
+from apps.customfields.models import CustomFieldValue
+from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.tasks.filters import TasksFilter
 from config.utils_filter_methods import filter_response
-from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances
+from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances, validate_put_method_data
 from apps.tasks.serializers import TasksSerializer,TaskCommentsSerializer,TaskAttachmentsSerializer,TaskHistorySerializer
 from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
 import logging
@@ -143,13 +145,17 @@ class TaskView(APIView):
             # Retrieve TaskHistory data
             task_history_data = self.get_related_data(TaskHistory, TaskHistorySerializer, 'task_id', pk)
             task_history_data = task_history_data if task_history_data else []
+            
+            # Retrieve custom field values
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
 
             # Customizing the response data
             custom_data = {
                 "task": task_serializer.data,
                 "task_comments": task_comments_data,
 				"task_attachments": task_attachments_data,
-                "task_history": task_history_data
+                "task_history": task_history_data,
+                "custom_field_values": custom_field_values_data
             }
             logger.info("task and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
@@ -257,7 +263,17 @@ class TaskView(APIView):
             task_attachments_error = validate_multiple_data(self, task_attachments_data, TaskAttachmentsSerializer, ['task_id'])
             if task_attachments_error:
                 errors["task_attachments"] = task_attachments_error
-
+                
+        # Validate Custom Fields Data
+        custom_fields_data = given_data.pop('custom_field_values', None)
+        if custom_fields_data:
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+        else:
+            custom_error = []
+        
+        errors = {}  
+        if custom_error:
+            errors['custom_field_values'] = custom_error
         if errors:
             return build_response(0, "ValidationError :", errors, status_code=status.HTTP_400_BAD_REQUEST)
         
@@ -301,12 +317,20 @@ class TaskView(APIView):
 
         logger.info('TaskHistory - created*')  # If Task is created, then initial TaskHistory is created
 
+        # Assign `custom_id = task_id` for CustomFieldValues
+        if custom_fields_data:
+            update_fields = {'custom_id': task_id}  # Now using `custom_id` like `order_id`
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            logger.info('CustomFieldValues - created*')
+        else:
+            custom_fields_data = []
 
         custom_data = {
             "task": new_task_data,
             "task_comments": task_comments_data,
             "task_attachments": task_attachments_data,
-            "task_history":task_history_data[0] if task_history_data else []
+            "task_history":task_history_data[0] if task_history_data else [],
+            "custom_field_values": custom_fields_data
         }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
@@ -372,12 +396,23 @@ class TaskView(APIView):
             task_history_error = validate_multiple_data(self, task_history_data, TaskHistorySerializer, exclude_fields)
             if task_history_error:
                 errors["task_history"] = task_history_error
+                
+        # Validated CustomFieldValues Data
+        custom_field_values_data = given_data.pop('custom_field_values', None)
+        if custom_field_values_data:
+            exclude_fields = ['custom_id']
+            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+        else:
+            custom_field_values_error = []
 
         # Ensure mandatory data is present
         if not task_data:
             logger.error("Task data is mandatory but not provided.")
             return build_response(0, "Task data is mandatory", [], status.HTTP_400_BAD_REQUEST)
 
+        errors = {}
+        if custom_field_values_error:
+            errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
         
@@ -434,11 +469,16 @@ class TaskView(APIView):
         # Update the 'Taskattachments'
         taskattachments_data = update_multi_instances(self, pk, task_attachments_data or [],  TaskAttachments, TaskAttachmentsSerializer, update_fields, main_model_related_field='task_id', current_model_pk_field='attachment_id')
 
+        # Update CustomFieldValues Data
+        if custom_field_values_data:
+            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+
         custom_data = {
             "task":taskdata,
             "task_comments":taskcomments_data if taskcomments_data else [],
             "task_attachments":taskattachments_data if taskattachments_data else [],
-            "task_history":task_history_data if task_history_data else []
+            "task_history":task_history_data if task_history_data else [],
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
