@@ -1,7 +1,7 @@
 #Table Names
 #===========:-
 
-baseurl = 'http://195.35.20.172:8000/'
+baseurl = 'https://apicore.cnlerp.com/'
 
 #Company db_tables
 companytable ='companies'
