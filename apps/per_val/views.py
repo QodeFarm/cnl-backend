@@ -36,7 +36,7 @@ class ProcessOrderView(APIView):
                     "order_id": order_id
                 }
                 try:
-                    response = requests.post('http://195.35.20.172:8000/api/v1/sales/order_items/', json=payload)
+                    response = requests.post('https://apicore.cnlerp.com/api/v1/sales/order_items/', json=payload)
                     response.raise_for_status()  # Raises an HTTPError if the response was an HTTP error
                 except requests.exceptions.RequestException as e:
                     return Response({"error": "Failed to send data", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
