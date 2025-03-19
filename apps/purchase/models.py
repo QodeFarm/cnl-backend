@@ -42,6 +42,9 @@ class PurchaseOrders(OrderNumberMixin):
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, null=True, default=None, db_column = 'order_status_id')
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)   
+    cgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    igst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 	
@@ -141,7 +144,10 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, blank=True, null=True)
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, null=True, default=None, db_column = 'order_status_id')
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
-    billing_address = models.CharField(max_length=1024, null=True, default=None)   
+    billing_address = models.CharField(max_length=1024, null=True, default=None) 
+    cgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    igst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)  
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -239,7 +245,10 @@ class PurchaseReturnOrders(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.CASCADE, null=True, default=None, db_column = 'order_status_id')
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
-    billing_address = models.CharField(max_length=1024, null=True, default=None)    
+    billing_address = models.CharField(max_length=1024, null=True, default=None) 
+    cgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    igst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)   
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

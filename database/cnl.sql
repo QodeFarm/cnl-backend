@@ -1146,6 +1146,10 @@ CREATE TABLE IF NOT EXISTS sale_orders(
     sale_return_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
+    cgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    sgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    igst DECIMAL(18,2) DEFAULT 0.00 NULL
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
@@ -1223,6 +1227,9 @@ CREATE TABLE IF NOT EXISTS sale_invoice_orders(
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
     sale_order_id CHAR(36),
+    cgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    sgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    igst DECIMAL(18,2) DEFAULT 0.00 NULL
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
@@ -1299,6 +1306,9 @@ CREATE TABLE IF NOT EXISTS sale_return_orders(
 	order_status_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
+    cgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    sgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    igst DECIMAL(18,2) DEFAULT 0.00 NULL
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     sale_invoice_id CHAR(36),
@@ -1453,6 +1463,9 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
 	order_status_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
+    cgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    sgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    igst DECIMAL(18,2) DEFAULT 0.00 NULL
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
@@ -1525,6 +1538,9 @@ CREATE TABLE IF NOT EXISTS purchase_invoice_orders (
 	order_status_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
+    cgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    sgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    igst DECIMAL(18,2) DEFAULT 0.00 NULL
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
@@ -1595,6 +1611,9 @@ CREATE TABLE IF NOT EXISTS purchase_return_orders (
 	order_status_id CHAR(36),
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
+    cgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    sgst DECIMAL(18,2) DEFAULT 0.00 NULL,
+    igst DECIMAL(18,2) DEFAULT 0.00 NULL
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),

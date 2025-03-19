@@ -193,7 +193,7 @@ class Products(OrderNumberMixin):
     order_no_field = 'code'
     barcode = models.CharField(max_length=50, null=True, default=None)
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, null=True, default=None, db_column = 'unit_options_id')
-    gst_input = models.CharField(max_length=255, null=True, default=None)
+    gst_input = models.IntegerField(null=True, default=None)
     stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, db_column = 'stock_unit_id')
     print_barcode = models.BooleanField(null=True, default=None)
     gst_classification_id = models.ForeignKey(ProductGstClassifications, on_delete=models.CASCADE, null=True, default=None, db_column = 'gst_classification_id')
