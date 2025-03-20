@@ -154,7 +154,7 @@ def get_database(request):
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": get_database,
+        "NAME": "devcnl",
         "USER": "root",
         "PASSWORD":"",
         "HOST": "127.0.0.1",
