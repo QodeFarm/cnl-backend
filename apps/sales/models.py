@@ -490,9 +490,6 @@ class SaleReturnOrders(OrderNumberMixin):
     order_status_id = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, db_column='order_status_id', null=True, default=None)
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)   
-    cgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
-    sgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
-    igst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -546,6 +543,9 @@ class SaleReturnItems(models.Model):
     discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     remarks = models.CharField(max_length=1024, null=True, default=None)
+    cgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    igst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
