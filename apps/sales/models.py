@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from apps import products
+from apps.finance.models import ChartOfAccounts
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions, FlowStatus
 from apps.products.models import Products, Size, Color
@@ -855,6 +856,7 @@ class PaymentTransactions(models.Model):
     sale_invoice = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, related_name='payment_transactions', default='')
     invoice_no = models.CharField(max_length=20, unique=True, default='')
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='payment_transactions')
+    account = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='payment_transactions')
 
     def __str__(self):
         return f"{self.payment_receipt_no} - {self.transaction_id}"

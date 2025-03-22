@@ -1364,10 +1364,12 @@ CREATE TABLE IF NOT EXISTS  payment_transactions (
   customer_id char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   invoice_no VARCHAR(20),
   total_amount DECIMAL(18, 2),
+  account_id CHAR(36) NOT NULL,
   created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY fk_payment_transactions_sale_invoice (sale_invoice_id),
   KEY fk_payment_transactions_customer (customer_id),
+  FOREIGN KEY (account_id) REFERENCES(account_id),
   CONSTRAINT fk_payment_transactions_customer FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT fk_payment_transactions_sale_invoice FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders (sale_invoice_id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) 
