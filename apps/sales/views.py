@@ -1,27 +1,17 @@
-from datetime import timedelta
 from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses
+from apps.customfields.serializers import CustomFieldValueSerializer
+from apps.finance.serializers import JournalEntryLinesSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import Products, ProductVariation
 from django.core.exceptions import  ObjectDoesNotExist
+from apps.customfields.models import CustomFieldValue
 from rest_framework.filters import OrderingFilter
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
-from rest_framework.serializers import ValidationError
-from uuid import UUID
-from rest_framework.views import APIView
-from apps.customfields.models import CustomFieldValue
-from apps.customfields.serializers import CustomFieldValueSerializer
-from apps.inventory.models import BlockedInventory, InventoryBlockConfig
-from config.utils_filter_methods import filter_response, list_filtered_objects
-from .filters import *
-from apps.purchase.models import PurchaseOrders
-from apps.purchase.serializers import PurchaseOrdersSerializer
-from apps.products.models import Products, ProductVariation
-from .serializers import *
 from apps.masters.models import OrderTypes
 from decimal import Decimal, ROUND_HALF_UP
 from rest_framework.views import APIView
@@ -2907,6 +2897,23 @@ class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
     """
+    def load_data_in_journal_entry_line(self, customer_id, account_id, amount, description):
+        try:
+            # Use serializer to create journal entry line
+            entry_data = {
+                "customer_id": customer_id,
+                "account_id": account_id,
+                "credit": int(amount),
+                "description": description
+            }
+            serializer = JournalEntryLinesSerializer(data=entry_data)
+            if serializer.is_valid():
+                serializer.save() 
+        except(ValueError, TypeError):
+            return build_response(1, "Invalid Data provided For Journal Entry Lines.", [], status.HTTP_406_NOT_ACCEPTABLE)
+        
+        return build_response(serializer, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
+    
     def post(self, request):
         """
         Handle POST request to create one or more payment transactions by applying the input amount
@@ -2914,6 +2921,15 @@ class PaymentTransactionAPIView(APIView):
         """
         data = request.data
         customer_id = data.get('customer')
+        account_id = data.get('account')
+        description = data.get('description')
+
+        # Validate account_id
+        try:
+            uuid.UUID(account_id)  # Ensure valid UUID format
+            customer_obj = ChartOfAccounts.objects.get(pk=account_id)
+        except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
+            return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
         # Validate customer_id
         try:
@@ -2989,21 +3005,27 @@ class PaymentTransactionAPIView(APIView):
                                 sale_invoice=invoice, 
                                 invoice_no=invoice.invoice_no,
                                 customer=customer_obj,
+                                account_id=account_id
                             )
-
-                            results.append({
-                                "Transaction ID": str(payment_transaction.transaction_id),
-                                "Total Invoice Amount": str(total_amount),
-                                "Allocated Amount To Invoice": str(allocated_amount),
-                                "New Outstanding": str(new_outstanding),
-                                "Payment Receipt No": payment_transaction.payment_receipt_no,
-                                "Remaining Payment" : str(remaining_payment)
-                            })
-
+                            
                             # If the invoice is fully paid, update its order_status_id to "Completed".
                             if new_outstanding == Decimal('0.00'):
                                 SaleInvoiceOrders.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(order_status_id=completed_status)
+                                PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
+
+                        self.load_data_in_journal_entry_line(customer_id, account_id, input_adjustNow, description)
                         
+                        results.append({
+                            "Transaction ID": str(payment_transaction.transaction_id),
+                            "Total Invoice Amount": str(total_amount),
+                            "Allocated Amount To Invoice": str(allocated_amount),
+                            "New Outstanding": str(new_outstanding),
+                            "Payment Receipt No": payment_transaction.payment_receipt_no,
+                            "Remaining Payment" : str(remaining_payment),
+                            "account_id" : str(account_id)
+                        })
+
+                            
             except Exception as e:
             # General exception handling - the transaction will be rolled back.
                 return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -3062,14 +3084,12 @@ class PaymentTransactionAPIView(APIView):
 
                         # Check if invoice exists in PaymentTransactions and fetch outstanding_amount
                         payment_transaction = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).order_by('-created_at').first()
-                        
                         if payment_transaction:
                             # If invoice is in PaymentTransactions, directly use the last outstanding amount
                             current_outstanding = max(payment_transaction.outstanding_amount, Decimal('0.0000'))
                         else:
                             # If invoice is NOT in PaymentTransactions, calculate from total_amount
                             current_outstanding = max(sale_invoice.total_amount - total_paid, Decimal('0.0000'))
-        
                         if current_outstanding <= 0:
                             continue  # Skip invoices that are fully paid
 
@@ -3089,14 +3109,18 @@ class PaymentTransactionAPIView(APIView):
                             customer_id=customer_id,
                             sale_invoice_id=sale_invoice.sale_invoice_id,
                             invoice_no=sale_invoice.invoice_no,
+                            account_id = account_id
                         )
                         payment_transactions_created.append(payment_txn)
 
                         # Step 5: Update invoice status if fully paid
                         if new_outstanding == Decimal('0.00'):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
-                            #PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
-                
+                            PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
+                        
+                        self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description)
+                        
+
                 # Prepare response
                 response_data = {
                     "payment_transactions": [
@@ -3108,6 +3132,8 @@ class PaymentTransactionAPIView(APIView):
                             "Outstanding Amount": str(txn.outstanding_amount),
                             "Sale Invoice Id": txn.sale_invoice_id,
                             "Invoice No": txn.invoice_no,
+                            "customer_id" : str(customer_id),
+                            "account_id" : str(account_id)
                         }
                         for txn in payment_transactions_created
                     ],

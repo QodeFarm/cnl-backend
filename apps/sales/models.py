@@ -853,10 +853,10 @@ class PaymentTransactions(models.Model):
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    sale_invoice = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, related_name='payment_transactions', default='')
     invoice_no = models.CharField(max_length=20, unique=True, default='')
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='payment_transactions')
-    account = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='payment_transactions')
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='payment_transactions', null=False)
+    account = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='payment_transactions', null=False)
+    sale_invoice = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, related_name='payment_transactions', default='')
 
     def __str__(self):
         return f"{self.payment_receipt_no} - {self.transaction_id}"
