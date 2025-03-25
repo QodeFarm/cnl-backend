@@ -37,7 +37,7 @@ class JournalEntrySerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class JournalEntryLinesSerializer(serializers.ModelSerializer):
-    journal_entry = ModJournalEntrySerializer(source='journal_entry_id', read_only=True)
+    # journal_entry = ModJournalEntrySerializer(source='journal_entry_id', read_only=True)
     account = ModChartOfAccountsSerializer(source='account_id', read_only=True)
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
