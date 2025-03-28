@@ -24,10 +24,18 @@ class CompaniesSerializer(serializers.ModelSerializer):
     state = ModStateSerializer(source='state_id', read_only = True)
     country = ModCountrySerializer(source='country_id', read_only = True)
     logo = PictureSerializer(many=True)
+    logo_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Companies
         fields = '__all__'
+        
+    def get_logo_url(self, obj):
+        if obj.logo and isinstance(obj.logo, list) and len(obj.logo) > 0:
+            logo_path = obj.logo[0].get("attachment_path", "")
+            if logo_path:
+                return f"{settings.MEDIA_URL}{logo_path}"
+        return None  # Or return a default logo
 
 class BranchesSerializer(serializers.ModelSerializer): 
     company = ModCompaniesSerializer(source='company_id', read_only = True)

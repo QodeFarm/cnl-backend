@@ -1,7 +1,7 @@
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
-from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data
+from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data, sales_invoice_doc
 from apps.masters.template.table_defination import doc_heading
 from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -586,16 +586,32 @@ class DocumentGeneratorView(APIView):
             doc_name, file_path, relative_file_path = path_generate(document_type)
             
 #   #=======================================ReportLab Code Started============================          
-            if document_type == "sale_order" or document_type == "sale_invoice":
+            if document_type == "sale_order":
                 pdf_data = sale_order_sales_invoice_data(pk, document_type)
                 elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
                 sale_order_sales_invoice_doc(
                                    elements, doc, 
                                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
-                                   pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'],
+                                   pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'], 
                                    pdf_data['product_data'],
                                    pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
-                                   pdf_data['bill_amount_in_words'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
+                                )
+                
+            if document_type == "sale_invoice":
+                pdf_data = sale_order_sales_invoice_data(pk, document_type)
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
+                sales_invoice_doc(
+                                   elements, doc, 
+                                   pdf_data['company_logo'], pdf_data['company_name'], pdf_data['company_gst'], pdf_data['company_address'], pdf_data['company_phone'], pdf_data['company_email'],
+                                   pdf_data['bank_name'], pdf_data['bank_acno'], pdf_data['bank_ifsc'], pdf_data['bank_branch'],
+                                   pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                                   pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'], pdf_data['shipping_address'],
+                                   pdf_data['billing_address'],
+                                   pdf_data['product_data'],
+                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                                 )
             elif document_type == "purchase_order" or document_type == "purchase_return":

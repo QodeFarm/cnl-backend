@@ -2,6 +2,8 @@ import os
 import random
 import string
 from django.conf import settings
+from apps.company.models import Companies
+from apps.company.serializers import CompaniesSerializer
 from apps.purchase.models import PurchaseOrders, PurchaseorderItems
 from apps.purchase.serializers import PurchaseReturnOrdersSerializer
 from apps.purchase.models import PurchaseReturnOrders, PurchaseReturnItems
@@ -38,11 +40,11 @@ doc_data = {
                 'Item_Model_PK': 'sale_invoice_id',
                 'Related_Model': OrderShipments,
                 'Related_Serializer': OrderShipmentsSerializer,
-                'Related_filter_field': 'order_id',
+                'Related_filter_field': 'order_id',                
 
-                'number_lbl': 'Quotation No.',
-                'date_lbl': 'Quote Date',
-                'Doc_Header': 'SALES QUOTATION',
+                'number_lbl': 'Invoice No.',
+                'date_lbl': 'Invoice Date',
+                'Doc_Header': 'TAX INVOICE',
                 'net_lbl': 'Net Amount',
 
                 'number_value': 'invoice_no',
