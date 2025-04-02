@@ -398,33 +398,43 @@ class SaleInvoiceOrders(OrderNumberMixin):
             increment_order_number(self.order_no_prefix)
         else:
             print("from edit", self.pk)
-
     
-class PaymentTransactions(models.Model): #required fields are updated
-    transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
-    payment_date = models.DateField(null=True, default=None)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
-    payment_method = models.CharField(max_length=100,null=True,default=None)
-    PAYMENT_STATUS_CHOICES = [
-        ('Pending', 'Pending'),
-        ('Completed', 'Completed'),
-        ('Failed', 'Failed'),
-        ]
-    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='Pending')
-    reference_number = models.CharField(max_length=100,null=True,default=None)
-    notes = models.TextField(null=True, default=None)
-    currency = models.CharField(max_length=10,null=True,default=None)
-    TRANSACTION_TYPE_CHOICES = [('Credit', 'Credit'),('Debit', 'Debit'),]
-    transaction_type = models.CharField(max_length=6, choices=TRANSACTION_TYPE_CHOICES)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    def update_paid_amount_balance_amount_after_payment_transactions(self, payment_amount, outstanding_amount):
+        """
+        Update the paid_amount and balance_amount when a payment is made.
+        """
+        self.paid_amount += payment_amount
+        self.balance_amount = outstanding_amount
+        self.save()
+        print(f"Updated SaleInvoiceOrders for invoice {self.invoice_no} with a total amount of {self.total_amount}, paid amount of {self.paid_amount}, and balance amount of {self.balance_amount}.")
 
-    def __str__(self):
-        return f'{self.transaction_id}'
+
+# we not using this model instead of this we are using another model check at the bottom line 854   
+# class PaymentTransactions(models.Model): #required fields are updated
+#     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
+#     payment_date = models.DateField(null=True, default=None)
+#     amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
+#     payment_method = models.CharField(max_length=100,null=True,default=None)
+#     PAYMENT_STATUS_CHOICES = [
+#         ('Pending', 'Pending'),
+#         ('Completed', 'Completed'),
+#         ('Failed', 'Failed'),
+#         ]
+#     payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='Pending')
+#     reference_number = models.CharField(max_length=100,null=True,default=None)
+#     notes = models.TextField(null=True, default=None)
+#     currency = models.CharField(max_length=10,null=True,default=None)
+#     TRANSACTION_TYPE_CHOICES = [('Credit', 'Credit'),('Debit', 'Debit'),]
+#     transaction_type = models.CharField(max_length=6, choices=TRANSACTION_TYPE_CHOICES)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     def __str__(self):
+#         return f'{self.transaction_id}'
     
-    class Meta:
-        db_table = paymenttransactions
+#     class Meta:
+#         db_table = paymenttransactions
 
 class SaleInvoiceItems(models.Model): #required fields are updated
     sale_invoice_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
