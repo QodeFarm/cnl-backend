@@ -2897,14 +2897,15 @@ class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
     """
-    def load_data_in_journal_entry_line(self, customer_id, account_id, amount, description):
+    def load_data_in_journal_entry_line(self, customer_id, account_id, amount, description, remaining_amount):
         try:
             # Use serializer to create journal entry line
             entry_data = {
                 "customer_id": customer_id,
                 "account_id": account_id,
                 "credit": int(amount),
-                "description": description
+                "description": description,
+                "balance" : int(remaining_amount)
             }
             serializer = JournalEntryLinesSerializer(data=entry_data)
             if serializer.is_valid():
@@ -3118,7 +3119,7 @@ class PaymentTransactionAPIView(APIView):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
                         
-                        self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description)
+                        self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description, remaining_amount)
                         
 
                 # Prepare response
