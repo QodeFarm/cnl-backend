@@ -73,6 +73,7 @@ class JournalEntryLines(models.Model):
     description = models.CharField(max_length=1024, default=None, null=True)
     customer_id  = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, db_column='customer_id')
     vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, db_column='vendor_id')
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
   # journal_entry_id = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name='entry_lines', db_column='journal_entry_id')

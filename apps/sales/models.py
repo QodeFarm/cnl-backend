@@ -356,6 +356,8 @@ class SaleInvoiceOrders(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     vehicle_name = models.CharField(max_length=255, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
+    paid_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    balance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     order_status_id = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, db_column='order_status_id', null=True, default=None)
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)
