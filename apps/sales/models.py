@@ -10,6 +10,7 @@ from config.utils_variables import quickpackitems, quickpacks, saleorders, payme
 from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id, generate_order_number
 import logging
 from django.core.exceptions import ObjectDoesNotExist
+from decimal import Decimal
 
 # Create your models here.
 
@@ -399,12 +400,16 @@ class SaleInvoiceOrders(OrderNumberMixin):
         else:
             print("from edit", self.pk)
     
-    def update_paid_amount_balance_amount_after_payment_transactions(self, payment_amount, outstanding_amount):
+    def update_paid_amount_balance_amount_after_payment_transactions(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
         """
         Update the paid_amount and balance_amount when a payment is made.
         """
-        self.paid_amount += payment_amount
-        self.balance_amount = outstanding_amount
+        if adjusted_now_amount > 00.00:
+            self.paid_amount += Decimal(adjusted_now_amount)
+            self.balance_amount = Decimal(outstanding_amount)
+        else:
+            self.paid_amount += Decimal(payment_amount)
+            self.balance_amount = Decimal(outstanding_amount)
         self.save()
         print(f"Updated SaleInvoiceOrders for invoice {self.invoice_no} with a total amount of {self.total_amount}, paid amount of {self.paid_amount}, and balance amount of {self.balance_amount}.")
 

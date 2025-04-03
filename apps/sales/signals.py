@@ -39,4 +39,4 @@ def update_Sale_Invoice_balance_after_payment_transaction(sender, instance, crea
                 return
             
             # Calling the model method to update balance and paid amount
-            sale_invoice_orders_data.update_paid_amount_balance_amount_after_payment_transactions(instance.amount, instance.outstanding_amount)
+            sale_invoice_orders_data.update_paid_amount_balance_amount_after_payment_transactions(instance.amount, instance.outstanding_amount, instance.adjusted_now)

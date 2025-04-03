@@ -2897,7 +2897,7 @@ class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
     """
-    def load_data_in_journal_entry_line(self, customer_id, account_id, amount, description, remaining_amount):
+    def load_data_in_journal_entry_line(self, customer_id, account_id, amount, description, balance_amount):
         try:
             # Use serializer to create journal entry line
             entry_data = {
@@ -2905,7 +2905,7 @@ class PaymentTransactionAPIView(APIView):
                 "account_id": account_id,
                 "credit": int(amount),
                 "description": description,
-                "balance" : int(remaining_amount)
+                "balance" : int(balance_amount)
             }
             serializer = JournalEntryLinesSerializer(data=entry_data)
             if serializer.is_valid():
@@ -3001,7 +3001,7 @@ class PaymentTransactionAPIView(APIView):
                                 payment_method=data.get('payment_method'),
                                 total_amount=total_amount,
                                 outstanding_amount=new_outstanding,
-                                adjusted_now=input_adjustNow,
+                                adjusted_now=allocated_amount,
                                 payment_status=data.get('payment_status'),
                                 sale_invoice=invoice, 
                                 invoice_no=invoice.invoice_no,
@@ -3014,7 +3014,7 @@ class PaymentTransactionAPIView(APIView):
                                 SaleInvoiceOrders.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(order_status_id=completed_status)
                                 PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
 
-                        self.load_data_in_journal_entry_line(customer_id, account_id, input_adjustNow, description)
+                        self.load_data_in_journal_entry_line(customer_id, account_id, input_adjustNow, description, remaining_payment)
                         
                         results.append({
                             "Transaction ID": str(payment_transaction.transaction_id),
@@ -3028,7 +3028,7 @@ class PaymentTransactionAPIView(APIView):
 
                             
             except Exception as e:
-            # General exception handling - the transaction will be rolled back.
+                # General exception handling - the transaction will be rolled back.
                 return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             return build_response(len(results), "Payment transactions processed successfully", results, status.HTTP_201_CREATED)
