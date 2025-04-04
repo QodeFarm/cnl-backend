@@ -61,6 +61,7 @@ class Customer(models.Model):
     print_name = models.CharField(max_length=255)
     identification = models.CharField(max_length=255, null=True, default=None)
     code = models.CharField(max_length=50)
+    #ledger_account = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE)
     ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE, null=True, db_column='ledger_account_id')
     customer_common_for_sales_purchase = models.BooleanField(default=False, null=True)
     is_sub_customer = models.BooleanField(default=False, null=True)

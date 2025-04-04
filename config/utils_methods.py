@@ -613,16 +613,53 @@ def format_phone_number(phone_number):
     elif len(phone_number_str) == 12 and phone_number_str.startswith("91"):
         return phone_number_str  
     else:
-        return "Mobile number has incorrect length"  
+        return "N/A"  
 
-def send_pdf_via_email(to_email, pdf_relative_path):
-    """Send the generated PDF as an email attachment."""
+# def send_pdf_via_email(to_email, pdf_relative_path):
+#     """Send the generated PDF as an email attachment."""
     
+#     # Construct the full path to the PDF file
+#     pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
+    
+#     subject = 'Your Requested Documents'
+#     body = 'Please Find Your Requested Documents.'
+#     email = EmailMessage(subject, body, to=[to_email])
+
+#     # Ensure the PDF file exists before attempting to open it
+#     if not os.path.exists(pdf_full_path):
+#         raise FileNotFoundError(f"The file {pdf_full_path} does not exist.")
+
+#     # Read the PDF file from the provided full path
+#     with open(pdf_full_path, 'rb') as pdf_file:
+#         email.attach('Document.pdf', pdf_file.read(), 'application/pdf')
+    
+#     # Send the email
+#     email.send()
+
+#     return "PDF sent via Email successfully."
+
+import os
+from django.core.mail import EmailMessage
+
+def send_pdf_via_email(to_email, pdf_relative_path, document_type):
+    """Send the generated PDF as an email attachment based on the document type."""
+
     # Construct the full path to the PDF file
     pdf_full_path = os.path.join(MEDIA_ROOT, pdf_relative_path)
-    
-    subject = 'Your Requested Documents'
-    body = 'Please Find Your Requested Documents.'
+
+    # Define subject and body based on document type
+    doc_messages = {
+        "sale_order": ("Sale Order Document", "Please Find Your Requested Sale Order Documents."),
+        "sale_quotation": ("Sale Quotation Document", "Please Find Your Requested Sale Quotation Documents."),
+        "sale_invoice": ("Sale Invoice Document", "Please Find Your Requested Sale Invoice Documents."),
+        "sale_return": ("Sale Return Document", "Please Find Your Requested Sale Return Documents."),
+        "purchase_order": ("Purchase Order Document", "Please Find Your Requested Purchase Order Documents."),
+        "purchase_return": ("Purchase Return Document", "Please Find Your Requested Purchase Return Documents."),
+        "payment_receipt": ("Payment Receipt Document", "Please Find Your Requested Payment Receipt Documents."), #payment_receipt
+    }
+
+    subject, body = doc_messages.get(document_type, ("Your Requested Documents", "Please Find Your Requested Documents."))
+
     email = EmailMessage(subject, body, to=[to_email])
 
     # Ensure the PDF file exists before attempting to open it
@@ -632,11 +669,13 @@ def send_pdf_via_email(to_email, pdf_relative_path):
     # Read the PDF file from the provided full path
     with open(pdf_full_path, 'rb') as pdf_file:
         email.attach('Document.pdf', pdf_file.read(), 'application/pdf')
-    
+
     # Send the email
     email.send()
 
-    return "PDF sent via Email successfully."
+    return f"{document_type.replace('_', ' ').title()} PDF sent via Email successfully."
+
+
 
 def send_whatsapp_message_via_wati(to_number, file_url):
     """ Send the PDF file as a WhatsApp message using WATI API. """
@@ -737,11 +776,13 @@ def extract_product_data(data):
         product = item['product']
         unit_options = item['unit_options']        
         product_name = product['name']
-        quantity = item['quantity']
+        quantity = float(item['quantity'])#item['quantity']
         unit_name = unit_options['unit_name']
-        rate = item['rate']
-        amount = item['amount']
-        discount = item['discount']
+        rate = float(item['rate']) #item['rate']
+        # amount = item['amount']
+        # discount = item['amount'] * item['discount']/100
+        amount = float(item['amount'])  # Convert to float
+        discount = quantity * rate * float(item['discount']) / 100  # Convert discount to float
         tax = (item['tax'] if item['tax'] is not None else 0)
         
         product_data.append([
