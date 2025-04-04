@@ -33,8 +33,11 @@ def doc_heading(file_path, doc_header, sub_header):
         # Add a bold heading
         elements.append(Paragraph(doc_header, style_heading))
 
-    if doc_header == "SALES ORDER":
-        main_heading(doc_header)
+    # if doc_header == "SALES ORDER":
+    #     main_heading(doc_header)
+    # Match exact header text (all uppercase as shown in your image)
+    if doc_header.upper() == "SALES ORDER" or doc_header.upper() == "SALES QUOTATION":
+        main_heading(doc_header.upper())  # Force uppercase to match your style
         
     elif doc_header == "TAX INVOICE":
         main_heading(doc_header)
@@ -82,7 +85,7 @@ def doc_heading(file_path, doc_header, sub_header):
 
 
 def doc_details(cust_bill_dtl, sno_lbl, sno, sdate_lbl, sdate): 
-    col_widths = [3.3*inch, 3.4*inch, 3.3*inch]
+    col_widths = [3.3*inch, 2.8*inch, 3.9*inch]
     table_data_1 = [
         [cust_bill_dtl, f'{sno_lbl} : {sno}', f'{sdate_lbl} : {sdate}'],
     ]
@@ -122,7 +125,7 @@ def customer_details(cust_name, billing_address, phone, city):
         [billing_content, shipping_content]
     ]
     
-    table_col_widths = [6.7*inch, 3.3*inch]
+    table_col_widths = [6.1*inch, 3.9*inch]
     
     table = Table(table_data, colWidths=table_col_widths)
     table.setStyle(TableStyle([
@@ -144,16 +147,15 @@ def format_numeric(cell):
         return "{:.2f}".format(float(cell))
     except (ValueError, TypeError):
         return str(cell)
-    
-    
+
 def product_details(data):
     style_normal = getSampleStyleSheet()['Normal']
     
-    # Increase column widths for more space
-    tbl_3_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
-    table_3_heading = [["Idx", "Product", "Qty", "Unit Name", "Rate", "Amount", "Discount", "Tax"]]
+    # Adjusted column widths (Total = 10 inches)
+    tbl_3_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
+    table_3_heading = [["Idx", "Product", "Qty", "Unit Name", "Rate", "Amount", "Discount"]]
     
-    EXPECTED_FIELDS = 8
+    EXPECTED_FIELDS = 8  # Originally had 8 fields, now using only 7
     
     for index, item in enumerate(data):
         if len(item) < EXPECTED_FIELDS:
@@ -167,8 +169,7 @@ def product_details(data):
             str(item[3]),                     # Unit Name
             format_numeric(item[4]),          # Rate
             format_numeric(item[5]),          # Amount
-            format_numeric(item[6]),          # Discount
-            format_numeric(item[7])           # Tax
+            format_numeric(item[6])           # Discount
         ]
         # Convert each cell into a Paragraph with normal style
         wrapped_row = [Paragraph(cell, style_normal) for cell in row]
@@ -176,7 +177,8 @@ def product_details(data):
     
     # Ensure a minimum of 5 rows for spacing
     while len(table_3_heading) < 6:
-        table_3_heading.append([" "] * 8)
+        table_3_heading.append([" "] * 7)
+    
     
     table = Table(table_3_heading, colWidths=tbl_3_col_widths)
     table.setStyle(TableStyle([
@@ -194,7 +196,7 @@ def product_details(data):
         
         # Vertical lines
         ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),  
-        ('LINEAFTER', (7, 0), (7, -1), 1, colors.black),   
+        ('LINEAFTER', (6, 0), (6, -1), 1, colors.black),   
         
         # Horizontal lines
         ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),  # Header top
@@ -210,9 +212,10 @@ def product_details(data):
     
     return table
 
-def product_total_details(ttl_Qty, ttl_Amount,total_disc, ttl_Tax):
-    table_4_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
-    table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount, total_disc, ttl_Tax]]
+
+def product_total_details(ttl_Qty, ttl_Amount,total_disc):
+    table_4_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
+    table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount, total_disc]]
     
     table = Table(table_4_heading, colWidths=table_4_col_widths)
     table.setStyle(TableStyle([
@@ -230,37 +233,41 @@ def product_total_details(ttl_Qty, ttl_Amount,total_disc, ttl_Tax):
     ]))
     return table
 
-def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, Tax_amount, round_off, Party_Old_Balance, net_lbl, net_value):
+def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, total_cgst, total_sgst, total_igst, round_off, Party_Old_Balance, net_lbl, net_value):
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']
-    
+
     # Bill amount in words
     bill_amount_paragraph = Paragraph(f"<b>Bill Amount In Words:</b> {Bill_Amount_In_Words}", normal_style)
 
     # Financial details table
     financials_data = [
-        [Paragraph("<b>Sub Total:</b>", normal_style),Paragraph(f"<b>{SubTotal}</b>", normal_style)],
-        ["Discount Amt:", f"{Discount_Amt}"],
-        ["Tax Amount:", f"{Tax_amount}"],
-        ["Round Off:", f"{round_off}"],
+        [Paragraph("<b>Sub Total:</b>", normal_style), Paragraph(f"<b>{SubTotal}</b>", normal_style)],
+        [Paragraph("<b>Discount Amt:</b>", normal_style), Paragraph(f"<b>{Discount_Amt}</b>", normal_style)],
+        # [Paragraph("<b>Taxable Amt:</b>", normal_style), Paragraph(f"<b>{final_tax}</b>", normal_style)],
+    ]
+    
+    # Tax Logic - Display only IGST OR (CGST + SGST)
+    if total_igst > 0:
+        financials_data.append([Paragraph("<b>IGST:</b>", normal_style), Paragraph(f"<b>{total_igst}</b>", normal_style)])
+    elif total_cgst > 0 and total_sgst > 0:
+        financials_data.append([Paragraph("<b>CGST:</b>", normal_style), Paragraph(f"<b>{total_cgst}</b>", normal_style)])
+        financials_data.append([Paragraph("<b>SGST:</b>", normal_style), Paragraph(f"<b>{total_sgst}</b>", normal_style)])
+
+    financials_data.extend([
+        [Paragraph("<b>Round Off:</b>", normal_style), Paragraph(f"<b>{round_off}</b>", normal_style)],
         [Paragraph("<b>Party Old Balance:</b>", normal_style), Paragraph(f"<b>{Party_Old_Balance}</b>", normal_style)],
         [Paragraph(f"<b>{net_lbl}:</b>", normal_style), Paragraph(f"<b>{net_value}</b>", normal_style)]
-    ]
+    ])
 
     financials_table = Table(financials_data, colWidths=[2.0 * inch, 1.3 * inch])
     financials_table.setStyle(TableStyle([
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTNAME', (0, 4), (-1, 4), 'Helvetica-Bold'),  # Party Old Balance in Bold
-        ('FONTNAME', (0, 5), (-1, 5), 'Helvetica-Bold'),  # Net Total in Bold
-        
-        # ✅ Adjusted line thickness to fit within borders
-        # ('LINEABOVE', (0, 4), (-1, 4), 1, colors.black),  # Properly aligned line
-        # ('LINEBELOW', (0, 4), (-1, 4), 1, colors.black),
-        # ('LINEABOVE', (0, 5), (-1, 5), 2, colors.black),  # Net Amount with thicker line
-        
-        ('BOTTOMPADDING', (0, 4), (-1, 5), 5),
-        ('TOPPADDING', (0, 4), (-1, 5), 5),
+        ('FONTNAME', (0, -2), (-1, -2), 'Helvetica-Bold'),  # Party Old Balance in Bold
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),  # Net Total in Bold
+        ('BOTTOMPADDING', (0, -2), (-1, -1), 5),
+        ('TOPPADDING', (0, -2), (-1, -1), 5),
     ]))
 
     # Combine bill amount and financials
@@ -269,7 +276,7 @@ def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, 
     ]
 
     # Main Table
-    table = Table(table_data, colWidths=[6.7 * inch, 3.3 * inch])
+    table = Table(table_data, colWidths=[6.1 * inch, 3.9 * inch])
     table.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -279,9 +286,10 @@ def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, 
     return table
 
 
+
 def declaration():
     table_data_6 = [['Declaration:' '\n' 'We declare that this invoice shows the actual price of the goods/services' '\n' 'described and that all particulars are true and correct.' '\n' 'Original For Recipient', 'Authorised Signatory']]
-    table_6_col_widths = [6.7*inch, 3.3*inch]
+    table_6_col_widths = [6.1*inch, 3.9*inch]
     
     table = Table(table_data_6, colWidths=table_6_col_widths)
     table.setStyle(TableStyle([
@@ -487,13 +495,6 @@ def invoice_doc_details(company_logo, company_name, company_gst, company_address
     
     table = Table(table_data_1, colWidths=col_widths)
     table.setStyle(TableStyle([
-        # ('BACKGROUND', (0, 0), (-1, 0), colors.white),
-        # ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        # ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
-        # ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-        # ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        # ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        # ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
         
         ('BACKGROUND', (0, 0), (-1, 0), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
@@ -551,14 +552,12 @@ def invoice_customer_details(cust_name, city, country, phone, destination, shipp
 
 def invoice_product_details(data):
     style_normal = getSampleStyleSheet()['Normal']
-    tbl_3_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 
-                        1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
     
-    # Table headers
-    table_3_heading = [["Idx", "Product", "Qty", "Unit Name", 
-                        "Rate", "Amount", "Discount", "Tax"]]
+    # Adjusted column widths (Total = 10 inches)
+    tbl_3_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
+    table_3_heading = [["Idx", "Product", "Qty", "Unit Name", "Rate", "Amount", "Discount"]]
     
-    EXPECTED_FIELDS = 8
+    EXPECTED_FIELDS = 8  # Originally had 8 fields, now using only 7
     
     for index, item in enumerate(data):
         if len(item) < EXPECTED_FIELDS:
@@ -567,35 +566,28 @@ def invoice_product_details(data):
             
         row = [
             str(index + 1),                   # Index
-            str(item[1]),                     # Product
+            str(item[1]),                     # Product (force string)
             format_numeric(item[2]),          # Qty
             str(item[3]),                     # Unit Name
             format_numeric(item[4]),          # Rate
             format_numeric(item[5]),          # Amount
-            format_numeric(item[6]),          # Discount
-            format_numeric(item[7])           # Tax
+            format_numeric(item[6])           # Discount
         ]
+        # Convert each cell into a Paragraph with normal style
         wrapped_row = [Paragraph(cell, style_normal) for cell in row]
         table_3_heading.append(wrapped_row)
-        
+    
     # Ensure a minimum of 5 rows for spacing
     while len(table_3_heading) < 6:
-        table_3_heading.append([" "] * 8)
-
+        table_3_heading.append([" "] * 7)
+    
     table = Table(table_3_heading, colWidths=tbl_3_col_widths)
     table.setStyle(TableStyle([
         # Basic styling
-        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        
-        # Alignment
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header alignment
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Numeric columns right-aligned
-        ('ALIGN', (0, 1), (1, -1), 'LEFT'),    # Text columns left-aligned
         
         # Alignment
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header alignment
@@ -605,7 +597,7 @@ def invoice_product_details(data):
         
         # Vertical lines
         ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),  
-        ('LINEAFTER', (7, 0), (7, -1), 1, colors.black),   
+        ('LINEAFTER', (6, 0), (6, -1), 1, colors.black),   
         
         # Horizontal lines
         ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),  # Header top
@@ -618,15 +610,16 @@ def invoice_product_details(data):
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
         ('RIGHTPADDING', (0, 0), (-1, -1), 6),
     ]))
+    
     return table
 
-def invoice_product_total_details(ttl_Qty, ttl_Amount,total_disc, ttl_Tax):
-    table_4_col_widths = [0.6 * inch, 3.4 * inch, 0.7 * inch, 0.9 * inch, 1.1 * inch, 1.2 * inch, 1.1 * inch, 1.0 * inch]
-    table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount, total_disc, ttl_Tax]]
+def invoice_product_total_details(ttl_Qty, ttl_Amount,total_disc):
+    table_4_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
+    table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount, total_disc]]
     
     table = Table(table_4_heading, colWidths=table_4_col_widths)
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
@@ -677,7 +670,7 @@ def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch):
     )
     
     # Column widths (equal columns)
-    col_widths = [6.7*inch, 3.3*inch]
+    col_widths = [6.1*inch, 3.9*inch]
     
     # Create the table structure
     table_data = [
@@ -712,3 +705,618 @@ def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch):
     ]))
     
     return table
+
+# Sale returns logic ...
+
+def return_company_header(company_name, company_address, company_phone):
+    styles = getSampleStyleSheet()
+    
+    # Style for company name (bold and centered)
+    company_style = ParagraphStyle(
+        'CompanyStyle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=14,
+        alignment=1,  # 1 = Center
+        spaceAfter=6
+    )
+    
+    # Style for address/phone (normal and centered)
+    address_style = ParagraphStyle(
+        'AddressStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=1,
+        spaceAfter=2
+    )
+    
+    # Build content
+    content = [
+        Paragraph(f"<b>{company_name}</b>", company_style),
+        Paragraph(company_address, address_style),
+        Paragraph(f"Phone No: {company_phone}", address_style),
+        Spacer(1, 12),  # Add space before "BILL OF SUPPLY"
+        # Paragraph("<b>BILL OF SUPPLY</b>", company_style),  # Subheader
+        Spacer(1, 12)   # Space after header
+    ]
+    
+    return content
+
+def return_doc_details(cust_bill_dtl, sno_lbl, sno, sdate_lbl, sdate): 
+    col_widths = [3.3*inch, 2.8*inch, 3.9*inch]
+    table_data = [
+        [cust_bill_dtl, f'{sno_lbl} : {sno}', f'{sdate_lbl} : {sdate}'],
+    ]
+    
+    
+    
+    table = Table(table_data, colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, 0), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+    ]))
+    return table
+
+def return_customer_details(cust_name, billing_address, phone, city):
+    styles = getSampleStyleSheet()
+    style_normal = styles['Normal']
+    
+    content = Paragraph(
+        f"<b>{cust_name}</b><br/>"
+        f"{billing_address}<br/>"
+        f"Phone: {phone}<br/>"
+        f"Destination: {city}", 
+        style_normal
+    )
+    
+    table_data = [[content]]
+    table = Table(table_data, colWidths=[10*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    return table
+
+def return_product_details(data):
+    styles = getSampleStyleSheet()
+    style_normal = styles['Normal']
+    
+    # Column widths (match financial section)
+    col_widths = [4.5*inch, 1.5*inch, 1.5*inch, 2.5*inch]
+    
+    # Table data with headers and products
+    table_data = [
+        [Paragraph("<b>Description</b>", style_normal),
+         Paragraph("<b>Qty</b>", style_normal),
+         Paragraph("<b>MRP</b>", style_normal),
+         Paragraph("<b>Amount</b>", style_normal)]
+    ]
+    
+    # Add product rows
+    for item in data:
+        table_data.append([
+            Paragraph(str(item[1])),  # Description
+            Paragraph(format_numeric(item[2])),  # Qty
+            Paragraph(format_numeric(item[4])),  # MRP
+            Paragraph(format_numeric(item[5]))   # Amount
+        ])
+    
+    # Add empty rows for spacing (optional)
+    for _ in range(4 - len(data)):
+        table_data.append(["", "", "", ""])
+    
+    return table_data
+
+def return_complete_table(data, total_qty, sub_total, discount_amt, bill_total, amount_in_words):
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    
+    # Column widths
+    col_widths = [4.5*inch, 1.5*inch, 1.5*inch, 2.5*inch]
+    
+    # Table data with headers
+    table_data = [
+        [
+            Paragraph("<b>Description</b>", normal_style),
+            Paragraph("<b>Qty</b>", normal_style),
+            Paragraph("<b>MRP</b>", normal_style),
+            Paragraph("<b>Amount</b>", normal_style)
+        ]
+    ]
+    
+    # Add product rows
+    for item in data:
+        table_data.append([
+            Paragraph(str(item[1])),  # Description
+            Paragraph(format_numeric(item[2])),  # Qty
+            Paragraph(format_numeric(item[4])),  # MRP
+            Paragraph(format_numeric(item[5]))   # Amount
+        ])
+    
+    # Add empty rows if less than 4 products
+    while len(table_data) < 5:  # Header + min 3 products + empty row
+        table_data.append(["", "", "", ""])
+    
+    # Add financial rows
+    table_data.extend([
+        ["Total Quantity",  "", "", total_qty],
+        ["Sub Total", "", "", sub_total],
+        ["Discount Amt", "", "", f"-{discount_amt}"],
+        ["Bill Total", "", "", bill_total],
+        [Paragraph(f"<b>Amount in Words:</b> {amount_in_words}", normal_style), "", "", ""]
+    ])
+    
+    # Create table
+    table = Table(table_data, colWidths=col_widths)
+    
+    # Apply styling
+    table.setStyle(TableStyle([
+        # Outer border
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        
+        # Header styling
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        
+        # Key dividers
+        ('LINEABOVE', (0, len(data)+1), (-1, len(data)+1), 1, colors.black),  # Above Total
+        ('LINEABOVE', (0, len(data)+3), (-1, len(data)+3), 1, colors.black),  # Above Bill Total
+        
+        # Right-align numbers
+        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+        
+        # Span amount in words
+        ('SPAN', (0, -1), (-1, -1)),
+        
+        # Bold important rows
+        ('FONTNAME', (0, -2), (-1, -2), 'Helvetica-Bold'),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+    ]))
+    
+    return table
+
+#Payment receipt logic ...
+def payment_receipt_header(company_name, company_address, company_phone, company_email):
+    styles = getSampleStyleSheet()
+    elements = []
+    
+    # Main header style
+    header_style = ParagraphStyle(
+        'HeaderStyle',
+        parent=styles['Heading1'],
+        fontSize=14,
+        alignment=1,  # Center
+        spaceAfter=12
+    )
+    
+    # Subheader style
+    subheader_style = ParagraphStyle(
+        'SubheaderStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=1,
+        spaceAfter=6
+    )
+    
+    # Contact style
+    contact_style = ParagraphStyle(
+        'ContactStyle',
+        parent=styles['Normal'],
+        fontSize=9,
+        alignment=1,
+        spaceAfter=12
+    )
+    
+    elements.append(Paragraph(company_name.upper(), header_style))
+    elements.append(Paragraph(company_address, subheader_style))
+    elements.append(Paragraph(f"Phone: {company_phone} | Email: {company_email}", contact_style))
+    
+    return elements
+
+def payment_receipt_voucher_table(data):
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    bold_style = styles['Heading3']
+    
+    # Main voucher table data
+    table_data = [
+        [
+            Paragraph(f"<b>Customer Name</b>", bold_style),
+            Paragraph(f"Voucher No: {data['voucher_no']}", normal_style),
+            Paragraph(f"Voucher Date: {data['voucher_date']}", normal_style)
+        ],
+        [
+            Paragraph(data['customer_name'], normal_style),
+            "Bills Ref",
+            "-"
+        ],
+        [
+            "",
+            "Transfer No.",
+            "-"
+        ],
+        [
+            Paragraph(f"<b>Transfer Name</b>", bold_style),
+            data['transfer_name'],
+            Paragraph(f"<b>Transfer Date</b>", bold_style),
+            data['transfer_date']
+        ],
+        [
+            Paragraph(f"<b>Bill No:</b>", bold_style),
+            "Bill Date",
+            "D/C",
+            "Transfer Amount",
+            "Adjusted Amt (Cash Discount)",
+            "Net Receipt"
+        ],
+        # Sample transaction rows (replace with actual data)
+        [
+            "09:45/24-25",
+            "06/03/2025",
+            "D",
+            "31,216.00",
+            "31,216.00",
+            "0.00",
+            "31,216.00"
+        ],
+        [
+            "05/23/24-25",
+            "06/03/2025",
+            "D",
+            "",
+            "(1) 300.00",
+            "0.00",
+            "(1) 300.00"
+        ],
+        [
+            "05/23/24-25",
+            "07/03/2025",
+            "D",
+            "",
+            "3,384.00",
+            "0.00",
+            "3,384.00"
+        ]
+    ]
+    
+    col_widths = [1.5*inch, 1*inch, 0.5*inch, 1*inch, 1.5*inch, 1*inch, 1*inch]
+    
+    table = Table(table_data, colWidths=col_widths, hAlign='LEFT')
+    table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('SPAN', (0, 1), (0, 2)),
+        ('SPAN', (1, 1), (2, 1)),
+        ('SPAN', (1, 2), (2, 2)),
+        ('SPAN', (0, 3), (1, 3)),
+        ('SPAN', (2, 3), (3, 3)),
+        ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
+    ]))
+    
+    return table
+
+def payment_amount_section(amount, amount_in_words, outstanding, total):
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    bold_style = styles['Heading3']
+    
+    # Amount in words
+    amount_words = Paragraph(
+        f"<b>Amount:</b> {amount_in_words}", 
+        normal_style
+    )
+    
+    # Amount breakdown table
+    amounts_data = [
+        [Paragraph("<b>Amount Paid:</b>", bold_style), Paragraph(f"<b>{amount:,.2f}</b>", bold_style)],
+        [Paragraph("<b>Outstanding:</b>", normal_style), Paragraph(f"{outstanding:,.2f}", normal_style)],
+        [Paragraph("<b>Original Total:</b>", normal_style), Paragraph(f"{total:,.2f}", normal_style)],
+    ]
+    
+    amounts_table = Table(amounts_data, colWidths=[3*inch, 2*inch])
+    amounts_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    
+    # Combine both in a single table
+    combined_data = [[amount_words, amounts_table]]
+    table = Table(combined_data, colWidths=[4*inch, 3*inch])
+    table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('PADDING', (0, 0), (-1, -1), 10),
+    ]))
+    
+    return table
+
+def payment_approval_section():
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    
+    table_data = [
+        ["", "Authorized Signatory"],
+        ["Prepared By:", ""],
+        ["Approved By:", ""]
+    ]
+    
+    table = Table(table_data, colWidths=[3*inch, 4*inch])
+    table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTNAME', (1, 0), (1, 0), 'Helvetica-Bold'),
+        ('LINEABOVE', (0, 1), (-1, 1), 1, colors.black),
+        ('LINEABOVE', (0, 2), (-1, 2), 1, colors.black),
+        ('SPAN', (1, 0), (1, 2)),
+    ]))
+    
+    return table
+
+def payment_receipt_amount_section(data):
+    """Creates the amount section with amount in words and numeric breakdown"""
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    bold_style = styles['Heading3']
+    
+    # Amount in words
+    amount_words = Paragraph(
+        f"<b>Amount Paid:</b> {data['amount_in_words']}", 
+        normal_style
+    )
+    
+    # Amount breakdown table
+    amounts_data = [
+        [Paragraph("<b>Amount Paid:</b>", bold_style), f"{data['amount']:,.2f}"],
+        [Paragraph("Outstanding:", normal_style), f"{data['outstanding']:,.2f}"],
+        [Paragraph("Original Total:", normal_style), f"{data['total']:,.2f}"],
+    ]
+    
+    amounts_table = Table(amounts_data, colWidths=[2.0*inch, 1.5*inch])
+    amounts_table.setStyle(TableStyle([
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+    ]))
+    
+    # Combine both sections
+    combined_table = Table([
+        [amount_words, amounts_table]
+    ], colWidths=[4.0*inch, 3.5*inch])
+    
+    combined_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('PADDING', (0, 0), (-1, -1), 10),
+    ]))
+    
+    return combined_table
+
+def payment_receipt_voucher_table(data):
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    bold_style = styles['Heading3']
+    
+    # Main voucher table data
+    table_data = [
+        [
+            Paragraph(f"<b>Customer Name</b>", bold_style),
+            Paragraph(f"Voucher No: {data['voucher_no']}", normal_style),
+            Paragraph(f"Voucher Date: {data['voucher_date']}", normal_style)
+        ],
+        [
+            Paragraph(data['customer_name'], normal_style),
+            "Bills Ref",
+            "-"
+        ],
+        [
+            "",
+            "Transfer No.",
+            "-"
+        ],
+        [
+            Paragraph(f"<b>Transfer Name</b>", bold_style),
+            data['transfer_name'],
+            Paragraph(f"<b>Transfer Date</b>", bold_style),
+            data['transfer_date']
+        ],
+        [
+            Paragraph(f"<b>Bill No:</b>", bold_style),
+            "Bill Date",
+            "D/C",
+            "Transfer Amount",
+            "Adjusted Amt (Cash Discount)",
+            "Net Receipt"
+        ],
+        # Sample transaction rows (replace with actual data)
+        [
+            "09:45/24-25",
+            "06/03/2025",
+            "D",
+            "31,216.00",
+            "31,216.00",
+            "0.00",
+            "31,216.00"
+        ],
+        [
+            "05/23/24-25",
+            "06/03/2025",
+            "D",
+            "",
+            "(1) 300.00",
+            "0.00",
+            "(1) 300.00"
+        ],
+        [
+            "05/23/24-25",
+            "07/03/2025",
+            "D",
+            "",
+            "3,384.00",
+            "0.00",
+            "3,384.00"
+        ]
+    ]
+    
+    col_widths = [1.5*inch, 1*inch, 0.5*inch, 1*inch, 1.5*inch, 1*inch, 1*inch]
+    
+    table = Table(table_data, colWidths=col_widths, hAlign='LEFT')
+    table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        
+        # Vertical lines only
+        ('LINEBEFORE', (0, 0), (0, -1), 1, colors.black),  # First column
+        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),  # Second column
+        ('LINEBEFORE', (2, 0), (2, -1), 1, colors.black),  # Third column
+        ('LINEBEFORE', (3, 0), (3, -1), 1, colors.black),  # Fourth column
+        ('LINEBEFORE', (4, 0), (4, -1), 1, colors.black),  # Fifth column
+        ('LINEBEFORE', (5, 0), (5, -1), 1, colors.black),  # Sixth column
+        ('LINEBEFORE', (6, 0), (6, -1), 1, colors.black),  # Seventh column
+        
+        # Remove all horizontal lines by removing GRID and LINEABOVE/BELOW
+        ('SPAN', (0, 1), (0, 2)),
+        ('SPAN', (1, 1), (2, 1)),
+        ('SPAN', (1, 2), (2, 2)),
+        ('SPAN', (0, 3), (1, 3)),
+        ('SPAN', (2, 3), (3, 3)),
+        ('BACKGROUND', (0, 4), (-1, 4), colors.lightgrey),
+        
+        # Right align numeric columns
+        ('ALIGN', (3, 5), (6, -1), 'RIGHT'),
+    ]))
+    
+    return table
+
+def payment_customer_details(cust_name, billing_address, phone, email):
+    styles = getSampleStyleSheet()
+    style_normal = styles['Normal']
+    
+    # Create structured content for payment receipts
+    customer_content = Paragraph(
+        f"<b>{cust_name}</b><br/>"
+        f"{billing_address}<br/>"
+        f"<b>Phone:</b> {phone}<br/>"
+        f"<b>Email:</b> {email}",
+        style_normal
+    )
+    
+    table_data = [
+        [customer_content]
+    ]
+    
+    table = Table(table_data, colWidths=[10*inch])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    
+    return table
+
+def payment_details_table(payment_data):
+    style_normal = getSampleStyleSheet()['Normal']
+    
+    # Column widths similar to sale order
+    col_widths = [1.5*inch, 3*inch, 1.5*inch, 2*inch, 2*inch]
+    
+    # Table headers
+    table_data = [
+        [
+            Paragraph("<b>Invoice No.</b>", style_normal),
+            Paragraph("<b>Invoice Date</b>", style_normal),
+            Paragraph("<b>Payment Method</b>", style_normal),
+            Paragraph("<b>Reference No.</b>", style_normal),
+            Paragraph("<b>Amount Paid</b>", style_normal)
+        ]
+    ]
+    
+    # Add payment rows
+    for payment in payment_data:
+        row = [
+            Paragraph(payment['invoice_no'], style_normal),
+            Paragraph(payment['invoice_date'], style_normal),
+            Paragraph(payment['payment_method'], style_normal),
+            Paragraph(payment.get('cheque_no', 'N/A'), style_normal),
+            Paragraph(format_numeric(payment['amount']), style_normal)
+        ]
+        table_data.append(row)
+    
+    # Ensure minimum rows for spacing
+    while len(table_data) < 6:
+        table_data.append([" "] * 5)
+    
+    table = Table(table_data, colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),  # Amount right-aligned
+        
+        # Vertical lines between all columns
+        ('LINEBEFORE', (0, 0), (0, -1), 1, colors.black),  # First column
+        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),  # Second column
+        ('LINEBEFORE', (2, 0), (2, -1), 1, colors.black),  # Third column
+        ('LINEBEFORE', (3, 0), (3, -1), 1, colors.black),  # Fourth column
+        ('LINEBEFORE', (4, 0), (4, -1), 1, colors.black),  # Fifth column
+        ('LINEAFTER', (4, 0), (4, -1), 1, colors.black),
+        
+        # Horizontal line only below header and above last row
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Below header
+        ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),  # Above last row
+        
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        
+        # Remove all other horizontal lines
+        ('TOPPADDING', (0, 1), (-1, -2), 8),  # Add some padding between rows
+    ]))
+    
+    return table
+
+def payment_amount_summary(outstanding, amount_in_words):
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    bold_style = styles['Heading3']
+    
+    # Amount in words
+    amount_paragraph = Paragraph(
+        f"<b>Amount in Words:</b> {amount_in_words}",
+        normal_style
+    )
+    
+    # Amount breakdown
+    amounts_data = [
+        # [Paragraph("<b>Amount Paid:</b>", bold_style), format_numeric(amount)],
+        [Paragraph("Outstanding Balance:", normal_style), format_numeric(outstanding)],
+        # [Paragraph("Original Total:", normal_style), format_numeric(total)],
+    ]
+    
+    amounts_table = Table(amounts_data, colWidths=[3*inch, 2*inch])
+    amounts_table.setStyle(TableStyle([
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+    ]))
+    
+    # Combine both sections
+    combined = Table([
+        [amount_paragraph, amounts_table]
+    ], colWidths=[6*inch, 4*inch])
+    
+    combined.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('PADDING', (0, 0), (-1, -1), 10),
+    ]))
+    
+    return combined

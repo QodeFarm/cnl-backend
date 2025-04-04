@@ -1,19 +1,24 @@
+from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
+from apps.sales.models import PaymentTransactions
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
-from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data, sales_invoice_doc
-from apps.masters.template.table_defination import doc_heading
+from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data, sale_return_doc, sales_invoice_doc
+from apps.masters.template.table_defination import doc_heading, payment_receipt_amount_section, payment_receipt_voucher_table
 from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.filters import OrderingFilter
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from reportlab.lib.pagesizes import inch
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate, Spacer, Image 
 from rest_framework import viewsets
 from config.utils_methods import *
 from rest_framework import status
 from django.conf import settings
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from .serializers import *
 from .filters import *
 from .models import *
@@ -588,20 +593,28 @@ class DocumentGeneratorView(APIView):
 #   #=======================================ReportLab Code Started============================          
             if document_type == "sale_order":
                 pdf_data = sale_order_sales_invoice_data(pk, document_type)
+                # Override doc_header based on sale_estimate directly in the view
+                
+                print("pdf_data.get('sale_estimate') : ", pdf_data.get('sale_estimate'))
+                if pdf_data.get('sale_estimate') == 'Yes':
+                    pdf_data['doc_header'] = "SALES QUOTATION"
+                    
+                print(f"Final confirmed doc_header: {pdf_data['doc_header']}") 
+
                 elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
                 sale_order_sales_invoice_doc(
                                    elements, doc, 
                                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
                                    pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'], 
                                    pdf_data['product_data'],
-                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
-                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
+                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['round_0ff'], 
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                                 )
                 
             if document_type == "sale_invoice":
-                pdf_data = sale_order_sales_invoice_data(pk, document_type)
-                elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
+                pdf_data = sale_order_sales_invoice_data(pk, document_type)  
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], '')
                 sales_invoice_doc(
                                    elements, doc, 
                                    pdf_data['company_logo'], pdf_data['company_name'], pdf_data['company_gst'], pdf_data['company_address'], pdf_data['company_phone'], pdf_data['company_email'],
@@ -610,15 +623,33 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'], pdf_data['shipping_address'],
                                    pdf_data['billing_address'],
                                    pdf_data['product_data'],
-                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_txbl_amt'],
-                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['round_0ff'], 
+                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'],pdf_data['finalDiscount'], pdf_data['round_0ff'], #finalDiscount
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                                 )
-            elif document_type == "purchase_order" or document_type == "purchase_return":
+            # Add this in the DocumentGeneratorView class after the sale_invoice condition
+            if document_type == "sale_return":
+                pdf_data = sale_order_sales_invoice_data(pk, document_type)
+                elements, doc = doc_heading(file_path, "BILL OF SUPPLY", '')  # Modified header for returns
+                sale_return_doc(
+                    elements, doc, 
+                    pdf_data['company_name'], pdf_data['company_address'], pdf_data['company_phone'],
+                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['final_invoice'],
+                    pdf_data['date_lbl'], pdf_data['final_invoiceDate'],
+                    pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'],
+                    pdf_data['city'],
+                    pdf_data['product_data'],
+                    pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['itemstotal'],
+                    pdf_data['total_disc_amt'], pdf_data['bill_amount_in_words'],
+                    pdf_data['round_0ff'],
+                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
+                )
+            if document_type == "purchase_order" or document_type == "purchase_return":
                 pdf_data = purchase_data(pk, document_type)
-                sub_heading = [pdf_data['comp_name'], pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']]
-                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_heading)
+                # sub_header = 'Receipt Voucher'
+                elements, doc = doc_heading(file_path, "PURCHASE BILL", '')
                 purchase_doc(elements, doc, 
+                                   pdf_data['comp_name'], pdf_data['comp_address'], pdf_data['comp_phone'],
                                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
                                    pdf_data['customer_name'], pdf_data['v_billing_address'], pdf_data['v_shipping_address_lbl'],  pdf_data['v_shipping_address'],
                                    pdf_data['product_data'],
@@ -628,9 +659,57 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'],  pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
                                    pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']
                                 )
-            
+                
+            elif document_type == "payment_receipt":
+                pdf_data = payment_receipt_data(pk, document_type)
+                sub_header = 'Receipt Voucher'
+                # Use same doc_heading pattern as sale order
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header)
+                
+                # Generate payment receipt with same structure as sale order
+                payment_receipt_doc(
+                    elements, doc,
+                    pdf_data['company_name'], pdf_data['company_address'], pdf_data['company_phone'],
+                    pdf_data['cust_bill_dtl'], 
+                    pdf_data['number_lbl'], 
+                    pdf_data['invoice_no'], 
+                    pdf_data['date_lbl'], 
+                    pdf_data['invoice_date'],
+                    pdf_data['customer_name'], 
+                    pdf_data['billing_address'], 
+                    pdf_data['phone'],
+                    pdf_data['email'],
+                    [{
+                        'invoice_no': pdf_data['invoice_no'],
+                        'invoice_date': pdf_data['invoice_date'],
+                        'payment_method': pdf_data['payment_method'],
+                        'cheque_no': pdf_data['cheque_no'],
+                        'amount': pdf_data['amount']
+                    }],  # Pass as list to match sale order's product_data structure
+                    pdf_data['amount'],
+                    pdf_data['outstanding'],
+                    pdf_data['total'],
+                    pdf_data['amount_in_words'],
+                    # pdf_data['net_lbl'],
+                    # pdf_data['amount']  # Using amount as net_value
+                )
+                
             if flag == 'email':
-                pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path)
+                pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path, document_type)
+                
+            if flag == 'print':
+                # Add any print-specific modifications to your PDF here
+                response = HttpResponse(pdf_data, content_type='application/pdf')
+                response['Content-Disposition'] = 'inline; filename="document_to_print.pdf"'
+                return response
+            
+            elif flag == 'preview':
+                # Return the PDF file directly for preview
+                with open(file_path, 'rb') as pdf_file:
+                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                    response['Content-Disposition'] = f'inline; filename="{doc_name}.pdf"'
+                    return response
+                
             # elif flag == 'whatsapp':
             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
 

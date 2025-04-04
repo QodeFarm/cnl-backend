@@ -144,6 +144,7 @@ class VendorViewSet(APIView):
  
             logger.info("Retrieving all vendors")
             queryset = Vendor.objects.all().order_by('-created_at')
+            print("check 1.")
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10)) 
@@ -154,11 +155,13 @@ class VendorViewSet(APIView):
                 filterset = VendorFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-
+            print("check 2.")
             serializer = VendorsOptionsSerializer(queryset, many=True)
             logger.info("vendors data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            print("check 3.")
+            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+            # return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
  
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
