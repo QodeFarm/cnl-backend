@@ -49,4 +49,5 @@ urlpatterns = [
     
     path('payment_transactions/', PaymentTransactionAPIView.as_view(),name='payment-transaction-create'),
     path('payment_transactions/<str:customer_id>/', PaymentTransactionAPIView.as_view(), name='customer-payment-transactions-List'),
+    path('data_for_payment_receipt_table/<str:customer_id>/', FetchSalesInvoicesForPaymentReceiptTable.as_view(), name='sale-Invoice-data-for-payment-receipt-table-by-customer-ID'),
 ]      
