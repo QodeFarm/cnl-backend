@@ -1226,6 +1226,8 @@ CREATE TABLE IF NOT EXISTS sale_invoice_orders(
 	shipping_address VARCHAR(1024),
 	billing_address VARCHAR(1024),
     sale_order_id CHAR(36),
+    paid_amount DECIMAL(18, 2) DEFAULT 0.00, -- This is like the amount paid compared to the total amount.
+    balance_amount DECIMAL(18, 2),   --It is the same as the outstanding amount (balance_amount = total_amount)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
@@ -1364,10 +1366,12 @@ CREATE TABLE IF NOT EXISTS  payment_transactions (
   customer_id char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
   invoice_no VARCHAR(20),
   total_amount DECIMAL(18, 2),
+  account_id CHAR(36) NOT NULL,
   created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY fk_payment_transactions_sale_invoice (sale_invoice_id),
   KEY fk_payment_transactions_customer (customer_id),
+  FOREIGN KEY (account_id) REFERENCES(account_id),
   CONSTRAINT fk_payment_transactions_customer FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT fk_payment_transactions_sale_invoice FOREIGN KEY (sale_invoice_id) REFERENCES sale_invoice_orders (sale_invoice_id) ON DELETE RESTRICT ON UPDATE CASCADE
 ) 
@@ -2331,16 +2335,17 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 -- Stores individual debit and credit lines associated with journal entries.
 CREATE TABLE IF NOT EXISTS journal_entry_lines (
     journal_entry_line_id CHAR(36) PRIMARY KEY,
-    journal_entry_id CHAR(36),
     account_id CHAR(36),
     customer_id CHAR(36),
     vendor_id CHAR(36),
     debit DECIMAL(15, 2) DEFAULT 0.00,
     credit DECIMAL(15, 2) DEFAULT 0.00,
     description VARCHAR(1024),
+    balance DECIMAL(15, 2) DEFAULT 0.00,  -- balance amt  
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(journal_entry_id),
+   -- journal_entry_id CHAR(36),                                                    Needed in future
+   -- FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(journal_entry_id),
     FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id)
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
     FOREIGN KEY (vendor_id) REFERENCES vendor(vendor_id)

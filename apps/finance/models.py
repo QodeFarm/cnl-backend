@@ -67,21 +67,22 @@ class JournalEntry(models.Model):
 
 class JournalEntryLines(models.Model):
     journal_entry_line_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    journal_entry_id = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name='entry_lines', db_column='journal_entry_id')
     account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, null=True, related_name='journal_entry_lines', db_column='account_id')
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     description = models.CharField(max_length=1024, default=None, null=True)
     customer_id  = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, db_column='customer_id')
     vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, db_column='vendor_id')
+    balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+  # journal_entry_id = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name='entry_lines', db_column='journal_entry_id')
     
     class Meta:
         db_table = journalentrylines
 
     def __str__(self):
-        return f"Line {self.journal_entry_line_id} for Entry {self.journal_entry.journal_entry_id}"
+        return f"Line {self.journal_entry_line_id} for Entry {self.description}"
 
 
 class PaymentTransaction(models.Model): # Enhance Later

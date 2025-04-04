@@ -1,27 +1,17 @@
-from datetime import timedelta
 from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses
+from apps.customfields.serializers import CustomFieldValueSerializer
+from apps.finance.serializers import JournalEntryLinesSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import Products, ProductVariation
 from django.core.exceptions import  ObjectDoesNotExist
+from apps.customfields.models import CustomFieldValue
 from rest_framework.filters import OrderingFilter
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
-from rest_framework.serializers import ValidationError
-from uuid import UUID
-from rest_framework.views import APIView
-from apps.customfields.models import CustomFieldValue
-from apps.customfields.serializers import CustomFieldValueSerializer
-from apps.inventory.models import BlockedInventory, InventoryBlockConfig
-from config.utils_filter_methods import filter_response, list_filtered_objects
-from .filters import *
-from apps.purchase.models import PurchaseOrders
-from apps.purchase.serializers import PurchaseOrdersSerializer
-from apps.products.models import Products, ProductVariation
-from .serializers import *
 from apps.masters.models import OrderTypes
 from decimal import Decimal, ROUND_HALF_UP
 from rest_framework.views import APIView
@@ -2907,6 +2897,24 @@ class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
     """
+    def load_data_in_journal_entry_line(self, customer_id, account_id, amount, description, balance_amount):
+        try:
+            # Use serializer to create journal entry line
+            entry_data = {
+                "customer_id": customer_id,
+                "account_id": account_id,
+                "credit": int(amount),
+                "description": description,
+                "balance" : int(balance_amount)
+            }
+            serializer = JournalEntryLinesSerializer(data=entry_data)
+            if serializer.is_valid():
+                serializer.save() 
+        except(ValueError, TypeError):
+            return build_response(1, "Invalid Data provided For Journal Entry Lines.", [], status.HTTP_406_NOT_ACCEPTABLE)
+        
+        return build_response(serializer, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
+    
     def post(self, request):
         """
         Handle POST request to create one or more payment transactions by applying the input amount
@@ -2914,6 +2922,15 @@ class PaymentTransactionAPIView(APIView):
         """
         data = request.data
         customer_id = data.get('customer')
+        account_id = data.get('account')
+        description = data.get('description')
+
+        # Validate account_id
+        try:
+            uuid.UUID(account_id)  # Ensure valid UUID format
+            customer_obj = ChartOfAccounts.objects.get(pk=account_id)
+        except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
+            return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
         # Validate customer_id
         try:
@@ -2984,28 +3001,34 @@ class PaymentTransactionAPIView(APIView):
                                 payment_method=data.get('payment_method'),
                                 total_amount=total_amount,
                                 outstanding_amount=new_outstanding,
-                                adjusted_now=input_adjustNow,
+                                adjusted_now=allocated_amount,
                                 payment_status=data.get('payment_status'),
                                 sale_invoice=invoice, 
                                 invoice_no=invoice.invoice_no,
                                 customer=customer_obj,
+                                account_id=account_id
                             )
-
-                            results.append({
-                                "Transaction ID": str(payment_transaction.transaction_id),
-                                "Total Invoice Amount": str(total_amount),
-                                "Allocated Amount To Invoice": str(allocated_amount),
-                                "New Outstanding": str(new_outstanding),
-                                "Payment Receipt No": payment_transaction.payment_receipt_no,
-                                "Remaining Payment" : str(remaining_payment)
-                            })
-
+                            
                             # If the invoice is fully paid, update its order_status_id to "Completed".
                             if new_outstanding == Decimal('0.00'):
                                 SaleInvoiceOrders.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(order_status_id=completed_status)
+                                PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
+
+                        self.load_data_in_journal_entry_line(customer_id, account_id, input_adjustNow, description, remaining_payment)
                         
+                        results.append({
+                            "Transaction ID": str(payment_transaction.transaction_id),
+                            "Total Invoice Amount": str(total_amount),
+                            "Allocated Amount To Invoice": str(allocated_amount),
+                            "New Outstanding": str(new_outstanding),
+                            "Payment Receipt No": payment_transaction.payment_receipt_no,
+                            "Remaining Payment" : str(remaining_payment),
+                            "account_id" : str(account_id)
+                        })
+
+                            
             except Exception as e:
-            # General exception handling - the transaction will be rolled back.
+                # General exception handling - the transaction will be rolled back.
                 return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             return build_response(len(results), "Payment transactions processed successfully", results, status.HTTP_201_CREATED)
@@ -3019,102 +3042,109 @@ class PaymentTransactionAPIView(APIView):
             except (ValueError, TypeError):
                 return build_response(1, "Invalid amount provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
             
-            # Process payment transactions
-            with transaction.atomic():
-                remaining_amount = input_amount
-                payment_transactions_created = []
+            remaining_amount = input_amount
+            payment_transactions_created = []
 
-                # Step 1: Get all pending invoices (ordered by date)
-                pending_invoices = SaleInvoiceOrders.objects.filter(
-                    customer_id=customer_id,
-                    order_status_id=pending_status
-                ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
+            # Step 1: Get all pending invoices (ordered by date)
+            pending_invoices = SaleInvoiceOrders.objects.filter(
+                customer_id=customer_id,
+                order_status_id=pending_status
+            ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
 
-                pending_invoice_ids = pending_invoices.values_list('sale_invoice_id', flat=True)
+            pending_invoice_ids = pending_invoices.values_list('sale_invoice_id', flat=True)
 
-                # Step 2: Find invoices that already have partial payments
-                invoices_with_partial_payments = PaymentTransactions.objects.filter(
-                    sale_invoice_id__in=pending_invoice_ids,
-                    customer_id=customer_id).values('sale_invoice_id').annotate(total_paid=Sum('amount')).order_by('sale_invoice_id')
+            # Step 2: Find invoices that already have partial payments
+            invoices_with_partial_payments = PaymentTransactions.objects.filter(
+                sale_invoice_id__in=pending_invoice_ids,
+                customer_id=customer_id).values('sale_invoice_id').annotate(total_paid=Sum('amount')).order_by('sale_invoice_id')
 
-                # Step 3: Combine both lists (remove duplicates, sort by oldest)
-                invoice_dict = {invoice.sale_invoice_id: invoice for invoice in pending_invoices}
+            # Step 3: Combine both lists (remove duplicates, sort by oldest)
+            invoice_dict = {invoice.sale_invoice_id: invoice for invoice in pending_invoices}
 
-                for invoice_data in invoices_with_partial_payments:
-                    sale_invoice_id = invoice_data['sale_invoice_id']
-                    if sale_invoice_id in invoice_dict:
-                        # Update the total_paid value in the dictionary
-                        invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
-                    else:
-                        # If the invoice is not already in pending_invoices, add it manually
-                        invoice_dict[sale_invoice_id] = SaleInvoiceOrders.objects.get(sale_invoice_id=sale_invoice_id)
-                        invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
+            for invoice_data in invoices_with_partial_payments:
+                sale_invoice_id = invoice_data['sale_invoice_id']
+                if sale_invoice_id in invoice_dict:
+                    # Update the total_paid value in the dictionary
+                    invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
+                else:
+                    # If the invoice is not already in pending_invoices, add it manually
+                    invoice_dict[sale_invoice_id] = SaleInvoiceOrders.objects.get(sale_invoice_id=sale_invoice_id)
+                    invoice_dict[sale_invoice_id].total_paid = invoice_data['total_paid']
 
-                # Convert dictionary to sorted list (oldest to newest based on created_at)
-                invoices_sorted = sorted(invoice_dict.values(), key=lambda x: x.created_at)
+            # Convert dictionary to sorted list (oldest to newest based on created_at)
+            invoices_sorted = sorted(invoice_dict.values(), key=lambda x: x.created_at)
+            if invoices_sorted:
+                # Process payment transactions
+                with transaction.atomic():
+                    # Step 4: Allocate payments to those invoices
+                    for sale_invoice in invoices_sorted:
+                        if remaining_amount <= 0:
+                            break
 
-                # Step 4: Allocate payments to those invoices
-                for sale_invoice in invoices_sorted:
-                    if remaining_amount <= 0:
-                        break
+                        total_paid = getattr(sale_invoice, 'total_paid', Decimal('0.0000')) or Decimal('0.0000')
 
-                    total_paid = getattr(sale_invoice, 'total_paid', Decimal('0.0000')) or Decimal('0.0000')
+                        # Check if invoice exists in PaymentTransactions and fetch outstanding_amount
+                        payment_transaction = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).order_by('-created_at').first()
+                        if payment_transaction:
+                            # If invoice is in PaymentTransactions, directly use the last outstanding amount
+                            current_outstanding = max(payment_transaction.outstanding_amount, Decimal('0.0000'))
+                        else:
+                            # If invoice is NOT in PaymentTransactions, calculate from total_amount
+                            current_outstanding = max(sale_invoice.total_amount - total_paid, Decimal('0.0000'))
+                        if current_outstanding <= 0:
+                            continue  # Skip invoices that are fully paid
 
-                    # Check if invoice exists in PaymentTransactions and fetch outstanding_amount
-                    payment_transaction = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).order_by('-created_at').first()
-                    
-                    if payment_transaction:
-                        # If invoice is in PaymentTransactions, use outstanding_amount
-                        current_outstanding = max(payment_transaction.outstanding_amount - total_paid, Decimal('0.0000'))
-                    else:
-                        # If invoice is NOT in PaymentTransactions, use total_amount - total_paid
-                        current_outstanding = max(sale_invoice.total_amount - total_paid, Decimal('0.0000'))
-    
-                    if current_outstanding <= 0:
-                        continue  # Skip invoices that are fully paid
+                        allocated_amount = min(remaining_amount, current_outstanding)
+                        new_outstanding = current_outstanding - allocated_amount
+                        remaining_amount -= allocated_amount
 
-                    allocated_amount = min(remaining_amount, current_outstanding)
-                    new_outstanding = current_outstanding - allocated_amount
-                    remaining_amount -= allocated_amount
+                        # Create payment transaction
+                        payment_txn = PaymentTransactions.objects.create(
+                            payment_receipt_no=data.get('payment_receipt_no'),
+                            payment_method=data.get('payment_method'),
+                            cheque_no=data.get('cheque_no'),
+                            total_amount=sale_invoice.total_amount,
+                            amount=allocated_amount,
+                            outstanding_amount=new_outstanding,
+                            payment_status=data.get('payment_status'),
+                            customer_id=customer_id,
+                            sale_invoice_id=sale_invoice.sale_invoice_id,
+                            invoice_no=sale_invoice.invoice_no,
+                            account_id = account_id
+                        )
+                        payment_transactions_created.append(payment_txn)
 
-                    # Create payment transaction
-                    payment_txn = PaymentTransactions.objects.create(
-                        payment_receipt_no=data.get('payment_receipt_no'),
-                        payment_method=data.get('payment_method'),
-                        cheque_no=data.get('cheque_no'),
-                        total_amount=sale_invoice.total_amount,
-                        amount=allocated_amount,
-                        outstanding_amount=new_outstanding,
-                        payment_status=data.get('payment_status'),
-                        customer_id=customer_id,
-                        sale_invoice_id=sale_invoice.sale_invoice_id,
-                        invoice_no=sale_invoice.invoice_no,
-                    )
-                    payment_transactions_created.append(payment_txn)
+                        # Step 5: Update invoice status if fully paid
+                        if new_outstanding == Decimal('0.00'):
+                            SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
+                            PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
+                        
+                        self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description, remaining_amount)
+                        
 
-                    # Step 5: Update invoice status if fully paid
-                    if new_outstanding == Decimal('0.00'):
-                        SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
-                        #PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
-            
-            # Prepare response
-            response_data = {
-                "payment_transactions": [
-                    {
-                        "Transaction ID": str(txn.transaction_id),
-                        "payment Receipt No": txn.payment_receipt_no,
-                        "Total Invoice Amount" : str(txn.total_amount),
-                        "Amount": str(txn.amount),
-                        "Outstanding Amount": str(txn.outstanding_amount),
-                        "Sale Invoice Id": txn.sale_invoice_id,
-                        "Invoice No": txn.invoice_no,
-                    }
-                    for txn in payment_transactions_created
-                ],
-                "remaining_payment": str(remaining_amount)
-            }
-            return build_response(1, "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
-        
+                # Prepare response
+                response_data = {
+                    "payment_transactions": [
+                        {
+                            "Transaction ID": str(txn.transaction_id),
+                            "payment Receipt No": txn.payment_receipt_no,
+                            "Total Invoice Amount" : str(txn.total_amount),
+                            "Amount": str(txn.amount),
+                            "Outstanding Amount": str(txn.outstanding_amount),
+                            "Sale Invoice Id": txn.sale_invoice_id,
+                            "Invoice No": txn.invoice_no,
+                            "customer_id" : str(customer_id),
+                            "account_id" : str(account_id)
+                        }
+                        for txn in payment_transactions_created
+                    ],
+                    "remaining_payment": str(remaining_amount)
+                }
+                return build_response(len(payment_transactions_created), "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
+            else:
+                return build_response(0, "No Invoices", [], status.HTTP_204_NO_CONTENT)
+
+
     def get(self, request, customer_id):
         '''Fetch All Payment Transactions for a Customer'''
         payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).select_related('sale_invoice').order_by('-created_at')
