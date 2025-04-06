@@ -3119,7 +3119,7 @@ class PaymentTransactionAPIView(APIView):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
                         
-                        self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description, remaining_amount)
+                    self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description, remaining_amount)
                         
 
                 # Prepare response
@@ -3158,4 +3158,19 @@ class PaymentTransactionAPIView(APIView):
         except Exception as e:
             return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+
+class FetchSalesInvoicesForPaymentReceiptTable(APIView):
+    '''This API is used to fetch all information related to sales invoices for 
+        the Payment Receipt. It's related to the Payment Transaction table only.'''
+    def get(self, request, customer_id):
+        sale_invoice = SaleInvoiceOrders.objects.filter(customer_id=customer_id)
         
+        if not sale_invoice.exists():
+            return build_response(0, "No sale invoice found for this customer", None, status.HTTP_404_NOT_FOUND) 
+
+        try:
+            serializer = SaleInvoiceOrdersSerializer(sale_invoice, many=True)
+            return build_response(len(serializer.data), "Sale Invoices", serializer.data, status.HTTP_200_OK)
+        except Exception as e:
+            return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+ 
