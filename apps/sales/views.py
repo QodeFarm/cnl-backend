@@ -3119,7 +3119,7 @@ class PaymentTransactionAPIView(APIView):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
                         
-                        self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description, remaining_amount)
+                    self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description, remaining_amount)
                         
 
                 # Prepare response
