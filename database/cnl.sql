@@ -561,6 +561,18 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
 	FOREIGN KEY (country_id) REFERENCES country(country_id)
 );
 
+/* Customer Balance Table */
+-- Stores information about customer balance.
+CREATE TABLE IF NOT EXISTS customer_balance (
+  customer_balance_id CHAR(36) PRIMARY KEY,
+  customer_id char(36) NOT NULL,
+  balance_amount decimal(10,2) NOT NULL DEFAULT '0.00',
+  last_updated datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  created_at timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
+)
+
 /* Product Groups Table */
 -- Stores information about different groups of products.
 CREATE TABLE IF NOT EXISTS product_groups (
