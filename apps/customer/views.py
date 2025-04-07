@@ -36,7 +36,7 @@ class LedgerAccountsViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
-        return list_filtered_objects(self, request, LedgerAccounts,*args, **kwargs)
+        return list_filtered_objects(self, request, LedgerAccounts, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)

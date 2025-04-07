@@ -82,11 +82,11 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     phone = serializers.SerializerMethodField()
     customer_addresses = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField() 
-    # ledger_account = serializers.SerializerMethodField()
+    ledger_account = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days']
+        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
@@ -136,9 +136,18 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     def get_customer_addresses(self, obj):
         return self.get_customer_details(obj)[3]
     
+    # def get_ledger_account(self, obj):
+    #     if obj.ledger_account_id:
+    #         return ModLedgerAccountsSerializers(obj.ledger_account_id).data
+    #     return None
+    
     def get_ledger_account(self, obj):
-        if obj.ledger_account_id:
-            return ModLedgerAccountsSerializers(obj.ledger_account_id).data
+        if obj.ledger_account_id_id:  # Check the raw foreign key ID, not just the relation
+            try:
+                ledger_account = LedgerAccounts.objects.get(ledger_account_id=obj.ledger_account_id_id)
+                return ModLedgerAccountsSerializers(ledger_account).data
+            except LedgerAccounts.DoesNotExist:
+                return None  # Avoid raising an error
         return None
     
         
