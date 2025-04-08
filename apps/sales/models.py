@@ -38,6 +38,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     ]
     sale_estimate = models.CharField(max_length=3, choices=SALE_ESTIMATE_CHOICES, default='No')
     flow_status_id = models.ForeignKey(FlowStatus, on_delete=models.CASCADE, db_column='flow_status_id', null=True, default=None)
+    use_workflow = models.BooleanField(default=True)
     # workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id')
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, null=True, default=None, db_column='customer_address_id')
     remarks = models.TextField(null=True, default=None)
@@ -79,13 +80,20 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Assign default stage for new orders
-        if is_new_record or self.flow_status_id is None:
-            is_child = self.is_child_order(self.order_no)
-            if is_child:
-                self.flow_status_id = self.get_stage_flow_status(2)  # Default stage for child orders
-            else:
-                self.flow_status_id = self.get_stage_flow_status(1)  # Default stage for parent orders
+        if self.use_workflow:
+            if is_new_record or self.flow_status_id is None:
+                is_child = self.is_child_order(self.order_no)
+                if is_child:
+                    self.flow_status_id = self.get_stage_flow_status(2)  # Default stage for child orders
+                else:
+                    self.flow_status_id = self.get_stage_flow_status(1)  # Default stage for parent orders
+        else:
+            try:
+                ready_to_invoice_status = FlowStatus.objects.get(flow_status_name="Ready for Invoice")
+                self.flow_status_id = ready_to_invoice_status
 
+            except FlowStatus.DoesNotExist:
+                raise ValueError("FlowStatus 'Ready for Invoice' not found")
         super().save(*args, **kwargs)  # Save the order
 
         if is_new_record:
