@@ -9,6 +9,7 @@ from apps.products.models import Products, ProductVariation
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from rest_framework.filters import OrderingFilter
+from apps.customer.models import CustomerBalance
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
@@ -26,6 +27,7 @@ from django.apps import apps
 from decimal import Decimal
 from .serializers import *
 from .filters import *
+import traceback
 import logging
 import uuid
 
@@ -2897,7 +2899,7 @@ class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
     """
-    def load_data_in_journal_entry_line(self, customer_id, account_id, amount, description, balance_amount):
+    def load_data_in_journal_entry_line_after_payment_transaction(self, customer_id, account_id, amount, description, balance_amount):
         try:
             # Use serializer to create journal entry line
             entry_data = {
@@ -2913,8 +2915,26 @@ class PaymentTransactionAPIView(APIView):
         except(ValueError, TypeError):
             return build_response(1, "Invalid Data provided For Journal Entry Lines.", [], status.HTTP_406_NOT_ACCEPTABLE)
         
-        return build_response(serializer, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
+        return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
     
+    def update_customer_balance_after_payment_transaction(self, customer_id, remaining_payment):        
+        try:
+            customer_instance = Customer.objects.get(customer_id=customer_id)
+            customer_balance = CustomerBalance.objects.filter(customer_id=customer_instance)
+
+            if customer_balance.exists():
+                # Update balance if customer balance already exists
+                for balance in customer_balance:
+                    customer_balance.update(balance_amount= balance.balance_amount + remaining_payment)
+            else:
+                # Create a new CustomerBalance entry if it doesn't exist
+                CustomerBalance.objects.create(customer_id=customer_instance, balance_amount=remaining_payment)
+    
+        except ObjectDoesNotExist as e:
+            return build_response(1, f"Customer with ID {customer_id} does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        return build_response(1, "Balance Updated In Customer Balance Table", [], status.HTTP_201_CREATED)
+
     def post(self, request):
         """
         Handle POST request to create one or more payment transactions by applying the input amount
@@ -3014,7 +3034,8 @@ class PaymentTransactionAPIView(APIView):
                                 SaleInvoiceOrders.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(order_status_id=completed_status)
                                 PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
 
-                        self.load_data_in_journal_entry_line(customer_id, account_id, input_adjustNow, description, remaining_payment)
+                        journal_entry_line_response = self.load_data_in_journal_entry_line_after_payment_transaction(customer_id, account_id, input_adjustNow, description, remaining_payment)
+                        customer_balance_response = self.update_customer_balance_after_payment_transaction(customer_id, remaining_payment)
                         
                         results.append({
                             "Transaction ID": str(payment_transaction.transaction_id),
@@ -3023,12 +3044,15 @@ class PaymentTransactionAPIView(APIView):
                             "New Outstanding": str(new_outstanding),
                             "Payment Receipt No": payment_transaction.payment_receipt_no,
                             "Remaining Payment" : str(remaining_payment),
-                            "account_id" : str(account_id)
+                            "account_id" : str(account_id),
+                            "journal_entry_line" : journal_entry_line_response.data.get("message"),
+                            "customer_balance" : customer_balance_response.data.get("message")
                         })
 
                             
             except Exception as e:
                 # General exception handling - the transaction will be rolled back.
+                traceback.print_exc(e)        # for checking Error in Details
                 return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
             
             return build_response(len(results), "Payment transactions processed successfully", results, status.HTTP_201_CREATED)
@@ -3118,9 +3142,9 @@ class PaymentTransactionAPIView(APIView):
                         if new_outstanding == Decimal('0.00'):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
-                        
-                    self.load_data_in_journal_entry_line(customer_id, account_id, input_amount, description, remaining_amount)
-                        
+                                            
+                    journal_entry_line_response = self.load_data_in_journal_entry_line_after_payment_transaction(customer_id, account_id, input_amount, description, remaining_amount)
+                    customer_balance_response = self.update_customer_balance_after_payment_transaction(customer_id, remaining_amount)
 
                 # Prepare response
                 response_data = {
@@ -3134,7 +3158,9 @@ class PaymentTransactionAPIView(APIView):
                             "Sale Invoice Id": txn.sale_invoice_id,
                             "Invoice No": txn.invoice_no,
                             "customer_id" : str(customer_id),
-                            "account_id" : str(account_id)
+                            "account_id" : str(account_id),
+                            "journal_entry_line" : journal_entry_line_response.data.get("message"),
+                            "customer_balance" : customer_balance_response.data.get("message")
                         }
                         for txn in payment_transactions_created
                     ],
