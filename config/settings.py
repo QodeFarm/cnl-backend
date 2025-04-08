@@ -41,7 +41,7 @@ ALLOWED_HOSTS = [
 ]
 
 # Set DEBUG = False for master and demo
-if "apicore.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS:
+if "demo.cnlerp.com" in ALLOWED_HOSTS:
     DEBUG = False
 else:
     DEBUG = True
