@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.core.validators import RegexValidator
 import uuid,os # type: ignore
@@ -74,6 +75,14 @@ class Companies(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
+    
+    def get_logo_url(self):
+        """Returns the full URL for the company logo."""
+        if self.logo and isinstance(self.logo, list) and len(self.logo) > 0:
+            logo_path = self.logo[0].get("attachment_path", "")
+            if logo_path:
+                return f"{settings.MEDIA_URL}{logo_path}"  # If using MEDIA_URL
+        return None  # Or return a default logo URL
 
     def __str__(self):
         return f"{self.company_id}.{self.name}"

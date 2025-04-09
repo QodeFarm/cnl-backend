@@ -116,7 +116,7 @@ def purchase_data(pk, document_type):
 
 
 def purchase_doc(
-         elements, doc, cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
+         elements, doc, company_name, company_address, company_phone, cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
          customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address,
          product_data,
          total_qty, total_amt, total_disc, total_txbl_amt, total_sub_amt, total_bill_amt,
@@ -125,6 +125,11 @@ def purchase_doc(
          shipping_company_name, shipping_tracking_no , vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight,
          comp_address, comp_phone, comp_email,
         ):
+    
+    # 1. Add company header
+    elements.extend(
+        return_company_header(company_name, company_address, company_phone)
+    )
 
     # Append document details
     elements.append(doc_details(
@@ -145,7 +150,7 @@ def purchase_doc(
 
     # Append product total details
     elements.append(product_total_details(
-        total_qty, total_amt, total_disc, total_txbl_amt
+        total_amt, total_disc, total_txbl_amt
     ))
 
     elements.append(narration_and_total(

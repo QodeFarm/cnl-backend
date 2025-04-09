@@ -13,6 +13,7 @@ ledgeraccountstable = 'ledger_accounts'
 customerstable = 'customers'
 customeraddressestable = 'customer_addresses'
 customerattachmentstable = 'customer_attachments'
+customerbalance = 'customer_balance'
 
 #Products db_tables
 productgroupstable = 'product_groups'

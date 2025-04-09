@@ -19,6 +19,8 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# settings.py
+MEDIA_ROOT = "C:/Users/Pramod Kumar/CNL_Backend/cnl-backend/media"
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -39,11 +41,11 @@ ALLOWED_HOSTS = [
 ]
 
 # Set DEBUG = False for master and demo
-if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS:
+if "demo.cnlerp.com" in ALLOWED_HOSTS:
     DEBUG = False
 else:
     DEBUG = True
-
+# DEBUG = True
 #------------File_uploads_requirements------------
 import os
 MEDIA_URL = '/cdn/'
@@ -98,7 +100,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    "corsheaders.middleware.CorsMiddleware",
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -131,9 +133,16 @@ WSGI_APPLICATION = 'config.wsgi.application'
 AUTH_USER_MODEL = 'users.User'
 
 REST_FRAMEWORK = {
-
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',  # Explicitly enable UI
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',  # Required for UI forms
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
+    ],
     'DEFAULT_VERSION': 'v1',
-
 }		  
 # Database
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
@@ -156,7 +165,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.mysql",
         "NAME": "devcnl",
         "USER": "root",
-        "PASSWORD":"",
+        "PASSWORD":"root",
         "HOST": "127.0.0.1",
         "PORT": "3306",
     },
@@ -254,12 +263,14 @@ EMAIL_HOST_USER = "qodefarm7@gmail.com"
 EMAIL_HOST_PASSWORD= "osap irhp jqzl ehre" 
 
 
-REST_FRAMEWORK = {    
-    #'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),  #For Securing API Endpoint
-    'DEFAULT_AUTHENTICATION_CLASSES': ('rest_framework_simplejwt.authentication.JWTAuthentication',
-                                       'rest_framework.authentication.TokenAuthentication',),
-    'DEFAULT_VERSION': 'v1',
-}
+# REST_FRAMEWORK = {    
+#     #'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),  #For Securing API Endpoint
+#     'DEFAULT_AUTHENTICATION_CLASSES': (
+#         'rest_framework.authentication.SessionAuthentication',
+#         'rest_framework_simplejwt.authentication.JWTAuthentication',
+#         'rest_framework.authentication.TokenAuthentication',),
+#     'DEFAULT_VERSION': 'v1',
+# }
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=1),

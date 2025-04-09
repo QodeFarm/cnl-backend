@@ -1,6 +1,7 @@
 import uuid
 from django.db import models
 from apps import products
+from apps.finance.models import ChartOfAccounts
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions, FlowStatus
 from apps.products.models import Products, Size, Color
@@ -9,6 +10,7 @@ from config.utils_variables import quickpackitems, quickpacks, saleorders, payme
 from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id, generate_order_number
 import logging
 from django.core.exceptions import ObjectDoesNotExist
+from decimal import Decimal
 
 # Create your models here.
 
@@ -36,6 +38,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     ]
     sale_estimate = models.CharField(max_length=3, choices=SALE_ESTIMATE_CHOICES, default='No')
     flow_status_id = models.ForeignKey(FlowStatus, on_delete=models.CASCADE, db_column='flow_status_id', null=True, default=None)
+    use_workflow = models.BooleanField(default=True)
     # workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id')
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, null=True, default=None, db_column='customer_address_id')
     remarks = models.TextField(null=True, default=None)
@@ -93,13 +96,20 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             # self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Assign default stage for new orders
-        if is_new_record or self.flow_status_id is None:
-            is_child = self.is_child_order(self.order_no)
-            if is_child:
-                self.flow_status_id = self.get_stage_flow_status(2)  # Default stage for child orders
-            else:
-                self.flow_status_id = self.get_stage_flow_status(1)  # Default stage for parent orders
+        if self.use_workflow:
+            if is_new_record or self.flow_status_id is None:
+                is_child = self.is_child_order(self.order_no)
+                if is_child:
+                    self.flow_status_id = self.get_stage_flow_status(2)  # Default stage for child orders
+                else:
+                    self.flow_status_id = self.get_stage_flow_status(1)  # Default stage for parent orders
+        else:
+            try:
+                ready_to_invoice_status = FlowStatus.objects.get(flow_status_name="Ready for Invoice")
+                self.flow_status_id = ready_to_invoice_status
 
+            except FlowStatus.DoesNotExist:
+                raise ValueError("FlowStatus 'Ready for Invoice' not found")
         super().save(*args, **kwargs)  # Save the order
 
         if is_new_record:
@@ -372,6 +382,8 @@ class SaleInvoiceOrders(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     vehicle_name = models.CharField(max_length=255, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
+    paid_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    balance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     order_status_id = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, db_column='order_status_id', null=True, default=None)
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)
@@ -412,33 +424,47 @@ class SaleInvoiceOrders(OrderNumberMixin):
             increment_order_number(self.order_no_prefix)
         else:
             print("from edit", self.pk)
-
     
-class PaymentTransactions(models.Model): #required fields are updated
-    transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
-    payment_date = models.DateField(null=True, default=None)
-    amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
-    payment_method = models.CharField(max_length=100,null=True,default=None)
-    PAYMENT_STATUS_CHOICES = [
-        ('Pending', 'Pending'),
-        ('Completed', 'Completed'),
-        ('Failed', 'Failed'),
-        ]
-    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='Pending')
-    reference_number = models.CharField(max_length=100,null=True,default=None)
-    notes = models.TextField(null=True, default=None)
-    currency = models.CharField(max_length=10,null=True,default=None)
-    TRANSACTION_TYPE_CHOICES = [('Credit', 'Credit'),('Debit', 'Debit'),]
-    transaction_type = models.CharField(max_length=6, choices=TRANSACTION_TYPE_CHOICES)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    def update_paid_amount_balance_amount_after_payment_transactions(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
+        """
+        Update the paid_amount and balance_amount when a payment is made.
+        """
+        if adjusted_now_amount > 00.00:
+            self.paid_amount += Decimal(adjusted_now_amount)
+            self.balance_amount = Decimal(outstanding_amount)
+        else:
+            self.paid_amount += Decimal(payment_amount)
+            self.balance_amount = Decimal(outstanding_amount)
+        self.save()
+        print(f"Updated SaleInvoiceOrders for invoice {self.invoice_no} with a total amount of {self.total_amount}, paid amount of {self.paid_amount}, and balance amount of {self.balance_amount}.")
 
-    def __str__(self):
-        return f'{self.transaction_id}'
+
+# we not using this model instead of this we are using another model check at the bottom line 854   
+# class PaymentTransactions(models.Model): #required fields are updated
+#     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, db_column='sale_invoice_id')
+#     payment_date = models.DateField(null=True, default=None)
+#     amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
+#     payment_method = models.CharField(max_length=100,null=True,default=None)
+#     PAYMENT_STATUS_CHOICES = [
+#         ('Pending', 'Pending'),
+#         ('Completed', 'Completed'),
+#         ('Failed', 'Failed'),
+#         ]
+#     payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='Pending')
+#     reference_number = models.CharField(max_length=100,null=True,default=None)
+#     notes = models.TextField(null=True, default=None)
+#     currency = models.CharField(max_length=10,null=True,default=None)
+#     TRANSACTION_TYPE_CHOICES = [('Credit', 'Credit'),('Debit', 'Debit'),]
+#     transaction_type = models.CharField(max_length=6, choices=TRANSACTION_TYPE_CHOICES)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     def __str__(self):
+#         return f'{self.transaction_id}'
     
-    class Meta:
-        db_table = paymenttransactions
+#     class Meta:
+#         db_table = paymenttransactions
 
 class SaleInvoiceItems(models.Model): #required fields are updated
     sale_invoice_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -869,9 +895,10 @@ class PaymentTransactions(models.Model):
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    sale_invoice = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, related_name='payment_transactions', default='')
     invoice_no = models.CharField(max_length=20, unique=True, default='')
-    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='payment_transactions')
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='payment_transactions', null=False)
+    account = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='payment_transactions', null=False)
+    sale_invoice = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, related_name='payment_transactions', default='')
 
     def __str__(self):
         return f"{self.payment_receipt_no} - {self.transaction_id}"

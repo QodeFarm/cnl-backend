@@ -3,6 +3,30 @@ from django.conf import settings
 
 
 query = {
+
+"Receivables_Breakdown_chart" : """SELECT 
+                c.name AS customer_name,
+                CASE 
+                    WHEN DATEDIFF(CURRENT_DATE, sio.due_date) BETWEEN 0 AND 30 THEN '0-30 days'
+                    WHEN DATEDIFF(CURRENT_DATE, sio.due_date) BETWEEN 31 AND 60 THEN '31-60 days'
+                    WHEN DATEDIFF(CURRENT_DATE, sio.due_date) BETWEEN 61 AND 90 THEN '61-90 days'
+                    WHEN DATEDIFF(CURRENT_DATE, sio.due_date) > 90 THEN '90+ days'
+                    WHEN sio.due_date > CURRENT_DATE THEN 'Not due'
+                    ELSE 'Advance'
+                END AS aging_category,
+                -- Show sum of payments and credits separately for debugging
+                SUM(pt.amount) AS total_payments,
+                SUM(scn.total_amount) AS total_credits,
+                -- Calculate net outstanding
+                SUM(sio.total_amount) - COALESCE(SUM(pt.amount), 0) - COALESCE(SUM(scn.total_amount), 0) AS outstanding_amount
+            FROM sale_invoice_orders sio
+            LEFT JOIN customers c ON sio.customer_id = c.customer_id
+            LEFT JOIN payment_transactions pt ON sio.sale_invoice_id = pt.sale_invoice_id
+            LEFT JOIN sale_credit_notes scn ON sio.sale_invoice_id = scn.sale_invoice_id
+            WHERE sio.bill_type = 'CREDIT'
+            GROUP BY c.name, aging_category
+            HAVING outstanding_amount > 0;""",
+
 "Sales_Over_the_Last_12_Months" : "SELECT DATE_FORMAT(sio.invoice_date, '%M-%Y') AS month_year, SUM(sio.total_amount) AS total_sales FROM sale_invoice_orders sio WHERE sio.invoice_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) GROUP BY YEAR(sio.invoice_date), MONTH(sio.invoice_date) ORDER BY YEAR(sio.invoice_date), MONTH(sio.invoice_date);",
 
 "Compare_weekly_sales_and_growth" : """WITH weekly_sales AS (
