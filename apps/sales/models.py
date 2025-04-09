@@ -67,14 +67,30 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     class Meta:
         db_table = saleorders
         
+    def get_order_prefix(self):
+        """Override to handle 'Other' sale type case"""
+        if hasattr(self, 'sale_type_id') and self.sale_type_id:
+            if self.sale_type_id.name.lower() == 'other':
+                return 'SOO'
+        return self.order_no_prefix
+        
     def save(self, *args, **kwargs):            
         from apps.masters.views import increment_order_number
         
         is_new_record = self._state.adding
+        is_other_sale = False
+        
+        # Check if this is an "Other" sale type order
+        if hasattr(self, 'sale_type_id') and self.sale_type_id:
+            if self.sale_type_id == '1a9d6cdb-2416-4d49-afd7-292cc6fb41de':
+                is_other_sale = True
+                kwargs['using'] = 'mstcnl'  # Use alternate database
         
         # Set default order status if not provided
         if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+            db = kwargs.get('using', 'default')
+            self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
+            # self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Assign default stage for new orders
         if is_new_record or self.flow_status_id is None:
@@ -89,7 +105,8 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         if is_new_record:
             # Increment the order number only for parent orders
             if not self.is_child_order(self.order_no):  # Skip increment for child orders
-                increment_order_number(self.order_no_prefix)
+                # increment_order_number(self.order_no_prefix)
+                increment_order_number(self.get_order_prefix())
 
         else:
             print("from edit", self.pk)

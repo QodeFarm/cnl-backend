@@ -58,6 +58,7 @@ class Customer(models.Model):
     ]
     customer_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    is_super_customer = models.BooleanField(default=False)  # New field
     print_name = models.CharField(max_length=255)
     identification = models.CharField(max_length=255, null=True, default=None)
     code = models.CharField(max_length=50)

@@ -159,8 +159,19 @@ DATABASES = {
         "PASSWORD":"",
         "HOST": "127.0.0.1",
         "PORT": "3306",
+    },
+    'mstcnl': {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": "mstcnl",  # Name of your separate database
+        "USER": "root",
+        "PASSWORD": "",    # Use the same password as your default database
+        "HOST": "127.0.0.1",
+        "PORT": "3306",
     }
 }
+
+DATABASE_ROUTERS = ['config.utils_db_router.DynamicDbRouter']
+
 
 DOMAIN_DATABASE_MAPPING = {
     "master.cnlerp.com": "cnl",
