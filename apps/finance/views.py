@@ -85,6 +85,26 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+class JournalEntryLinesAPIview(APIView):
+    def post(self, customer_id, account_id, amount, description, balance_amount):
+        '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
+        try:
+            # Use serializer to create journal entry line
+            entry_data = {
+                "customer_id": customer_id,
+                "account_id": account_id,
+                "credit": int(amount),
+                "description": description,
+                "balance" : int(balance_amount)
+            }
+            serializer = JournalEntryLinesSerializer(data=entry_data)
+            if serializer.is_valid():
+                serializer.save() 
+        except(ValueError, TypeError):
+            return build_response(1, "Invalid Data provided For Journal Entry Lines.", [], status.HTTP_406_NOT_ACCEPTABLE)
+        
+        return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
+
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
     queryset = PaymentTransaction.objects.all().order_by('-created_at')
     serializer_class = PaymentTransactionSerializer

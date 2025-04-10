@@ -6,8 +6,10 @@ from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.finance.serializers import JournalEntryLinesSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import Products, ProductVariation
+from apps.finance.views import JournalEntryLinesAPIview
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
+from apps.customer.views import CustomerBalanceView
 from rest_framework.filters import OrderingFilter
 from apps.customer.models import CustomerBalance
 from django.shortcuts import get_object_or_404
@@ -22,7 +24,7 @@ from rest_framework import status
 from django.db.models import Sum
 from django.http import Http404
 from django.db.models import F
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.apps import apps
 from decimal import Decimal
 from .serializers import *
@@ -2899,42 +2901,6 @@ class PaymentTransactionAPIView(APIView):
     """
     API endpoint to create a new PaymentTransaction record.
     """
-    def load_data_in_journal_entry_line_after_payment_transaction(self, customer_id, account_id, amount, description, balance_amount):
-        try:
-            # Use serializer to create journal entry line
-            entry_data = {
-                "customer_id": customer_id,
-                "account_id": account_id,
-                "credit": int(amount),
-                "description": description,
-                "balance" : int(balance_amount)
-            }
-            serializer = JournalEntryLinesSerializer(data=entry_data)
-            if serializer.is_valid():
-                serializer.save() 
-        except(ValueError, TypeError):
-            return build_response(1, "Invalid Data provided For Journal Entry Lines.", [], status.HTTP_406_NOT_ACCEPTABLE)
-        
-        return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
-    
-    def update_customer_balance_after_payment_transaction(self, customer_id, remaining_payment):        
-        try:
-            customer_instance = Customer.objects.get(customer_id=customer_id)
-            customer_balance = CustomerBalance.objects.filter(customer_id=customer_instance)
-
-            if customer_balance.exists():
-                # Update balance if customer balance already exists
-                for balance in customer_balance:
-                    customer_balance.update(balance_amount= balance.balance_amount + remaining_payment)
-            else:
-                # Create a new CustomerBalance entry if it doesn't exist
-                CustomerBalance.objects.create(customer_id=customer_instance, balance_amount=remaining_payment)
-    
-        except ObjectDoesNotExist as e:
-            return build_response(1, f"Customer with ID {customer_id} does not exist.", str(e), status.HTTP_404_NOT_FOUND)
-
-        return build_response(1, "Balance Updated In Customer Balance Table", [], status.HTTP_201_CREATED)
-
     def post(self, request):
         """
         Handle POST request to create one or more payment transactions by applying the input amount
@@ -3034,8 +3000,8 @@ class PaymentTransactionAPIView(APIView):
                                 SaleInvoiceOrders.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(order_status_id=completed_status)
                                 PaymentTransactions.objects.filter(sale_invoice_id=invoice.sale_invoice_id).update(payment_status="Completed")
 
-                        journal_entry_line_response = self.load_data_in_journal_entry_line_after_payment_transaction(customer_id, account_id, input_adjustNow, description, remaining_payment)
-                        customer_balance_response = self.update_customer_balance_after_payment_transaction(customer_id, remaining_payment)
+                        journal_entry_line_response = JournalEntryLinesAPIview.post(self, customer_id, account_id, input_adjustNow, description, remaining_payment)
+                        customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_payment)
                         
                         results.append({
                             "Transaction ID": str(payment_transaction.transaction_id),
@@ -3143,8 +3109,8 @@ class PaymentTransactionAPIView(APIView):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
                                             
-                    journal_entry_line_response = self.load_data_in_journal_entry_line_after_payment_transaction(customer_id, account_id, input_amount, description, remaining_amount)
-                    customer_balance_response = self.update_customer_balance_after_payment_transaction(customer_id, remaining_amount)
+                    journal_entry_line_response = JournalEntryLinesAPIview.post(self, customer_id, account_id, input_amount, description, remaining_amount)
+                    customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_amount)
 
                 # Prepare response
                 response_data = {
@@ -3196,7 +3162,11 @@ class FetchSalesInvoicesForPaymentReceiptTable(APIView):
 
         try:
             serializer = SaleInvoiceOrdersSerializer(sale_invoice, many=True)
-            return build_response(len(serializer.data), "Sale Invoices", serializer.data, status.HTTP_200_OK)
+            sorted_data = sorted(
+                serializer.data,
+                key=lambda x: x['created_at']
+            )
+            return build_response(len(serializer.data), "Sale Invoices", sorted_data, status.HTTP_200_OK)
         except Exception as e:
             return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
  
