@@ -439,3 +439,20 @@ class CustomerBalanceView(APIView):
             return build_response(1, f"Customer with ID {customer_id} does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
         return build_response(1, "Balance Updated In Customer Balance Table", [], status.HTTP_201_CREATED)
+    
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                customer_id = get_object_or_404(Customer, pk=pk)
+                balance = get_object_or_404(CustomerBalance, customer_id=customer_id)
+                serializer = CustomerBalanceSerializer(balance)
+                return build_response(1, "Customer Balance", serializer.data, status.HTTP_200_OK)
+            except Exception as e:
+                return build_response(1, "Something Went Wrong", str(e), status.HTTP_403_FORBIDDEN)
+        else:
+            balances = CustomerBalance.objects.all()
+            serializer = CustomerBalanceSerializer(balances, many=True)
+            return build_response(len(serializer.data), "Customer Balance", serializer.data, status.HTTP_200_OK)
+
+    def update():
+        pass
