@@ -522,7 +522,7 @@ def generate_order_number_view(request):
         return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
 
     order_type_prefix = order_type_prefix.upper()
-    valid_prefixes = ['SO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
+    valid_prefixes = ['SO', 'SOO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
 
     if order_type_prefix not in valid_prefixes:
         return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)
@@ -554,12 +554,23 @@ def get_next_order_number(order_type_prefix):
         sequence_number_str = f"{sequence_number + 1:05d}"
         return f"{order_type_prefix}-{sequence_number_str}"
 
-    # For date-based prefixes
+    # # For date-based prefixes
+    # current_date = timezone.now()
+    # date_str = current_date.strftime('%y%m')
+    # key = f"{order_type_prefix}-{date_str}"
+    # sequence_number = cache.get(key, 0)
+    # cache.set(key, sequence_number)  # UPDATE cache
+    # sequence_number_str = f"{sequence_number + 1:05d}"  # +1 for the next number
+    # return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+    
+    # For date-based prefixes like SOO-2504-00001
     current_date = timezone.now()
-    date_str = current_date.strftime('%y%m')
+    date_str = current_date.strftime('%y%m')  # e.g., '2504'
     key = f"{order_type_prefix}-{date_str}"
     sequence_number = cache.get(key, 0)
-    sequence_number_str = f"{sequence_number + 1:05d}"  # +1 for the next number
+    sequence_number += 1  # INCREMENT HERE
+    cache.set(key, sequence_number)  # UPDATE cache
+    sequence_number_str = f"{sequence_number:05d}"
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
 
     

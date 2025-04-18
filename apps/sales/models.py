@@ -73,7 +73,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     def get_order_prefix(self):
         """Override to handle 'Other' sale type case"""
         if hasattr(self, 'sale_type_id') and self.sale_type_id:
-            if self.sale_type_id.name.lower() == 'other':
+            if self.sale_type_id.name.lower() == 'Other':
                 return 'SOO'
         return self.order_no_prefix
         

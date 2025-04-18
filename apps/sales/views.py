@@ -1,4 +1,6 @@
 from datetime import timedelta
+from apps.users.models import User
+from itertools import chain
 from config.utils_db_router import set_db
 from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
@@ -313,75 +315,133 @@ class SaleOrderViewSet(APIView):
     #         logger.error(f"An unexpected error occurred: {str(e)}")
     #         return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    # from accounts.models import User  # ✅ Import your User model
+
+    # def get(self, request, *args, **kwargs):
+    #     if "pk" in kwargs:
+    #         result = validate_input_pk(self, kwargs['pk'])
+    #         return result if result else self.retrieve(self, request, *args, **kwargs)
+
+    #     try:
+    #         # Check if the 'records_all' filter is set in the query params
+    #         records_all = request.query_params.get("records_all", "false").lower() == "true"
+            
+    #         logger.info(f"Fetching records_all: {records_all}")
+
+    #         summary = request.query_params.get("summary", "false").lower() == "true"
+    #         if summary:
+    #             logger.info("Retrieving Sale order summary")
+    #             saleorders = SaleOrder.objects.all().order_by('-created_at')
+    #             data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
+    #             return Response(data, status=status.HTTP_200_OK)
+
+    #         logger.info("Retrieving all sale orders")
+
+    #         page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+    #         limit = int(request.query_params.get('limit', 10))
+
+    #         # Apply filters manually based on the 'records_all' parameter
+    #         queryset = SaleOrder.objects.all().order_by('-created_at')
+
+    #         # If records_all is true, fetch records from both mstcnl and devcnl databases
+    #         if records_all:
+    #             logger.info("Fetching sale orders from both mstcnl and devcnl databases")
+    #             # Add logic to combine records from both databases
+    #             saleorders_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+    #             saleorders_devcnl = SaleOrder.objects.using('devcnl').all().order_by('-created_at')
+    #             queryset = saleorders_mstcnl | saleorders_devcnl  # Union of both queries
+
+    #         else:
+    #             logger.info("Fetching sale orders only from devcnl")
+    #             queryset = SaleOrder.objects.using('devcnl').all().order_by('-created_at')
+
+    #         # Apply other filters from SaleOrderFilter
+    #         if request.query_params:
+    #             filterset = SaleOrderFilter(request.GET, queryset=queryset)
+    #             if filterset.is_valid():
+    #                 queryset = filterset.qs
+
+    #         total_count = queryset.count()
+
+    #         # Serialize the queryset
+    #         serializer = SaleOrderOptionsSerializer(queryset, many=True)
+
+    #         logger.info("Sale order data retrieved successfully.")
+    #         return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    #     except Exception as e:
+    #         logger.error(f"Error retrieving sale orders: {str(e)}")
+    #         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
     def get(self, request, *args, **kwargs):
-        from apps.customer.models import Customer  # Adjust your import if needed
+        if "pk" in kwargs:
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
 
         try:
-            if "pk" in kwargs:
-                result = validate_input_pk(self, kwargs['pk'])
-                return result if result else self.retrieve(self, request, *args, **kwargs)
+            # Check if the 'records_all' filter is set in the query params
+            records_all = request.query_params.get("records_all", "false").lower() == "true"
+            
+            logger.info(f"Fetching records_all: {records_all}")
 
             summary = request.query_params.get("summary", "false").lower() == "true"
-            customer_name = request.query_params.get("customer_name", None)
+            if summary:
+                logger.info("Retrieving Sale order summary")
+                saleorders = SaleOrder.objects.all().order_by('-created_at')
+                data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
+                return Response(data, status=status.HTTP_200_OK)
 
-            # Pagination
-            page = int(request.query_params.get('page', 1))
+            logger.info("Retrieving all sale orders")
+
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10))
 
-            # Start querysets
+            # Apply filters manually based on the 'records_all' parameter
             queryset = SaleOrder.objects.all().order_by('-created_at')
-            queryset_other_db = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
 
-            # Start filtering
-            if customer_name:
-                try:
-                    customer = Customer.objects.get(name=customer_name)
+            # If records_all is true, fetch records from both mstcnl and devcnl databases
+            if records_all:
+                logger.info("Fetching sale orders from both mstcnl and devcnl databases")
+                
+                # Query the 'mstcnl' database
+                saleorders_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+                # Query the 'devcnl' database
+                saleorders_devcnl = SaleOrder.objects.using('default').all().order_by('-created_at')
 
-                    if customer.is_super_customer:
-                        # ✅ Super customer: Get orders from both DBs
-                        queryset = list(queryset) + list(queryset_other_db)
+                # Combine the two querysets
+                combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
 
-                    else:
-                        # ✅ Normal customer: Only from default DB where sale_type != "Other"
-                        queryset = queryset.filter(customer_name=customer_name).exclude(sale_type__name='Other')
-
-                except Customer.DoesNotExist:
-                    logger.warning(f"Customer with name '{customer_name}' does not exist.")
-                    return build_response(0, "Customer does not exist", [], status.HTTP_404_NOT_FOUND)
+                # We need to paginate the combined result manually since it's from multiple databases
+                total_count = len(combined_queryset)
+                start_index = (page - 1) * limit
+                end_index = start_index + limit
+                paginated_results = combined_queryset[start_index:end_index]
 
             else:
-                # No customer_name param, normal behaviour — Default DB, excluding 'Other'
-                queryset = queryset.exclude(sale_type__name='Other')
+                logger.info("Fetching sale orders only from devcnl")
+                # Only query from the 'devcnl' database
+                queryset = SaleOrder.objects.using('default').all().order_by('-created_at')
 
-            # Apply filters manually
-            if request.query_params:
-                filterset = SaleOrderFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
+                # Apply other filters from SaleOrderFilter
+                if request.query_params:
+                    filterset = SaleOrderFilter(request.GET, queryset=queryset)
+                    if filterset.is_valid():
+                        queryset = filterset.qs
 
-            # Count & paginate
-            total_count = len(queryset)  # Since we merged lists, use len()
-            start = (page - 1) * limit
-            end = start + limit
-            paginated_queryset = queryset[start:end]
+                total_count = queryset.count()
+                paginated_results = queryset[(page - 1) * limit: page * limit]
 
-            # Serialize
-            serializer = SaleOrderOptionsSerializer(paginated_queryset, many=True)
+            # Serialize the queryset
+            serializer = SaleOrderOptionsSerializer(paginated_results, many=True)
 
             logger.info("Sale order data retrieved successfully.")
-            return filter_response(
-                total_count,
-                "Success",
-                serializer.data,
-                page,
-                limit,
-                total_count,
-                status.HTTP_200_OK
-            )
+            return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"An unexpected error occurred: {str(e)}")
-            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error retrieving sale orders: {str(e)}")
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
     def retrieve(self, request, *args, **kwargs):
@@ -534,6 +594,9 @@ class SaleOrderViewSet(APIView):
         # ---------------------- D A T A   C R E A T I O N ----------------------------#
         
         sale_type_val = sale_order_data.get('sale_type_id')
+        print("-"*20)
+        print("sale_type_val : ", sale_type_val)
+        print("-"*20)
         is_other_sale = sale_type_val == '1a9d6cdb-2416-4d49-afd7-292cc6fb41de'
         # Step 2: Decide the DB
         if is_other_sale:

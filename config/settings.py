@@ -41,7 +41,7 @@ ALLOWED_HOSTS = [
 ]
 
 # Set DEBUG = False for master and demo
-if "demo.cnlerp.com" in ALLOWED_HOSTS:
+if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS or "apicore.cnlerp.com" in ALLOWED_HOSTS:
     DEBUG = False
 else:
     DEBUG = True
@@ -173,7 +173,7 @@ DATABASES = {
         "ENGINE": "django.db.backends.mysql",
         "NAME": "mstcnl",  # Name of your separate database
         "USER": "root",
-        "PASSWORD": "",    # Use the same password as your default database
+        "PASSWORD": "root",    # Use the same password as your default database
         "HOST": "127.0.0.1",
         "PORT": "3306",
     }

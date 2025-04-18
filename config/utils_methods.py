@@ -172,8 +172,24 @@ class OrderNumberMixin(models.Model):
         abstract = True
         
     def get_order_prefix(self):
-        """Method to be overridden by child classes for custom prefix logic"""
+        """
+        Override to handle 'Other' sale type case
+        and validate the prefix inline.
+        """
+        if hasattr(self, 'sale_type_id') and self.sale_type_id:
+            if self.sale_type_id.name and self.sale_type_id.name.lower() == 'Other':
+                return 'SOO'
+        
+        # Validate existing prefix before returning
+        valid_prefixes = ['SO', 'SOO', 'PO', 'INV']  # add all that you use
+        if self.order_no_prefix not in valid_prefixes:
+            raise ValueError("Invalid prefix")  # <== this will surface clearly
+
         return self.order_no_prefix
+        
+    # def get_order_prefix(self):
+    #     """Method to be overridden by child classes for custom prefix logic"""
+    #     return self.order_no_prefix
 
     def save(self, *args, **kwargs):
         """
@@ -214,6 +230,9 @@ def increment_order_number(order_type_prefix):
 
     sequence_number_str = f"{sequence_number:05d}"
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+
+
+
 
 #=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
 def normalize_value(value):

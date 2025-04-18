@@ -159,7 +159,7 @@ class GetUserDataSerializer(serializers.ModelSerializer):
     role = ModRoleSerializer(source='role_id', read_only = True)
     class Meta:
         model = User
-        fields = ['email', 'user_id', 'username', 'title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'branch', 'status', 'role']   #if we use here '__all__' then it shows password field also.
+        fields = ['email', 'user_id', 'username', 'title', 'first_name', 'last_name', 'mobile', 'otp_required', 'profile_picture_url', 'bio', 'timezone', 'language', 'created_at', 'updated_at', 'last_login', 'date_of_birth', 'gender', 'is_active', 'branch', 'status', 'role', 'is_superuser']   #if we use here '__all__' then it shows password field also.
 
 #====================================USER-CREATE-SERIALIZER=============================================================
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
