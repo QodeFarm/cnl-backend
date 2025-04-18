@@ -19,6 +19,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
+from django.core.exceptions import  ObjectDoesNotExist
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -418,3 +419,40 @@ class CustomerCreateViews(APIView):
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
 
+
+class CustomerBalanceView(APIView):
+    def post(self, request, customer_id, remaining_payment): 
+        '''update_customer_balance_after payment transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''  
+        try:
+            customer_instance = Customer.objects.get(customer_id=customer_id)
+            customer_balance = CustomerBalance.objects.filter(customer_id=customer_instance)
+
+            if customer_balance.exists():
+                # Update balance if customer balance already exists
+                for balance in customer_balance:
+                    customer_balance.update(balance_amount= balance.balance_amount + remaining_payment)
+            else:
+                # Create a new CustomerBalance entry if it doesn't exist
+                CustomerBalance.objects.create(customer_id=customer_instance, balance_amount=remaining_payment)
+    
+        except ObjectDoesNotExist as e:
+            return build_response(1, f"Customer with ID {customer_id} does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        return build_response(1, "Balance Updated In Customer Balance Table", [], status.HTTP_201_CREATED)
+    
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                customer_id = get_object_or_404(Customer, pk=pk)
+                balance = get_object_or_404(CustomerBalance, customer_id=customer_id)
+                serializer = CustomerBalanceSerializer(balance)
+                return build_response(1, "Customer Balance", serializer.data, status.HTTP_200_OK)
+            except Exception as e:
+                return build_response(1, "Something Went Wrong", str(e), status.HTTP_403_FORBIDDEN)
+        else:
+            balances = CustomerBalance.objects.all()
+            serializer = CustomerBalanceSerializer(balances, many=True)
+            return build_response(len(serializer.data), "Customer Balance", serializer.data, status.HTTP_200_OK)
+
+    def update():
+        pass

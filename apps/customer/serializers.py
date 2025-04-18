@@ -158,3 +158,9 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+
+class CustomerBalanceSerializer(serializers.ModelSerializer):
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    class Meta:
+        model = CustomerBalance
+        fields = ['customer_balance_id','customer','balance_amount','created_at' ]
