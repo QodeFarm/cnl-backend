@@ -2907,21 +2907,23 @@ class PaymentTransactionAPIView(APIView):
         across one or more invoices.
         """
         data = request.data
-        customer_id = data.get('customer')
-        account_id = data.get('account')
+        cust_data = data.get('customer')
+        customer_id = cust_data.get('customer_id').replace('-','')
+        account_data = data.get('account')
+        account_id = account_data.get('account_id').replace('-','')
         description = data.get('description')
 
         # Validate account_id
         try:
             uuid.UUID(account_id)  # Ensure valid UUID format
-            customer_obj = ChartOfAccounts.objects.get(pk=account_id)
+            ChartOfAccounts.objects.get(pk=account_id)
         except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
             return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
         # Validate customer_id
         try:
             uuid.UUID(customer_id)  # Ensure valid UUID format
-            customer_obj = Customer.objects.get(pk=customer_id)
+            Customer.objects.get(pk=customer_id)
         except (ValueError, TypeError, Customer.DoesNotExist) as e:
             return build_response(1, "Invalid customer ID format OR Customer does not exist.", str(e), status.HTTP_404_NOT_FOUND)
         
