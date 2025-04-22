@@ -360,7 +360,7 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
                 picture_data = response.data.get('profile_picture_url')
                 if picture_data:
                     response.data['profile_picture_url'] = picture_data
-            return response
+            return build_response(1, "User Created Successfully.", response.data, status.HTTP_201_CREATED)
        
         except ValidationError as e:
             return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
