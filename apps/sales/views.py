@@ -2994,7 +2994,7 @@ class PaymentTransactionAPIView(APIView):
                                     payment_status=data.get('payment_status'),
                                     sale_invoice=invoice, 
                                     invoice_no=invoice.invoice_no,
-                                    customer=customer_obj,
+                                    customer=customer_id,
                                     account_id=account_id
                                 )
                                 

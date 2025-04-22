@@ -865,9 +865,11 @@ class SaleDebitNoteItems(models.Model):
     class Meta:
         db_table = saledebitnoteitems
 
-class PaymentTransactions(models.Model):
+class PaymentTransactions(OrderNumberMixin):
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    payment_receipt_no = models.CharField(max_length=50)
+    payment_receipt_no = models.CharField(max_length=50, unique=True, default='')
+    order_no_prefix = 'PR'  # Payment Receipt prefix
+    order_no_field = 'payment_receipt_no'  # Field to store the order number
     payment_date = models.DateTimeField(auto_now_add=True)
     payment_method = models.CharField(max_length=100, null=True, blank=True)
     cheque_no = models.CharField(max_length=50, null=True, blank=True)
@@ -888,3 +890,28 @@ class PaymentTransactions(models.Model):
 
     class Meta:
         db_table = paymenttransactions  
+        
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+        
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                order_number = generate_order_number(self.order_no_prefix)
+                setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print(f"Creating new payment receipt: {self.payment_receipt_no}")
+            increment_order_number(self.order_no_prefix)
+        else:
+            print(f"Updating existing payment receipt: {self.payment_receipt_no}")
