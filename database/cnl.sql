@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS users (
     mobile VARCHAR(20) NOT NULL,
     otp_required BOOLEAN DEFAULT 0,
     status_id CHAR(36) NOT NULL,
-    profile_picture_url VARCHAR(255),
+    profile_picture_url VARCHAR(1024),
     bio VARCHAR(1024),
     timezone VARCHAR(100),
     language VARCHAR(10),
