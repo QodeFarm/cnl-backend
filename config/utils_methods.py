@@ -170,13 +170,34 @@ class OrderNumberMixin(models.Model):
 
     class Meta:
         abstract = True
+        
+    def get_order_prefix(self):
+        """
+        Override to handle 'Other' sale type case
+        and validate the prefix inline.
+        """
+        if hasattr(self, 'sale_type_id') and self.sale_type_id:
+            if self.sale_type_id.name and self.sale_type_id.name.lower() == 'Other':
+                return 'SOO'
+        
+        # Validate existing prefix before returning
+        valid_prefixes = ['SO', 'SOO', 'PO', 'INV']  # add all that you use
+        if self.order_no_prefix not in valid_prefixes:
+            raise ValueError("Invalid prefix")  # <== this will surface clearly
+
+        return self.order_no_prefix
+        
+    # def get_order_prefix(self):
+    #     """Method to be overridden by child classes for custom prefix logic"""
+    #     return self.order_no_prefix
 
     def save(self, *args, **kwargs):
         """
         Override the save method to generate and set the order number if it is not already set.
         """
         if not getattr(self, self.order_no_field):
-            setattr(self, self.order_no_field, generate_order_number(self.order_no_prefix))
+            prefix = self.get_order_prefix()
+            setattr(self, self.order_no_field, generate_order_number(prefix))
         super().save(*args, **kwargs)
 
 def increment_order_number(order_type_prefix):
@@ -209,6 +230,9 @@ def increment_order_number(order_type_prefix):
 
     sequence_number_str = f"{sequence_number:05d}"
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+
+
+
 
 #=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
 def normalize_value(value):
@@ -288,7 +312,29 @@ def validate_payload_data(self, data , model_serializer):
         
         return errors
 
-def generic_data_creation(self, valid_data, serializer_class, update_fields=None):
+# def generic_data_creation(self, valid_data, serializer_class, update_fields=None, using='default'):
+#     '''
+#     ** This function creates new instances with valid data & at the same time it updates the data with required fields**
+#     valid_data - The data to be created
+#     serializer_class - name of the serializer for which the data is to be created.
+#     update_fields - fields to be updated before the data is created [input type dict]
+#     '''
+#     # If any fields to be updated before the data is created
+#     if update_fields:
+#         for data in valid_data:
+#             for key, value in update_fields.items():
+#                 data[key] = value
+
+#     data_list = []
+#     for data in valid_data:
+#         serializer = serializer_class(data=data)
+#         serializer.is_valid(raise_exception=True)
+#         serializer.save()
+#         data_list.append(serializer.data)
+
+#     return data_list
+
+def generic_data_creation(self, valid_data, serializer_class, update_fields=None, using='default'):
     '''
     ** This function creates new instances with valid data & at the same time it updates the data with required fields**
     valid_data - The data to be created
@@ -305,10 +351,45 @@ def generic_data_creation(self, valid_data, serializer_class, update_fields=None
     for data in valid_data:
         serializer = serializer_class(data=data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+
+        # ✅ This is the only line added to respect the 'using' parameter
+        instance = serializer.Meta.model.objects.db_manager(using).create(**serializer.validated_data)
+        serializer = serializer_class(instance)
+
         data_list.append(serializer.data)
 
     return data_list
+
+
+# def generic_data_creation(self, valid_data, serializer_class, update_fields=None, using=None):
+#     '''
+#     Generic function to create instances - remains completely table-agnostic
+#     '''
+#     if isinstance(valid_data, dict):
+#         valid_data = [valid_data]
+#         return_as_dict = True
+#     else:
+#         return_as_dict = False
+
+#     if update_fields:
+#         for data in valid_data:
+#             data.update(update_fields)
+
+#     data_list = []
+#     for data in valid_data:
+#         serializer = serializer_class(data=data)
+#         serializer.is_valid(raise_exception=True)
+        
+#         if using:
+#             ModelClass = serializer.Meta.model
+#             instance = ModelClass.objects.using(using).create(**serializer.validated_data)
+#             serializer = serializer_class(instance)
+#         else:
+#             instance = serializer.save()
+            
+#         data_list.append(serializer.data)
+
+#     return data_list[0] if return_as_dict else data_list
 
 def validate_input_pk(self, pk=None):
     try:
