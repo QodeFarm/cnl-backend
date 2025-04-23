@@ -103,7 +103,7 @@ class User(AbstractBaseUser):
     date_of_birth = models.DateField(null= True, default=None)
     email = models.EmailField(max_length=255, unique=True)
     otp_required = models.BooleanField(default=False)
-    is_superuser = models.BooleanField(default=False) #New field
+    # is_superuser = models.BooleanField(default=False) #New field
     mobile= models.CharField(max_length=20, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -121,7 +121,7 @@ class User(AbstractBaseUser):
         db_table = userstable
 
     USERNAME_FIELD = 'username'
-    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id', 'is_superuser'] 
+    REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'mobile', 'profile_picture_url', 'bio', 'language', 'date_of_birth', 'gender', 'title', 'otp_required', 'timezone', 'status_id', 'branch_id', 'role_id'] 
 
     def __str__(self):
         return self.username
