@@ -1,9 +1,9 @@
-import uuid
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
-from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, remove_fields, validate_uuid
+from config.utils_methods import IsAdminRoles, build_response, list_all_objects, create_instance, update_instance, validate_uuid
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
+from .filters import RolePermissionsFilter, RolesFilter, UserFilter
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.decorators import permission_classes
 from djoser.views import UserViewSet as DjoserUserViewSet
@@ -19,7 +19,6 @@ from django.db import connection, transaction
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .filters import RolePermissionsFilter, RolesFilter, UserFilter
 from apps.company.models import Companies
 from rest_framework.views import APIView
 from .renderers import UserRenderer
@@ -27,6 +26,7 @@ from rest_framework import viewsets
 from collections import defaultdict
 from rest_framework import status
 from django.utils import timezone
+import uuid
 
 import logging
 # Set up basic configuration for logging
@@ -566,6 +566,7 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
         
 #====================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
 class RolePermissionsCreateView(APIView):
+    permission_classes = [IsAdminRoles]
     def post(self, request, *args, **kwargs):
         result = self.create_list_data(request.data)
         if isinstance(result, Response):
