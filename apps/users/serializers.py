@@ -226,7 +226,7 @@ class SendPasswordResetEmailSerializer(serializers.Serializer):
             user = User.objects.get(email=email)
             uid = urlsafe_base64_encode(force_bytes(user.user_id))
             token = CustomPasswordResetTokenGenerator().make_token(user)
-            link = baseurl +'/api/v1/users/reset_password/'+uid+'/'+token+'/'
+            link = baseurl +'api/v1/users/reset_password/'+uid+'/'+token+'/'
             #Send Mail Code
             body='Click Following Link To Reset Your Password: ' + link
             data={

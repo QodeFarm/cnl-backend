@@ -1,12 +1,13 @@
 # Grouped imports:
-import base64
-import json
+from rest_framework.permissions import BasePermission
+from uuid import UUID, uuid4
 import logging
-import os
+import base64
 import random
 import string
+import json
 import uuid
-from uuid import UUID, uuid4
+import os
 
 # Alphabetized imports:
 import inflect
@@ -934,3 +935,19 @@ def get_active_workflow(section_id):
     except Exception as e:
         raise ValueError(f"Error fetching active workflow: {str(e)}")
 
+class IsAdminRoles(BasePermission):
+    """
+    Custom permission to allow access only to users with the 'Admin' role.
+
+    This checks the authenticated user's associated role via the `role_id` ForeignKey
+    and ensures that the role's `name` field is equal to "Admin".
+
+    Returns: True if the user is authenticated and their role is 'Admin', False otherwise.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        return (
+            user.is_authenticated and 
+            hasattr(user, 'role_id') and 
+            getattr(user.role_id, 'role_name', '').lower() == "admin"
+        )
