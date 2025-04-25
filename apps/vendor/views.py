@@ -3,6 +3,7 @@ from django.db import transaction
 from django.forms import ValidationError
 from django.shortcuts import render,get_object_or_404
 from django.http import  Http404
+from requests import Response
 from rest_framework import viewsets,status
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
@@ -140,7 +141,8 @@ class VendorViewSet(APIView):
                 logger.info("Retrieving vendors summary")
                 vendors = Vendor.objects.all().order_by('-created_at')
                 data = VendorsOptionsSerializer.get_vendors_summary(vendors)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+                return Response(data, status=status.HTTP_200_OK)
+                # return build_response(len(data), "Success", data, status.HTTP_200_OK)
  
             logger.info("Retrieving all vendors")
             queryset = Vendor.objects.all().order_by('-created_at')
@@ -159,7 +161,7 @@ class VendorViewSet(APIView):
             serializer = VendorsOptionsSerializer(queryset, many=True)
             logger.info("vendors data retrieved successfully.")
             print("check 3.")
-            return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
             # return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
  
@@ -286,9 +288,9 @@ class VendorViewSet(APIView):
             custom_error = []
 
         # Ensure mandatory data is present
-        if not vendors_data or not vendor_addresses_data or not custom_fields_data:
-            logger.error("Vendor data, vendor addresses data, and Custom Fields data are mandatory but not provided.")
-            return build_response(0, "Vendor, vendor addresses, and Custom Fields are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not vendors_data or not vendor_addresses_data:
+            logger.error("Vendor data, vendor addresses data mandatory but not provided.")
+            return build_response(0, "Vendor, vendor addresses mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if vendors_error:
