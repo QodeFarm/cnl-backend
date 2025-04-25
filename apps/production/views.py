@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 from rest_framework.filters import OrderingFilter
-from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, WorkOrderFilter
+from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, StockJournalFilter, WorkOrderFilter
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from apps.products.models import Products, ProductVariation
@@ -208,8 +208,16 @@ class WorkOrderAPIView(APIView):
             stock_journal = request.query_params.get('stock_journal', 'false').lower() == 'true'
             if stock_journal:
                 logger.info("Retrieving stock_journal")
-                data = StockJournalSerializer(instances, many=True).data
-                return filter_response(len(data),"Success", data, page, limit, total_count, status.HTTP_200_OK)
+                # Apply filters to the stock journal data
+                queryset = WorkOrder.objects.all().order_by('-created_at')
+                filterset = StockJournalFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    filtered_queryset = filterset.qs
+                    data = StockJournalSerializer(filtered_queryset, many=True).data
+                    return filter_response(len(data), "Success", data, page, limit, filtered_queryset.count(), status.HTTP_200_OK)
+                else:
+                    data = StockJournalSerializer(instances, many=True).data
+                    return filter_response(len(data), "Success", data, page, limit, total_count, status.HTTP_200_OK)
 
             if summary:
                 logger.info("Retrieving Work Order summary")

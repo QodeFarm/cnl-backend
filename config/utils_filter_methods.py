@@ -219,7 +219,9 @@ def list_filtered_objects(viewset, request, model_name, *args, **kwargs):
     serializer = viewset.get_serializer(queryset, many=True)
     message = "NO RECORDS INSERTED" if not serializer.data else None
     status_code = status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
-    return filter_response(count=len(queryset),message=message,data=serializer.data,page=1,limit=len(queryset),total_count=model_name.objects.count(),status_code=status_code)
+    # Use filtered queryset count instead of counting all records in the model
+    total_count = queryset.count()
+    return filter_response(count=len(serializer.data),message=message,data=serializer.data,page=1,limit=len(serializer.data),total_count=total_count,status_code=status_code)
 
 
 #========================Filter Response==================================
