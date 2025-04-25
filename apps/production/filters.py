@@ -161,3 +161,39 @@ class MachineFilter(filters.FilterSet):
     class Meta:
         model = Machine 
         fields = ['machine_id','machine_name','description','status','created_at','s', 'sort','page','limit']
+
+
+class StockJournalFilter(filters.FilterSet):
+    product = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
+    product_id = filters.CharFilter(method=filter_uuid)
+    size = filters.CharFilter(field_name='size_id__size_name', lookup_expr='icontains')
+    color = filters.CharFilter(field_name='color_id__color_name', lookup_expr='icontains')
+    status = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
+    bom_name = filters.CharFilter(field_name='bom_id__bom_name', lookup_expr='icontains')
+    quantity = filters.RangeFilter()
+    completed_qty = filters.RangeFilter()
+    created_at = filters.DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = WorkOrder
+        fields = ['product', 'size', 'color', 'status', 'quantity', 'completed_qty', 'product_id', 'created_at', 'period_name', 'bom_name', 's', 'sort', 'page', 'limit']
