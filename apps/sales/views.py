@@ -23,6 +23,8 @@ from config.utils_methods import previous_product_instance_verification, product
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
 from django.apps import apps
+from django.db.models import Sum, F, Count,ExpressionWrapper,Value
+
 
 
 from datetime import datetime, timedelta
@@ -273,10 +275,7 @@ class SaleDebitNoteItemsViews(viewsets.ModelViewSet):
 from django.db.models import F
 
 class SaleOrderViewSet(APIView):
-    """
-    API ViewSet for handling sale order creation and related data.
-    """
-
+    """API ViewSet for handling sale order creation and related data."""
     def get_object(self, pk):
         try:
             return SaleOrder.objects.get(pk=pk)
@@ -285,41 +284,463 @@ class SaleOrderViewSet(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
     def get(self, request, *args, **kwargs):
-        if "pk" in kwargs:
-            result = validate_input_pk(self, kwargs['pk'])
-            return result if result else self.retrieve(self, request, *args, **kwargs)
+        """Handles GET requests to retrieve sale orders with optional filters and reports."""
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
-            if summary:
-                logger.info("Retrieving Sale order summary")
-                saleorders = SaleOrder.objects.all().order_by('-created_at')
-                data = SaleOrderOptionsSerializer.get_sale_order_summary(saleorders)
-                return Response(data, status=status.HTTP_200_OK)
+            if "pk" in kwargs:
+                result = validate_input_pk(self, kwargs['pk'])
+                return result if result else self.retrieve(self, request, *args, **kwargs)
 
-            logger.info("Retrieving all sale order")
+            if request.query_params.get("summary", "false").lower() == "true" :
+                return self.get_summary_data(request)
+            
+            if request.query_params.get("sales_order_report", "false").lower() == "true" :
+                return self.get_sales_order_report(request)
+            
+            if request.query_params.get("sales_invoice_report", "false").lower() == "true" :
+                return self.get_sales_invoice_report(request)
+            
+            if request.query_params.get("sales_by_product", "false").lower() == "true":
+                return self.get_sales_by_product(request)
+            
+            if request.query_params.get("sales_by_customer", "false").lower() == "true":
+                return self.get_sales_by_customer(request)
+            
+            if request.query_params.get("outstanding_sales_by_customer", "false").lower() == "true":
+                return self.get_outstanding_sales_by_customer(request)
+            
+            if request.query_params.get("sales_tax_report", "false").lower() == "true":
+                return self.get_sales_tax_by_product_report(request)
+            
+            if request.query_params.get("salesperson_performance_report", "false").lower() == "true":
+                return self.get_salesperson_performance_report(request)
+            
+            if request.query_params.get("profit_margin_report", "false").lower() == "true":
+                return self.get_profit_margin_report(request)
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
-
-            queryset = SaleOrder.objects.all().order_by('-created_at')
-
-            # Apply filters manually
-            if request.query_params:
-                filterset = SaleOrderFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs   
-
-            total_count = SaleOrder.objects.count()
-        
-            serializer = SaleOrderOptionsSerializer(queryset, many=True)
-            logger.info("sale order data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            return self.get_sale_orders(request)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def get_pagination_params(self, request):
+        """Extracts pagination parameters from the request."""
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
+        return page, limit
+    
+    def get_sale_orders(self, request):
+        """Applies filters, pagination, and retrieves sale orders."""
+        logger.info("Retrieving all sale orders")
+
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = SaleOrder.objects.all().order_by('-created_at')
+
+        if request.query_params:
+            filterset = SaleOrderFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = SaleOrder.objects.count()
+        serializer = SaleOrderSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    def get_summary_data(self, request):
+        """Fetches sale order summary data."""
+        logger.info("Retrieving Sale order summary")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = SaleOrder.objects.all().order_by('-created_at')
+        
+        if request.query_params:
+            filterset = SaleOrderFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = SaleOrder.objects.count()
+        # queryset, total_count = self.apply_filters(request, queryset, SaleOrderFilter, SaleOrder)
+
+        serializer = SaleOrderOptionsSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    def get_sales_order_report(self, request):
+        """Fetches sales order details with required fields."""
+        logger.info("Retrieving sales order report data")
+        page, limit = self.get_pagination_params(request)
+
+        # Group the necessary fields from SaleOrder model.
+        queryset = SaleOrder.objects.all().order_by('-created_at')
+
+        if request.query_params:
+            filterset = SalesOrderReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = SaleOrder.objects.count()
+        serializer = SalesOrderReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    def get_sales_invoice_report(self, request):
+        """Fetches detailed sales invoice report data."""
+        logger.info("Retrieving detailed sales invoice report data")
+        page, limit = self.get_pagination_params(request)
+
+        # Retrieve full SaleInvoiceOrders model instances.
+        queryset = SaleInvoiceOrders.objects.all().order_by('-invoice_date')
+        
+        if request.query_params:
+            filterset = SalesInvoiceReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = SaleInvoiceOrders.objects.count()
+        serializer = SalesInvoiceReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+
+    def get_sales_by_product(self, request):
+        """Fetches total sales amount grouped by product."""
+        logger.info("Retrieving sales by product data")
+        page, limit = self.get_pagination_params(request)
+        
+        # queryset = SaleOrderItems.objects.values(product=F('product_id__name'),total_sales=F('amount')).order_by('-total_sales')
+
+        # queryset = SaleOrderItems.objects.values(product=F('product_id__name')).annotate(
+        #     total_sales=Sum('amount', output_field=models.DecimalField())  
+        # ).order_by('-total_sales')
+        
+        queryset = SaleOrderItems.objects.values( "product_id__name").annotate(
+                total_quantity_sold=Sum("quantity"),
+                total_sales=Sum("amount"),
+            ).order_by('-total_sales')
+
+        # if request.query_params:
+        #     filterset = SalesByProductReportFilter(request.GET, queryset=queryset)
+        #     if filterset.is_valid():
+        #         queryset = filterset.qs
+                
+        # total_count = queryset.count()
+        if request.query_params:
+            filterset = SalesByProductReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = queryset.count()
+        serializer = SalesByProductReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    def get_sales_by_customer(self, request):
+        """Fetches total sales amount grouped by customer."""
+        logger.info("Retrieving sales by customer data")
+        page, limit = self.get_pagination_params(request)
+
+        queryset = SaleOrder.objects.values(customer=F('customer_id__name')).annotate(
+            total_sales=Sum('item_value', output_field=models.DecimalField())  # Ensure DecimalField output
+        ).order_by('-total_sales')
+
+        if request.query_params:
+            filterset = SalesByCustomerReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = SalesByCustomerSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    
+    def get_outstanding_sales_by_customer(self, request):
+        """Fetches pending payments grouped by customer."""
+        logger.info("Retrieving outstanding sales (pending payments) by customer data")
+        page, limit = self.get_pagination_params(request)
+
+        # Annotate each invoice with total_paid and pending_amount,
+        # Group by customer: sum total_amount and sum payments made.
+        queryset = SaleInvoiceOrders.objects.filter(
+            total_amount__gt=F('paymenttransactions__amount')
+        ).values(customer=F('customer_id__name')).annotate(
+            total_invoice=Sum('total_amount', output_field=models.DecimalField()),
+            total_paid=Coalesce(
+                Sum('paymenttransactions__amount', filter=Q(paymenttransactions__payment_status='Completed'),
+                    output_field=models.DecimalField()),
+                Value(0),
+                output_field=models.DecimalField()
+            )
+        ).annotate(
+            total_pending=F('total_invoice') - F('total_paid')
+        ).filter(total_pending__gt=0).order_by('-total_pending')
+
+        if request.query_params:
+            filterset = OutstandingSalesReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = OutstandingSalesSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    def get_sales_tax_by_product_report(self, request):
+        """Fetches sales tax report data grouped by product and GST type."""
+        logger.info("Retrieving sales tax by product report data")
+        page, limit = self.get_pagination_params(request)
+        
+        # Group by product and GST type, then aggregate total sales and tax.
+        queryset = SaleInvoiceItems.objects.values(
+            'product_id__name',
+            'sale_invoice_id__gst_type_id__name'
+        ).annotate(
+            product=F('product_id__name'),
+            gst_type=F('sale_invoice_id__gst_type_id__name'),
+            total_sales=Sum('amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+            total_tax=Sum('tax', output_field=DecimalField(max_digits=18, decimal_places=2))
+        ).order_by('-total_tax')
+        
+        # Calculate total count before applying filters
+        total_count = queryset.count()
+        
+        # Apply optional filters if provided
+        if request.query_params:
+            filterset = SalesTaxByProductReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        
+        # Manual pagination if needed
+        if not hasattr(filterset, 'page_number') and not hasattr(filterset, 'limit'):
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            queryset = queryset[start_index:end_index]
+                    
+        serializer = SalesTaxByProductReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    def get_salesperson_performance_report(self, request):
+        """Fetches sales figures aggregated per salesperson."""
+        logger.info("Retrieving salesperson performance report data")
+        page, limit = self.get_pagination_params(request)
+        
+        # Group invoices by salesperson (using the related field from order_salesman_id)
+        queryset = SaleInvoiceOrders.objects.values(
+            salesperson=F('order_salesman_id__name')  # Assumes OrdersSalesman model has a 'name' field.
+        ).annotate(
+            total_sales=Sum('total_amount', output_field=DecimalField(max_digits=18, decimal_places=2))
+        ).order_by('-total_sales')
+        
+        # Optional filtering if query parameters are provided.
+        if request.query_params:
+            filterset = SalespersonPerformanceReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = SalespersonPerformanceReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    
+    def get_profit_margin_report(self, request):
+        """Fetches profit margin analysis on sold products."""
+        logger.info("Retrieving profit margin report data")
+        page, limit = self.get_pagination_params(request)
+        
+        # Aggregate total sales and total cost by product.
+        queryset = SaleOrderItems.objects.values(
+            product=F('product_id__name')
+        ).annotate(
+            total_sales=Sum('amount'),
+            total_quantity=Sum('quantity'),
+            total_cost=Sum(
+                ExpressionWrapper(
+                    F('product_id__purchase_rate') * F('quantity'),
+                    output_field=DecimalField(max_digits=18, decimal_places=2)
+                )
+            )
+        )
+        
+        # Annotate profit and profit margin.
+        # Profit = total_sales - total_cost
+        # Profit Margin = (profit / total_sales) * 100
+        queryset = queryset.annotate(
+            profit=ExpressionWrapper(F('total_sales') - F('total_cost'), output_field=DecimalField(max_digits=18, decimal_places=2))
+        ).annotate(
+            profit_margin=ExpressionWrapper(
+                (F('profit') / F('total_sales')) * 100,
+                output_field=DecimalField(max_digits=5, decimal_places=2)
+            )
+        ).order_by('-profit_margin')
+        
+        if request.query_params:
+            filterset = ProfitMarginReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        
+        total_count = queryset.count()
+        serializer = ProfitMarginReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+        
+
+    # def get_sales_tax_report(self, request):
+    #     """Fetches sales tax report – tax collected on sales."""
+    #     logger.info("Retrieving sales tax report data")
+    #     page, limit = self.get_pagination_params(request)
+        
+    #     # Filter by invoice date range if provided
+    #     start_date = request.query_params.get('start_date')
+    #     end_date = request.query_params.get('end_date')
+    #     queryset = SaleInvoiceOrders.objects.all()
+    #     if start_date and end_date:
+    #         queryset = queryset.filter(invoice_date__range=[start_date, end_date])
+        
+    #     # Aggregate tax data grouped by GST type name.
+    #     queryset = queryset.values(
+    #         gst_type=F('gst_type_id__name')  # Assumes GstTypes model has a field 'gst_name'
+    #     ).annotate(
+    #         total_taxable=Sum('taxable', output_field=DecimalField(max_digits=18, decimal_places=2)),
+    #         total_tax=Sum('tax_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+    #         total_cess=Sum('cess_amount', output_field=DecimalField(max_digits=18, decimal_places=2))
+    #     ).order_by('-total_tax')
+        
+    #     # Apply optional filters if provided.
+    #     if request.query_params:
+    #         filterset = SalesTaxReportFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     total_count = queryset.count()
+    #     serializer = SalesTaxReportSerializer(queryset, many=True)
+    #     # return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+
+
+
+
+    # def get_outstanding_sales(self, request):
+    #     """Fetches outstanding sales payments to customers."""
+    #     logger.info("Retrieving outstanding sales payments report")
+
+    #     page, limit = self.get_pagination_params(request)
+
+    #     queryset = SaleOrder.objects.values(
+    #         "customer_id__name"
+    #     ).annotate(
+    #         total_sales=Sum("item_value"),
+    #         advance_paid=Sum("dis_amt"),
+    #         outstanding_amount=ExpressionWrapper(
+    #             F("item_value") - F("dis_amt"),
+    #             output_field=DecimalField()
+    #         )
+    #     ).filter(outstanding_amount__gt=0).order_by("-outstanding_amount")  # ✅ Show only pending payments
+
+    #     # # Apply filters (if any)
+    #     # if request.query_params:
+    #     #     filterset = OutstandingSalesFilter(request.GET, queryset=queryset)
+    #     #     if filterset.is_valid():
+    #     #         queryset = filterset.qs
+
+    #     total_count = queryset.count()
+    #     serializer = OutstandingSalesReportSerializer(queryset, many=True)
+        
+    #     return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            
+    #   
+def get_sales_tax_report(self, request):
+    #     """Fetches Sales Tax Report – Total tax collected on sales."""
+    #     logger.info("Retrieving Sales Tax Report...")
+
+    #     page, limit = self.get_pagination_params(request)
+
+        
+    #     queryset = SaleInvoiceOrders.objects.values(
+    #         "invoice_no",
+    #         "invoice_date",
+    #         "customer_id__name",
+    #         "total_amount",   # ✅ Include these fields directly
+    #         "tax_amount",
+    #         "cess_amount"
+    #     ).order_by("-invoice_date")  # ✅ Show latest invoices first
+
+
+    #     # Apply filters (if any)
+    #     # if request.query_params:
+    #     #     filterset = SalesTaxFilter(request.GET, queryset=queryset)
+    #     #     if filterset.is_valid():
+    #     #         queryset = filterset.qs
+
+    #     total_count = queryset.count()
+    #     serializer = SalesTaxReportSerializer(queryset, many=True)
+        
+    #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)      
+    
+    # def get_outstanding_sales(self, request):
+    #     """Fetches outstanding sales payments report."""
+    #     logger.info("Retrieving outstanding sales payments report")
+
+    #     page, limit = self.get_pagination_params(request)
+
+    #     #   # Define statuses where payment might still be pending
+    #     # pending_statuses = [
+    #     #     "Pending", "In Progress", "Partially Delivered", "Partially Dispatched",
+    #     #     "Delivered", "Dispatched", "Processing", "On Hold", "Approved"
+    #     # ]
+
+    #     queryset = SaleInvoiceOrders.objects.annotate(
+    #         customer_name=F('customer_id__name'),
+    #         invoice_num=F('invoice_no'),
+    #         invoice_dates=F('invoice_date'),
+    #         due_dates=F('due_date'),
+    #         total_amounts=F('total_amount'),
+    #         amount_paid=F('advance_amount'), 
+    #         order_status=F('order_status_id__status_name'),
+    #         outstanding_amount=ExpressionWrapper(
+    #             F('total_amount') - F('advance_amount'),
+    #             output_field=DecimalField()
+    #         )
+    #     ).filter(outstanding_amount__gt=0).order_by('-due_date')
+
+
+    #     # # Apply filters
+    #     # filterset = OutstandingSalesFilter(request.GET, queryset=queryset)
+    #     # if filterset.is_valid():
+    #     #     queryset = filterset.qs
+
+    #     total_count = queryset.count()
+    #     serializer = OutstandingSalesReportSerializer(queryset, many=True)
+    #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    # def get_sales_tax_report(self, request):
+    #     """Fetches total sales tax collected on taxable sales, grouped by product or overall."""
+    #     logger.info("Retrieving sales tax report")
+    #     page, limit = self.get_pagination_params(request)
+        
+    #     # Start with the SaleOrderItems queryset
+    #     # Start with the SaleInvoiceOrders queryset
+    #     invoice_queryset = SaleInvoiceOrders.objects.all()
+        
+    #     # Apply filters if query parameters exist
+    #     if request.query_params:
+    #         filterset = SaleInvoiceOrdersFilter(request.GET, queryset=invoice_queryset)
+    #         if filterset.is_valid():
+    #             invoice_queryset = filterset.qs
+        
+    #     # Aggregate taxable sales and tax collected, grouped by product or customer (optional)
+    #     tax_report = invoice_queryset.values(
+    #         product=F('sale_order_id__saleorderitems__product_id__name'),  # Navigate through SaleOrderItems
+    #         customer=F('customer_id__name'),
+    #         tax_rate=F('saleorderitems__rate')  # Assuming GstTypes has a 'rate' field
+    #     ).annotate(
+    #         total_taxable_sales=Sum('taxable'),  # Sum of taxable amounts
+    #         tax_collected=Sum('tax_amount')      # Sum of tax amounts collected
+    #     ).order_by('-tax_collected')
+        
+    #     # Calculate total count of records (unique combinations of product/customer with taxable sales)
+    #     total_count = tax_report.count()
+        
+     
+        
+    #     # Serialize the data
+    #     serializer = SalesTaxReportSerializer(tax_report, many=True)
+        
+    #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a sale order and its related data (items, attachments, and shipments).

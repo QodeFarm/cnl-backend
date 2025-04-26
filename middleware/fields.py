@@ -8,6 +8,9 @@ custom_filters = [
     'sales_order_status',
     'customers_not_purchasing',
     'products_not_moving',
+    'outstanding_sales_by_customer',
+    'sales_order_report',
+    'sales_invoice_report'
     ]
 
 

@@ -1,4 +1,7 @@
 from rest_framework import serializers
+
+from apps.finance.models import JournalEntryLines, PaymentTransaction
+from apps.sales.models import SaleInvoiceOrders
 from .models import *
 from apps.products.serializers import PictureSerializer
 from apps.masters.serializers import *
@@ -151,3 +154,156 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
             "msg": "SUCCESS",
             "data": serializer.data
         }
+class CustomerSummaryReportSerializer(serializers.ModelSerializer):
+    total_sales = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    outstanding_payments = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    total_advance = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = Customer
+        fields = ['customer_id', 'name', 'total_sales', 'total_advance', 'outstanding_payments']   
+
+class CustomerOrderHistoryReportSerializer(serializers.ModelSerializer):
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+
+    class Meta:
+        model = SaleInvoiceOrders
+        fields = ['invoice_no','invoice_date','total_amount','order_status','customer']
+
+class CustomerCreditLimitReportSerializer(serializers.ModelSerializer):
+    credit_usage = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    remaining_credit = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    
+    class Meta:
+        model = Customer
+        fields = ['customer_id', 'name', 'credit_limit', 'credit_usage', 'remaining_credit']
+
+class CustomerLedgerReportSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Customer Ledger Report that tracks all financial transactions with a customer.
+    This includes sales, payments, and any other debit/credit transactions.
+    """
+    transaction_date = serializers.DateField(source='journal_entry_id.entry_date')
+    reference_number = serializers.CharField(source='journal_entry_id.reference')
+    description = serializers.SerializerMethodField()
+    debit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    credit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    running_balance = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    transaction_type = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = JournalEntryLines
+        fields = [
+            'journal_entry_line_id',
+            'transaction_date',
+            'reference_number',
+            'description',
+            'debit',
+            'credit',
+            'running_balance',
+            'transaction_type'
+        ]
+    
+    def get_description(self, obj):
+        """
+        Returns either the line description or falls back to the journal entry description
+        """
+        return obj.description or obj.journal_entry_id.description
+    
+    def get_transaction_type(self, obj):
+        """
+        Determines transaction type based on the journal entry reference or other attributes
+        """
+        reference = obj.journal_entry_id.reference or ''
+        if 'SO-' in reference:
+            return 'Sale Order'
+        elif 'SO-INV' in reference or 'INV' in reference:
+            return 'Sale Invoice'
+        elif 'SR-' in reference:
+            return 'Sale Return'
+        elif 'CN-' in reference:
+            return 'Credit Note'  
+        elif 'DN-' in reference:
+            return 'Debit Note'
+        elif 'RCPT-' in reference:
+            return 'Receipt'
+        elif 'PMT-' in reference:
+            return 'Payment'
+        else:
+            return 'Other'
+
+class CustomerOutstandingReportSerializer(serializers.ModelSerializer):
+    """
+    Simplified serializer for Customer Outstanding Report showing pending payments per customer.
+    """
+    total_sales = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    total_paid = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    total_pending = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    last_payment_date = serializers.DateField(read_only=True)
+    phone = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Customer
+        fields = ['customer_id', 'name', 'total_sales', 'total_paid', 'total_pending', 
+                 'last_payment_date', 'phone', 'email']
+    
+    def get_phone(self, obj):
+        """Get the customer's phone number from addresses"""
+        address = obj.customeraddresses_set.filter(phone__isnull=False).first()
+        return address.phone if address else None
+    
+    def get_email(self, obj):
+        """Get the customer's email from addresses"""
+        address = obj.customeraddresses_set.filter(email__isnull=False).first()
+        return address.email if address else None
+
+class CustomerPaymentReportSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Customer Payment Report showing payments received from customers.
+    """
+    payment_id = serializers.UUIDField()
+    payment_date = serializers.DateField()
+    payment_amount = serializers.DecimalField(source='amount', max_digits=15, decimal_places=2)
+    payment_method = serializers.CharField()
+    payment_status = serializers.CharField()
+    reference_number = serializers.CharField()
+    invoice_id = serializers.CharField()
+    customer_name = serializers.SerializerMethodField()
+    customer_gst = serializers.SerializerMethodField()
+    notes = serializers.CharField()
+    
+    class Meta:
+        model = PaymentTransaction
+        fields = ['payment_id', 'payment_date', 'payment_amount', 'payment_method',
+                  'payment_status', 'reference_number', 'invoice_id',
+                  'customer_name', 'customer_gst', 'notes']
+    
+    def get_customer_name(self, obj):
+        """Get customer name based on invoice_id"""
+        from apps.sales.models import SaleInvoiceOrders
+        if obj.order_type == 'Sale':
+            try:
+                sale_invoice = SaleInvoiceOrders.objects.filter(
+                    sale_invoice_id=obj.invoice_id
+                ).select_related('customer_id').first()
+                if sale_invoice and sale_invoice.customer_id:
+                    return sale_invoice.customer_id.name
+            except Exception:
+                pass
+        return "N/A"
+    
+    def get_customer_gst(self, obj):
+        """Get customer GST based on invoice_id"""
+        from apps.sales.models import SaleInvoiceOrders
+        if obj.order_type == 'Sale':
+            try:
+                sale_invoice = SaleInvoiceOrders.objects.filter(
+                    sale_invoice_id=obj.invoice_id
+                ).select_related('customer_id').first()
+                if sale_invoice and sale_invoice.customer_id:
+                    return sale_invoice.customer_id.gst
+            except Exception:
+                pass
+        return "N/A"

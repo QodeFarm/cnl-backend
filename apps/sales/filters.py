@@ -1,12 +1,18 @@
+# from django.forms import DecimalField, IntegerField
 from django_filters import rest_framework as filters
 from .models import QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
-from django.db.models import Q
-logger = logging.getLogger(__name__)
+from django.db.models import Q, Sum, F, Count, Max, OuterRef, Subquery, DecimalField, IntegerField
+from django.db.models.functions import Coalesce
 
+
+from rest_framework.response import Response
+
+
+logger = logging.getLogger(__name__)
 class SaleOrderFilter(filters.FilterSet):
     order_no = filters.CharFilter(lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)
@@ -32,6 +38,44 @@ class SaleOrderFilter(filters.FilterSet):
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     # New filter to fetch all child sale orders based on parent order_no
     parent_order_no = filters.CharFilter(method='filter_child_orders')
+ 
+    
+    # NEW filter with only the fields present in get_customer_order_history Report:
+    customer_name = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    order_date = filters.DateFilter()
+    order_status_id = filters.CharFilter(method=filter_uuid)
+    order_status = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
+    total_amount = filters.RangeFilter(field_name='item_value')
+    total_paid = filters.RangeFilter(field_name='advance_amount')
+    outstanding_balance = filters.RangeFilter()
+
+    
+    
+     # NEW FILTER: Fetch aggregated sales per product
+    # sales_by_product = filters.BooleanFilter(method='filter_sales_by_product', label="Total Sales per Product")
+    # sales_by_customer = filters.BooleanFilter(method='filter_sales_by_customer', label="Total Sales per Customer")
+    
+    
+    # def filter_sales_by_product(self, queryset, name, value):
+    #     """
+    #         Aggregate total sales per product/service when `sales_by_product=true` is passed.
+    #     """
+    #     # queryset = queryset.filter(order_no='SO-2502-00002')
+        
+    #     # return queryset
+    
+    
+    # def filter_sales_by_customer(self, queryset, name, value):
+    #     """
+    #     Aggregate total sales per product/service when `total_sales_per_product=true` is passed.
+        
+        
+    #     """
+    #     queryset = queryset.filter(order_no='SO-2502-00002')
+        
+    #     return queryset
+
+        
     
     # def filter_child_orders(self, queryset, name, value):
     #     """
@@ -324,3 +368,300 @@ class SaleDebitNotesFilter(filters.FilterSet):
  
  
   
+class OutstandingSalesReportFilter(filters.FilterSet):
+    """
+    Filter for Outstanding Sales Report showing pending payments from customers.
+    """
+    customer_id = filters.UUIDFilter(field_name='customer_id')
+    customer_name = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    min_total_pending = filters.NumberFilter(field_name='total_pending', lookup_expr='gte')
+    max_total_pending = filters.NumberFilter(field_name='total_pending', lookup_expr='lte')
+    invoice_date_after = filters.DateFilter(field_name='invoice_date', lookup_expr='gte')
+    invoice_date_before = filters.DateFilter(field_name='invoice_date', lookup_expr='lte')
+    
+    class Meta:
+        model = SaleInvoiceOrders
+        fields = ['customer_id', 'customer_name', 'min_total_pending', 'max_total_pending',
+                 'invoice_date_after', 'invoice_date_before']
+
+
+class SalesByProductReportFilter(filters.FilterSet):
+    product = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    total_sales = filters.RangeFilter()  #New filter for total sales amount
+    total_quantity_sold = filters.RangeFilter() 
+
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = SaleOrderItems
+        fields = [  'total_sales', 's', 'sort', 'page', 'limit']  
+        
+class SalesByCustomerReportFilter(filters.FilterSet):
+    customer = filters.CharFilter()
+    total_sales = filters.RangeFilter() 
+    created_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = SaleOrder
+        fields = ['customer','total_sales','created_at','s','sort','page','limit']   
+        
+
+class SalesByProductReportFilter(filters.FilterSet):
+    product = filters.CharFilter(field_name="product_id__name", lookup_expr="icontains")  
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    total_sales = filters.RangeFilter()  
+    created_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method="filter_by_search", label="Search")
+    sort = filters.CharFilter(method="filter_by_sort", label="Sort")
+    page = filters.NumberFilter(method="filter_by_page", label="Page")
+    limit = filters.NumberFilter(method="filter_by_limit", label="Limit")
+    
+    
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = SaleOrderItems
+        fields = ["product", "total_sales",'created_at','s','sort','page','limit']
+                       
+                       
+
+class OutstandingSalesReportFilter(filters.FilterSet):
+    customer = filters.CharFilter(field_name='customer', lookup_expr='iexact')
+    total_invoice = filters.RangeFilter()
+    total_paid = filters.RangeFilter()
+    total_pending = filters.RangeFilter()
+    created_at = filters.filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        
+        model = SaleOrder  
+        fields = [
+            'customer', 'total_invoice', 'total_paid', 'total_pending','created_at',
+            's', 'sort', 'page', 'limit'
+        ]
+
+from django_filters import rest_framework as filters
+from django_filters.filters import DateFilter, CharFilter, RangeFilter, NumberFilter
+
+import django_filters
+
+
+class SalesOrderReportFilter(django_filters.FilterSet):
+    order_no = CharFilter(field_name="order_no", lookup_expr="icontains")
+    customer = CharFilter(field_name="customer_id__name", lookup_expr="icontains")
+    order_date = DateFromToRangeFilter(field_name="order_date")
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
+    
+    sale_type = CharFilter(field_name="sale_type_id__name", lookup_expr="icontains")
+    amount = NumberFilter(field_name="item_value")  # Assuming this is the total order amount
+    created_at = filters.filters.DateFromToRangeFilter()
+    s = CharFilter(method="filter_by_search", label="Search")
+    sort = CharFilter(method="filter_by_sort", label="Sort")
+    page = NumberFilter(method="filter_by_page", label="Page")
+    limit = NumberFilter(method="filter_by_limit", label="Limit")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = SaleOrder
+        fields = ["order_no", "customer", "order_date", "sale_type", "status_name", "amount",'created_at' ,"s", "sort", "page", "limit"]
+
+
+
+
+class SalesInvoiceReportFilter(filters.FilterSet):
+    invoice_no = filters.CharFilter(field_name="invoice_no", lookup_expr="icontains")
+    customer = filters.CharFilter(field_name="customer_id__name", lookup_expr="icontains")
+    invoice_date = filters.DateFromToRangeFilter(field_name="invoice_date")
+    bill_type = filters.CharFilter(field_name="bill_type", lookup_expr="iexact")
+    item_value = filters.RangeFilter(field_name="item_value")
+    dis_amt = filters.RangeFilter(field_name="dis_amt")
+    tax_amount = filters.RangeFilter(field_name="tax_amount")
+    total_amount = filters.RangeFilter(field_name="total_amount")
+    due_date = filters.DateFromToRangeFilter(field_name="due_date")
+    status_name = filters.CharFilter(field_name='order_status_id', lookup_expr='iexact')
+    created_at = filters.DateFromToRangeFilter(field_name="created_at")
+    
+    # Additional filters for search, sort, pagination
+    s = filters.CharFilter(method="filter_by_search", label="Search")
+    sort = filters.CharFilter(method="filter_by_sort", label="Sort")
+    page = filters.NumberFilter(method="filter_by_page", label="Page")
+    limit = filters.NumberFilter(method="filter_by_limit", label="Limit")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    class Meta:
+        model = ''
+        fields = [
+            'invoice_no', 'customer', 'invoice_date', 'bill_type', 
+            'status_name', 'total_amount', 'created_at',
+            's', 'sort', 'page', 'limit'
+        ]
+        
+        
+# class SalesTaxReportFilter(filters.FilterSet):
+#     gst_type = filters.CharFilter(field_name='gst_type', lookup_expr='icontains')
+#     total_taxable = filters.RangeFilter()
+#     total_tax = filters.RangeFilter()
+#     total_cess = filters.RangeFilter()
+#     invoice_date = filters.DateFromToRangeFilter(field_name='invoice_date')
+    
+#     class Meta:
+#         model = SaleInvoiceOrders
+#         # Note: Since the query returns dicts (aggregated data), model isn’t used directly.
+#         fields = ['gst_type', 'total_taxable', 'total_tax', 'total_cess', 'invoice_date']        
+  
+  
+
+class SalesTaxByProductReportFilter(filters.FilterSet):
+    product = filters.CharFilter(field_name='product', lookup_expr='icontains')
+    gst_type = filters.CharFilter(field_name='gst_type', lookup_expr='icontains')
+    total_sales = filters.RangeFilter()
+    total_tax = filters.RangeFilter()
+    invoice_date = filters.DateFromToRangeFilter(field_name='sale_invoice_id__invoice_date')
+
+    class Meta:
+        model = SaleOrderItems  # The queryset returns dicts from an annotated query.
+        fields = ['product', 'gst_type', 'total_sales', 'total_tax', 'invoice_date']                  
+
+
+import django_filters
+
+class SalespersonPerformanceReportFilter(filters.FilterSet):
+    salesperson = filters.CharFilter(field_name='salesperson', lookup_expr='icontains')
+    total_sales = filters.RangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_search(self, queryset, name, value):
+            return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = None  # The queryset returns dictionaries.
+        fields = ['salesperson', 'total_sales', 's', 'sort', 'page', 'limit']
+
+
+class ProfitMarginReportFilter(filters.FilterSet):
+    product = filters.CharFilter(field_name='product', lookup_expr='icontains')
+    total_sales = filters.RangeFilter()
+    profit_margin = filters.RangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = None 
+        fields = ['product', 'total_sales', 'profit_margin', 's', 'sort', 'page', 'limit']

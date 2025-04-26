@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, FinancialReport, JournalEntry, PaymentTransaction, TaxConfiguration
+from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -277,3 +277,45 @@ class FinancialReportFilter(filters.FilterSet):
         model = FinancialReport 
         #do not change "report_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields = ['report_name','report_type','generated_at','created_at','period_name','s','sort','page','limit']
+
+
+class JournalEntryLineFilter(filters.FilterSet):
+    date = filters.DateFromToRangeFilter(field_name='journal_entry_id__entry_date')  # Fixed
+    account = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')  
+    reference = filters.CharFilter(field_name='journal_entry_id__reference', lookup_expr='icontains')  # Fixed
+    debit = filters.NumberFilter(field_name='debit')
+    credit = filters.NumberFilter(field_name='credit')
+    description = filters.CharFilter(field_name='description',lookup_expr='icontains')
+
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+ 
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = JournalEntryLines
+        fields = ['date', 'account', 'reference']
+        
+        
+class TrialBalanceReportFilter(filters.FilterSet):
+    start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
+    end_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='lte')
+    account_type = filters.CharFilter(field_name='account_type')
+    
+    class Meta:
+        model = ChartOfAccounts
+        fields = ['start_date', 'end_date', 'account_type']        
