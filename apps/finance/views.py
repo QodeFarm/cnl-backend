@@ -1,5 +1,9 @@
+import datetime
+from decimal import Decimal
 import logging
-from apps.finance.filters import BankAccountFilter, BudgetFilter, ChartOfAccountsFilter, ExpenseClaimFilter, FinancialReportFilter, JournalEntryFilter, PaymentTransactionFilter, TaxConfigurationFilter
+from django.forms import IntegerField
+from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter, ExpenseClaimFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter
+from apps.sales.models import SaleInvoiceOrders
 from .models import *
 from .serializers import *
 from django.http import Http404
@@ -15,7 +19,10 @@ from rest_framework.response import Response
 from .models import Journal
 from .serializers import JournalSerializer
 from uuid import uuid4
-
+from rest_framework.decorators import action
+from django.db.models import Sum, F, Value, DecimalField, ExpressionWrapper, When,Case,DurationField,IntegerField,Q
+from django.db.models.functions import Coalesce,Cast
+from datetime import date
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -39,7 +46,7 @@ class BankAccountViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
+    
 class ChartOfAccountsViewSet(viewsets.ModelViewSet):
     queryset = ChartOfAccounts.objects.all().order_by('-created_at')
     serializer_class = ChartOfAccountsSerializer
@@ -55,7 +62,7 @@ class ChartOfAccountsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
+    
 class JournalEntryViewSet(viewsets.ModelViewSet):
     queryset = JournalEntry.objects.all().order_by('-created_at')
     serializer_class = JournalEntrySerializer
@@ -71,9 +78,9 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
+    
 class JournalEntryLinesViewSet(viewsets.ModelViewSet):
-    queryset = JournalEntryLines.objects.all()
+    queryset = JournalEntryLines.objects.all().order_by('-created_at')
     serializer_class = JournalEntryLinesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -84,7 +91,7 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
+    
 class JournalEntryLinesAPIview(APIView):
     def post(self, customer_id, account_id, amount, description, balance_amount):
         '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
@@ -120,7 +127,7 @@ class PaymentTransactionViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-
+      
 class TaxConfigurationViewSet(viewsets.ModelViewSet):
     queryset = TaxConfiguration.objects.all().order_by('-created_at')
     serializer_class = TaxConfigurationSerializer
@@ -184,6 +191,304 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def get_pagination_params(self, request):
+        """Extracts pagination parameters from the request."""
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
+        return page, limit
+
+    @action(detail=False, methods=['get'])
+    def general_ledger(self, request):
+        """Generates the General Ledger Report with all transactions."""
+        logger.info("Generating General Ledger Report")
+
+        # Get pagination parameters
+        page, limit = self.get_pagination_params(request)
+
+        # Fetch all journal entry lines, ordered by entry date
+        queryset = JournalEntryLines.objects.select_related('journal_entry_id', 'account_id').order_by('-journal_entry_id__entry_date')
+
+        # Apply filters if query parameters are present
+        if request.query_params:
+            filterset = GeneralLedgerReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        # Get total count of journal entry lines (before pagination)
+        total_count = JournalEntryLines.objects.count()
+        # Serialize the data
+        serializer = GeneralLedgerReportSerializer(queryset, many=True)
+
+        # Return the response using filter_response
+        return filter_response(len(queryset),  "General Ledger Report Generated",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def trial_balance(self, request):
+        """Generates the Trial Balance Report summarizing account balances."""
+        logger.info("Generating Trial Balance Report")
+        page, limit = self.get_pagination_params(request)
+
+        # Annotate each ChartOfAccounts instance with aggregated debit, credit and calculate balance.
+        queryset = ChartOfAccounts.objects.annotate(
+            total_debit=Coalesce(
+                Sum('journal_entry_lines__debit'),
+                Value(0, output_field=DecimalField(max_digits=15, decimal_places=2))
+            ),
+            total_credit=Coalesce(
+                Sum('journal_entry_lines__credit'),
+                Value(0, output_field=DecimalField(max_digits=15, decimal_places=2))
+            )
+        ).annotate(
+            balance=ExpressionWrapper(
+                F('total_debit') - F('total_credit'),
+                output_field=DecimalField(max_digits=15, decimal_places=2)
+            )
+        ).order_by('account_code')
+        
+        # Apply filters if query parameters are present
+        if request.query_params:
+            filterset = TrialBalanceReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = queryset.count()
+        serializer = TrialBalanceReportSerializer(queryset, many=True)
+        # Get pagination parameters if needed (assuming you have a helper)
+        
+        return filter_response(total_count,"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)    
+
+    @action(detail=False, methods=['get'])
+    def profit_and_loss(self, request):
+        """Generates the Profit & Loss Statement."""
+        logger.info("Generating Profit & Loss Report")
+        page, limit = self.get_pagination_params(request)
+        
+        # Step 1: Create a queryset
+        queryset = ChartOfAccounts.objects.all()
+        # Step 2: Apply filters
+        filterset = ProfitLossReportFilter(request.GET, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+            
+         # Aggregate revenue for accounts with type 'Revenue'
+        revenue_agg = ChartOfAccounts.objects.filter(account_type='Revenue').aggregate(
+            total_credit=Coalesce(
+                Sum('journal_entry_lines__credit'),
+                Value(Decimal('0.00'), output_field=DecimalField(max_digits=15, decimal_places=2))
+            ),
+            total_debit=Coalesce(
+                Sum('journal_entry_lines__debit'),
+                Value(Decimal('0.00'), output_field=DecimalField(max_digits=15, decimal_places=2))
+            )
+        )
+        total_revenue = revenue_agg['total_credit'] - revenue_agg['total_debit']
+
+        # Aggregate expense for accounts with type 'Expense'
+        expense_agg = ChartOfAccounts.objects.filter(account_type='Expense').aggregate(
+            total_debit=Coalesce(
+                Sum('journal_entry_lines__debit'),
+                Value(Decimal('0.00'), output_field=DecimalField(max_digits=15, decimal_places=2))
+            ),
+            total_credit=Coalesce(
+                Sum('journal_entry_lines__credit'),
+                Value(Decimal('0.00'), output_field=DecimalField(max_digits=15, decimal_places=2))
+            )
+        )
+        total_expense = expense_agg['total_debit'] - expense_agg['total_credit']
+
+        # Calculate net profit (or loss)
+        net_profit = total_revenue - total_expense
+        # Wrap the result in a list so that it matches the UI's expected format (list of objects)
+        report_data = [{
+            'total_revenue': total_revenue,
+            'total_expense': total_expense,
+            'net_profit': net_profit
+        }]
+        
+        # Instantiate the serializer with the instance (report_data) and many=True
+        serializer = ProfitLossReportSerializer(report_data, many=True)
+        # Return using the same response structure as your other reports
+        return filter_response( count=len(report_data),  message="Profit & Loss Report Generated",data=serializer.data,page=page,limit=limit,total_count=len(report_data),status_code=status.HTTP_200_OK)
+        
+    @action(detail=False, methods=['get'])
+    def balance_sheet(self, request):
+        """Generates the Balance Sheet Report."""
+        logger.info("Generating Balance Sheet Report")
+        page, limit = self.get_pagination_params(request)
+
+         # Filter for Asset, Liability, and Equity accounts and aggregate debit/credit sums
+        queryset = ChartOfAccounts.objects.filter(
+            account_type__in=['Asset', 'Liability', 'Equity']
+        ).annotate(
+            total_debit=Coalesce(
+                Sum('journal_entry_lines__debit', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            total_credit=Coalesce(
+                Sum('journal_entry_lines__credit', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            )
+        ).annotate(
+            balance=ExpressionWrapper(
+                F('total_debit') - F('total_credit'),
+                output_field=DecimalField(max_digits=18, decimal_places=2)
+            )
+        ).order_by('account_code')
+        if request.query_params:
+            filterset = BalanceSheetReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = BalanceSheetAccountSerializer(queryset, many=True)
+
+        # Use your helper function to format the response with pagination info
+        return filter_response(count=total_count,message="Balance Sheet Report Generated",data=serializer.data,page=page,limit=limit,total_count=total_count,status_code=status.HTTP_200_OK )
+
+    @action(detail=False, methods=['get'])
+    def cash_flow(self, request):
+        """Generates the Cash Flow Statement."""
+        logger.info("Generating Cash Flow Statement")
+        page, limit = self.get_pagination_params(request)
+
+        queryset = ChartOfAccounts.objects.filter(
+            account_type__in=['Asset', 'Expense', 'Revenue']
+        ).annotate(
+            total_debit=Coalesce(
+                Sum('journal_entry_lines__debit'),
+                Value(Decimal('0.00'), output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            total_credit=Coalesce(
+                Sum('journal_entry_lines__credit'),
+                Value(Decimal('0.00'), output_field=DecimalField(max_digits=18, decimal_places=2))
+            )
+        ).annotate(
+            cash_inflow=Case(
+                When(account_type='Revenue', then=F('total_credit')),
+                When(account_type='Asset', then=F('total_credit')),
+                default=Value(Decimal('0.00')),
+                output_field=DecimalField(max_digits=18, decimal_places=2)
+            ),
+            cash_outflow=Case(
+                When(account_type='Expense', then=F('total_debit')),
+                When(account_type='Asset', then=F('total_debit')),
+                default=Value(Decimal('0.00')),
+                output_field=DecimalField(max_digits=18, decimal_places=2)
+            )
+        ).order_by('account_code')
+        
+        if request.query_params:
+            filterset = CashFlowReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = CashFlowStatementSerializer(queryset, many=True)
+
+        return filter_response(total_count,"Cash Flow Statement Generated",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def aging_report(self, request):
+        """Generates the Aging Report for pending payments."""
+        logger.info("Generating Aging Report")
+        page, limit = self.get_pagination_params(request)
+
+        today_date = date.today()  # Define today_date before using it
+    
+        queryset = PaymentTransaction.objects.filter(
+            payment_status='Pending'
+        ).annotate(
+            due_days=Cast(
+                ExpressionWrapper(
+                    Value(today_date) - F('payment_date'),
+                    output_field=DurationField()
+                ),
+                output_field=IntegerField()
+            ),
+            pending_amount=Coalesce(Sum('amount'), Value(0, output_field=DecimalField()))
+        ).order_by('due_days')
+        
+        if request.query_params:
+            filterset = AgingReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = AgingReportSerializer(queryset, many=True)
+
+        return filter_response(total_count,"Aging Report Generated",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def bank_reconciliation(self, request):
+        """Generates the Bank Reconciliation Report."""
+        logger.info("Generating Bank Reconciliation Report")
+        page, limit = self.get_pagination_params(request)
+
+        queryset = BankAccount.objects.all().annotate(
+        total_debit=Coalesce(
+            Sum('linked_accounts__journal_entry_lines__debit'),
+            Value(0),
+            output_field=DecimalField(max_digits=15, decimal_places=2)
+        ),
+        total_credit=Coalesce(
+            Sum('linked_accounts__journal_entry_lines__credit'),
+            Value(0),
+            output_field=DecimalField(max_digits=15, decimal_places=2)
+        )
+    ).annotate(
+        ledger_balance=ExpressionWrapper(
+            F('total_debit') - F('total_credit'),
+            output_field=DecimalField(max_digits=15, decimal_places=2)
+        )
+    ).annotate(
+        difference=ExpressionWrapper(
+            F('balance') - F('ledger_balance'),
+            output_field=DecimalField(max_digits=15, decimal_places=2)
+        )
+    ).order_by('bank_name')
+    
+        if request.query_params:
+                filterset = BankReconciliationReportFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = BankReconciliationReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def journal_entry_report(self, request):
+        """Generates the Journal Entry Report."""
+        logger.info("Generating Journal Entry Report")
+        page, limit = self.get_pagination_params(request)
+
+        # Fetch all journal entries with their lines
+        queryset = JournalEntry.objects.prefetch_related('entry_lines').order_by('-entry_date')
+        total_count = queryset.count()
+        
+        if request.query_params:
+            filterset = JournalEntryReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        # Process data for report
+        report_data = []
+        for entry in queryset:
+            entry_data = {
+                'entry_date': entry.entry_date,
+                'reference': entry.reference,
+                'description': entry.description,
+                'lines': []
+            }
+            for line in entry.entry_lines.all():
+                entry_data['lines'].append({
+                    'account': line.account_id.account_name if line.account_id else "N/A",
+                    'debit': float(line.debit),
+                    'credit': float(line.credit),
+                    'description': line.description
+                })
+            report_data.append(entry_data)
+        return filter_response(len(report_data), "Journal Entry Report Generated", report_data, page, limit, total_count, status.HTTP_200_OK)
 
 
 #--------------------API View-----------------------#

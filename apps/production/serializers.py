@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from apps.masters.serializers import ModOrderStatusesSerializer
 from .models import *
 from apps.products.serializers import ColorSerializer, ModColorSerializer, ModStockJournalProductSerializer, ModproductsSerializer, ModSizeSerializer
 from apps.hrms.serializers import ModEmployeesSerializer
@@ -187,3 +189,92 @@ class WorkOrderStockJournalSerializer(serializers.ModelSerializer):
     def get_bom_components(self, obj):
         # Access pre-fetched BOM data
         return BillOfMaterials.objects.filter(reference_id=obj.pk).values()
+    
+
+class ProductionSummaryReportSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    status = ModProductionStatusSerializer(source='status_id', read_only=True)
+    completion_percentage = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True)
+    
+    class Meta:
+        model = WorkOrder
+        fields = ['work_order_id','product','quantity','completed_qty','completion_percentage','status','start_date','end_date']
+    
+class WorkOrderStatusReportSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    status = ModProductionStatusSerializer(source='status_id', read_only=True)
+    completion_percentage = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkOrder
+        fields = ['work_order_id','product','quantity','completed_qty','completion_percentage','status','start_date','end_date']
+
+    def get_completion_percentage(self, obj):
+        if obj.quantity and obj.quantity > 0:
+            return round((obj.completed_qty / obj.quantity) * 100, 2)
+        return 0.0
+    
+class RawMaterialConsumptionReportSerializer(serializers.Serializer):
+    product_name = serializers.CharField(source="product_id__name")
+    total_consumed_quantity = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_cost = serializers.DecimalField(max_digits=18, decimal_places=2)
+    avg_unit_cost = serializers.SerializerMethodField()
+    last_consumption_date = serializers.DateTimeField(required=False)
+    
+    def get_avg_unit_cost(self, obj):
+        if obj['total_consumed_quantity'] and obj['total_consumed_quantity'] > 0:
+            return round(obj['total_cost'] / obj['total_consumed_quantity'], 2)
+        return 0.0
+
+class FinishedGoodsReportSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    completion_percentage = serializers.SerializerMethodField()
+
+    class Meta:
+        model = WorkOrder
+        fields = ['work_order_id','product','quantity','completed_qty','completion_percentage','start_date','end_date']
+
+    def get_completion_percentage(self, obj):
+        if obj.quantity and obj.quantity > 0:
+            return round((obj.completed_qty / obj.quantity) * 100, 2)
+        return 0.0      
+
+class ProductionCostReportSerializer(serializers.ModelSerializer):
+    # Map product_id.name to 'product'
+    product = serializers.CharField()
+    # Aggregated fields from the query:
+    total_quantity = serializers.IntegerField()
+    total_cost = serializers.DecimalField(max_digits=18, decimal_places=2)
+    avg_unit_cost = serializers.DecimalField(max_digits=18, decimal_places=2)
+    
+    class Meta:
+        model = BillOfMaterials
+        fields = ['product', 'total_quantity', 'total_cost', 'avg_unit_cost']
+        
+class MachineUtilizationReportSerializer(serializers.Serializer):
+    machine_name = serializers.CharField()
+    total_usage_hours = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_work_orders = serializers.IntegerField()
+    avg_usage_per_work_order = serializers.DecimalField(max_digits=10, decimal_places=2)
+    total_work_time = serializers.IntegerField()
+    downtime_hours = serializers.IntegerField()
+   
+class WIPReportSerializer(serializers.Serializer):
+    """Serializer for Work in Progress (WIP) Report"""
+    work_order_id = serializers.UUIDField()
+    product_name = serializers.CharField(source="product_id__name")
+    status_name = serializers.CharField(source="status_id__status_name")
+    quantity = serializers.IntegerField()
+    completed_qty = serializers.IntegerField()
+    pending_qty = serializers.IntegerField()
+
+class BOMReportSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    items = BillOfMaterialsSerializer(source='billofmaterials_set', many=True, read_only=True)
+    
+    class Meta:
+        model = BOM
+        fields = ['bom_id','bom_name','product','notes','created_at','items']
+
+
+

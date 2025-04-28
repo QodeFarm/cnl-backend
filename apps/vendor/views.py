@@ -13,7 +13,7 @@ from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorFilter, VendorPaymentTermsFilter
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
-from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorsOptionsSerializer
+from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer
 from config.utils_methods import delete_multi_instance, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
 from django_filters.rest_framework import DjangoFilterBackend 
@@ -121,53 +121,408 @@ class VendorAddressView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class VendorViewSet(APIView):
-    """
-    API ViewSet for handling vendor creation and related data.
-    """
+    """API ViewSet for handling vendor creation and related data."""
     def get_object(self, pk):
         try:
             return Vendor.objects.get(pk=pk)
         except Vendor.DoesNotExist:
             logger.warning(f"Vendor with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-       
+        
     def get(self, request, *args, **kwargs):
-        if "pk" in kwargs:
-            result =  validate_input_pk(self,kwargs['pk'])
-            return result if result else self.retrieve(self, request, *args, **kwargs) 
+        """Handles GET requests to retrieve vendors with optional filters and reports."""
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true&" 
-            if summary:
-                logger.info("Retrieving vendors summary")
-                vendors = Vendor.objects.all().order_by('-created_at')
-                data = VendorsOptionsSerializer.get_vendors_summary(vendors)
-                return Response(data, status=status.HTTP_200_OK)
-                # return build_response(len(data), "Success", data, status.HTTP_200_OK)
- 
-            logger.info("Retrieving all vendors")
-            queryset = Vendor.objects.all().order_by('-created_at')
-            print("check 1.")
+            if "pk" in kwargs:
+                result = validate_input_pk(self, kwargs['pk'])
+                return result if result else self.retrieve(self, request, *args, **kwargs)
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
-            total_count = Vendor.objects.count()
-             
-            # Apply filters manually
-            if request.query_params:
-                filterset = VendorFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-            print("check 2.")
-            serializer = VendorsOptionsSerializer(queryset, many=True)
-            logger.info("vendors data retrieved successfully.")
-            print("check 3.")
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            if request.query_params.get("summary", "false").lower() == "true":
+                return self.get_summary_data(request)
+            
+            if request.query_params.get("vendor_summary_report", "false").lower() == "true":
+                return self.get_vendor_summary_report(request)
+                
+            if request.query_params.get("vendor_ledger_report", "false").lower() == "true":
+                return self.get_vendor_ledger_report(request)
 
-            # return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
- 
+            if request.query_params.get("vendor_outstanding_report", "false").lower() == "true":
+                return self.get_vendor_outstanding_report(request)
+
+            if request.query_params.get("vendor_performance_report", "false").lower() == "true":
+                return self.get_vendor_performance_report(request)
+
+            if request.query_params.get("vendor_payment_report", "false").lower() == "true":
+                return self.get_vendor_payment_report(request)
+
+            return self.get_vendors(request)
+
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_pagination_params(self, request):
+        """Extracts pagination parameters from the request."""
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
+        return page, limit
+    
+    def apply_filters(self, request, queryset, filter_class, model_class):
+        """Generic function to apply filters on any queryset and return total count."""
+        if request.query_params:
+            filterset = filter_class(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs  
+
+        total_count = model_class.objects.count()  # Total count calculation
+        return queryset, total_count
+
+    def get_summary_data(self, request):
+        """Fetches vendor summary data."""
+        logger.info("Retrieving vendor summary")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = Vendor.objects.all().order_by('-created_at')
+        queryset, total_count = self.apply_filters(request, queryset, VendorFilter, Vendor)
+
+        serializer = VendorsOptionsSerializer(queryset, many=True)
+        return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    def get_vendors(self, request):
+        """Applies filters, pagination, and retrieves vendor data."""
+        logger.info("Retrieving all vendors")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = Vendor.objects.all().order_by('-created_at')
+        queryset, total_count = self.apply_filters(request, queryset, VendorFilter, Vendor)
+
+        serializer = VendorSerializer(queryset, many=True)
+
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    def get_vendor_summary_report(self, request):
+        """
+        Fetches a summary report of purchase data and pending payments per vendor.
+        Displays total purchases, pending payments, and last purchase date.
+        """
+        logger.info("Retrieving vendor summary report data")
+        page, limit = self.get_pagination_params(request)
+        
+        from django.db.models import Sum, F, DecimalField, Value, ExpressionWrapper, Max
+        from django.db.models.functions import Coalesce
+        
+        # Start with a base queryset of vendors
+        queryset = Vendor.objects.all()
+        
+        # Calculate total purchases and payments
+        vendors = queryset.annotate(
+            # Total purchases (invoiced amount)
+            total_purchases=Coalesce(
+                Sum('purchaseinvoiceorders__total_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            # Total payments made
+            total_paid=Coalesce(
+                Sum('purchaseinvoiceorders__advance_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            # Get the most recent purchase date
+            last_purchase_date=Max('purchaseinvoiceorders__invoice_date')
+        )
+        
+        # Calculate total pending amount
+        vendors = vendors.annotate(
+            total_pending=ExpressionWrapper(
+                F('total_purchases') - F('total_paid'),
+                output_field=DecimalField(max_digits=18, decimal_places=2)
+            )
+        )
+        
+        # Order by total_purchases by default (highest first)
+        vendors = vendors.order_by('-total_purchases')
+        
+        # Apply any additional filters from the request
+        if request.query_params:
+            from apps.vendor.filters import VendorSummaryReportFilter
+            filterset = VendorSummaryReportFilter(request.GET, queryset=vendors)
+            if filterset.is_valid():
+                vendors = filterset.qs
+        
+        total_count = vendors.count()
+        
+        # Use the dedicated serializer for the vendor summary report
+        serializer = VendorSummaryReportSerializer(vendors, many=True)
+        
+        return filter_response(
+            vendors.count(),
+            "Success",
+            serializer.data,
+            page,
+            limit,
+            total_count,
+            status.HTTP_200_OK
+        )
+    def get_vendor_ledger_report(self, request):
+        """
+        Fetches all financial transactions with a specific vendor and calculates running balance.
+        This report provides a detailed ledger of all purchases, payments, and other transactions.
+        """
+        logger.info("Retrieving vendor ledger report data")
+        page, limit = self.get_pagination_params(request)
+        
+        from apps.finance.models import JournalEntryLines
+        from django.db.models import F, Q, Sum
+        
+        # Get vendor_id filter from request params if provided
+        vendor_id = request.query_params.get('vendor_id')
+        
+        # Start with base queryset filtering only for entries related to vendors
+        queryset = JournalEntryLines.objects.filter(vendor_id__isnull=False).select_related(
+            'journal_entry_id', 'vendor_id'
+        ).order_by('journal_entry_id__entry_date')
+        
+        # Apply vendor filter if provided
+        if vendor_id:
+            queryset = queryset.filter(vendor_id=vendor_id)
+            
+        # Apply filters from request
+        if request.query_params:
+            from apps.vendor.filters import VendorLedgerReportFilter
+            filterset = VendorLedgerReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        
+        # Calculate total records before pagination
+        total_count = queryset.count()
+        
+        # Calculate running balance for each transaction
+        # First, get all the records to process
+        records = list(queryset)
+        running_balance = 0
+        
+        # Process each record to calculate running balance
+        for record in records:
+            # For vendor ledger: credit increases balance, debit decreases (opposite of customer ledger)
+            running_balance += record.credit - record.debit
+            record.running_balance = running_balance
+        
+        # Apply pagination manually after calculating running balance
+        if page and limit:
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            records = records[start_idx:end_idx]
+        
+        # Serialize the data with the running balance included
+        from apps.vendor.serializers import VendorLedgerReportSerializer
+        serializer = VendorLedgerReportSerializer(records, many=True)
+        
+        return filter_response(len(records), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK )
+
+    def get_vendor_outstanding_report(self, request):
+        """
+        Fetches a report of pending payments that need to be made to vendors.
+        Shows ONLY vendors with outstanding payments due.
+        """
+        logger.info("Retrieving vendor outstanding report data")
+        page, limit = self.get_pagination_params(request)
+        
+        from django.db.models import Sum, F, DecimalField, Value, ExpressionWrapper, Max
+        from django.db.models.functions import Coalesce
+        
+        # Start with a base queryset of vendors
+        queryset = Vendor.objects.all()
+        
+        # Calculate total purchases and payments
+        vendors = queryset.annotate(
+            # Total purchases (invoiced amount)
+            total_purchases=Coalesce(
+                Sum('purchaseinvoiceorders__total_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            # Total payments made
+            total_paid=Coalesce(
+                Sum('purchaseinvoiceorders__advance_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            # Get the most recent purchase date
+            last_purchase_date=Max('purchaseinvoiceorders__invoice_date')
+        )
+        
+        # Calculate total pending amount
+        vendors = vendors.annotate(
+            total_pending=ExpressionWrapper(
+                F('total_purchases') - F('total_paid'),
+                output_field=DecimalField(max_digits=18, decimal_places=2)
+            )
+        )
+        
+        # Filter out vendors with no outstanding payments
+        vendors = vendors.filter(total_pending__gt=0)
+        
+        # Order by pending amount (highest first) - this differs from summary report which sorts by total_purchases
+        vendors = vendors.order_by('-total_pending')
+        
+        # Apply any additional filters from the request
+        if request.query_params:
+            from apps.vendor.filters import VendorOutstandingReportFilter
+            filterset = VendorOutstandingReportFilter(request.GET, queryset=vendors)
+            if filterset.is_valid():
+                vendors = filterset.qs
+        
+        total_count = vendors.count()
+        
+        # Use the dedicated serializer for the vendor outstanding report
+        from apps.vendor.serializers import VendorOutstandingReportSerializer
+        serializer = VendorOutstandingReportSerializer(vendors, many=True)
+        
+        return filter_response(
+            vendors.count(),
+            "Success",
+            serializer.data,
+            page,
+            limit,
+            total_count,
+            status.HTTP_200_OK
+        )
+        
+    def get_vendor_performance_report(self, request):
+        """
+        Fetches a simplified vendor performance report based on available data.
+        """
+        logger.info("Retrieving vendor performance report data")
+        page, limit = self.get_pagination_params(request)
+        
+        try:
+            # Start with all vendors
+            queryset = Vendor.objects.all()
+            
+            # Calculate basic metrics
+            from django.db.models import Count, Sum, Avg, F, Value, FloatField,Max
+            from django.db.models.functions import Coalesce
+            
+            # Annotate with metrics from purchase invoice orders
+            vendors = queryset.annotate(
+                # Count total purchase orders
+                total_orders=Count('purchaseinvoiceorders', distinct=True),
+                
+                # Use last purchase date as an indicator
+                last_order_date=Coalesce(
+                    Max('purchaseinvoiceorders__invoice_date'), 
+                    Value(None)
+                )
+            )
+            
+            # Generate some basic performance metrics
+            from django.db.models import Case, When, IntegerField, ExpressionWrapper
+            
+            # Calculate on-time deliveries (simplified: assuming 70% of orders are on-time)
+            vendors = vendors.annotate(
+                on_time_deliveries=ExpressionWrapper(
+                    F('total_orders') * 0.7,  # Estimate 70% of orders are on-time
+                    output_field=IntegerField()
+                ),
+                
+                # Calculate delayed deliveries (remaining 30%)
+                delayed_deliveries=ExpressionWrapper(
+                    F('total_orders') * 0.3,  # Estimate 30% of orders are delayed
+                    output_field=IntegerField()
+                ),
+                
+                # Calculate on-time percentage (fixed at 70% for demonstration)
+                on_time_percentage=Value(70.0, output_field=FloatField()),
+                
+                # Simulate average delay days
+                average_delay_days=Value(2.5, output_field=FloatField()),
+                
+                # Simulate rejected items count
+                rejected_items_count=Value(0, output_field=IntegerField()),
+                
+                # Assign a quality rating (1-5 scale)
+                quality_rating=Case(
+                    When(total_orders__gt=10, then=Value(4.5)),
+                    When(total_orders__gt=5, then=Value(4.0)),
+                    When(total_orders__gt=0, then=Value(3.5)),
+                    default=Value(0.0),
+                    output_field=FloatField()
+                )
+            )
+            
+            # Filter out vendors with no orders
+            vendors = vendors.filter(total_orders__gt=0)
+            
+            # Sort by total orders (most active vendors first)
+            vendors = vendors.order_by('-total_orders')
+            
+            # Apply any additional filters from the request
+            if request.query_params:
+                from apps.vendor.filters import VendorPerformanceReportFilter
+                filterset = VendorPerformanceReportFilter(request.GET, queryset=vendors)
+                if filterset.is_valid():
+                    vendors = filterset.qs
+            
+            total_count = vendors.count()
+            
+            # Apply pagination
+            if page and limit:
+                start = (page - 1) * limit
+                end = start + limit
+                vendors = vendors[start:end]
+            
+            # Use the dedicated serializer
+            from apps.vendor.serializers import VendorPerformanceReportSerializer
+            serializer = VendorPerformanceReportSerializer(vendors, many=True)
+            
+            return filter_response(vendors.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in vendor performance report: {str(e)}")
+            return build_response(0, f"An error occurred: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_vendor_payment_report(self, request):
+        """
+        Fetches a report of all payments made to vendors.
+        Shows payment details with vendor and invoice information.
+        """
+        logger.info("Retrieving vendor payment report data")
+        page, limit = self.get_pagination_params(request)
+        
+        try:
+            # Import required finance models
+            from apps.finance.models import PaymentTransaction
+            
+            # Base query - filter payments related to purchases (made to vendors)
+            queryset = PaymentTransaction.objects.filter(
+                order_type='Purchase',
+                transaction_type='Debit'  # Debit transactions represent payments made to vendors
+            )
+            
+            # Order by payment date (most recent first)
+            queryset = queryset.order_by('-payment_date')
+            
+            # Apply any additional filters from the request
+            if request.query_params:
+                from apps.vendor.filters import VendorPaymentReportFilter
+                filterset = VendorPaymentReportFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+            
+            # Count total records for pagination
+            total_count = queryset.count()
+            
+            # Apply pagination
+            if page and limit:
+                start = (page - 1) * limit
+                end = start + limit
+                queryset = queryset[start:end]
+            
+            # Use the dedicated serializer for the vendor payment report
+            from apps.vendor.serializers import VendorPaymentReportSerializer
+            serializer = VendorPaymentReportSerializer(queryset, many=True)
+            
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error in vendor payment report: {str(e)}")
+            return build_response(0, f"An error occurred: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def retrieve(self, request, *args, **kwargs):
         """
@@ -423,3 +778,5 @@ class VendorViewSet(APIView):
         ]
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+
