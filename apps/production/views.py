@@ -1,8 +1,10 @@
+from decimal import Decimal
 import logging
 import re
+from django.forms import FloatField
 from django.http import Http404
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q,Sum,F,Count,ExpressionWrapper,DecimalField,Value,IntegerField,OuterRef, Subquery, Max
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
@@ -10,13 +12,15 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 from rest_framework.filters import OrderingFilter
-from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, StockJournalFilter, WorkOrderFilter
+from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, StockJournalFilter, WorkOrderFilter,BOMReportFilter, BillOfMaterialsFilter, MachineFilter, MachineUtilizationReportFilter, MaterialFilter, ProductionCostReportFilter, ProductionStatusFilter, ProductionSummaryReportFilter, RawMaterialConsumptionReportFilter, WorkOrderFilter
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from apps.products.models import Products, ProductVariation
 from apps.products.serializers import ProductVariationSerializer, productsSerializer
 from .serializers import *
 from config.utils_methods import normalize_value, build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from django.db.models.functions import Coalesce,NullIf,Cast,ExtractSecond
+from django.db.models import Avg
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -190,64 +194,256 @@ class WorkOrderAPIView(APIView):
             return WorkOrder.objects.get(pk=pk)
         except WorkOrder.DoesNotExist:
             logger.warning(f"WorkOrder with ID {pk} does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)   
-
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND) 
+          
     def get(self, request, *args, **kwargs):
-        if 'pk' in kwargs:
-           result =  validate_input_pk(self,kwargs['pk'])
-           return result if result else self.retrieve(self, request, *args, **kwargs)
+        """Handles GET requests to retrieve Work Order data with optional filters and reports."""
         try:
-            data = []
-            instances = WorkOrder.objects.all().order_by('-created_at')	
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
-            total_count = instances.count()
+            if "pk" in kwargs:
+                result = validate_input_pk(self, kwargs["pk"])
+                return result if result else self.retrieve(self, request, *args, **kwargs)
 
-            #Added wokorder summary logic here(starts)
-            summary = request.query_params.get("summary", "false").lower() == "true"
-            stock_journal = request.query_params.get('stock_journal', 'false').lower() == 'true'
-            if stock_journal:
-                logger.info("Retrieving stock_journal")
-                # Apply filters to the stock journal data
-                queryset = WorkOrder.objects.all().order_by('-created_at')
-                filterset = StockJournalFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    filtered_queryset = filterset.qs
-                    data = StockJournalSerializer(filtered_queryset, many=True).data
-                    return filter_response(len(data), "Success", data, page, limit, filtered_queryset.count(), status.HTTP_200_OK)
-                else:
-                    data = StockJournalSerializer(instances, many=True).data
-                    return filter_response(len(data), "Success", data, page, limit, total_count, status.HTTP_200_OK)
+            if request.query_params.get("stock_journal", "false").lower() == "true":
+                return self.get_stock_journal(request)
+            
+            if request.query_params.get("production_summary_report", "false").lower() == "true":
+                return self.get_production_summary_report(request)
+            
+            if request.query_params.get("work_order_status_report", "false").lower() == "true":
+                return self.get_work_order_status_report(request)
 
-            if summary:
-                logger.info("Retrieving Work Order summary")
-                
-                # Apply filters to the queryset for the summary case
-                workorders = WorkOrder.objects.all()	
-                filterset = WorkOrderFilter(request.GET, queryset=workorders)
-                if filterset.is_valid():
-                    workorders = filterset.qs  # Filtered queryset for summary
-                
-                data = WorkOrderOptionsSerializer.get_work_order_summary(workorders)
-                return filter_response(len(data),"Success", data, page, limit, len(data), status.HTTP_200_OK)
-
-            # Apply filters manually
-            if request.query_params:
-                queryset = WorkOrder.objects.all().order_by('-created_at')
-                filterset = WorkOrderFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-                    data = WorkOrderSerializer(queryset, many=True).data
-                    return filter_response(queryset.count(),"Success", data, page, limit, total_count, status.HTTP_200_OK)
+            if request.query_params.get("summary", "false").lower() == "true":
+                return self.get_work_order_summary(request)
+            
+            # if request.query_params.get("work_order_status_report", "false").lower() == "true":
+            #     return self.get_work_order_status_report(request)
+            
+            if request.query_params.get("finished_goods_report", "false").lower() == "true":
+                return self.get_finished_goods_report(request)
+            
+            if request.query_params.get("production_cost_report", "false").lower() == "true":
+                return self.get_production_cost_report(request)
+            
+            if request.query_params.get("machine_utilization_report", "false").lower() == "true":
+                return self.get_machine_utilization_report(request)
+            
+            if request.query_params.get("wip_report", "false").lower() == "true":
+                return self.get_wip_report(request)
+            
+            return self.get_work_orders(request)
 
         except WorkOrder.DoesNotExist:
             logger.error("WorkOrder does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        else:
-            data = WorkOrderSerializer(instances, many=True).data
-            logger.info("WorkOrder data retrieved successfully.")
-            return filter_response(len(data),"Success", data, page, limit, total_count, status.HTTP_200_OK)
-            # return build_response(instances.count(), "Success", serializer.data, status.HTTP_200_OK)  
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_pagination_params(self, request):
+        """Extracts pagination parameters from the request."""
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
+        return page, limit
+
+    def get_work_orders(self, request):
+        """Fetches paginated Work Order records with applied filters."""
+        logger.info("Retrieving all Work Orders")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = WorkOrder.objects.annotate(
+        pending_qty=F("quantity") - F("completed_qty"))  # ✅ Add pending_qty dynamically
+        # total_count = queryset.count()  
+        
+       # Apply filters
+        filterset = WorkOrderFilter(request.GET, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = WorkOrderSerializer(queryset, many=True)
+        return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    def get_work_order_summary(self, request):
+        """Fetches summarized Work Order data."""
+        logger.info("Retrieving Work Order summary")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = WorkOrder.objects.all().order_by("-created_at")
+        
+         # Apply filters
+        if request.query_params:
+            filterset = WorkOrderFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()  
+        # queryset = self.apply_filters(request, queryset, WorkOrder)
+        data = WorkOrderOptionsSerializer.get_work_order_summary(queryset)
+        return filter_response(len(data), "Success", data, page, limit, total_count, status.HTTP_200_OK)
+
+    def get_stock_journal(self, request):
+        """Fetches stock journal data for Work Orders."""
+        logger.info("Retrieving stock journal data")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = WorkOrder.objects.all().order_by("-created_at")
+        total_count = queryset.count() 
+        queryset = self.apply_filters(request, queryset, WorkOrder)
+
+        serializer = StockJournalSerializer(queryset, many=True)
+        return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    def get_production_summary_report(self, request, *args, **kwargs):
+        """Fetches production summary report – overview of production output."""
+        logger.info("Retrieving production summary report data")
+        
+        page, limit = self.get_pagination_params(request)
+        
+        # Annotate each WorkOrder with completion_percentage.
+        queryset = WorkOrder.objects.all().annotate(
+            completion_percentage=ExpressionWrapper(
+                (F('completed_qty') * Value(100.0)) / Coalesce(F('quantity'), Value(1.0)),
+                output_field=DecimalField(max_digits=5, decimal_places=2)
+            )
+        ).order_by('start_date')
+        
+        if request.query_params:
+            filterset = ProductionSummaryReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = WorkOrder.objects.count()
+        serializer = ProductionSummaryReportSerializer(queryset, many=True)
+        
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    
+    def get_work_order_status_report(self, request):
+        """Fetches the count of Work Orders grouped by status."""
+        logger.info("Retrieving Work Order Status Report")
+
+        page, limit = self.get_pagination_params(request)
+
+        queryset = WorkOrder.objects.all().annotate(
+        completion_percentage=ExpressionWrapper(
+            (F('completed_qty') * Value(100.0)) / Coalesce(F('quantity'), Value(1.0)),
+            output_field=DecimalField(max_digits=5, decimal_places=2)
+        )
+    ).order_by('-start_date')  # Sorting by latest work orders
+
+      
+        total_count = queryset.count()
+        # queryset = self.apply_filters(request, queryset, WorkOrder)
+
+        serializer = WorkOrderStatusReportSerializer(queryset, many=True)
+
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    def get_finished_goods_report(self, request):
+        """Fetches Finished Goods Report (manufactured products ready for sale)."""
+        logger.info("Retrieving Finished Goods Report")
+        page, limit = self.get_pagination_params(request)
+        
+        # queryset = WorkOrder.objects.filter(status_id__status_name="closed" , completed_qty__gt=0)
+        queryset = WorkOrder.objects.filter(completed_qty=F('quantity')).order_by('-end_date')
+
+         # Apply filters
+        if request.query_params:
+            filterset = WorkOrderFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = WorkOrder.objects.count()   
+        serializer = FinishedGoodsReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,queryset.count(),status.HTTP_200_OK)
+
+
+    def get_production_cost_report(self, request):
+        """Fetches breakdown of costs in manufacturing."""
+        logger.info("Retrieving Production Cost Report")
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = BillOfMaterials.objects.values(
+        product=F('product_id__name')
+    ).annotate(
+        total_quantity=Coalesce(Sum('quantity'), Value(0, output_field=IntegerField())),
+        total_cost=Coalesce(Sum('total_cost'), Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))),
+        avg_unit_cost=Coalesce(Avg('unit_cost'), Value(0, output_field=DecimalField(max_digits=18, decimal_places=2)))
+    ).order_by('product')
+        
+        #  Apply filters
+        if request.query_params:
+            filterset = ProductionCostReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        # Count the number of unique products after grouping rather than all BillOfMaterials records
+        total_count = queryset.count()
+        serializer = ProductionCostReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    def get_machine_utilization_report(self, request):
+        """Fetches machine utilization data including efficiency and downtime analysis."""
+        logger.info("Retrieving Machine Utilization Report")
+
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = WorkOrderMachine.objects.values(
+        machine_name=F('machine_id__machine_name')  # Get the machine name
+            ).annotate(
+                total_usage_hours=Coalesce(
+                    Sum(F('work_order_id__completed_qty')), Value(0), output_field=DecimalField()
+                ),
+                total_work_orders=Coalesce(Count('work_order_id', distinct=True), Value(1)),  # Prevent division by zero
+                avg_usage_per_work_order=ExpressionWrapper(
+                    F('total_usage_hours') / F('total_work_orders'),
+                    output_field=DecimalField()
+                ),
+                total_work_time=Coalesce(
+                    Sum(
+                        Cast(F('work_order_id__end_date'), output_field=IntegerField()) - 
+                        Cast(F('work_order_id__start_date'), output_field=IntegerField())
+                    ),
+                    Value(0),
+                    output_field=IntegerField()
+                ),
+                downtime_hours=ExpressionWrapper(
+                    Value(168) - Cast(F('total_work_time'), output_field=IntegerField()),  # Assuming 168-hour work week
+                    output_field=IntegerField()
+                )
+            ).order_by('-total_usage_hours')
+         
+        if request.query_params:
+            filterset = MachineUtilizationReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = MachineUtilizationReportSerializer(queryset, many=True)
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    def get_wip_report(self, request):
+        """Fetches Work in Progress (WIP) Report - Partially Completed Products."""
+        logger.info("Retrieving WIP Report")
+
+        page, limit = self.get_pagination_params(request)
+
+        # Query work orders that are still in progress
+        queryset = WorkOrder.objects.filter( completed_qty__gt=0,  # At least some work is done
+            # completed_qty__lt=F('quantity'),  # But not fully completed
+            status_id__status_name ="open"  # The order is still in progress
+        )
+         # Apply filters
+        if request.query_params:
+            filterset = WorkOrderFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = WorkOrderSerializer(queryset, many=True)
+
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -482,7 +678,7 @@ class WorkOrderAPIView(APIView):
         # Validated WorkOrderStage Data
         stages_data = given_data.pop('work_order_stages', None)
         if stages_data:
-            stages_error = validate_put_method_data(self, stages_data, WorkOrderStageSerializer, exclude_fields, WorkOrderStage, current_model_pk_field='work_stage_id')
+            stages_error = validate_put_method_data(self, stages_data, WorkOrderStageSerializer, exclude_fields, ProductionWorker, current_model_pk_field='work_stage_id')
         else:
             stages_error = []
         
@@ -578,35 +774,95 @@ class BOMView(APIView):
         except BOM.DoesNotExist:
             logger.warning(f"BOM with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-
+        
     def get(self, request, *args, **kwargs):
-        if 'pk' in kwargs:
-           result =  validate_input_pk(self,kwargs['pk'])
-           return result if result else self.retrieve(self, request, *args, **kwargs)
+        """Handles GET requests to retrieve BOM data with optional filters and reports."""
         try:
-            instance = BOM.objects.all().order_by('-created_at')	
+            if "pk" in kwargs:
+                result = validate_input_pk(self, kwargs["pk"])
+                return result if result else self.retrieve(self, request, *args, **kwargs)
+            
+            if request.query_params.get("bom_records", "false").lower() == "true":
+                return self.get_bom_records(request)
+            
+            if request.query_params.get("bom_report", "false").lower() == "true":
+                return self.get_bom_report(request)
+            
+            if request.query_params.get("raw_material_consumption_report", "false").lower() == "true":
+                return self.get_raw_material_consumption_report(request)
 
-
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
-            total_count = BOM.objects.count()
-
-            # Apply filters manually
-            if request.query_params:
-                queryset = BOM.objects.all().order_by('-created_at')	
-                filterset = BOMFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-                    serializer = BOMSerializer(queryset, many=True)
-                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            return self.get_bom_records(request)
 
         except BOM.DoesNotExist:
             logger.error("BOM does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        else:
-            serializer = BOMSerializer(instance, many=True)
-            logger.info("BOM data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_pagination_params(self, request):
+        """Extracts pagination parameters from the request."""
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
+        return page, limit
+
+    def get_raw_material_consumption_report(self, request):
+        """Fetches usage of raw materials in production."""
+        logger.info("Retrieving Raw Material Consumption Report")
+
+        page, limit = self.get_pagination_params(request)
+        
+        # Query to get raw material consumption data - grouped by product
+        queryset = BillOfMaterials.objects.values(
+            'product_id__name'  # Group by product name
+        ).annotate(
+            total_consumed_quantity=Sum('quantity', output_field=models.DecimalField()),
+            total_cost=Sum(F('quantity') * F('unit_cost'), output_field=models.DecimalField()),
+            last_consumption_date=Max('updated_at')  # Get the most recent usage date
+        ).order_by('-total_consumed_quantity')  # Sort by consumption quantity in descending order
+
+        total_count = queryset.count()
+        
+        # Apply filters using RawMaterialConsumptionReportFilter
+        if request.query_params:
+            filterset = RawMaterialConsumptionReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        serializer = RawMaterialConsumptionReportSerializer(queryset, many=True)
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    def get_bom_records(self, request):
+        """Fetches paginated BOM records with applied filters."""
+        logger.info("Retrieving all BOM records")
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = BOM.objects.all().order_by("-created_at")
+        
+        if request.query_params:
+            filterset = BillOfMaterialsFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = BOM.objects.count()
+
+        serializer = BOMSerializer(queryset, many=True)
+        return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    def get_bom_report(self, request):
+        """Fetches BOM details for products."""
+        logger.info("Retrieving BOM report data")
+        page, limit = self.get_pagination_params(request)
+        queryset = BOM.objects.all().order_by('bom_name')
+        if request.query_params:
+            filterset = BOMReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = BOM.objects.count()
+        serializer = BOMReportSerializer(queryset, many=True)
+        
+        return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
     def retrieve(self, request, *args, **kwargs):
         """

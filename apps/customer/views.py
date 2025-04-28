@@ -4,9 +4,11 @@ from django.shortcuts import get_object_or_404, render
 from requests import request
 from rest_framework import viewsets, generics, mixins as mi
 from apps import customer
-from apps.customer.filters import LedgerAccountsFilters, CustomerFilters, CustomerAddressesFilters, CustomerAttachmentsFilters
+from apps.customer.filters import CustomerCreditLimitReportFilter, CustomerOrderHistoryReportFilter, CustomerSummaryReportFilter, LedgerAccountsFilters, CustomerFilters, CustomerAddressesFilters, CustomerAttachmentsFilters, CustomerLedgerReportFilter, CustomerOutstandingReportFilter
 from apps.customfields.models import CustomField, CustomFieldValue
 from apps.customfields.serializers import CustomFieldSerializer, CustomFieldValueSerializer
+from apps.sales.filters import SaleOrderFilter
+from apps.sales.models import SaleInvoiceOrders, SaleOrder
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from .serializers import *
@@ -20,6 +22,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 from django.core.exceptions import  ObjectDoesNotExist
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper,When,Value,Case,FloatField,Max
+from django.db.models.functions import Coalesce
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -115,40 +119,253 @@ class CustomerCreateViews(APIView):
             return None
 
     def get(self, request, *args, **kwargs):
-        if "pk" in kwargs:
-            result =  validate_input_pk(self,kwargs['pk'])
-            return result if result else self.retrieve(self, request, *args, **kwargs)
-
+        """Handles GET requests to retrieve customers with optional filters and reports."""
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
-            if summary:
-                logger.info("Retrieving customer summary")
-                customers = Customer.objects.all().order_by('-created_at')	
-                data = CustomerOptionSerializer.get_customer_summary(customers)
-                return Response(data, status=status.HTTP_200_OK)
- 
-            logger.info("Retrieving all customers")
-            queryset = Customer.objects.all().order_by('-created_at')	
+            if "pk" in kwargs:
+                result = validate_input_pk(self, kwargs['pk'])
+                return result if result else self.retrieve(self, request, *args, **kwargs)
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
-            total_count = Customer.objects.count()
-             
-            # Apply filters manually
-            if request.query_params:
-                filterset = CustomerFilters(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-
-            serializer = CustomerOptionSerializer(queryset, many=True)
-            logger.info("Customer data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            if request.query_params.get("summary", "false").lower() == "true":
+                return self.get_customer_summary(request)
+            
+            if request.query_params.get("customer_summary_report", "false").lower() == "true":
+                return self.get_customer_summary_report(request)
+            
+            if request.query_params.get("customer_ledger_report", "false").lower() == "true":
+                return self.get_customer_ledger_report(request)
+            
+            if request.query_params.get("customer_outstanding_report", "false").lower() == "true":
+                return self.get_customer_outstanding_report(request)
+            
+            if request.query_params.get("customer_order_history", "false").lower() == "true":
+             return self.get_customer_order_history(request)
+         
+            if request.query_params.get("credit_limit_report", "false").lower() == "true":
+             return self.get_customer_credit_limit_report(request)
+            
+            if request.query_params.get("customer_payment_report", "false").lower() == "true":
+             return self.get_customer_payment_report(request)
+         
+            return self.get_customers(request)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    def get_pagination_params(self, request):
+        """Extracts pagination parameters from the request."""
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
+        return page, limit
+    
+    def get_customers(self, request):
+        """Applies filters, pagination, and retrieves customers."""
+        logger.info("Retrieving all customers")
+
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = Customer.objects.all().order_by('-created_at')
+        if request.query_params:
+            filterset = CustomerFilters(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = Customer.objects.count()
+        serializer = CustomerSerializer(queryset, many=True)
+
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    def get_customer_summary(self, request):
+        """Fetches customer summary data."""
+        logger.info("Retrieving customer summary")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = Customer.objects.all().order_by('-created_at')
+        if request.query_params:
+            filterset = CustomerFilters(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = Customer.objects.count()
+        serializer = CustomerOptionSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    def get_customer_summary_report(self, request):
+        """Fetches a summary report of total sales and outstanding payments per customer."""
+        logger.info("Retrieving customer summary report data")
+        page, limit = self.get_pagination_params(request)
+        
+       # Annotate each customer with aggregated values.
+        queryset = Customer.objects.annotate(
+            total_sales=Sum('saleorder__item_value', output_field=DecimalField(max_digits=18, decimal_places=2)),
+            total_advance=Sum('saleorder__advance_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+            outstanding_payments=Sum(
+                ExpressionWrapper(
+                    F('saleorder__item_value') - F('saleorder__advance_amount'),
+                    output_field=DecimalField(max_digits=18, decimal_places=2)
+                )
+            )
+        ).order_by('name')
+        if request.query_params:
+            filterset = CustomerSummaryReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = Customer.objects.count()
+        serializer = CustomerSummaryReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    
+    def get_customer_order_history(self, request):
+        """Fetches past purchases by customers."""
+        logger.info("Retrieving customer order history report data")
+
+        page, limit = self.get_pagination_params(request)
+
+         # Retrieve all sale invoice orders (sorted by invoice_date descending)
+        queryset = SaleInvoiceOrders.objects.all().order_by('-invoice_date')
+        
+        if request.query_params:
+            filterset = CustomerOrderHistoryReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = SaleInvoiceOrders.objects.count()        
+        serializer = CustomerOrderHistoryReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    def get_customer_credit_limit_report(self, request):
+        """Fetches assigned credit limits vs. usage per customer."""
+        logger.info("Retrieving customer credit limit report data")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = Customer.objects.annotate(
+            credit_usage=Coalesce(
+                Sum(
+                    ExpressionWrapper(
+                        F('saleinvoiceorders__total_amount') - F('saleinvoiceorders__advance_amount'),
+                        output_field=DecimalField(max_digits=18, decimal_places=2)
+                    )
+                ),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            )
+        ).annotate(
+            remaining_credit=ExpressionWrapper(
+                Coalesce(F('credit_limit'), Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))) - F('credit_usage'),
+                output_field=DecimalField(max_digits=18, decimal_places=2)
+            )
+        ).order_by('name')
+        # total_count = queryset.count()
+        if request.query_params:
+            filterset = CustomerCreditLimitReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = Customer.objects.count()
+        serializer = CustomerCreditLimitReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    def get_customer_ledger_report(self, request):
+        """Fetches all financial transactions with a specific customer and calculates running balance."""
+        logger.info("Retrieving customer ledger report data")
+        page, limit = self.get_pagination_params(request)
+        
+        from apps.finance.models import JournalEntryLines
+        
+        # Get customer_id filter from request params if provided
+        customer_id = request.query_params.get('customer_id')
+        
+        # Start with base queryset filtering only for entries related to customers
+        queryset = JournalEntryLines.objects.filter(customer_id__isnull=False).select_related(
+            'journal_entry_id', 'customer_id'
+        ).order_by('journal_entry_id__entry_date')
+        
+        # Apply customer filter if provided
+        if customer_id:
+            queryset = queryset.filter(customer_id=customer_id)
+            
+        # Apply filters from request
+        if request.query_params:
+            filterset = CustomerLedgerReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        
+        # Calculate total records before pagination
+        total_count = queryset.count()
+        
+        # Calculate running balance for each transaction
+        # First, get all the records to process
+        records = list(queryset)
+        running_balance = 0
+        
+        # Process each record to calculate running balance
+        for record in records:
+            # For customer ledger: debit increases balance, credit decreases
+            running_balance += record.debit - record.credit
+            record.running_balance = running_balance
+        
+        # Apply pagination manually after calculating running balance
+        if page and limit:
+            start_idx = (page - 1) * limit
+            end_idx = start_idx + limit
+            records = records[start_idx:end_idx]
+        
+        # Serialize the data with the running balance included
+        serializer = CustomerLedgerReportSerializer(records, many=True)
+        return filter_response(len(records), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    def get_customer_outstanding_report(self, request):
+        """
+        Fetches a simplified report of pending payments per customer.
+        """
+        logger.info("Retrieving simplified customer outstanding report")
+        page, limit = self.get_pagination_params(request)
+        
+        from django.utils import timezone
+        from django.db.models import Sum, F, DecimalField, Value, ExpressionWrapper
+        from django.db.models.functions import Coalesce
+        
+        # Start with a base queryset of customers
+        queryset = Customer.objects.all()
+        
+        # Calculate total sales and payments
+        customers = queryset.annotate(
+            # Total sales (invoiced amount)
+            total_sales=Coalesce(
+                Sum('saleinvoiceorders__total_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            # Total payments received
+            total_paid=Coalesce(
+                Sum('saleinvoiceorders__advance_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+                Value(0, output_field=DecimalField(max_digits=18, decimal_places=2))
+            ),
+            # Get the most recent payment date
+            last_payment_date=Max('saleinvoiceorders__due_date')
+        )
+        
+        # Calculate total pending amount
+        customers = customers.annotate(
+            total_pending=ExpressionWrapper(
+                F('total_sales') - F('total_paid'),
+                output_field=DecimalField(max_digits=18, decimal_places=2)
+            )
+        )
+        
+        # Filter out customers with no outstanding payments
+        customers = customers.filter(total_pending__gt=0).order_by('-total_pending')
+        
+        # Apply any additional filters from the request
+        if request.query_params:
+            filterset = CustomerOutstandingReportFilter(request.GET, queryset=customers)
+            if filterset.is_valid():
+                customers = filterset.qs
+        
+        total_count = customers.count()
+        
+        serializer = CustomerOutstandingReportSerializer(customers, many=True)
+        return filter_response(customers.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK )
+    
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a sale order and its related data (items, attachments, and shipments).
@@ -417,7 +634,53 @@ class CustomerCreateViews(APIView):
             ]
 
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-    
+        
+    def get_customer_payment_report(self, request):
+        """
+        Fetches a report of all payments received from customers.
+        Shows payment details with customer and invoice information.
+        """
+        logger.info("Retrieving customer payment report data")
+        page, limit = self.get_pagination_params(request)
+        
+        try:
+            # Import required finance models
+            from apps.finance.models import PaymentTransaction
+            from apps.customer.filters import CustomerPaymentReportFilter
+            
+            # Base query - filter payments related to sales (received from customers)
+            queryset = PaymentTransaction.objects.filter(
+                order_type='Sale',
+                transaction_type='Credit'  # Credit transactions represent payments received from customers
+            )
+            
+            # Order by payment date (most recent first)
+            queryset = queryset.order_by('-payment_date')
+            
+            # Apply any additional filters from the request
+            if request.query_params:
+                filterset = CustomerPaymentReportFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+            
+            # Get total count for pagination
+            total_count = queryset.count()
+            
+            # Apply pagination
+            if page and limit:
+                start_idx = (page - 1) * limit
+                end_idx = start_idx + limit
+                queryset = queryset[start_idx:end_idx]
+            
+            # Serialize the filtered data
+            serializer = CustomerPaymentReportSerializer(queryset, many=True)
+            
+            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error generating customer payment report: {str(e)}")
+            return build_response(0, "An error occurred while generating the report", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class CustomerBalanceView(APIView):

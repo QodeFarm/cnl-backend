@@ -343,3 +343,76 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentTransactions
         fields = ['invoice_no', 'invoice_date', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount', ]
+
+class SalesByProductReportSerializer(serializers.ModelSerializer):
+    product = serializers.CharField(source="product_id__name")  
+    total_quantity_sold = serializers.IntegerField()
+    total_sales = serializers.DecimalField(max_digits=18, decimal_places=2)
+
+    class Meta:
+        model = SaleOrderItems
+        fields = [ "product", "total_quantity_sold","total_sales"]
+    
+    
+class SalesByCustomerSerializer(serializers.Serializer):
+    customer = serializers.CharField()
+    total_sales = serializers.DecimalField(max_digits=18, decimal_places=2)
+    
+    
+class SalesOrderReportSerializer(serializers.ModelSerializer):
+    customer = serializers.CharField(source='customer_id.name')
+    sale_type = serializers.CharField(source='sale_type_id')
+    order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    amount = serializers.DecimalField(source='item_value', max_digits=18, decimal_places=2)
+
+    class Meta:
+        model = SaleOrder
+        fields = ['order_no', 'customer', 'order_date', 'sale_type','order_status','amount']
+        
+
+class SalesInvoiceReportSerializer(serializers.ModelSerializer):
+    customer = serializers.CharField(source='customer_id.name')
+    order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+
+    class Meta:
+        model = SaleInvoiceOrders
+        fields = ['invoice_no','invoice_date','customer','bill_type','item_value','dis_amt','tax_amount','total_amount','due_date','order_status']
+
+    def get_payment_status(self, obj):
+        # Check if order_status_id exists and return its status_name; otherwise, return None.
+        if obj.order_status_id:
+            return obj.order_status_id.status_name
+        return None
+
+
+class OutstandingSalesSerializer(serializers.Serializer):
+    customer = serializers.CharField()
+    total_invoice = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_paid = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_pending = serializers.DecimalField(max_digits=18, decimal_places=2)
+    
+class SalesTaxByProductReportSerializer(serializers.Serializer):
+    product = serializers.CharField()
+    gst_type = serializers.CharField()
+    total_sales = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_tax = serializers.DecimalField(max_digits=18, decimal_places=2)
+
+class SalespersonPerformanceReportSerializer(serializers.Serializer):
+    salesperson = serializers.CharField()
+    total_sales = serializers.DecimalField(max_digits=18, decimal_places=2)
+    
+class ProfitMarginReportSerializer(serializers.Serializer):
+    product = serializers.CharField()
+    total_sales = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_cost = serializers.DecimalField(max_digits=18, decimal_places=2)
+    profit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    profit_margin = serializers.DecimalField(max_digits=5, decimal_places=2)    
+       
+class AgingReportSerializer(serializers.ModelSerializer):
+    aging_category = serializers.CharField(read_only=True)
+    pending_amount = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    days_overdue = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = SaleInvoiceOrders
+        fields = ['invoice_no', 'due_date', 'pending_amount', 'days_overdue', 'aging_category']       
