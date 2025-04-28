@@ -175,15 +175,40 @@ def filter_by_sort(filter_set, queryset, value):
     return apply_sorting(filter_set, queryset)
 
 def filter_by_page(filter_set, queryset, value):
-    filter_set.page_number = int(value)
-    return queryset
+    try:
+        filter_set.page_number = int(value)
+        logger.debug(f"Setting page number to {filter_set.page_number}")
+        # Initialize limit if not set yet
+        if not hasattr(filter_set, 'limit'):
+            filter_set.limit = 10  # Default limit
+        return queryset
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error parsing page value: {e}")
+        filter_set.page_number = 1  # Default to first page on error
+        return queryset
 
 def filter_by_limit(filter_set, queryset, value):
-    filter_set.limit = int(value)
-    queryset = apply_sorting(filter_set, queryset)
-    paginated_queryset, total_count = filter_by_pagination(queryset, filter_set.page_number, filter_set.limit)
-    filter_set.total_count = total_count
-    return paginated_queryset
+    try:
+        filter_set.limit = int(value)
+        logger.debug(f"Setting limit to {filter_set.limit}")
+        # Initialize page if not set yet
+        if not hasattr(filter_set, 'page_number'):
+            filter_set.page_number = 1  # Default page
+            
+        # Apply sorting first
+        queryset = apply_sorting(filter_set, queryset)
+        
+        # Apply pagination
+        paginated_queryset, total_count = filter_by_pagination(queryset, filter_set.page_number, filter_set.limit)
+        filter_set.total_count = total_count
+        return paginated_queryset
+    except (ValueError, TypeError) as e:
+        logger.error(f"Error parsing limit value: {e}")
+        filter_set.limit = 10  # Default to 10 items on error
+        # Apply default pagination
+        paginated_queryset, total_count = filter_by_pagination(queryset, getattr(filter_set, 'page_number', 1), filter_set.limit)
+        filter_set.total_count = total_count
+        return paginated_queryset
 
 #========================Filter Response==================================
 

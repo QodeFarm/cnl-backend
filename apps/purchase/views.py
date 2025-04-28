@@ -5,6 +5,7 @@ from rest_framework import viewsets
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.purchase.filters import PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
+from apps.purchase.filters import OutstandingPurchaseFilter, PurchaseInvoiceOrdersFilter, PurchaseOrderItemsFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter, PurchasesByVendorReportFilter, PurchasesbyVendorReportFilter, StockReplenishmentReportFilter
 from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
@@ -22,6 +23,9 @@ from django.db import transaction
 from rest_framework.serializers import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
+from django.db.models import Sum, F, Count, Min,Max,Avg, ExpressionWrapper, DecimalField,IntegerField
+from django.db.models.functions import Coalesce
+
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -143,40 +147,203 @@ class PurchaseOrderViewSet(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         
     def get(self, request, *args, **kwargs):
-        if 'pk' in kwargs:
-           result =  validate_input_pk(self,kwargs['pk'])
-           return result if result else self.retrieve(self, request, *args, **kwargs)
+        """Handles GET requests with filters and reports."""
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
-            if summary:
-                logger.info("Retrieving Purchase order summary")
-                purchaseorders = PurchaseOrders.objects.all().order_by('-created_at')
-                data = PurchaseOrdersOptionsSerializer.get_purchase_orders_summary(purchaseorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+            if "pk" in kwargs:
+                result = validate_input_pk(self, kwargs['pk'])
+                return result if result else self.retrieve(self, request, *args, **kwargs)
+
+            if request.query_params.get("summary", "false").lower() == "true":
+                return self.get_summary_data(request)
             
-            instance = PurchaseOrders.objects.all().order_by('-created_at')
+            if request.query_params.get("purchases_by_vendor", "false").lower() == "true":
+                return self.get_purchases_by_vendor_report(request)
+            
+            if request.query_params.get("outstanding_purchases", "false").lower() == "true":
+                return self.get_outstanding_purchases(request)
+            
+            if request.query_params.get("landed_cost_report", "false").lower() == "true":
+                return self.get_landed_cost_report(request)
+            
+            if request.query_params.get("purchase_price_variance_report", "false").lower() == "true":
+                return self.get_purchase_price_variance_report(request)
+            
+            if request.query_params.get("stock_replenishment_report", "false").lower() == "true":
+                return self.get_stock_replenishment_report(request)
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
-            total_count = PurchaseOrders.objects.count()
+            return self.get_purchase_orders(request)
 
-            # Apply filters manually
-            if request.query_params:
-                queryset = PurchaseOrders.objects.all().order_by('-created_at')
-                filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-                    serializer = PurchaseOrdersOptionsSerializer(queryset, many=True)
-                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        except PurchaseOrders.DoesNotExist:
-            logger.error("Purchase order does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        else:
-            serializer = PurchaseOrdersSerializer(instance, many=True)
-            logger.info("Purchase order data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)
+    def get_pagination_params(self, request):
+        """Extracts pagination parameters from the request."""
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
+        return page, limit
+    
+    # def apply_filters(self, request, queryset, filter_class, model_class):
+    #     """Generic function to apply filters on any queryset and return total count."""
+    #     if request.query_params:
+    #         filterset = filter_class(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs  
+
+    #     total_count = model_class.objects.count()  # Total count calculation
+    #     return queryset, total_count
+    
+    def get_purchase_orders(self, request):
+        """Fetches filtered purchase orders."""
+        logger.info("Retrieving all purchase orders")
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = PurchaseOrders.objects.all().order_by('-created_at')
+
+        # Apply filters
+        if request.query_params:
+            filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = PurchaseOrders.objects.count()
+        serializer = PurchaseOrdersSerializer(queryset, many=True)
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    def get_summary_data(self, request):
+        """Fetches purchase order summary data."""
+        logger.info("Retrieving Purchase order summary")
+
+        page, limit = self.get_pagination_params(request)
+        queryset = PurchaseOrders.objects.all().order_by('-created_at')
+
+        # Apply filters
+        if request.query_params:
+            filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+                
+        total_count = PurchaseOrders.objects.count()
+        serializer = PurchaseOrdersOptionsSerializer(queryset, many=True)
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    def get_purchases_by_vendor_report(self, request):
+        """Fetches total purchases aggregated by vendor."""
+        logger.info("Retrieving purchases by vendor report data")
+        page, limit = self.get_pagination_params(request)
+        
+        # Group data by vendor (using vendor_id__name) and aggregate the total purchase amount and count of invoices.
+        queryset = PurchaseInvoiceOrders.objects.values(
+            vendor=F('vendor_id__name')
+        ).annotate(
+            total_purchase=Sum('total_amount', output_field=DecimalField(max_digits=18, decimal_places=2)),
+            order_count=Count('purchase_invoice_id')
+        ).order_by('-total_purchase')
+        
+        # Optional filtering using PurchasesByVendorReportFilter.
+        if request.query_params:
+            filterset = PurchasesByVendorReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = PurchasesByVendorReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+    def get_outstanding_purchases(self, request):
+        """Fetches outstanding purchase payments to vendors."""
+        logger.info("Retrieving outstanding purchase payments report")
+
+        page, limit = self.get_pagination_params(request)
+
+        queryset = PurchaseInvoiceOrders.objects.values(vendor_name=F('vendor_id__name'), invoice_num=F('invoice_no'), invoice_dates=F('invoice_date'), due_dates=F('due_date'),total_amounts=F('total_amount'),advance_payments=F('advance_amount')
+         ).annotate(
+            outstanding_amount=ExpressionWrapper(F('total_amount') - F('advance_amount'),output_field=DecimalField()),
+            payment_status=ExpressionWrapper(F('total_amount') - F('advance_amount'),output_field=DecimalField())
+        ).filter(outstanding_amount__gt=0).order_by('-due_date')
+
+        # Apply filters
+        filterset = OutstandingPurchaseFilter(request.GET, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+
+        total_count = queryset.count()
+        serializer = OutstandingPurchaseReportSerializer(queryset, many=True)
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
+    def get_landed_cost_report(self, request):
+        """Fetches landed cost report total cost including taxes, shipping, etc."""
+        logger.info("Retrieving Landed Cost Report...")
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = PurchaseInvoiceOrders.objects.select_related("vendor_id").annotate(
+            vendor_name=F("vendor_id__name"),  #  Fetch vendor name correctly
+            landed_cost=ExpressionWrapper(
+                F("total_amount") + F("tax_amount") + F("cess_amount") +
+                Coalesce(F("transport_charges"), 0) - Coalesce(F("dis_amt"), 0) +
+                Coalesce(F("round_off"), 0),
+                output_field=DecimalField()
+            )
+        ).order_by("-invoice_no")
+        
+         # Apply filters
+        filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+            
+        total_count = queryset.count()
+        serializer = LandedCostReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+    
+
+    def get_purchase_price_variance_report(self, request):
+        """Fetches purchase price variance report – compare purchase prices over time."""
+        logger.info(" Retrieving Purchase Price Variance Report...")
+
+        page, limit = self.get_pagination_params(request)
+        
+        queryset = PurchaseorderItems.objects.select_related("product_id", "purchase_order_id__vendor_id").annotate(
+            product=F("product_id__name"),
+            vendor_name=F("purchase_order_id__vendor_id__name"),
+            order_date=F("purchase_order_id__order_date"), 
+            min_price=Min("rate"),
+            max_price=Max("rate"),
+            avg_price=Avg("rate")
+        ).order_by("product_id__name", "purchase_order_id__order_date")
+
+
+         # Apply filters
+        filterset = PurchaseOrderItemsFilter(request.GET, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
+            
+        total_count = queryset.count()
+        serializer = PurchasePriceVarianceReportSerializer(queryset, many=True)
+
+        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    def get_stock_replenishment_report(self, request):
+        """Fetches suggested purchases based on stock levels.
+        Shows products that need to be reordered based on stock levels:"""
+        logger.info("Retrieving stock replenishment report data")
+        page, limit = self.get_pagination_params(request)
+        
+        # Filter for products where current stock (balance) is less than the minimum desired (minimum_level)
+        queryset = Products.objects.filter(balance__lt=F('minimum_level')).annotate(
+            reorder_quantity=ExpressionWrapper(F('minimum_level') - F('balance'), output_field=IntegerField()),
+            current_stock=F('balance')  # Map balance to current_stock for consistency
+        ).order_by('name')
+        
+        # Apply filters using StockReplenishmentReportFilter
+        if request.query_params:
+            filterset = StockReplenishmentReportFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        
+        total_count = queryset.count()
+        serializer = StockReplenishmentReportSerializer(queryset, many=True)
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+        
         
 
     def retrieve(self, request, *args, **kwargs):
@@ -1261,4 +1428,3 @@ class PurchaseReturnOrderViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-    
