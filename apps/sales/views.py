@@ -385,6 +385,9 @@ class SaleOrderViewSet(APIView):
             if request.query_params.get("summary", "false").lower() == "true" :
                 return self.get_summary_data(request)
             
+            if request.query_params.get("records_all", "false").lower() == "true" :
+                return self.get_summary_data(request)
+            
             if request.query_params.get("sales_order_report", "false").lower() == "true" :
                 return self.get_sales_order_report(request)
             
@@ -711,7 +714,7 @@ class SaleOrderViewSet(APIView):
     
     def retrieve(self, request, *args, **kwargs):
         """
-        Retrieves a sale order and its related data (items, attachments, and shipments).
+        Retrieves a sale order and its related data (items, attachments, and shipments) from mstcnl or devcnl database.
         """
         try:
             pk = kwargs.get('pk')
@@ -719,23 +722,33 @@ class SaleOrderViewSet(APIView):
                 logger.error("Primary key not provided in request.")
                 return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
 
-            # Retrieve the SaleOrder instance
-            sale_order = get_object_or_404(SaleOrder, pk=pk)
+            # Step 1: Try to fetch from mstcnl
+            try:
+                sale_order = SaleOrder.objects.using('mstcnl').get(pk=pk)
+                using_db = 'mstcnl'
+                logger.info(f"Sale order found in 'mstcnl' database with pk: {pk}")
+            except SaleOrder.DoesNotExist:
+                # Step 2: If not found in mstcnl, try devcnl (default)
+                try:
+                    sale_order = SaleOrder.objects.using('default').get(pk=pk)
+                    using_db = 'default'
+                    logger.info(f"Sale order found in 'devcnl' database with pk: {pk}")
+                except SaleOrder.DoesNotExist:
+                    # Step 3: Not found anywhere
+                    logger.error(f"Sale order with pk {pk} does not exist in any database.")
+                    return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+            # Step 4: Serialize the sale order
             sale_order_serializer = SaleOrderSerializer(sale_order)
 
-            # Retrieve related data
-            items_data = self.get_related_data(
-                SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
-            attachments_data = self.get_related_data(
-                OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
-            shipments_data = self.get_related_data(
-                OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
-            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
-            
-            # Retrieve custom field values
-            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
+            # Step 5: Fetch related data using correct database
+            items_data = self.get_related_data(SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk, using_db)
+            attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk, using_db)
+            shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk, using_db)
+            shipments_data = shipments_data[0] if len(shipments_data) > 0 else {}
 
-            # Customizing the response data
+            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk, using_db)
+
             custom_data = {
                 "sale_order": sale_order_serializer.data,
                 "sale_order_items": items_data,
@@ -743,60 +756,166 @@ class SaleOrderViewSet(APIView):
                 "order_shipments": shipments_data,
                 "custom_field_values": custom_field_values_data
             }
+
             logger.info("Sale order and related data retrieved successfully.")
             return build_response(1, "Success", custom_data, status.HTTP_200_OK)
 
-        except Http404:
-            logger.error("Sale order with pk %s does not exist.", pk)
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.exception(
-                "An error occurred while retrieving sale order with pk %s: %s", pk, str(e))
+            logger.exception(f"An error occurred while retrieving sale order with pk {pk}: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+
+
+    # def retrieve(self, request, *args, **kwargs):
+    #     """
+    #     Retrieves a sale order and its related data (items, attachments, and shipments).
+    #     """
+    #     try:
+    #         pk = kwargs.get('pk')
+    #         if not pk:
+    #             logger.error("Primary key not provided in request.")
+    #             return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+    #         # Retrieve the SaleOrder instance
+    #         sale_order = get_object_or_404(SaleOrder, pk=pk)
+    #         sale_order_serializer = SaleOrderSerializer(sale_order)
+
+    #         # Retrieve related data
+    #         items_data = self.get_related_data(
+    #             SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk)
+    #         attachments_data = self.get_related_data(
+    #             OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
+    #         shipments_data = self.get_related_data(
+    #             OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+    #         shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
+            
+    #         # Retrieve custom field values
+    #         custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk)
+
+    #         # Customizing the response data
+    #         custom_data = {
+    #             "sale_order": sale_order_serializer.data,
+    #             "sale_order_items": items_data,
+    #             "order_attachments": attachments_data,
+    #             "order_shipments": shipments_data,
+    #             "custom_field_values": custom_field_values_data
+    #         }
+    #         logger.info("Sale order and related data retrieved successfully.")
+    #         return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+    #     except Http404:
+    #         logger.error("Sale order with pk %s does not exist.", pk)
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.exception(
+    #             "An error occurred while retrieving sale order with pk %s: %s", pk, str(e))
+    #         return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # def get_related_data(self, model, serializer_class, filter_field, filter_value):
+    #     """
+    #     Retrieves related data for a given model, serializer, and filter field.
+    #     """
+    #     try:
+    #         related_data = model.objects.filter(**{filter_field: filter_value})
+    #         serializer = serializer_class(related_data, many=True)
+    #         logger.debug("Retrieved related data for model %s with filter %s=%s.",
+    #                      model.__name__, filter_field, filter_value)
+    #         return serializer.data
+    #     except Exception as e:
+    #         logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
+    #                          model.__name__, filter_field, filter_value, str(e))
+    #         return []
+    def get_related_data(self, model, serializer_class, filter_field, filter_value, using_db='default'):
         """
-        Retrieves related data for a given model, serializer, and filter field.
+        Retrieves related data for a given model, serializer, and filter field from specified database.
         """
         try:
-            related_data = model.objects.filter(**{filter_field: filter_value})
+            related_data = model.objects.using(using_db).filter(**{filter_field: filter_value})
             serializer = serializer_class(related_data, many=True)
-            logger.debug("Retrieved related data for model %s with filter %s=%s.",
-                         model.__name__, filter_field, filter_value)
+            logger.debug(f"Retrieved related data for model {model.__name__} with filter {filter_field}={filter_value} from {using_db}.")
             return serializer.data
         except Exception as e:
-            logger.exception("Error retrieving related data for model %s with filter %s=%s: %s",
-                             model.__name__, filter_field, filter_value, str(e))
+            logger.exception(f"Error retrieving related data for model {model.__name__} with filter {filter_field}={filter_value} from {using_db}: {str(e)}")
             return []
 
+
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale order and its related attachments and shipments.
+    #     """
+    #     try:
+    #         # Get the SaleOrder instance
+    #         instance = SaleOrder.objects.get(pk=pk)
+
+    #         # Delete related OrderAttachments and OrderShipments
+    #         if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete the main SaleOrder instance
+    #         instance.delete()
+
+    #         logger.info(f"SaleOrder with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except SaleOrder.DoesNotExist:
+    #         logger.warning(f"SaleOrder with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
         Handles the deletion of a sale order and its related attachments and shipments.
+        Based on the sale_order_id, it checks the appropriate database and deletes the records.
         """
+        db_to_use = None
         try:
-            # Get the SaleOrder instance
-            instance = SaleOrder.objects.get(pk=pk)
+            # Check which database the SaleOrder belongs to
+            SaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
+            set_db('mstcnl')
+            db_to_use = 'mstcnl'
+        except SaleOrder.DoesNotExist:
+            try:
+                SaleOrder.objects.using('default').get(sale_order_id=pk)
+                set_db('default')
+                db_to_use = 'default'
+            except SaleOrder.DoesNotExist:
+                logger.warning(f"SaleOrder with ID {pk} does not exist in any database.")
+                return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
-            # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id'):
+        try:
+            # Get the SaleOrder instance from the appropriate database
+            instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
+
+            # Delete related OrderAttachments, OrderShipments, and CustomFieldValues from the correct database
+            if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id'):
+            
+            if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id'):
+            
+            if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Delete the main SaleOrder instance
-            instance.delete()
+            # Delete the main SaleOrder instance from the correct database
+            instance.delete(using=db_to_use)
 
             logger.info(f"SaleOrder with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
         except SaleOrder.DoesNotExist:
             logger.warning(f"SaleOrder with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
@@ -1150,125 +1269,143 @@ class SaleOrderViewSet(APIView):
     #     }
     #     return build_response(1, "Sale Order created successfully", custom_data, status.HTTP_201_CREATED)  
     
-    def prepare_mstcnl_database(self, sale_order_data):
-        """
-        Ensure all required foreign key references exist in mstcnl database
-        before creating a sale order with "Other" sale type
-        """
-        from django.db import transaction
+    # def prepare_mstcnl_database(self, sale_order_data):
+    #     """
+    #     Ensure all required foreign key references exist in mstcnl database
+    #     before creating a sale order with "Other" sale type
+    #     """
+    #     from django.db import transaction
         
-        # 1. Ensure SaleType exists
-        sale_type_id = sale_order_data.get('sale_type_id')
-        if sale_type_id:
-            try:
-                with transaction.atomic(using='mstcnl'):
-                    SaleTypes.objects.using('mstcnl').get_or_create(
-                        sale_type_id=sale_type_id,
-                        defaults={
-                            'name': 'Other',
-                            'created_at': timezone.now(),
-                            'updated_at': timezone.now()
-                        }
-                    )
-            except Exception as e:
-                logger.error(f"Failed to prepare SaleType in mstcnl: {str(e)}")
-                raise
+    #     # 1. Ensure SaleType exists
+    #     sale_type_id = sale_order_data.get('sale_type_id')
+    #     if sale_type_id:
+    #         try:
+    #             with transaction.atomic(using='mstcnl'):
+    #                 SaleTypes.objects.using('mstcnl').get_or_create(
+    #                     sale_type_id=sale_type_id,
+    #                     defaults={
+    #                         'name': 'Other',
+    #                         'created_at': timezone.now(),
+    #                         'updated_at': timezone.now()
+    #                     }
+    #                 )
+    #         except Exception as e:
+    #             logger.error(f"Failed to prepare SaleType in mstcnl: {str(e)}")
+    #             raise
 
-        # 2. Ensure Customer exists (minimal fields)
-        customer_id = sale_order_data.get('customer_id')
-        if customer_id:
-            try:
-                with transaction.atomic(using='mstcnl'):
-                    Customer.objects.using('mstcnl').get_or_create(
-                        customer_id=customer_id,
-                        defaults={
-                            'name': 'Temp Customer',  # Will be updated with real data
-                            'created_at': timezone.now(),
-                            'updated_at': timezone.now()
-                        }
-                    )
-            except Exception as e:
-                logger.error(f"Failed to prepare Customer in mstcnl: {str(e)}")
-                raise
+    #     # 2. Ensure Customer exists (minimal fields)
+    #     customer_id = sale_order_data.get('customer_id')
+    #     if customer_id:
+    #         try:
+    #             with transaction.atomic(using='mstcnl'):
+    #                 Customer.objects.using('mstcnl').get_or_create(
+    #                     customer_id=customer_id,
+    #                     defaults={
+    #                         'name': 'Temp Customer',  # Will be updated with real data
+    #                         'created_at': timezone.now(),
+    #                         'updated_at': timezone.now()
+    #                     }
+    #                 )
+    #         except Exception as e:
+    #             logger.error(f"Failed to prepare Customer in mstcnl: {str(e)}")
+    #             raise
 
-        # 3. Ensure OrderStatus exists
-        status_id = sale_order_data.get('order_status_id')
-        if status_id:
-            try:
-                with transaction.atomic(using='mstcnl'):
-                    OrderStatuses.objects.using('mstcnl').get_or_create(
-                        order_status_id=status_id,
-                        defaults={
-                            'status_name': 'Pending',
-                            'created_at': timezone.now(),
-                            'updated_at': timezone.now()
-                        }
-                    )
-            except Exception as e:
-                logger.error(f"Failed to prepare OrderStatus in mstcnl: {str(e)}")
-                raise
+    #     # 3. Ensure OrderStatus exists
+    #     status_id = sale_order_data.get('order_status_id')
+    #     if status_id:
+    #         try:
+    #             with transaction.atomic(using='mstcnl'):
+    #                 OrderStatuses.objects.using('mstcnl').get_or_create(
+    #                     order_status_id=status_id,
+    #                     defaults={
+    #                         'status_name': 'Pending',
+    #                         'created_at': timezone.now(),
+    #                         'updated_at': timezone.now()
+    #                     }
+    #                 )
+    #         except Exception as e:
+    #             logger.error(f"Failed to prepare OrderStatus in mstcnl: {str(e)}")
+    #             raise
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
-    
+
     @transaction.atomic
     def update(self, request, pk, *args, **kwargs):
+        # ----------------------------------- C H E C K  D A T A B A S E -----------------------------#
+        db_to_use = None
+        try:
+            # Check if sale_order_id exists in the mstcnl database
+            SaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
+            set_db('mstcnl')
+            db_to_use = 'mstcnl'
+        except ObjectDoesNotExist:
+            try:
+                # Check if sale_order_id exists in the devcnl database
+                SaleOrder.objects.using('default').get(sale_order_id=pk)
+                set_db('default')
+                db_to_use = 'default'
+            except ObjectDoesNotExist:
+                logger.error(f"Sale order with id {pk} not found in any database.")
+                return build_response(0, f"Sale order with id {pk} not found", [], status.HTTP_404_NOT_FOUND)
 
         # ----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
-        """
-        All the data in request will be validated here. it will handle the following errors:
-        - Invalid data types
-        - Invalid foreign keys
-        - nulls in required fields
-        """
-        # Get the given data from request
         given_data = request.data
 
-        # Vlidated SaleOrder Data
-        sale_order_data = given_data.pop('sale_order', None)  # parent_data
+        # Validate SaleOrder Data
+        sale_order_data = given_data.pop('sale_order', None)
         if sale_order_data:
             sale_order_data['sale_order_id'] = pk
-            order_error = validate_multiple_data(self, [sale_order_data], SaleOrderSerializer, ['order_no'])
-            # validate the 'order_type' in 'sale_order' data
-            validate_order_type(sale_order_data, order_error,OrderTypes, look_up='order_type')
+            # Validate SaleOrder Data
+            order_error = validate_multiple_data(
+                self, [sale_order_data], SaleOrderSerializer, ['order_no'], using_db=db_to_use
+            )
 
-        # Vlidated SaleOrderItems Data
+            validate_order_type(sale_order_data, order_error, OrderTypes, look_up='order_type')
+
+        # Validate SaleOrderItems Data
         sale_order_items_data = given_data.pop('sale_order_items', None)
         if sale_order_items_data:
             exclude_fields = ['sale_order_id']
-            item_error = validate_put_method_data(self, sale_order_items_data, SaleOrderItemsSerializer,
-                                                  exclude_fields, SaleOrderItems, current_model_pk_field='sale_order_item_id')
+            item_error = validate_put_method_data(
+                self, sale_order_items_data, SaleOrderItemsSerializer,
+                exclude_fields, SaleOrderItems, current_model_pk_field='sale_order_item_id', db_to_use=db_to_use
+            )
 
-        # Vlidated OrderAttchments Data
+        # Validate OrderAttachments Data
         order_attachments_data = given_data.pop('order_attachments', None)
         exclude_fields = ['order_id', 'order_type_id']
         if order_attachments_data:
             attachment_error = validate_put_method_data(
-                self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
+                self, order_attachments_data, OrderAttachmentsSerializer,
+                exclude_fields, OrderAttachments, current_model_pk_field='attachment_id', db_to_use=db_to_use
+            )
         else:
-            # Since 'order_attachments' is optional, so making an error is empty list
             attachment_error = []
 
-        # Vlidated OrderShipments Data
+        # Validate OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
         if order_shipments_data:
             shipments_error = validate_put_method_data(
-                self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+                self, order_shipments_data, OrderShipmentsSerializer,
+                exclude_fields, OrderShipments, current_model_pk_field='shipment_id', db_to_use=db_to_use
+            )
         else:
-            # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
-            
-        # Validated CustomFieldValues Data
+
+        # Validate CustomFieldValues Data
         custom_field_values_data = given_data.pop('custom_field_values', None)
         if custom_field_values_data:
             exclude_fields = ['custom_id']
-            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+            custom_field_values_error = validate_put_method_data(
+                self, custom_field_values_data, CustomFieldValueSerializer,
+                exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id', db_to_use=db_to_use
+            )
         else:
             custom_field_values_error = []
 
         # Ensure mandatory data is present
         if not sale_order_data or not sale_order_items_data:
-            logger.error(
-                "Sale order and sale order items are mandatory but not provided.")
+            logger.error("Sale order and sale order items are mandatory but not provided.")
             return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
@@ -1277,54 +1414,79 @@ class SaleOrderViewSet(APIView):
         if item_error:
             errors["sale_order_items"] = item_error
         if attachment_error:
-            errors['order_attachments'] = attachment_error
+            errors["order_attachments"] = attachment_error
         if shipments_error:
-            errors['order_shipments'] = shipments_error
+            errors["order_shipments"] = shipments_error
         if custom_field_values_error:
-            errors['custom_field_values'] = custom_field_values_error
+            errors["custom_field_values"] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
-        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        # ------------------------------ D A T A   U P D A T E -----------------------------------------#
 
-        # update SaleOrder
+        # Update SaleOrder
         if sale_order_data:
-            update_fields = []  # No need to update any fields
-            saleorder_data = update_multi_instances(self, pk, [sale_order_data], SaleOrder, SaleOrderSerializer,
-                                                    update_fields, main_model_related_field='sale_order_id', current_model_pk_field='sale_order_id')
+            update_fields = []
+            saleorder_data = update_multi_instances(
+                self, pk, [sale_order_data], SaleOrder, SaleOrderSerializer,
+                update_fields, main_model_related_field='sale_order_id',
+                current_model_pk_field='sale_order_id', using_db=db_to_use
+            )
 
-        # Update the 'sale_order_items'
+        # Update SaleOrderItems
         update_fields = {'sale_order_id': pk}
-        items_data = update_multi_instances(self, pk, sale_order_items_data, SaleOrderItems, SaleOrderItemsSerializer,
-                                            update_fields, main_model_related_field='sale_order_id', current_model_pk_field='sale_order_item_id')
+        items_data = update_multi_instances(
+            self, pk, sale_order_items_data, SaleOrderItems, SaleOrderItemsSerializer,
+            update_fields, main_model_related_field='sale_order_id',
+            current_model_pk_field='sale_order_item_id', using_db=db_to_use  # Ensuring same DB is used
+        )
 
         # Get order_type_id from OrderTypes model
         order_type_val = sale_order_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
-        type_id = order_type.order_type_id
+        type_id = order_type.order_type_id if order_type else None
 
-        # Update the 'order_attchments'
-        update_fields = {'order_id': pk, 'order_type_id': type_id}
-        attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer,
-                                                 update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
+        # Update OrderAttachments
+        if order_attachments_data:
+            update_fields = {'order_id': pk, 'order_type_id': type_id}
+            attachment_data = update_multi_instances(
+                self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer,
+                update_fields, main_model_related_field='order_id',
+                current_model_pk_field='attachment_id', using_db=db_to_use
+            )
+        else:
+            attachment_data = []
 
-        # Update the 'shipments'
-        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
-                                               update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
-        
-        # Update CustomFieldValues Data
+        # Update OrderShipments
+        if order_shipments_data:
+            update_fields = {'order_id': pk, 'order_type_id': type_id}
+            shipment_data = update_multi_instances(
+                self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
+                update_fields, main_model_related_field='order_id',
+                current_model_pk_field='shipment_id', using_db=db_to_use
+            )
+        else:
+            shipment_data = []
+
+        # Update CustomFieldValues
         if custom_field_values_data:
-            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+            custom_field_values_data = update_multi_instances(
+                self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer,
+                {}, main_model_related_field='custom_id',
+                current_model_pk_field='custom_field_value_id', using_db=db_to_use
+            )
 
+        # Prepare custom_data for response
         custom_data = {
             "sale_order": saleorder_data[0] if saleorder_data else {},
             "sale_order_items": items_data if items_data else [],
             "order_attachments": attachment_data if attachment_data else [],
             "order_shipments": shipment_data[0] if shipment_data else {},
-            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
     
     def patch(self, request, pk, format=None):
         sale_order = self.get_object(pk)
