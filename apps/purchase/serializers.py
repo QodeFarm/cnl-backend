@@ -55,6 +55,7 @@ class PurchaseInvoiceOrdersSerializer(serializers.ModelSerializer):
     purchase_type = PurchaseTypesSerializer(source='purchase_type_id',read_only=True)
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id',read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id',read_only=True)
+    
         
     class Meta:
         model = PurchaseInvoiceOrders
@@ -193,3 +194,53 @@ class PurchaseInvoiceOrdersOptionsSerializer(serializers.ModelSerializer):
     def get_purchase_invoice_orders_summary(purchase_invoice_orders):
         serializer = PurchaseInvoiceOrdersOptionsSerializer(purchase_invoice_orders, many=True)
         return serializer.data
+    
+class LandedCostReportSerializer(serializers.ModelSerializer):
+    vendor_name = serializers.CharField()
+    landed_cost = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        model = PurchaseInvoiceOrders
+        fields = ["invoice_no","invoice_date","due_date","total_amount","advance_amount","tax_amount","cess_amount","transport_charges","dis_amt","round_off","vendor_name","landed_cost"]    
+         
+
+class PurchasesByVendorReportSerializer(serializers.Serializer):
+    vendor = serializers.CharField()
+    total_purchase = serializers.DecimalField(max_digits=18, decimal_places=2)
+    order_count = serializers.IntegerField()
+
+class PurchasePriceVarianceReportSerializer(serializers.ModelSerializer):
+    product = serializers.CharField()
+    vendor_name = serializers.CharField()
+    order_date = serializers.DateField() 
+    min_price = serializers.DecimalField(max_digits=18, decimal_places=2)
+    max_price = serializers.DecimalField(max_digits=18, decimal_places=2)
+    avg_price = serializers.DecimalField(max_digits=18, decimal_places=2)
+
+    class Meta:
+        model = PurchaseorderItems
+        fields = ["product","vendor_name","order_date","min_price","max_price","avg_price"]  
+    
+class OutstandingPurchaseReportSerializer(serializers.Serializer):
+    vendor_name = serializers.CharField()
+    invoice_num = serializers.CharField()
+    invoice_dates = serializers.DateField()
+    due_dates = serializers.DateField()
+    total_amounts = serializers.DecimalField(max_digits=18, decimal_places=2)
+    advance_payments = serializers.DecimalField(max_digits=18, decimal_places=2)
+    outstanding_amount = serializers.DecimalField(max_digits=18, decimal_places=2)
+    payment_status = serializers.SerializerMethodField()
+
+    def get_payment_status(self, obj):
+        return "Pending" if obj["outstanding_amount"] > 0 else "Paid"
+    
+class StockReplenishmentReportSerializer(serializers.ModelSerializer):
+    # Map each field explicitly for clarity
+    name = serializers.CharField(help_text="Product name")
+    current_stock = serializers.IntegerField(help_text="Current available stock")
+    minimum_stock = serializers.IntegerField(source='minimum_level', help_text="Minimum required stock level")
+    reorder_quantity = serializers.IntegerField(read_only=True, help_text="Quantity to reorder (minimum_stock - current_stock)")
+
+    class Meta:
+        model = Products
+        fields = ['name', 'current_stock', 'minimum_stock', 'reorder_quantity']

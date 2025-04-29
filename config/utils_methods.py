@@ -1,12 +1,13 @@
 # Grouped imports:
-import base64
-import json
+from rest_framework.permissions import BasePermission
+from uuid import UUID, uuid4
 import logging
-import os
+import base64
 import random
 import string
+import json
 import uuid
-from uuid import UUID, uuid4
+import os
 
 # Alphabetized imports:
 import inflect
@@ -170,13 +171,34 @@ class OrderNumberMixin(models.Model):
 
     class Meta:
         abstract = True
+        
+    def get_order_prefix(self):
+        """
+        Override to handle 'Other' sale type case
+        and validate the prefix inline.
+        """
+        if hasattr(self, 'sale_type_id') and self.sale_type_id:
+            if self.sale_type_id.name and self.sale_type_id.name.lower() == 'Other':
+                return 'SOO'
+        
+        # Validate existing prefix before returning
+        valid_prefixes = ['SO', 'SOO', 'PO', 'INV']  # add all that you use
+        if self.order_no_prefix not in valid_prefixes:
+            raise ValueError("Invalid prefix")  # <== this will surface clearly
+
+        return self.order_no_prefix
+        
+    # def get_order_prefix(self):
+    #     """Method to be overridden by child classes for custom prefix logic"""
+    #     return self.order_no_prefix
 
     def save(self, *args, **kwargs):
         """
         Override the save method to generate and set the order number if it is not already set.
         """
         if not getattr(self, self.order_no_field):
-            setattr(self, self.order_no_field, generate_order_number(self.order_no_prefix))
+            prefix = self.get_order_prefix()
+            setattr(self, self.order_no_field, generate_order_number(prefix))
         super().save(*args, **kwargs)
 
 def increment_order_number(order_type_prefix):
@@ -210,6 +232,9 @@ def increment_order_number(order_type_prefix):
     sequence_number_str = f"{sequence_number:05d}"
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
 
+
+
+
 #=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
 def normalize_value(value):
     '''Check if the value is a list containing exactly one empty dictionary or [empty_dict, None]'''
@@ -226,14 +251,40 @@ def get_object_or_none(model, **kwargs):
     except model.DoesNotExist:
         return None
 
-def delete_multi_instance(del_value, main_model_class, related_model_class, main_model_field_name=None):
+# def delete_multi_instance(del_value, main_model_class, related_model_class, main_model_field_name=None):
+#     """
+#     Deletes instances from a related model based on a field value from the main model.
+
+#     :param del_value: Value of the main model field to filter related model instances.
+#     :param main_model_class: The main model class.
+#     :param related_model_class: The related model class from which to delete instances.
+#     :param main_model_field_name: The field name in the related model that references the main model.
+#     """
+#     try:
+#         # Get the main model's primary key field name
+#         main_model_pk_field_name = main_model_class._meta.pk.name
+
+#         # Arrange arguments to filter
+#         filter_kwargs = {main_model_field_name or main_model_pk_field_name: del_value}
+
+#         # Delete related instances
+#         deleted_count, _ = related_model_class.objects.filter(**filter_kwargs).delete()
+#         logger.info(f"Deleted {deleted_count} instances from {related_model_class.__name__} where {filter_kwargs}.")
+#     except Exception as e:
+#         logger.error(f"Error deleting instances from {related_model_class.__name__}: {str(e)}")
+#         return False
+#     return True
+
+def delete_multi_instance(del_value, main_model_class, related_model_class, main_model_field_name=None, using_db=None):
     """
     Deletes instances from a related model based on a field value from the main model.
+    Allows for database selection (using_db).
 
     :param del_value: Value of the main model field to filter related model instances.
     :param main_model_class: The main model class.
     :param related_model_class: The related model class from which to delete instances.
     :param main_model_field_name: The field name in the related model that references the main model.
+    :param using_db: The database to use for the deletion operation (e.g., 'mstcnl', 'devcnl').
     """
     try:
         # Get the main model's primary key field name
@@ -242,36 +293,65 @@ def delete_multi_instance(del_value, main_model_class, related_model_class, main
         # Arrange arguments to filter
         filter_kwargs = {main_model_field_name or main_model_pk_field_name: del_value}
 
-        # Delete related instances
-        deleted_count, _ = related_model_class.objects.filter(**filter_kwargs).delete()
+        # Delete related instances from the specified database
+        deleted_count, _ = related_model_class.objects.using(using_db).filter(**filter_kwargs).delete()
         logger.info(f"Deleted {deleted_count} instances from {related_model_class.__name__} where {filter_kwargs}.")
+
     except Exception as e:
         logger.error(f"Error deleting instances from {related_model_class.__name__}: {str(e)}")
         return False
+
     return True
 
-def validate_multiple_data(self, bulk_data, model_serializer, exclude_fields):
-        errors = []
 
-        if bulk_data:
-            if isinstance(bulk_data, list):
-                bulk_data = bulk_data
-            if isinstance(bulk_data, dict):
-                bulk_data = [bulk_data]
+# def validate_multiple_data(self, bulk_data, model_serializer, exclude_fields):
+#         errors = []
+
+#         if bulk_data:
+#             if isinstance(bulk_data, list):
+#                 bulk_data = bulk_data
+#             if isinstance(bulk_data, dict):
+#                 bulk_data = [bulk_data]
         
-        # Validate child data
-        child_serializers = []
-        for data in bulk_data:
-            child_serializer = model_serializer(data=data)
-            if not child_serializer.is_valid(raise_exception=False):
-                error = child_serializer.errors
-                exclude_keys = exclude_fields
-                # Create a new dictionary excluding specified keys
-                filtered_data = {k: v for k, v in error.items() if k not in exclude_keys}
-                if filtered_data:
-                    errors.append(filtered_data)
+#         # Validate child data
+#         child_serializers = []
+#         for data in bulk_data:
+#             child_serializer = model_serializer(data=data)
+#             if not child_serializer.is_valid(raise_exception=False):
+#                 error = child_serializer.errors
+#                 exclude_keys = exclude_fields
+#                 # Create a new dictionary excluding specified keys
+#                 filtered_data = {k: v for k, v in error.items() if k not in exclude_keys}
+#                 if filtered_data:
+#                     errors.append(filtered_data)
 
-        return errors
+#         return errors
+
+def validate_multiple_data(self, bulk_data, model_serializer, exclude_fields, using_db=None):
+    errors = []
+
+    if bulk_data:
+        if isinstance(bulk_data, list):
+            bulk_data = bulk_data
+        if isinstance(bulk_data, dict):
+            bulk_data = [bulk_data]
+
+    # Validate child data
+    child_serializers = []
+    for data in bulk_data:
+        # Pass using_db to the model_serializer to handle database context properly
+        child_serializer = model_serializer(data=data, context={'using_db': using_db})
+        if not child_serializer.is_valid(raise_exception=False):
+            error = child_serializer.errors
+            exclude_keys = exclude_fields
+            # Create a new dictionary excluding specified keys
+            filtered_data = {k: v for k, v in error.items() if k not in exclude_keys}
+            if filtered_data:
+                errors.append(filtered_data)
+
+    return errors
+
+
 
 def validate_payload_data(self, data , model_serializer):
         errors = []
@@ -288,7 +368,29 @@ def validate_payload_data(self, data , model_serializer):
         
         return errors
 
-def generic_data_creation(self, valid_data, serializer_class, update_fields=None):
+# def generic_data_creation(self, valid_data, serializer_class, update_fields=None, using='default'):
+#     '''
+#     ** This function creates new instances with valid data & at the same time it updates the data with required fields**
+#     valid_data - The data to be created
+#     serializer_class - name of the serializer for which the data is to be created.
+#     update_fields - fields to be updated before the data is created [input type dict]
+#     '''
+#     # If any fields to be updated before the data is created
+#     if update_fields:
+#         for data in valid_data:
+#             for key, value in update_fields.items():
+#                 data[key] = value
+
+#     data_list = []
+#     for data in valid_data:
+#         serializer = serializer_class(data=data)
+#         serializer.is_valid(raise_exception=True)
+#         serializer.save()
+#         data_list.append(serializer.data)
+
+#     return data_list
+
+def generic_data_creation(self, valid_data, serializer_class, update_fields=None, using='default'):
     '''
     ** This function creates new instances with valid data & at the same time it updates the data with required fields**
     valid_data - The data to be created
@@ -305,10 +407,45 @@ def generic_data_creation(self, valid_data, serializer_class, update_fields=None
     for data in valid_data:
         serializer = serializer_class(data=data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+
+        # ✅ This is the only line added to respect the 'using' parameter
+        instance = serializer.Meta.model.objects.db_manager(using).create(**serializer.validated_data)
+        serializer = serializer_class(instance)
+
         data_list.append(serializer.data)
 
     return data_list
+
+
+# def generic_data_creation(self, valid_data, serializer_class, update_fields=None, using=None):
+#     '''
+#     Generic function to create instances - remains completely table-agnostic
+#     '''
+#     if isinstance(valid_data, dict):
+#         valid_data = [valid_data]
+#         return_as_dict = True
+#     else:
+#         return_as_dict = False
+
+#     if update_fields:
+#         for data in valid_data:
+#             data.update(update_fields)
+
+#     data_list = []
+#     for data in valid_data:
+#         serializer = serializer_class(data=data)
+#         serializer.is_valid(raise_exception=True)
+        
+#         if using:
+#             ModelClass = serializer.Meta.model
+#             instance = ModelClass.objects.using(using).create(**serializer.validated_data)
+#             serializer = serializer_class(instance)
+#         else:
+#             instance = serializer.save()
+            
+#         data_list.append(serializer.data)
+
+#     return data_list[0] if return_as_dict else data_list
 
 def validate_input_pk(self, pk=None):
     try:
@@ -324,23 +461,23 @@ def filter_uuid(queryset, name, value):
         return queryset.none()
     return queryset.filter(Q(**{name: value}))
 
-def update_multi_instances(self, pk, valid_data, related_model_name, related_class_name, update_fields, main_model_related_field=None, current_model_pk_field=None):
+def update_multi_instances(self, pk, valid_data, related_model_name, related_class_name, update_fields, main_model_related_field=None, current_model_pk_field=None, using_db='default'):
     '''
-    related_model_class : name of the current model Name
+    related_model_name : name of the current model class
     main_model_related_field : This field should have the relation with main Model
     '''
     data_list = []
     try:
-        filter_kwargs = {main_model_related_field:pk}
-        old_instances_list  = list(related_model_name.objects.filter(**filter_kwargs).values_list('pk', flat=True))
-        old_instances_list = [str(uuid) for uuid in old_instances_list] # conversion 
+        filter_kwargs = {main_model_related_field: pk}
+        old_instances_list = list(
+            related_model_name.objects.using(using_db).filter(**filter_kwargs).values_list('pk', flat=True)
+        )
+        old_instances_list = [str(uuid) for uuid in old_instances_list]  # conversion 
     except Exception as e:
         logger.error(f"Error fetching instances from {related_model_name.__name__}: {str(e)}")
 
-    # get the ids that are updated
     pks_in_update_data = []
 
-    # prepare user provided pks and verify with the previous records
     if valid_data:
         if isinstance(valid_data, list):
             valid_data = valid_data
@@ -349,46 +486,71 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
 
     update_count = 0
     for data in valid_data:
-        id = data.get(current_model_pk_field,None) # get the primary key in updated data
-        # update the data for avilable pks
+        id = data.get(current_model_pk_field, None)  # get the primary key in updated data
         if id is not None:
-            pks_in_update_data.append(id) # collecting how many ids are updated
-            instance = related_model_name.objects.get(pk=id)
-            # if given pk is avilable in old instances then update
+            pks_in_update_data.append(id)
+            instance = related_model_name.objects.using(using_db).get(pk=id)
             if id in old_instances_list:
                 serializer = related_class_name(instance, data=data, partial=False)
                 serializer.is_valid(raise_exception=True)
-                serializer.save()
+                serializer.save(using=using_db)
                 data_list.append(serializer.data)
-                update_count = update_count + 1
-        # If there is no pk avilabe (id will be None), it is new record to create
+                update_count += 1
         else:
-            # create new record by using function 'generic_data_creation'
-            new_instance = generic_data_creation(self,[data],related_class_name,update_fields=update_fields)
+            new_instance = generic_data_creation(self, [data], related_class_name, update_fields=update_fields, using_db=using_db)
             if new_instance:
-                data_list.append(new_instance[0]) # append the new record to existing records
+                data_list.append(new_instance[0])
                 logger.info(f'New instance in {related_model_name.__name__} is created')
             else:
-                logger.warning("Error during update: new record creation failed in {related_model_name.__name__}")
-                return build_response(0,f"Error during update: new record creation failed in {related_model_name.__name__}",[],status.HTTP_400_BAD_REQUEST)
-            
-    # Delete the previous records if those are not mentioned in update data
+                logger.warning(f"Error during update: new record creation failed in {related_model_name.__name__}")
+                return build_response(0, f"Error during update: new record creation failed in {related_model_name.__name__}", [], status.HTTP_400_BAD_REQUEST)
+
     for id in old_instances_list:
         if id not in pks_in_update_data:
             try:
-                instance = related_model_name.objects.get(pk=id)
+                instance = related_model_name.objects.using(using_db).get(pk=id)
                 instance.delete()
                 logger.info(f'Old record in {related_model_name.__name__} with id {id} is deleted')
             except Exception as e:
                 logger.warning(f'Error deleting the record in {related_model_name.__name__} with id {id}')
-  
+
     if (update_count == len(old_instances_list)) and update_count != 0:
-        logger.info(f'All old instances in {related_model_name.__name__} are updated (update count : {len(old_instances_list)})')
+        logger.info(f'All old instances in {related_model_name.__name__} are updated (update count: {len(old_instances_list)})')
 
     return data_list
 
-def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None):
+# def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None, using_db='default'):
+#     error_list = []
 
+#     if valid_data:
+#         if isinstance(valid_data, list):
+#             valid_data = valid_data
+#         if isinstance(valid_data, dict):
+#             valid_data = [valid_data]
+
+#     for data in valid_data:
+#         id = data.get(current_model_pk_field, None)
+#         if id is not None:
+#             instance = model_class_name.objects.using(using_db).filter(pk=id).first()
+#             serializer = serializer_name(instance, data=data)
+#             if not serializer.is_valid(raise_exception=False):
+#                 error = serializer.errors
+#                 model = serializer.Meta.model
+#                 model_name = model.__name__
+#                 logger.error("Validation error on %s: %s", model_name, str(error))
+#                 error_list.append(error)
+#         else:
+#             serializer = serializer_name(data=data)
+#             if not serializer.is_valid(raise_exception=False):
+#                 error = serializer.errors
+#                 exclude_keys = update_fields
+#                 filtered_data = {k: v for k, v in error.items() if k not in exclude_keys}
+#                 if filtered_data:
+#                     error_list.append(filtered_data)
+
+#     return error_list
+
+def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None, using_db='default', db_to_use=None):
     error_list = []
 
     if valid_data:
@@ -398,31 +560,127 @@ def validate_put_method_data(self, valid_data, serializer_name, update_fields, m
             valid_data = [valid_data]
 
     for data in valid_data:
-        id = data.get(current_model_pk_field,None) # get the primary key in updated data
-        # update the data for avilable pks
+        id = data.get(current_model_pk_field, None)
         if id is not None:
-            instance = model_class_name.objects.filter(pk=id).first()
-            serializer = serializer_name(instance,data=data)
-            # If Main model data is not valid
+            instance = model_class_name.objects.using(db_to_use or using_db).filter(pk=id).first()
+            serializer = serializer_name(instance, data=data)
             if not serializer.is_valid(raise_exception=False):
                 error = serializer.errors
                 model = serializer.Meta.model
                 model_name = model.__name__
-                logger.error("Validation error on %s: %s",model_name, str(error))  # Log validation error
+                logger.error("Validation error on %s: %s", model_name, str(error))
                 error_list.append(error)
-
-        # If there is no pk avilabe (id will be None), validate the new record
         else:
             serializer = serializer_name(data=data)
             if not serializer.is_valid(raise_exception=False):
                 error = serializer.errors
                 exclude_keys = update_fields
-                # Create a new dictionary excluding specified keys
                 filtered_data = {k: v for k, v in error.items() if k not in exclude_keys}
                 if filtered_data:
                     error_list.append(filtered_data)
 
     return error_list
+
+
+# def update_multi_instances(self, pk, valid_data, related_model_name, related_class_name, update_fields, main_model_related_field=None, current_model_pk_field=None):
+#     '''
+#     related_model_class : name of the current model Name
+#     main_model_related_field : This field should have the relation with main Model
+#     '''
+#     data_list = []
+#     try:
+#         filter_kwargs = {main_model_related_field:pk}
+#         old_instances_list  = list(related_model_name.objects.filter(**filter_kwargs).values_list('pk', flat=True))
+#         old_instances_list = [str(uuid) for uuid in old_instances_list] # conversion 
+#     except Exception as e:
+#         logger.error(f"Error fetching instances from {related_model_name.__name__}: {str(e)}")
+
+#     # get the ids that are updated
+#     pks_in_update_data = []
+
+#     # prepare user provided pks and verify with the previous records
+#     if valid_data:
+#         if isinstance(valid_data, list):
+#             valid_data = valid_data
+#         if isinstance(valid_data, dict):
+#             valid_data = [valid_data]
+
+#     update_count = 0
+#     for data in valid_data:
+#         id = data.get(current_model_pk_field,None) # get the primary key in updated data
+#         # update the data for avilable pks
+#         if id is not None:
+#             pks_in_update_data.append(id) # collecting how many ids are updated
+#             instance = related_model_name.objects.get(pk=id)
+#             # if given pk is avilable in old instances then update
+#             if id in old_instances_list:
+#                 serializer = related_class_name(instance, data=data, partial=False)
+#                 serializer.is_valid(raise_exception=True)
+#                 serializer.save()
+#                 data_list.append(serializer.data)
+#                 update_count = update_count + 1
+#         # If there is no pk avilabe (id will be None), it is new record to create
+#         else:
+#             # create new record by using function 'generic_data_creation'
+#             new_instance = generic_data_creation(self,[data],related_class_name,update_fields=update_fields)
+#             if new_instance:
+#                 data_list.append(new_instance[0]) # append the new record to existing records
+#                 logger.info(f'New instance in {related_model_name.__name__} is created')
+#             else:
+#                 logger.warning("Error during update: new record creation failed in {related_model_name.__name__}")
+#                 return build_response(0,f"Error during update: new record creation failed in {related_model_name.__name__}",[],status.HTTP_400_BAD_REQUEST)
+            
+#     # Delete the previous records if those are not mentioned in update data
+#     for id in old_instances_list:
+#         if id not in pks_in_update_data:
+#             try:
+#                 instance = related_model_name.objects.get(pk=id)
+#                 instance.delete()
+#                 logger.info(f'Old record in {related_model_name.__name__} with id {id} is deleted')
+#             except Exception as e:
+#                 logger.warning(f'Error deleting the record in {related_model_name.__name__} with id {id}')
+  
+#     if (update_count == len(old_instances_list)) and update_count != 0:
+#         logger.info(f'All old instances in {related_model_name.__name__} are updated (update count : {len(old_instances_list)})')
+
+#     return data_list
+
+# def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None):
+
+#     error_list = []
+
+#     if valid_data:
+#         if isinstance(valid_data, list):
+#             valid_data = valid_data
+#         if isinstance(valid_data, dict):
+#             valid_data = [valid_data]
+
+#     for data in valid_data:
+#         id = data.get(current_model_pk_field,None) # get the primary key in updated data
+#         # update the data for avilable pks
+#         if id is not None:
+#             instance = model_class_name.objects.filter(pk=id).first()
+#             serializer = serializer_name(instance,data=data)
+#             # If Main model data is not valid
+#             if not serializer.is_valid(raise_exception=False):
+#                 error = serializer.errors
+#                 model = serializer.Meta.model
+#                 model_name = model.__name__
+#                 logger.error("Validation error on %s: %s",model_name, str(error))  # Log validation error
+#                 error_list.append(error)
+
+#         # If there is no pk avilabe (id will be None), validate the new record
+#         else:
+#             serializer = serializer_name(data=data)
+#             if not serializer.is_valid(raise_exception=False):
+#                 error = serializer.errors
+#                 exclude_keys = update_fields
+#                 # Create a new dictionary excluding specified keys
+#                 filtered_data = {k: v for k, v in error.items() if k not in exclude_keys}
+#                 if filtered_data:
+#                     error_list.append(filtered_data)
+
+#     return error_list
 
 def validate_order_type(data, error_list, model_name,look_up=None):
     '''
@@ -853,3 +1111,19 @@ def get_active_workflow(section_id):
     except Exception as e:
         raise ValueError(f"Error fetching active workflow: {str(e)}")
 
+class IsAdminRoles(BasePermission):
+    """
+    Custom permission to allow access only to users with the 'Admin' role.
+
+    This checks the authenticated user's associated role via the `role_id` ForeignKey
+    and ensures that the role's `name` field is equal to "Admin".
+
+    Returns: True if the user is authenticated and their role is 'Admin', False otherwise.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        return (
+            user.is_authenticated and 
+            hasattr(user, 'role_id') and 
+            getattr(user.role_id, 'role_name', '').lower() == "admin"
+        )

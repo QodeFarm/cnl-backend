@@ -103,6 +103,7 @@ class User(AbstractBaseUser):
     date_of_birth = models.DateField(null= True, default=None)
     email = models.EmailField(max_length=255, unique=True)
     otp_required = models.BooleanField(default=False)
+    # is_superuser = models.BooleanField(default=False) #New field
     mobile= models.CharField(max_length=20, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

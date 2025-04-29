@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, FinancialReport, JournalEntry, PaymentTransaction, TaxConfiguration
+from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -277,3 +277,304 @@ class FinancialReportFilter(filters.FilterSet):
         model = FinancialReport 
         #do not change "report_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields = ['report_name','report_type','generated_at','created_at','period_name','s','sort','page','limit']
+
+
+class JournalEntryLineFilter(filters.FilterSet):
+    date = filters.DateFromToRangeFilter(field_name='journal_entry_id__entry_date')  # Fixed
+    account = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')  
+    reference = filters.CharFilter(field_name='journal_entry_id__reference', lookup_expr='icontains')  # Fixed
+    debit = filters.NumberFilter(field_name='debit')
+    credit = filters.NumberFilter(field_name='credit')
+    description = filters.CharFilter(field_name='description',lookup_expr='icontains')
+
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+ 
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = JournalEntryLines
+        fields = ['date', 'account', 'reference']
+               
+class TrialBalanceReportFilter(filters.FilterSet):
+    start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
+    end_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='lte')
+    account_type = filters.CharFilter(field_name='account_type')
+    account_code = filters.CharFilter(field_name='account_code', lookup_expr='icontains')
+    account_name = filters.CharFilter(field_name='account_name', lookup_expr='icontains')
+    total_debit = filters.NumberFilter()
+    total_credit = filters.NumberFilter()
+    balance = filters.NumberFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = ChartOfAccounts
+        fields = ['start_date', 'end_date', 'account_type', 'account_code', 
+                 'account_name', 'total_debit', 'total_credit', 'balance',
+                 's', 'sort', 'page', 'limit']
+
+class GeneralLedgerReportFilter(filters.FilterSet):
+    """Filter for General Ledger Report that shows all financial transactions across all accounts."""
+    account_id = filters.CharFilter(method=filter_uuid)
+    account_name = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')
+    start_date = filters.DateFilter(field_name='journal_entry_id__entry_date', lookup_expr='gte')
+    end_date = filters.DateFilter(field_name='journal_entry_id__entry_date', lookup_expr='lte')
+    reference_number = filters.CharFilter(field_name='journal_entry_id__reference', lookup_expr='icontains')
+    min_amount = filters.NumberFilter(method='filter_min_amount')
+    max_amount = filters.NumberFilter(method='filter_max_amount')
+    description = filters.CharFilter(field_name='description', lookup_expr='icontains')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_min_amount(self, queryset, name, value):
+        """Filter transactions with amount greater than or equal to the specified value"""
+        from django.db.models import Q
+        if value:
+            return queryset.filter(Q(debit__gte=value) | Q(credit__gte=value))
+        return queryset
+
+    def filter_max_amount(self, queryset, name, value):
+        """Filter transactions with amount less than or equal to the specified value"""
+        from django.db.models import Q
+        if value:
+            return queryset.filter(Q(debit__lte=value) | Q(credit__lte=value))
+        return queryset
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = JournalEntryLines
+        fields = ['account_id', 'account_name', 'start_date', 'end_date', 'reference_number', 'min_amount', 'max_amount', 'description', 's', 'sort', 'page', 'limit']
+
+class ProfitLossReportFilter(filters.FilterSet):
+    """Filter for Profit and Loss Report showing revenue, expenses and profit/loss."""
+    start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
+    end_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='lte')
+    account_type = filters.MultipleChoiceFilter(
+        choices=[('Revenue', 'Revenue'), ('Expense', 'Expense')],
+        field_name='account_type'
+    )
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = ChartOfAccounts
+        fields = ['start_date', 'end_date', 'account_type', 's', 'sort', 'page', 'limit']
+
+
+class BalanceSheetReportFilter(filters.FilterSet):
+    """Filter for Balance Sheet Report showing assets, liabilities and equity."""
+    start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
+    end_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='lte')
+    account_type = filters.MultipleChoiceFilter(
+        choices=[('Asset', 'Asset'), ('Liability', 'Liability'), ('Equity', 'Equity')],
+        field_name='account_type'
+    )
+    account_code = filters.CharFilter(field_name='account_code', lookup_expr='icontains')
+    account_name = filters.CharFilter(field_name='account_name', lookup_expr='icontains')
+    total_debit = filters.NumberFilter()
+    total_credit = filters.NumberFilter()
+    balance = filters.NumberFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = ChartOfAccounts
+        fields = ['start_date', 'end_date', 'account_type', 'account_code', 'account_name',
+                 'total_debit', 'total_credit', 'balance', 's', 'sort', 'page', 'limit']
+
+class CashFlowReportFilter(filters.FilterSet):
+    """Filter for Cash Flow Statement showing inflow and outflow of cash."""
+    start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
+    end_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='lte')
+    activity_type = filters.ChoiceFilter(
+        choices=[('Operating', 'Operating'), ('Investing', 'Investing'), ('Financing', 'Financing')],
+        method='filter_by_activity_type'
+    )
+    account_code = filters.CharFilter(field_name='account_code', lookup_expr='icontains')
+    account_name = filters.CharFilter(field_name='account_name', lookup_expr='icontains')
+    account_type = filters.CharFilter(field_name='account_type', lookup_expr='iexact')
+    cash_inflow = filters.NumberFilter()
+    cash_outflow = filters.NumberFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_activity_type(self, queryset, name, value):
+        """Filter transactions by cash flow activity type"""
+        if value == 'Operating':
+            return queryset.filter(account_type__in=['Revenue', 'Expense'])
+        elif value == 'Investing':
+            return queryset.filter(account_type='Asset')
+        elif value == 'Financing':
+            return queryset.filter(account_type__in=['Liability', 'Equity'])
+        return queryset
+        
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = ChartOfAccounts
+        fields = ['start_date', 'end_date', 'activity_type', 'account_code', 'account_name', 'account_type', 'cash_inflow', 'cash_outflow', 's', 'sort', 'page', 'limit']
+
+class AgingReportFilter(filters.FilterSet):
+    """Filter for Aging Report showing pending payments by age categories."""
+    payment_date = filters.DateFromToRangeFilter()
+    payment_status = filters.ChoiceFilter(choices=[('Pending', 'Pending'), ('Completed', 'Completed'), ('Failed', 'Failed')])
+    due_days = filters.RangeFilter()
+    order_type = filters.ChoiceFilter(choices=[('Purchase', 'Purchase'), ('Sale', 'Sale')])
+    min_amount = filters.NumberFilter(field_name='amount', lookup_expr='gte')
+    max_amount = filters.NumberFilter(field_name='amount', lookup_expr='lte')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = PaymentTransaction
+        fields = ['payment_date', 'payment_status', 'due_days', 'order_type', 'min_amount', 'max_amount', 's', 'sort', 'page', 'limit']
+
+class BankReconciliationReportFilter(filters.FilterSet):
+    """Filter for Bank Reconciliation Report comparing bank statement with ledger balance."""
+    bank_name = filters.CharFilter(field_name='bank_name', lookup_expr='icontains')
+    account_number = filters.CharFilter(field_name='account_number', lookup_expr='icontains')
+    account_name = filters.CharFilter(field_name='account_name', lookup_expr='icontains')
+    min_balance = filters.NumberFilter(field_name='balance', lookup_expr='gte')
+    max_balance = filters.NumberFilter(field_name='balance', lookup_expr='lte')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = BankAccount
+        fields = ['bank_name', 'account_number', 'account_name', 'min_balance', 'max_balance', 's', 'sort', 'page', 'limit']
+
+class JournalEntryReportFilter(filters.FilterSet):
+    """Filter for Journal Entry Report showing all journal entries and their details."""
+    entry_date = filters.DateFromToRangeFilter()
+    reference = filters.CharFilter(lookup_expr='icontains')
+    description = filters.CharFilter(lookup_expr='icontains')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = JournalEntry
+        fields = ['entry_date', 'reference', 'description', 's', 'sort', 'page', 'limit']
