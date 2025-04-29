@@ -3144,19 +3144,23 @@ class PaymentTransactionAPIView(APIView):
                 return build_response(0, "No Invoices", [], status.HTTP_204_NO_CONTENT)
 
 
-    def get(self, request, customer_id):
-        '''Fetch All Payment Transactions for a Customer'''
-        payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).select_related('sale_invoice').order_by('-created_at')
-        
-        if not payment_transactions.exists():
-            return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND) 
+    def get(self, request, customer_id = None):
+        if customer_id:
+            '''Fetch All Payment Transactions for a Customer'''
+            payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).select_related('sale_invoice').order_by('-created_at')
+            
+            if not payment_transactions.exists():
+                return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND) 
 
-        try:
-            serializer = PaymentTransactionSerializer(payment_transactions, many=True)
+            try:
+                serializer = PaymentTransactionSerializer(payment_transactions, many=True)
+                return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
+            except Exception as e:
+                return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            transactions = PaymentTransactions.objects.all()
+            serializer = PaymentTransactionSerializer(transactions, many=True)
             return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
-        except Exception as e:
-            return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
 
 class FetchSalesInvoicesForPaymentReceiptTable(APIView):
     '''This API is used to fetch all information related to sales invoices for 
