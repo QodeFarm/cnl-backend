@@ -107,8 +107,11 @@ class JournalEntryLinesAPIview(APIView):
             serializer = JournalEntryLinesSerializer(data=entry_data)
             if serializer.is_valid():
                 serializer.save() 
-        except(ValueError, TypeError):
-            return build_response(1, "Invalid Data provided For Journal Entry Lines.", [], status.HTTP_406_NOT_ACCEPTABLE)
+            else:
+                raise ValueError(f"serializer validation failed, {serializer.errors}")
+        
+        except(ValueError, TypeError) as e:
+            return build_response(1, f"Invalid Data provided For Journal Entry Lines.", str(e), status.HTTP_406_NOT_ACCEPTABLE)
         
         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
 
