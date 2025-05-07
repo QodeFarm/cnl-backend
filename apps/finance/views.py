@@ -93,6 +93,7 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class JournalEntryLinesAPIView(APIView):
+    print("Inside class")
     def post(self, customer_id, account_id, amount, description, balance_amount):
         '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
         try:
@@ -115,19 +116,18 @@ class JournalEntryLinesAPIView(APIView):
         
         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
     
-    def get(self, request, *args, **kwargs):
-            customer_id = request.GET.get('customer_id')
-            vendor_id = request.GET.get('vendor_id')
-
-            if customer_id:
-                entries = JournalEntryLines.objects.filter(customer_id=customer_id)
-            elif vendor_id:
-                entries = JournalEntryLines.objects.filter(vendor_id=vendor_id)
+    def get(self, request, input_id):  
+            print("GET method")          
+             # Try to determine if this UUID is for a customer
+            if Customer.objects.filter(pk=input_id).exists():
+                queryset = JournalEntryLines.objects.filter(customer_id=input_id)
+            elif Vendor.objects.filter(pk=input_id).exists():
+                queryset = JournalEntryLines.objects.filter(vendor_id=input_id)
             else:
                 return build_response(0, "Please provide either customer_id or vendor_id.", [], status.HTTP_400_BAD_REQUEST)
-            
-            serializer = JournalEntryLinesSerializer(entries, many=True)
-            return build_response(1, "Journal Entry Lines data", serializer.data, status.HTTP_200_OK)
+
+            serializer = JournalEntryLinesSerializer(queryset, many=True)
+            return build_response(len(serializer.data), "Journal Entry Lines data", serializer.data, status.HTTP_200_OK)
 
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
     queryset = PaymentTransaction.objects.all().order_by('-created_at')
