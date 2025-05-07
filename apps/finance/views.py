@@ -92,7 +92,8 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
-class JournalEntryLinesAPIview(APIView):
+class JournalEntryLinesAPIView(APIView):
+    print("Inside class")
     def post(self, customer_id, account_id, amount, description, balance_amount):
         '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
         try:
@@ -114,6 +115,19 @@ class JournalEntryLinesAPIview(APIView):
             return build_response(1, f"Invalid Data provided For Journal Entry Lines.", str(e), status.HTTP_406_NOT_ACCEPTABLE)
         
         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
+    
+    def get(self, request, input_id):  
+            print("GET method")          
+             # Try to determine if this UUID is for a customer
+            if Customer.objects.filter(pk=input_id).exists():
+                queryset = JournalEntryLines.objects.filter(customer_id=input_id)
+            elif Vendor.objects.filter(pk=input_id).exists():
+                queryset = JournalEntryLines.objects.filter(vendor_id=input_id)
+            else:
+                return build_response(0, "Please provide either customer_id or vendor_id.", [], status.HTTP_400_BAD_REQUEST)
+
+            serializer = JournalEntryLinesSerializer(queryset, many=True)
+            return build_response(len(serializer.data), "Journal Entry Lines data", serializer.data, status.HTTP_200_OK)
 
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
     queryset = PaymentTransaction.objects.all().order_by('-created_at')

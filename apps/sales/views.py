@@ -10,7 +10,7 @@ from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.finance.serializers import JournalEntryLinesSerializer
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import Products, ProductVariation
-from apps.finance.views import JournalEntryLinesAPIview
+from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
@@ -3812,7 +3812,7 @@ class PaymentTransactionAPIView(APIView):
                         else:
                             return build_response(0, "Invoice Already Completed", None, status.HTTP_400_BAD_REQUEST)
 
-                        journal_entry_line_response = JournalEntryLinesAPIview.post(self, customer_id, account_id, input_adjustNow, description, remaining_payment)
+                        journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_adjustNow, description, remaining_payment)
                         customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_payment)
                         
                         results.append({
@@ -3921,7 +3921,7 @@ class PaymentTransactionAPIView(APIView):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
                                             
-                    journal_entry_line_response = JournalEntryLinesAPIview.post(self, customer_id, account_id, input_amount, description, remaining_amount)
+                    journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, remaining_amount)
                     customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_amount)
 
                 # Prepare response
