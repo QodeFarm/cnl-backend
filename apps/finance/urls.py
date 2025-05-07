@@ -25,4 +25,6 @@ urlpatterns = [
 
     path('journal_details/', JournalDetailListCreateAPIView.as_view(), name='journal-detail-list-create'),
     path('journal_details/<str:journal_detail_id>/', JournalDetailRetrieveUpdateDeleteAPIView.as_view(), name='journal-detail-retrieve-update-delete'),
+
+    path('journal_entry_lines_list/', JournalEntryLinesAPIView.as_view(),name='JournalEntryLinesAPIView-List-for-customer-or-vendor-ledger-reports')
 ]
