@@ -120,9 +120,9 @@ class JournalEntryLinesAPIView(APIView):
             print("GET method")          
              # Try to determine if this UUID is for a customer
             if Customer.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(customer_id=input_id)
+                queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
             elif Vendor.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(vendor_id=input_id)
+                queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
             else:
                 return build_response(0, "Please provide either customer_id or vendor_id.", [], status.HTTP_400_BAD_REQUEST)
 
