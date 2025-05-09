@@ -2,7 +2,7 @@ import datetime
 from decimal import Decimal
 import logging
 from django.forms import IntegerField
-from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter, ExpenseClaimFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter
+from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter, ExpenseClaimFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter
 from apps.sales.models import SaleInvoiceOrders
 from .models import *
 from .serializers import *
@@ -125,10 +125,25 @@ class JournalEntryLinesAPIView(APIView):
                 queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
             else:
                 return build_response(0, "Please provide either customer_id or vendor_id.", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Get pagination parameters
+            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            limit = int(request.query_params.get('limit', 10))
+            total_count = queryset.count()
+            
+            # Apply filters if query parameters are present
+            if request.query_params:
+                filterset = JournalEntryLinesListFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                    logger.debug(f"Applied filters. Filtered queryset count: {queryset.count()}")
 
+            # Serialize the data
             serializer = JournalEntryLinesSerializer(queryset, many=True)
-            return build_response(len(serializer.data), "Journal Entry Lines data", serializer.data, status.HTTP_200_OK)
-
+            
+            # Return response using filter_response helper
+            return filter_response( count=queryset.count(), message="Journal Entry Lines data", data=serializer.data,page=page,limit=limit,total_count=total_count,status_code=status.HTTP_200_OK)
+        
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
     queryset = PaymentTransaction.objects.all().order_by('-created_at')
     serializer_class = PaymentTransactionSerializer

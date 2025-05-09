@@ -309,7 +309,42 @@ class JournalEntryLineFilter(filters.FilterSet):
     class Meta:
         model = JournalEntryLines
         fields = ['date', 'account', 'reference']
-               
+
+class JournalEntryLinesListFilter(filters.FilterSet):
+    """Filter for Journal Entry Lines when listed by customer or vendor ID"""
+    account_id = filters.CharFilter(method=filter_uuid)
+    account = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')
+    debit = filters.RangeFilter()
+    credit = filters.RangeFilter()
+    balance = filters.RangeFilter()
+    description = filters.CharFilter(lookup_expr='icontains')
+    created_at = filters.DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    # Standard filter methods
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = JournalEntryLines
+        fields = ['account_id', 'account', 'debit', 'credit', 'description', 'balance', 'created_at', 's', 'sort', 'page', 'limit']
+
 class TrialBalanceReportFilter(filters.FilterSet):
     start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
     end_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='lte')
