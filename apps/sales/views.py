@@ -976,12 +976,17 @@ class SaleOrderViewSet(APIView):
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
         # ---------------------- D A T A   C R E A T I O N ----------------------------#
-        
-        sale_type_val = sale_order_data.get('sale_type_id')
-        print("-"*20)
-        print("sale_type_val : ", sale_type_val)
-        print("-"*20)
-        is_other_sale = sale_type_val == '1a9d6cdb-2416-4d49-afd7-292cc6fb41de'
+        sale_type_id = sale_order_data.get('sale_type_id')
+
+        sale_type_val = None
+        if sale_type_id:
+            try:
+                sale_type_obj = SaleTypes.objects.get(sale_type_id=sale_type_id)
+                sale_type_val = sale_type_obj.name
+            except SaleTypes.DoesNotExist:
+                sale_type_val = None
+
+        is_other_sale = sale_type_val == 'Other'
         # Step 2: Decide the DB
         if is_other_sale:
             set_db('mstcnl')

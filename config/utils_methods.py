@@ -497,7 +497,7 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
                 data_list.append(serializer.data)
                 update_count += 1
         else:
-            new_instance = generic_data_creation(self, [data], related_class_name, update_fields=update_fields, using_db=using_db)
+            new_instance = generic_data_creation(self, [data], related_class_name, update_fields=update_fields)
             if new_instance:
                 data_list.append(new_instance[0])
                 logger.info(f'New instance in {related_model_name.__name__} is created')
