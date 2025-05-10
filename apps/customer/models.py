@@ -158,3 +158,16 @@ class CustomerBalance(models.Model):
 
     def __str__(self):
         return f"CustomerBalance {self.customer_balance_id} for {self.customer_id}"
+    
+class CustomersMstModel(models.Model):
+    customer_id = models.UUIDField(primary_key=True)
+    name = models.CharField(max_length=255)
+    phone = models.CharField(max_length=20)
+    email = models.EmailField()
+    company_id = models.UUIDField()
+    company_name = models.CharField(max_length=255)
+
+    class Meta:
+        managed = False
+        db_table = 'customer'
+
