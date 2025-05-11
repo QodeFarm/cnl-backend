@@ -15,17 +15,17 @@ logger = logging.getLogger(__name__)
 @receiver(post_save, sender=SaleInvoiceOrders)
 def update_balance_after_invoice(sender, instance, created, **kwargs):
     """
-    Signal to update balance_amount with total_amount when a new SaleInvoiceOrders record is created.
+    Signal to update pending_amount with total_amount when a new SaleInvoiceOrders record is created.
     """
     if created:  # Ensure it's a new record
-        instance.balance_amount = instance.total_amount  # Copy total_amount to balance_amount
-        instance.save(update_fields=['balance_amount'])  # Save only the balance_amount field
+        instance.pending_amount = instance.total_amount  # Copy total_amount to pending_amount
+        instance.save(update_fields=['pending_amount'])  # Save only the pending_amount field
 
 
 @receiver(post_save, sender=PaymentTransactions)
 def update_Sale_Invoice_balance_after_payment_transaction(sender, instance, created, **kwargs):
     """
-    Signal to update paid_amount with amount and balance_amount with outstanding_amount when a new PaymentTransactions record is created.
+    Signal to update paid_amount with amount and pending_amount with outstanding_amount when a new PaymentTransactions record is created.
     """
     if created:
         with transaction.atomic():
