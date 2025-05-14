@@ -37,6 +37,7 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
         JournalEntryLines.objects.create(
             account_id=sale_account,  
             debit=instance.total_amount,
+            voucher_no = instance.invoice_no,
             credit=0.00,
             description=f"Goods sold to {instance.customer_id.name}",
             customer_id=instance.customer_id,
