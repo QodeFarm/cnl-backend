@@ -164,32 +164,118 @@ class CustomerCreateViews(APIView):
         logger.info("Retrieving all customers")
 
         page, limit = self.get_pagination_params(request)
-        
-        queryset = Customer.objects.all().order_by('-created_at')
+        using_db = self.resolve_db_from_request(request)
+
+        queryset = Customer.objects.using(using_db).all().order_by('-created_at')
+
         if request.query_params:
             filterset = CustomerFilters(request.GET, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
-                
-        total_count = Customer.objects.count()
+
+        total_count = Customer.objects.using(using_db).count()
         serializer = CustomerSerializer(queryset, many=True)
 
-        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+        return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
 
     def get_customer_summary(self, request):
         """Fetches customer summary data."""
         logger.info("Retrieving customer summary")
 
         page, limit = self.get_pagination_params(request)
-        queryset = Customer.objects.all().order_by('-created_at')
+        using_db = self.resolve_db_from_request(request)
+
+        queryset = Customer.objects.using(using_db).all().order_by('-created_at')
+
         if request.query_params:
             filterset = CustomerFilters(request.GET, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
-                
-        total_count = Customer.objects.count()
+
+        total_count = Customer.objects.using(using_db).count()
         serializer = CustomerOptionSerializer(queryset, many=True)
-        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+        return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    def resolve_db_from_request(self, request):
+        """
+        Determines the DB to use:
+        - If `sale_type_id` resolves to 'Other' → use 'mstcnl'
+        - If `bill_type` is 'Other' → use 'mstcnl'
+        - Else use 'default'
+        """
+        bill_type = request.query_params.get("bill_type")
+        sale_type_id = request.query_params.get("sale_type_id")
+        
+        # Default
+        db_to_use = 'default'
+
+        # If bill_type is explicitly 'Other'
+        if bill_type == 'Other':
+            set_db = 'mstcnl'
+            db_to_use = set_db
+            return db_to_use
+
+        # If sale_type_id is passed, resolve its name
+        if sale_type_id:
+            try:
+                from masters.models import SaleTypes  # ensure import
+                sale_type_obj = SaleTypes.objects.filter(sale_type_id=sale_type_id).first()
+                print("-"*20)
+                print("sale_type_obj : ", sale_type_obj)
+                print("-"*20)
+                if sale_type_obj and sale_type_obj.name == 'Other':
+                    set_db = 'mstcnl'
+                    db_to_use = set_db
+                    return db_to_use
+            except Exception as e:
+                logger.error(f"Error resolving sale_type_id to name: {e}")
+
+        return db_to_use
+
+
+    
+    # def get_customers(self, request):
+    #     """Applies filters, pagination, and retrieves customers."""
+    #     logger.info("Retrieving all customers")
+
+    #     page, limit = self.get_pagination_params(request)
+        
+    #     bill_type = request.query_params.get("bill_type")
+    #     db_to_use = 'mstcnl' if bill_type == 'Other' else 'default'
+        
+    #     queryset = Customer.objects.using(db_to_use).all().order_by('-created_at')
+    #     if request.query_params:
+    #         filterset = CustomerFilters(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+                
+    #     # total_count = Customer.objects.count()
+    #     total_count = Customer.objects.using(db_to_use).count()
+    #     serializer = CustomerSerializer(queryset, many=True)
+
+    #     return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    # def get_customer_summary(self, request):
+    #     """Fetches customer summary data."""
+    #     logger.info("Retrieving customer summary")
+
+    #     page, limit = self.get_pagination_params(request)
+        
+    #     bill_type = request.query_params.get("bill_type")
+    #     db_to_use = 'mstcnl' if bill_type == 'Other' else 'default'
+        
+    #     queryset = Customer.objects.using(db_to_use).all().order_by('-created_at')
+    #     if request.query_params:
+    #         filterset = CustomerFilters(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+                
+    #     # total_count = Customer.objects.count()
+    #     total_count = Customer.objects.using(db_to_use).count()
+    #     serializer = CustomerOptionSerializer(queryset, many=True)
+    #     return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
     
     def get_customer_summary_report(self, request):
         """Fetches a summary report of total sales and outstanding payments per customer."""
@@ -437,6 +523,18 @@ class CustomerCreateViews(APIView):
             if not delete_multi_instance(pk, Customer, CustomFieldValue, main_model_field_name='custom_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+            # Delete from mstcnl DB
+            try:
+                mst_customer = CustomersMstModel.objects.using('mstcnl').filter(customer_id=pk).first()
+                if mst_customer:
+                    mst_customer.delete(using='mstcnl')
+                    logger.info(f"Customer with ID {pk} deleted from mstcnl database.")
+                else:
+                    logger.warning(f"No mstcnl customer found with ID {pk}.")
+            except Exception as mstcnl_error:
+                logger.error(f"Error deleting mstcnl customer with ID {pk}: {str(mstcnl_error)}")
+                return build_response(0, "Error deleting record from mstcnl database", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
             # Delete the main Customer instance
             instance.delete()
 
@@ -761,6 +859,30 @@ class CustomerCreateViews(APIView):
             if custom_field_values_data:
                 custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
 
+            # --------------------------- M S T C N L   S Y N C ----------------------------------- #
+            try:
+                mst_customer = CustomersMstModel.objects.using('mstcnl').filter(customer_id=pk).first()
+
+                if mst_customer:
+                    customer_name = customer_data[0].get('name')
+                    company = Companies.objects.first()
+                    phone = addresses_data[0].get("phone") if addresses_data else None
+                    email = addresses_data[0].get("email") if addresses_data else None
+                    
+                    # Update fields explicitly
+                    mst_customer.name = customer_name
+                    mst_customer.phone = phone
+                    mst_customer.email = email
+                    mst_customer.company_id = company.company_id if company else None
+                    mst_customer.company_name = company.name if company else None
+                    mst_customer.save(using='mstcnl')
+
+                    logger.info("Customer updated successfully in mstcnl database.")
+                else:
+                    logger.warning(f"No customer found in mstcnl with customer_id = {pk}")
+            except Exception as e:
+                logger.warning(f"Error updating mstcnl record: {str(e)}")
+                
             custom_data = [
                 {"customer_data":customer_data},
                 {"customer_attachments":attachments_data if attachments_data else []},

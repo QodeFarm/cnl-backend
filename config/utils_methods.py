@@ -180,6 +180,9 @@ class OrderNumberMixin(models.Model):
         if hasattr(self, 'sale_type_id') and self.sale_type_id:
             if self.sale_type_id.name and self.sale_type_id.name.lower() == 'Other':
                 return 'SOO'
+        if hasattr(self, 'bill_type') and self.bill_type:
+            if self.bill_type.lower() == 'Others':
+                return 'SOO-INV'
         
         # Validate existing prefix before returning
         valid_prefixes = ['SO', 'SOO', 'PO', 'INV']  # add all that you use
@@ -353,7 +356,7 @@ def validate_multiple_data(self, bulk_data, model_serializer, exclude_fields, us
 
 
 
-def validate_payload_data(self, data , model_serializer):
+def validate_payload_data(self, data , model_serializer, using='default'):
         errors = []
 
         # Validate parent data

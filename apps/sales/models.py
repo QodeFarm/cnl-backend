@@ -83,9 +83,12 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         is_new_record = self._state.adding
         is_other_sale = False
         
-        # Check if this is an "Other" sale type order
+        #Check if this is an "Other" sale type order
         if hasattr(self, 'sale_type_id') and self.sale_type_id:
-            if self.sale_type_id == '1a9d6cdb-2416-4d49-afd7-292cc6fb41de':
+            print("-"*20)
+            print("self.sale_type_id.name : ", self.sale_type_id.name)
+            print("-"*20)
+            if self.sale_type_id.name.lower() == 'Other':
                 is_other_sale = True
                 kwargs['using'] = 'mstcnl'  # Use alternate database
         
@@ -396,6 +399,13 @@ class SaleInvoiceOrders(OrderNumberMixin):
     def __str__(self):
         return str(self.sale_invoice_id)
     
+    def get_order_prefix(self):
+        """Override to handle 'Other' sale type case"""
+        if hasattr(self, 'bill_type') and self.bill_type:
+            if self.bill_type.upper() == 'Others':
+                return 'SOO-INV'
+        return self.order_no_prefix
+    
     def save(self, *args, **kwargs):          
         from apps.masters.views import increment_order_number
         """
@@ -403,10 +413,18 @@ class SaleInvoiceOrders(OrderNumberMixin):
         """
         # Determine if this is a new record based on the `adding` state
         is_new_record = self._state.adding
+        is_other_sale = False
+        
+        #Check if this is an "Other" Bill type order
+        if hasattr(self, 'bill_type') and self.bill_type:
+            if self.bill_type == 'Others':
+                is_other_sale = True
+                kwargs['using'] = 'mstcnl'  # Use alternate database
         
         # Ensure the order status is set if not already set
         if not self.order_status_id:
-            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+            db = kwargs.get('using', 'default')
+            self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
 
         # Only generate and set the order number if this is a new record
         if is_new_record:
@@ -421,7 +439,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
         # After the record is saved, increment the order number sequence only for new records
         if is_new_record:
             print("from create", self.pk)
-            increment_order_number(self.order_no_prefix)
+            increment_order_number(self.get_order_prefix())
         else:
             print("from edit", self.pk)
     

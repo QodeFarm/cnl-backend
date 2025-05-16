@@ -522,7 +522,7 @@ def generate_order_number_view(request):
         return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
 
     order_type_prefix = order_type_prefix.upper()
-    valid_prefixes = ['SO', 'SOO', 'SO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
+    valid_prefixes = ['SO', 'SOO', 'SO-INV', 'SOO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
 
     if order_type_prefix not in valid_prefixes:
         return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)
