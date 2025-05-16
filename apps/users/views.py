@@ -248,10 +248,6 @@ class UserAccessAPIView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
-from rest_framework_simplejwt.tokens import RefreshToken
-from django.core.exceptions import ObjectDoesNotExist
-from apps.company.models import Companies  # Update the import as needed
-
 def get_tokens_for_user(user, is_sp_user=False):
     refresh = RefreshToken.for_user(user)
 
@@ -266,7 +262,7 @@ def get_tokens_for_user(user, is_sp_user=False):
         'user_id': str(user.user_id)
     }
 
-    # Add extra fields only for non-SP users
+    # Added extra fields only for non-SP users
     if not is_sp_user:
         # Company info
         company = Companies.objects.first()
