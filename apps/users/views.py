@@ -1,13 +1,13 @@
-from config.utils_filter_methods import filter_response, list_filtered_objects
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
-from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles
+from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles, License
 from config.utils_methods import IsAdminRoles, build_response, list_all_objects, create_instance, update_instance, validate_uuid
+from config.utils_filter_methods import filter_response, list_filtered_objects
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from .filters import RolePermissionsFilter, RolesFilter, UserFilter
 from django_filters.rest_framework import DjangoFilterBackend 
-from rest_framework.decorators import permission_classes
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.decorators import permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from django.utils.decorators import method_decorator
@@ -24,9 +24,11 @@ from rest_framework.views import APIView
 from .renderers import UserRenderer
 from rest_framework import viewsets
 from collections import defaultdict
+from .backends import MstcnlBackend
 from rest_framework import status
 from django.utils import timezone
 import uuid
+import re
 
 import logging
 # Set up basic configuration for logging
@@ -246,41 +248,39 @@ class UserAccessAPIView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
-def get_tokens_for_user(user):
+def get_tokens_for_user(user, is_sp_user=False):
     refresh = RefreshToken.for_user(user)
 
-    company = Companies.objects.first()  # Get the first company
-    company_name = company.name if company else "N/A"
-    company_code = company.code if company else "N/A"
-
-    profile_picture_url = None
-    if user.profile_picture_url:
-        profile_picture_url = user.profile_picture_url
-
-    try:
-        role_id = user.role_id.role_id
-        role_name = user.role_id.role_name
-
-    except (ObjectDoesNotExist, IndexError, KeyError) as e:
-            role_id = "Role not assigned yet"
-            role_name = "Role not assigned yet"
-
-    return {
+    token_data = {
         'username': user.username,
         'first_name': user.first_name,
         'last_name': user.last_name,
         'email': user.email,
         'mobile': user.mobile,
-        'profile_picture_url': profile_picture_url,
-
         'refresh_token': str(refresh),
         'access_token': str(refresh.access_token),
-        'user_id': str(user.user_id),
-        'role_id': str(role_id),
-        'role_name' : role_name,
-        'company_name' : company_name,
-        'company_code' : company_code
-        }
+        'user_id': str(user.user_id)
+    }
+
+    # Added extra fields only for non-SP users
+    if not is_sp_user:
+        # Company info
+        company = Companies.objects.first()
+        token_data['company_name'] = company.name if company else "N/A"
+        token_data['company_code'] = company.code if company else "N/A"
+
+        # Profile picture
+        token_data['profile_picture_url'] = getattr(user, 'profile_picture_url', None)
+
+        # Role info
+        try:
+            token_data['role_id'] = str(user.role_id.role_id)
+            token_data['role_name'] = user.role_id.role_name
+        except (ObjectDoesNotExist, AttributeError):
+            token_data['role_id'] = "Role not assigned yet"
+            token_data['role_name'] = "Role not assigned yet"
+
+    return token_data
 
 #====================================USER-LOGIN-VIEW=============================================================
 class UserLoginView(APIView):
@@ -291,15 +291,31 @@ class UserLoginView(APIView):
         serializer.is_valid(raise_exception=True)
         username = serializer.data.get('username')
         password = serializer.data.get('password')
-        user = authenticate(username=username, password=password)
-        if user is not None:
-            user.last_login = timezone.now()
-            user.save()
-            token = get_tokens_for_user(user)
-            return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
-        else:
-          return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+        try:
+            # Fetch usernames from both databases
+            default_usernames = list(User.objects.using('default').values_list('username', flat=True))
+            mstcnl_usernames = list(License.objects.using('mstcnl').values_list('username', flat=True))
 
+            if any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in default_usernames):
+                user = authenticate(username=username, password=password)
+                if user is not None:
+                    user.last_login = timezone.now()
+                    user.save()
+                    token = get_tokens_for_user(user)
+                    return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
+            
+            elif any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in mstcnl_usernames):
+                backend = MstcnlBackend()
+                user = backend.authenticate(username=username, password=password)
+                if user is not None:
+                    user.last_login = timezone.now()
+                    user.save(using='mstcnl')  # Ensure last_login is saved in mstcnl
+                    token = get_tokens_for_user(user, is_sp_user=True)
+                    return Response({'count': '1', 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)   
+            else:
+                return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+        except Exception as e:
+                return Response({'count': '1', 'msg': 'Unknown Error Occurred ', 'data': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 #====================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]

@@ -1,4 +1,4 @@
-from config.utils_variables import rolestable, rolepermissionstable, actionstable, modulestable, modulesections, userstable, usertimerestrictions, userallowedweekdays, userroles
+from config.utils_variables import rolestable, rolepermissionstable, actionstable, modulestable, modulesections, userstable, usertimerestrictions, userallowedweekdays, userroles, license
 from django.contrib.auth.models import BaseUserManager, AbstractBaseUser
 from django.db.models.signals import pre_delete
 from apps.masters.models import Statuses
@@ -200,3 +200,25 @@ class UserRoles(models.Model):
     
     def __str__(self):
         return f"{self.user_role_id}"
+    
+
+class License(models.Model):
+    user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    username = models.CharField(verbose_name="Username",max_length=255,unique=True)
+    first_name = models.CharField(max_length=255, null= True, default=None)
+    last_name = models.CharField(max_length=255, null= True, default=None)
+    last_login = models.DateTimeField(null=True, default=None)
+    email = models.EmailField(max_length=255, unique=True)
+    mobile = models.CharField(max_length=20, unique=True)
+    domain = models.CharField(max_length=50, null= False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    password = models.CharField(max_length=128)
+
+
+    class Meta:
+        db_table = license
+    
+    def __str__(self):
+        return f"{self.domain} + {self.username}"
+    

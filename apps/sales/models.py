@@ -386,7 +386,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
     vehicle_name = models.CharField(max_length=255, null=True, default=None)
     total_boxes = models.IntegerField(null=True, default=None)
     paid_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.0)
-    balance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    pending_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     order_status_id = models.ForeignKey('masters.OrderStatuses', on_delete=models.CASCADE, db_column='order_status_id', null=True, default=None)
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)
@@ -445,7 +445,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
     
     def update_paid_amount_balance_amount_after_payment_transactions(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
         """
-        Update the paid_amount and balance_amount when a payment is made.
+        Update the paid_amount and pending_amount when a payment is made.
         """
         # Ensure paid_amount is initialized
         if self.paid_amount is None:
@@ -453,12 +453,12 @@ class SaleInvoiceOrders(OrderNumberMixin):
 
         if adjusted_now_amount > 00.00:
             self.paid_amount += Decimal(adjusted_now_amount)
-            self.balance_amount = Decimal(outstanding_amount)
+            self.pending_amount = Decimal(outstanding_amount)
         else:
             self.paid_amount += Decimal(payment_amount)
-            self.balance_amount = Decimal(outstanding_amount)
+            self.pending_amount = Decimal(outstanding_amount)
         self.save()
-        print(f"Updated SaleInvoiceOrders for invoice {self.invoice_no} with a total amount of {self.total_amount}, paid amount of {self.paid_amount}, and balance amount of {self.balance_amount}.")
+        print(f"Updated SaleInvoiceOrders for Invoice {self.invoice_no} with a Total Amount of {self.total_amount}, Paid Amount of {self.paid_amount}, and Pending Amount of {self.pending_amount}.")
 
 
 # we not using this model instead of this we are using another model check at the bottom line 854   

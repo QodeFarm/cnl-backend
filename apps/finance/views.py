@@ -93,8 +93,7 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class JournalEntryLinesAPIView(APIView):
-    print("Inside class")
-    def post(self, customer_id, account_id, amount, description, balance_amount):
+    def post(self, customer_id, account_id, amount, description, balance_amount, invoice_no):
         '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
         try:
             # Use serializer to create journal entry line
@@ -103,7 +102,8 @@ class JournalEntryLinesAPIView(APIView):
                 "account_id": account_id,
                 "credit": int(amount),
                 "description": description,
-                "balance" : int(balance_amount)
+                "balance" : int(balance_amount),
+                "voucher_no" : invoice_no
             }
             serializer = JournalEntryLinesSerializer(data=entry_data)
             if serializer.is_valid():
@@ -117,8 +117,7 @@ class JournalEntryLinesAPIView(APIView):
         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
     
     def get(self, request, input_id):  
-            print("GET method")          
-             # Try to determine if this UUID is for a customer
+            # Try to determine if this UUID is for a customer
             if Customer.objects.filter(pk=input_id).exists():
                 queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
             elif Vendor.objects.filter(pk=input_id).exists():

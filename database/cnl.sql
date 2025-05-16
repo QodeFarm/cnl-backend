@@ -1239,7 +1239,7 @@ CREATE TABLE IF NOT EXISTS sale_invoice_orders(
 	billing_address VARCHAR(1024),
     sale_order_id CHAR(36),
     paid_amount DECIMAL(18, 2) DEFAULT 0.00, -- This is like the amount paid compared to the total amount.
-    balance_amount DECIMAL(18, 2),   --It is the same as the outstanding amount (balance_amount = total_amount)
+    pending_amount DECIMAL(18, 2),   --It is the same as the outstanding amount (initially pending_amount = total_amount)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (gst_type_id) REFERENCES gst_types(gst_type_id),
@@ -2350,13 +2350,14 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
     account_id CHAR(36),
     customer_id CHAR(36),
     vendor_id CHAR(36),
+    voucher_no VARCHAR(20) NOT NULL
     debit DECIMAL(15, 2) DEFAULT 0.00,
     credit DECIMAL(15, 2) DEFAULT 0.00,
     description VARCHAR(1024),
     balance DECIMAL(15, 2) DEFAULT 0.00,  -- balance amt  
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-   -- journal_entry_id CHAR(36),                                                    Needed in future
+   -- journal_entry_id CHAR(36),     Needed in future
    -- FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(journal_entry_id),
     FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id)
     FOREIGN KEY (customer_id) REFERENCES customers(customer_id),
