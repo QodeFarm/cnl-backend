@@ -136,6 +136,7 @@ usertimerestrictions = 'user_time_restrictions'
 userallowedweekdays = 'user_allowed_weekdays'
 userpermissions = 'user_permissions'
 userroles = 'user_roles'
+license = 'license'
 
 # LEAD Management
 leadstatuses = 'lead_statuses'

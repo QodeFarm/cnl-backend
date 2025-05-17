@@ -68,6 +68,7 @@ class JournalEntry(models.Model):
 class JournalEntryLines(models.Model):
     journal_entry_line_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, null=True, related_name='journal_entry_lines', db_column='account_id')
+    voucher_no = models.CharField(max_length=20 ,default='')
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     description = models.CharField(max_length=1024, default=None, null=True)
