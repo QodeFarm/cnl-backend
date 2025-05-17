@@ -1,7 +1,7 @@
 from django.db import models
 import uuid
 from apps.hrms.models import Employees
-from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal
+from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal,expensecategories, expenseitems
 from apps.customer.models import Customer, LedgerAccounts
 from apps.vendor.models import Vendor
 
@@ -163,7 +163,9 @@ class Budget(models.Model):
         db_table = budgets
 
     def __str__(self):
-        return f"Budget for {self.account.account_name} - Fiscal Year {self.fiscal_year}"
+        # return f"Budget for {self.account.account_name} - Fiscal Year {self.fiscal_year}"
+        return f"Budget for {self.account_id.account_name if self.account_id else 'Unknown'} - Fiscal Year {self.fiscal_year}"
+
 
 
 class ExpenseClaim(models.Model):
@@ -241,3 +243,99 @@ class JournalDetail(models.Model):
 
     def __str__(self):
         return f"Journal Detail {self.journal_detail_id}"
+    
+    
+class ExpenseCategory(models.Model):
+    category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category_name = models.CharField(max_length=100, null=False)
+    description = models.CharField(max_length=255, default=None, null=True)
+    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='expense_categories', db_column='account_id', null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = expensecategories
+
+    def __str__(self):
+        return f"{self.category_name}"
+
+class ExpenseItem(models.Model):
+    expense_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    expense_date = models.DateField(null=False)
+    description = models.CharField(max_length=255, default=None, null=True)
+    amount = models.DecimalField(max_digits=15, decimal_places=2, null=False)
+    receipt_image = models.ImageField(upload_to='expenses/receipts/', null=True, blank=True)
+    
+    # Link to category
+    category_id = models.ForeignKey(ExpenseCategory, on_delete=models.SET_NULL, related_name='expense_items', db_column='category_id', null=True)
+    
+    # If expense is linked to a bank account
+    bank_account_id = models.ForeignKey(BankAccount, on_delete=models.SET_NULL, null=True, related_name='expenses', db_column='bank_account_id')
+    
+    # If expense is linked to a vendor
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, db_column='vendor_id')
+    
+    # If expense is made by an employee
+    employee_id = models.ForeignKey(Employees, on_delete=models.SET_NULL, null=True, db_column='employee_id')
+    
+    # If expense is part of a claim
+    expense_claim_id = models.ForeignKey(ExpenseClaim, on_delete=models.SET_NULL, null=True, related_name='expense_items', db_column='expense_claim_id')
+    
+    # Expense status
+    PAID = 'Paid'
+    PENDING = 'Pending'
+    REJECTED = 'Rejected'
+    STATUS_CHOICES = [
+        (PAID, 'Paid'),
+        (PENDING, 'Pending'),
+        (REJECTED, 'Rejected'),
+    ]
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    
+    # Payment details
+    payment_method = models.CharField(
+        max_length=20,
+        choices=[
+            ('Bank Transfer', 'Bank Transfer'),
+            ('Cash', 'Cash'),        
+            ('Cheque', 'Cheque'),
+            ('Credit Card', 'Credit Card'),
+        ],
+        null=True
+    )
+    
+    reference_number = models.CharField(max_length=100, default=None, null=True)
+    
+    # Budget tracking
+    budget_id = models.ForeignKey(Budget, on_delete=models.SET_NULL, null=True, db_column='budget_id')
+    
+    # For tax calculations
+    tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    is_taxable = models.BooleanField(default=True)
+    tax_id = models.ForeignKey(TaxConfiguration, on_delete=models.SET_NULL, null=True, db_column='tax_id')
+    
+    # Recurring expense
+    is_recurring = models.BooleanField(default=False)
+    recurring_frequency = models.CharField(
+        max_length=10,
+        choices=[
+            ('Daily', 'Daily'),
+            ('Weekly', 'Weekly'),
+            ('Monthly', 'Monthly'),
+            ('Quarterly', 'Quarterly'),
+            ('Yearly', 'Yearly'),
+        ],
+        null=True, blank=True
+    )
+    next_recurrence_date = models.DateField(null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = expenseitems
+
+    def __str__(self):
+        return f"Expense {self.expense_item_id} - {self.amount} on {self.expense_date}"
+    

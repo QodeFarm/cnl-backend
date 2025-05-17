@@ -151,3 +151,29 @@ class JournalEntryReportSerializer(serializers.ModelSerializer):
         model = JournalEntry
         fields = ['journal_entry_id', 'entry_date', 'reference', 'description', 'created_at', 'updated_at']
                 
+                
+class ExpenseCategorySerializer(serializers.ModelSerializer):
+    account = ModChartOfAccountsSerializer(source='account_id', read_only=True)
+    
+    class Meta:
+        model = ExpenseCategory
+        fields = '__all__'
+
+class ModExpenseCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ExpenseCategory
+        fields = ['category_id', 'category_name']
+
+class ExpenseItemSerializer(serializers.ModelSerializer):
+    category = ModExpenseCategorySerializer(source='category_id', read_only=True)
+    bank_account = ModBankAccountSerializer(source='bank_account_id', read_only=True)
+    vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
+    expense_claim = ExpenseClaimSerializer(source='expense_claim_id', read_only=True)
+    budget = BudgetSerializer(source='budget_id', read_only=True)
+    tax_configuration = TaxConfigurationSerializer(source='tax_id', read_only=True)
+    
+    class Meta:
+        model = ExpenseItem
+        fields = '__all__'
+                
