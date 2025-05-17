@@ -287,6 +287,10 @@ class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
 
     def post(self, request, format=None):
+        host = request.get_host()  # e.g., 'tp.maxxerp.com'
+        subdomain = host.split('.')[0]  # 'tp'
+        print("Subdomain =====================>> :", subdomain, "====", host)
+
         serializer = UserLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         username = serializer.data.get('username')
@@ -302,7 +306,7 @@ class UserLoginView(APIView):
                     user.last_login = timezone.now()
                     user.save()
                     token = get_tokens_for_user(user)
-                    return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
+                    return Response({'count': '1', 'msg': f'Login Success {host} ====== {subdomain}', 'data': [token]}, status=status.HTTP_200_OK)
             
             elif any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in mstcnl_usernames):
                 backend = MstcnlBackend()
@@ -311,7 +315,7 @@ class UserLoginView(APIView):
                     user.last_login = timezone.now()
                     user.save(using='mstcnl')  # Ensure last_login is saved in mstcnl
                     token = get_tokens_for_user(user, is_sp_user=True)
-                    return Response({'count': '1', 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)   
+                    return Response({'count': '1', 'msg': f'Login Success (mstcnl) {host} ====== {subdomain}', 'data': [token]}, status=status.HTTP_200_OK)   
             else:
                 return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
