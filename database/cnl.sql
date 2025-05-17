@@ -2688,3 +2688,52 @@ CREATE TABLE IF NOT EXISTS blocked_inventory (
     FOREIGN KEY (sale_order_id) REFERENCES sale_orders(sale_order_id),
     FOREIGN KEY (product_id) REFERENCES products(product_id)
 );
+
+-- * ExpenseCategories Table */
+
+CREATE TABLE IF NOT EXISTS expense_categories (
+    category_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    category_name VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    description VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    account_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    is_active TINYINT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (category_id),
+    FOREIGN KEY (account_id) REFERENCES chart_of_accounts(account_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- * ExpenseItem Table */
+-- Stores individual expense transactions with details
+CREATE TABLE IF NOT EXISTS expense_items (
+    expense_item_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+    expense_date DATE NOT NULL,
+    description VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    amount DECIMAL(15,2) NOT NULL,
+    receipt_image VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    category_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    bank_account_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    vendor_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    employee_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    expense_claim_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    status ENUM('Paid', 'Pending', 'Rejected') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'Pending',
+    payment_method ENUM('Bank Transfer', 'Cash', 'Cheque', 'Credit Card') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    reference_number VARCHAR(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    budget_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    tax_amount DECIMAL(15,2) DEFAULT 0.00,
+    is_taxable TINYINT(1) DEFAULT 1,
+    tax_id CHAR(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    is_recurring TINYINT(1) DEFAULT 0,
+    recurring_frequency ENUM('Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+    next_recurrence_date DATE DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (expense_item_id),
+    FOREIGN KEY (category_id) REFERENCES expense_categories(category_id) ON DELETE SET NULL,
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(bank_account_id) ON DELETE SET NULL,
+    FOREIGN KEY (vendor_id) REFERENCES vendor(vendor_id) ON DELETE SET NULL,
+    FOREIGN KEY (employee_id) REFERENCES employees(employee_id) ON DELETE SET NULL,
+    FOREIGN KEY (expense_claim_id) REFERENCES expense_claims(expense_claim_id) ON DELETE SET NULL,
+    FOREIGN KEY (budget_id) REFERENCES budgets(budget_id) ON DELETE SET NULL,
+    FOREIGN KEY (tax_id) REFERENCES tax_configurations(tax_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
