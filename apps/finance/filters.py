@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
+from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseCategory, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -613,3 +613,80 @@ class JournalEntryReportFilter(filters.FilterSet):
     class Meta:
         model = JournalEntry
         fields = ['entry_date', 'reference', 'description', 's', 'sort', 'page', 'limit']
+        
+        
+class ExpenseCategoryFilter(filters.FilterSet):
+    category_name = filters.CharFilter(lookup_expr='icontains')
+    description = filters.CharFilter(lookup_expr='icontains')
+    account_id = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')
+    is_active = filters.BooleanFilter()
+    created_at = filters.DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    class Meta:
+        model = ExpenseCategory
+        fields = ['category_name','description','account_id','is_active','created_at','period_name','s','sort','page','limit']
+
+class ExpenseItemFilter(filters.FilterSet):
+    expense_date = filters.DateFromToRangeFilter()
+    description = filters.CharFilter(lookup_expr='icontains')
+    amount = filters.RangeFilter()
+    category_id = filters.CharFilter(field_name='category_id__category_name', lookup_expr='icontains')
+    bank_account_id = filters.CharFilter(field_name='bank_account_id__bank_name', lookup_expr='icontains')
+    vendor_id = filters.CharFilter(field_name='vendor_id__name', lookup_expr='icontains')
+    employee_id = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
+    expense_claim_id = filters.CharFilter(method=filter_uuid)
+    status = filters.ChoiceFilter(choices=ExpenseItem.STATUS_CHOICES)
+    payment_method = filters.CharFilter(lookup_expr='iexact')
+    budget_id = filters.CharFilter(method=filter_uuid)
+    is_taxable = filters.BooleanFilter()
+    is_recurring = filters.BooleanFilter()
+    recurring_frequency = filters.CharFilter(lookup_expr='iexact')
+    created_at = filters.DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    class Meta:
+        model = ExpenseItem
+        fields = ['expense_date','description','amount','category_id','bank_account_id','vendor_id','employee_id',
+                 'expense_claim_id','status','payment_method','budget_id','is_taxable','is_recurring',
+                 'recurring_frequency','created_at','period_name','s','sort','page','limit']
+
+        
+        
