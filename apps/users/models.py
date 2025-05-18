@@ -110,6 +110,7 @@ class User(AbstractBaseUser):
     bio = models.TextField(null= True, default=None)
     is_active = models.BooleanField(default=True)
     first_name = models.CharField(max_length=255)
+    company_created_user = models.BooleanField(default= False)
     last_login = models.DateTimeField(null=True, default=None)
     branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id', null= True)
     status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
