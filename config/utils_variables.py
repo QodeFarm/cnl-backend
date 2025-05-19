@@ -188,6 +188,8 @@ default_workflow_name = 'sales'
 # Finance db_tables
 financialreports = 'financial_reports'
 expenseclaims = 'expense_claims'
+expensecategories = 'expense_categories'
+expenseitems = 'expense_items'
 budgets = 'budgets'
 taxconfigurations = 'tax_configurations'
 paymenttransaction = 'payment_transaction'

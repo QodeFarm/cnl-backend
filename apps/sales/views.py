@@ -4196,7 +4196,7 @@ class PaymentTransactionAPIView(APIView):
                         else:
                             return build_response(0, "Invoice Already Completed", None, status.HTTP_400_BAD_REQUEST)
 
-                        journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_adjustNow, description, remaining_payment, invoice.invoice_no)
+                        journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_adjustNow, description, remaining_payment, data.get('payment_receipt_no'))
                         customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_payment)
                         
                         results.append({
@@ -4305,7 +4305,7 @@ class PaymentTransactionAPIView(APIView):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
                                             
-                    journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, remaining_amount, sale_invoice.invoice_no)
+                    journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, remaining_amount, data.get('payment_receipt_no'))
                     customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_amount)
 
                 # Prepare response

@@ -2,7 +2,7 @@ import datetime
 from decimal import Decimal
 import logging
 from django.forms import IntegerField
-from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter, ExpenseClaimFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter
+from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter, ExpenseCategoryFilter, ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter
 from apps.sales.models import SaleInvoiceOrders
 from .models import *
 from .serializers import *
@@ -206,6 +206,43 @@ class ExpenseClaimViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+ 
+class ExpenseCategoryViewSet(viewsets.ModelViewSet):
+    queryset = ExpenseCategory.objects.all().order_by('-created_at')
+    serializer_class = ExpenseCategorySerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ExpenseCategoryFilter
+    ordering_fields = ['created_at']
+    
+
+    def list(self, request, *args, **kwargs):
+        print("Inside list method")
+        return list_filtered_objects(self, request, ExpenseCategory,*args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+class ExpenseItemViewSet(viewsets.ModelViewSet):
+    queryset = ExpenseItem.objects.all().order_by('-created_at')
+    serializer_class = ExpenseItemSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ExpenseItemFilter
+    ordering_fields = ['created_at']
+   
+
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, ExpenseItem,*args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)    
+    
 
 class FinancialReportViewSet(viewsets.ModelViewSet):
     queryset = FinancialReport.objects.all().order_by('-created_at')

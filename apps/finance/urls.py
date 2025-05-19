@@ -13,6 +13,8 @@ router.register(r'payment_transactions', PaymentTransactionViewSet)
 router.register(r'tax_configurations', TaxConfigurationViewSet)
 router.register(r'budgets', BudgetViewSet)
 router.register(r'expense_claims', ExpenseClaimViewSet)
+router.register(r'expense_categories', ExpenseCategoryViewSet)
+router.register(r'expense_items', ExpenseItemViewSet)
 router.register(r'financial_reports', FinancialReportViewSet)
 
 urlpatterns = [

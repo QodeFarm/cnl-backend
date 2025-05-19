@@ -248,45 +248,51 @@ class UserAccessAPIView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
-def get_tokens_for_user(user, is_sp_user=False):
+def get_tokens_for_user(user,sp_user_flag):
     refresh = RefreshToken.for_user(user)
 
-    token_data = {
+    company = Companies.objects.first()  # Get the first company
+    company_name = company.name if company else "N/A"
+    company_code = company.code if company else "N/A"
+
+    profile_picture_url = None
+    if user.profile_picture_url:
+        profile_picture_url = user.profile_picture_url
+
+    try:
+        role_id = user.role_id.role_id
+        role_name = user.role_id.role_name
+
+    except (ObjectDoesNotExist, IndexError, KeyError) as e:
+            role_id = "Role not assigned yet"
+            role_name = "Role not assigned yet"
+
+    return {
         'username': user.username,
         'first_name': user.first_name,
         'last_name': user.last_name,
         'email': user.email,
         'mobile': user.mobile,
+        'profile_picture_url': profile_picture_url,
+
         'refresh_token': str(refresh),
         'access_token': str(refresh.access_token),
-        'user_id': str(user.user_id)
+        'user_id': str(user.user_id),
+        'role_id': str(role_id),
+        'role_name' : role_name,
+        'company_name' : company_name,
+        'company_code' : company_code,
+        'is_sp_user' : sp_user_flag
     }
-
-    # Added extra fields only for non-SP users
-    if not is_sp_user:
-        # Company info
-        company = Companies.objects.first()
-        token_data['company_name'] = company.name if company else "N/A"
-        token_data['company_code'] = company.code if company else "N/A"
-
-        # Profile picture
-        token_data['profile_picture_url'] = getattr(user, 'profile_picture_url', None)
-
-        # Role info
-        try:
-            token_data['role_id'] = str(user.role_id.role_id)
-            token_data['role_name'] = user.role_id.role_name
-        except (ObjectDoesNotExist, AttributeError):
-            token_data['role_id'] = "Role not assigned yet"
-            token_data['role_name'] = "Role not assigned yet"
-
-    return token_data
 
 #====================================USER-LOGIN-VIEW=============================================================
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
 
     def post(self, request, format=None):
+        host = request.get_host()  # e.g., 'tp.maxxerp.com'
+        subdomain = host.split('.')[0]  # 'tp'
+
         serializer = UserLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         username = serializer.data.get('username')
@@ -294,15 +300,14 @@ class UserLoginView(APIView):
         try:
             # Fetch usernames from both databases
             default_usernames = list(User.objects.using('default').values_list('username', flat=True))
-            mstcnl_usernames = list(License.objects.using('mstcnl').values_list('username', flat=True))
-
+            mstcnl_usernames = list(License.objects.using('mstcnl').filter(domain=subdomain).values_list('username', flat=True))
             if any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in default_usernames):
                 user = authenticate(username=username, password=password)
                 if user is not None:
                     user.last_login = timezone.now()
                     user.save()
-                    token = get_tokens_for_user(user)
-                    return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
+                    token = get_tokens_for_user(user, False)
+                    return Response({'count': '1', 'msg': f'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
             
             elif any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in mstcnl_usernames):
                 backend = MstcnlBackend()
@@ -310,8 +315,10 @@ class UserLoginView(APIView):
                 if user is not None:
                     user.last_login = timezone.now()
                     user.save(using='mstcnl')  # Ensure last_login is saved in mstcnl
-                    token = get_tokens_for_user(user, is_sp_user=True)
-                    return Response({'count': '1', 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)   
+                    company_created_user = User.objects.using('default').filter(company_created_user=True)
+                    for user in company_created_user:
+                        token = get_tokens_for_user(user, True)
+                        return Response({'count': '1', 'msg': f'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)   
             else:
                 return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
