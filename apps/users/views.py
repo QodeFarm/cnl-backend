@@ -286,6 +286,7 @@ def get_tokens_for_user(user,sp_user_flag):
     }
 
 #====================================USER-LOGIN-VIEW=============================================================
+@permission_classes([AllowAny])
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
 
@@ -308,7 +309,9 @@ class UserLoginView(APIView):
                     user.save()
                     token = get_tokens_for_user(user, False)
                     return Response({'count': '1', 'msg': f'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
-            
+                else:
+                  return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data':[]}, status=status.HTTP_401_UNAUTHORIZED)
+                    
             elif any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in mstcnl_usernames):
                 backend = MstcnlBackend()
                 user = backend.authenticate(username=username, password=password)
@@ -318,7 +321,9 @@ class UserLoginView(APIView):
                     company_created_user = User.objects.using('default').filter(company_created_user=True)
                     for user in company_created_user:
                         token = get_tokens_for_user(user, True)
-                        return Response({'count': '1', 'msg': f'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)   
+                        return Response({'count': '1', 'msg': f'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)  
+                else:
+                  return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data':[]}, status=status.HTTP_401_UNAUTHORIZED)
             else:
                 return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
         except Exception as e:
