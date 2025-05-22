@@ -1,5 +1,5 @@
 from apps.finance.models import JournalEntryLines, ChartOfAccounts
-from .models import SaleInvoiceOrders, PaymentTransactions
+from .models import SaleCreditNotes, SaleInvoiceOrders, PaymentTransactions, SaleReturnOrders
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -63,3 +63,49 @@ def update_Sale_Invoice_balance_after_payment_transaction(sender, instance, crea
             
             # Calling the model method to update balance and paid amount
             sale_invoice_orders_data.update_paid_amount_balance_amount_after_payment_transactions(instance.amount, instance.outstanding_amount, instance.adjusted_now)
+
+  
+@receiver(post_save, sender=SaleCreditNotes)
+def update_balance_after_credit(sender, instance, created, **kwargs):
+    """
+    Signal to update when a new SaleCreditNote record is created.
+    """
+    if created:  # Ensuring it's a new record
+        try:
+            sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
+        except ChartOfAccounts.DoesNotExist:
+            sale_account = None  
+
+        # Step 3: Creating JournalEntryLines record
+        JournalEntryLines.objects.create(
+            account_id=sale_account,  
+            debit=0.00,
+            voucher_no = instance.credit_note_number,
+            credit=instance.total_amount,
+            description=f"Credit note gives to {instance.customer_id.name}",
+            customer_id=instance.customer_id,
+            balance=instance.total_amount
+        )
+        
+        
+@receiver(post_save, sender=SaleReturnOrders)
+def update_balance_after_return(sender, instance, created, **kwargs):
+    """
+    Signal to update when a new SaleReturnOrders record is created.
+    """
+    if created:  # Ensuring it's a new record
+        try:
+            sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
+        except ChartOfAccounts.DoesNotExist:
+            sale_account = None  
+
+        # Step 3: Creating JournalEntryLines record
+        JournalEntryLines.objects.create(
+            account_id=sale_account,  
+            debit=instance.total_amount,
+            voucher_no = instance.return_no,
+            credit=0.00,
+            description=f"Return gives to {instance.customer_id.name}",
+            customer_id=instance.customer_id,
+            balance=instance.total_amount
+        )

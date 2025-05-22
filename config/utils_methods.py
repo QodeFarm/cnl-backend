@@ -180,6 +180,9 @@ class OrderNumberMixin(models.Model):
         if hasattr(self, 'sale_type_id') and self.sale_type_id:
             if self.sale_type_id.name and self.sale_type_id.name.lower() == 'Other':
                 return 'SOO'
+        if hasattr(self, 'bill_type') and self.bill_type:
+            if self.bill_type.lower() == 'Others':
+                return 'SOO-INV'
         
         # Validate existing prefix before returning
         valid_prefixes = ['SO', 'SOO', 'PO', 'INV']  # add all that you use
@@ -353,7 +356,7 @@ def validate_multiple_data(self, bulk_data, model_serializer, exclude_fields, us
 
 
 
-def validate_payload_data(self, data , model_serializer):
+def validate_payload_data(self, data , model_serializer, using='default'):
         errors = []
 
         # Validate parent data
@@ -550,8 +553,11 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
 
 #     return error_list
 
-def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None, using_db='default', db_to_use=None):
+def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None, db_to_use=None):
     error_list = []
+    
+    # ✅ Prioritize `db_to_use` if given, fallback to `using_db`
+    selected_db = db_to_use
 
     if valid_data:
         if isinstance(valid_data, list):
@@ -560,9 +566,10 @@ def validate_put_method_data(self, valid_data, serializer_name, update_fields, m
             valid_data = [valid_data]
 
     for data in valid_data:
-        id = data.get(current_model_pk_field, None)
+        instance = None
+        id = data.get(current_model_pk_field)
         if id is not None:
-            instance = model_class_name.objects.using(db_to_use or using_db).filter(pk=id).first()
+            instance = model_class_name.objects.using(selected_db).filter(pk=id).first()
             serializer = serializer_name(instance, data=data)
             if not serializer.is_valid(raise_exception=False):
                 error = serializer.errors
@@ -808,25 +815,57 @@ def previous_product_instance_verification(model_name, data): # In case of Produ
                 stock_error[f'{product}'] = 'This product variation is unavailable or has been removed.'
     return stock_error
 
+# @transaction.atomic
+# def update_product_stock(parent_model, child_model, data, operation):
+#     for item in data:
+#         product = item.get('product_id',None)
+#         return_qty = int(item.get('quantity',None))
+#         size = item.get('size_id',None)
+#         color = item.get('color_id',None)
+
+#         # Update each product stock (Subtract the order QTY from stock)
+#         product_instance = parent_model.objects.get(product_id=product)
+#         if operation == 'add':
+#             product_instance.balance += return_qty
+#         elif operation == 'subtract':
+#             product_instance.balance -= return_qty
+#         product_instance.save()
+
+#         try:
+#             # Update each product variation stock (Subtract/Add the order QTY from stock)
+#             product_variation_instance = child_model.objects.get(
+#                 product_id=product,
+#                 size_id=size,
+#                 color_id=color
+#             )
+#             if operation == 'add':
+#                 product_variation_instance.quantity += return_qty
+#             elif operation == 'subtract':
+#                 product_variation_instance.quantity -= return_qty
+#             product_variation_instance.save()
+#             logger.info(f'Updated stock for Product ID : {product}')
+#         except Exception:
+#             logger.info('Direct Product stock is updated.')
+
 @transaction.atomic
-def update_product_stock(parent_model, child_model, data, operation):
+def update_product_stock(parent_model, child_model, data, operation, using='default'):
     for item in data:
-        product = item.get('product_id',None)
-        return_qty = int(item.get('quantity',None))
-        size = item.get('size_id',None)
-        color = item.get('color_id',None)
+        product = item.get('product_id', None)
+        return_qty = int(item.get('quantity', None))
+        size = item.get('size_id', None)
+        color = item.get('color_id', None)
 
         # Update each product stock (Subtract the order QTY from stock)
-        product_instance = parent_model.objects.get(product_id=product)
+        product_instance = parent_model.objects.using(using).get(product_id=product)
         if operation == 'add':
             product_instance.balance += return_qty
         elif operation == 'subtract':
             product_instance.balance -= return_qty
-        product_instance.save()
+        product_instance.save(using=using)  # ✅ respect DB
 
         try:
             # Update each product variation stock (Subtract/Add the order QTY from stock)
-            product_variation_instance = child_model.objects.get(
+            product_variation_instance = child_model.objects.using(using).get(
                 product_id=product,
                 size_id=size,
                 color_id=color
@@ -835,10 +874,11 @@ def update_product_stock(parent_model, child_model, data, operation):
                 product_variation_instance.quantity += return_qty
             elif operation == 'subtract':
                 product_variation_instance.quantity -= return_qty
-            product_variation_instance.save()
+            product_variation_instance.save(using=using)  # ✅ respect DB
             logger.info(f'Updated stock for Product ID : {product}')
         except Exception:
             logger.info('Direct Product stock is updated.')
+
 
 #=========================== COMMUNICATION / REPORTS / OTHER SPECIAL FUNCTIONS (CHETAN) ============================
 

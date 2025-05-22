@@ -144,6 +144,10 @@ class User(AbstractBaseUser):
     def is_staff(self):
         return False  # or customize based on your own logic
     
+    # @property
+    # def is_sp_user(self):
+    #     return self.role_id.role_name.lower() == "admin"
+    
 class UserTimeRestrictions(models.Model):
     user_id = models.ForeignKey(User, on_delete=models.CASCADE,  db_column = 'user_id')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
