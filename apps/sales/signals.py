@@ -63,19 +63,18 @@ def update_Sale_Invoice_balance_after_payment_transaction(sender, instance, crea
             
             # Calling the model method to update balance and paid amount
             sale_invoice_orders_data.update_paid_amount_balance_amount_after_payment_transactions(instance.amount, instance.outstanding_amount, instance.adjusted_now)
-            
+
+  
 @receiver(post_save, sender=SaleCreditNotes)
 def update_balance_after_credit(sender, instance, created, **kwargs):
     """
-    Signal to update pending_amount with total_amount when a new SaleInvoiceOrders record is created.
+    Signal to update when a new SaleCreditNote record is created.
     """
     if created:  # Ensuring it's a new record
         try:
             sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
-            print("sale_account : ", sale_account)
         except ChartOfAccounts.DoesNotExist:
             sale_account = None  
-            print("sale_account : ", sale_account)
 
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
@@ -92,15 +91,13 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
 @receiver(post_save, sender=SaleReturnOrders)
 def update_balance_after_return(sender, instance, created, **kwargs):
     """
-    Signal to update pending_amount with total_amount when a new SaleInvoiceOrders record is created.
+    Signal to update when a new SaleReturnOrders record is created.
     """
     if created:  # Ensuring it's a new record
         try:
             sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
-            print("sale_account : ", sale_account)
         except ChartOfAccounts.DoesNotExist:
             sale_account = None  
-            print("sale_account : ", sale_account)
 
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
