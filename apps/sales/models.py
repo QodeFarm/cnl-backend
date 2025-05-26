@@ -38,7 +38,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     ]
     sale_estimate = models.CharField(max_length=3, choices=SALE_ESTIMATE_CHOICES, default='No')
     flow_status_id = models.ForeignKey(FlowStatus, on_delete=models.CASCADE, db_column='flow_status_id', null=True, default=None)
-    use_workflow = models.BooleanField(default=True)
+    # use_workflow = models.BooleanField(default=True)
     # workflow_id = models.ForeignKey('Workflow', on_delete=models.CASCADE, db_column='workflow_id')
     customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.CASCADE, null=True, default=None, db_column='customer_address_id')
     remarks = models.TextField(null=True, default=None)
