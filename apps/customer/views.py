@@ -201,82 +201,18 @@ class CustomerCreateViews(APIView):
     def resolve_db_from_request(self, request):
         """
         Determines the DB to use:
-        - If `sale_type_id` resolves to 'Other' → use 'mstcnl'
-        - If `bill_type` is 'Other' → use 'mstcnl'
-        - Else use 'default'
+        - If `sale_type=Other` --> use 'mstcnl'
+        - If `bill_type=Others` --> use 'mstcnl' 
+        - Else → use 'default'
         """
         bill_type = request.query_params.get("bill_type")
-        sale_type_id = request.query_params.get("sale_type_id")
-        
-        # Default
-        db_to_use = 'default'
+        sale_type = request.query_params.get("sale_type")
 
-        # If bill_type is explicitly 'Other'
-        if bill_type == 'Other':
-            set_db = 'mstcnl'
-            db_to_use = set_db
-            return db_to_use
+        if (bill_type and bill_type.lower() == 'others') or (sale_type and sale_type.lower() == 'other'):
+            return 'mstcnl'
 
-        # If sale_type_id is passed, resolve its name
-        if sale_type_id:
-            try:
-                from masters.models import SaleTypes  # ensure import
-                sale_type_obj = SaleTypes.objects.filter(sale_type_id=sale_type_id).first()
-                print("-"*20)
-                print("sale_type_obj : ", sale_type_obj)
-                print("-"*20)
-                if sale_type_obj and sale_type_obj.name == 'Other':
-                    set_db = 'mstcnl'
-                    db_to_use = set_db
-                    return db_to_use
-            except Exception as e:
-                logger.error(f"Error resolving sale_type_id to name: {e}")
+        return 'default'
 
-        return db_to_use
-
-
-    
-    # def get_customers(self, request):
-    #     """Applies filters, pagination, and retrieves customers."""
-    #     logger.info("Retrieving all customers")
-
-    #     page, limit = self.get_pagination_params(request)
-        
-    #     bill_type = request.query_params.get("bill_type")
-    #     db_to_use = 'mstcnl' if bill_type == 'Other' else 'default'
-        
-    #     queryset = Customer.objects.using(db_to_use).all().order_by('-created_at')
-    #     if request.query_params:
-    #         filterset = CustomerFilters(request.GET, queryset=queryset)
-    #         if filterset.is_valid():
-    #             queryset = filterset.qs
-                
-    #     # total_count = Customer.objects.count()
-    #     total_count = Customer.objects.using(db_to_use).count()
-    #     serializer = CustomerSerializer(queryset, many=True)
-
-    #     return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
-
-    # def get_customer_summary(self, request):
-    #     """Fetches customer summary data."""
-    #     logger.info("Retrieving customer summary")
-
-    #     page, limit = self.get_pagination_params(request)
-        
-    #     bill_type = request.query_params.get("bill_type")
-    #     db_to_use = 'mstcnl' if bill_type == 'Other' else 'default'
-        
-    #     queryset = Customer.objects.using(db_to_use).all().order_by('-created_at')
-    #     if request.query_params:
-    #         filterset = CustomerFilters(request.GET, queryset=queryset)
-    #         if filterset.is_valid():
-    #             queryset = filterset.qs
-                
-    #     # total_count = Customer.objects.count()
-    #     total_count = Customer.objects.using(db_to_use).count()
-    #     serializer = CustomerOptionSerializer(queryset, many=True)
-    #     return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
-    
     def get_customer_summary_report(self, request):
         """Fetches a summary report of total sales and outstanding payments per customer."""
         logger.info("Retrieving customer summary report data")
