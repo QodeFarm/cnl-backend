@@ -356,12 +356,44 @@ class SaleOrderViewSet(APIView):
         page, limit = self.get_pagination_params(request)
         records_all = request.query_params.get("records_all", "false").lower() == "true"
 
+        # if records_all:
+        #     logger.info("Fetching sale order summary from both mstcnl and default databases")
+            
+        #     saleorders_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+        #     saleorders_devcnl = SaleOrder.objects.using('default').all().order_by('-created_at')
+            
+        #     filterset_mstcnl = SaleOrderFilter(request.GET, queryset=base_queryset_mstcnl)
+        #     filterset_devcnl = SaleOrderFilter(request.GET, queryset=base_queryset_devcnl)
+            
+        #     combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
+        #     total_count = len(combined_queryset)
+
+        #     start_index = (page - 1) * limit
+        #     end_index = start_index + limit
+        #     paginated_results = combined_queryset[start_index:end_index]
+
+        #     serializer = SaleOrderOptionsSerializer(paginated_results, many=True)
+        #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
         if records_all:
             logger.info("Fetching sale order summary from both mstcnl and default databases")
-            
-            saleorders_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
-            saleorders_devcnl = SaleOrder.objects.using('default').all().order_by('-created_at')
-            
+
+            # Apply filters from SaleOrderFilter to both DBs
+            base_queryset_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+            base_queryset_devcnl = SaleOrder.objects.using('default').all().order_by('-created_at')
+
+            filterset_mstcnl = SaleOrderFilter(request.GET, queryset=base_queryset_mstcnl)
+            filterset_devcnl = SaleOrderFilter(request.GET, queryset=base_queryset_devcnl)
+
+            if filterset_mstcnl.is_valid():
+                saleorders_mstcnl = filterset_mstcnl.qs
+            else:
+                saleorders_mstcnl = base_queryset_mstcnl
+
+            if filterset_devcnl.is_valid():
+                saleorders_devcnl = filterset_devcnl.qs
+            else:
+                saleorders_devcnl = base_queryset_devcnl
+
             combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
             total_count = len(combined_queryset)
 
@@ -371,6 +403,7 @@ class SaleOrderViewSet(APIView):
 
             serializer = SaleOrderOptionsSerializer(paginated_results, many=True)
             return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
 
         else:
             logger.info("Fetching sale order summary only from default database")
@@ -1074,11 +1107,51 @@ class SaleOrderViewSet(APIView):
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
     
+    # def patch(self, request, pk, format=None):
+    #     sale_order = self.get_object(pk)
+    #     if not sale_order:
+    #         return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    #     flow_status_id = request.data.get("flow_status_id")
+    #     order_status_id = request.data.get("order_status_id")
+
+    #     if flow_status_id:
+    #         try:
+    #             new_flow_status = FlowStatus.objects.get(pk=flow_status_id)
+    #             sale_order.flow_status_id = new_flow_status
+    #         except FlowStatus.DoesNotExist:
+    #             return build_response(0, "Invalid flow_status_id", [], status.HTTP_400_BAD_REQUEST)
+            
+    #     if order_status_id:
+    #         try:
+    #             new_order_status = OrderStatuses.objects.get(pk=order_status_id)
+    #             sale_order.order_status_id = new_order_status
+    #         except OrderStatuses.DoesNotExist:
+    #             return build_response(0, "Invalid order_status_id", [], status.HTTP_400_BAD_REQUEST)
+
+    #     serializer = SaleOrderOptionsSerializer(sale_order, data=request.data, partial=True)
+    #     if serializer.is_valid():
+    #         serializer.save()
+    #         return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
+        
+    #     return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
+    
     def patch(self, request, pk, format=None):
+        # Determine which DB the sale_order belongs to
+        if SaleOrder.objects.using('default').filter(pk=pk).exists():
+            db_alias = 'default'
+        elif SaleOrder.objects.using('mstcnl').filter(pk=pk).exists():
+            db_alias = 'mstcnl'
+        else:
+            return build_response(0, f"sale_order_id {pk} not found in either DB", [], status.HTTP_400_BAD_REQUEST)
+
+        # Set DB context
+        set_db(db_alias)
+
         sale_order = self.get_object(pk)
         if not sale_order:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        
+
         flow_status_id = request.data.get("flow_status_id")
         order_status_id = request.data.get("order_status_id")
 
@@ -1088,7 +1161,7 @@ class SaleOrderViewSet(APIView):
                 sale_order.flow_status_id = new_flow_status
             except FlowStatus.DoesNotExist:
                 return build_response(0, "Invalid flow_status_id", [], status.HTTP_400_BAD_REQUEST)
-            
+
         if order_status_id:
             try:
                 new_order_status = OrderStatuses.objects.get(pk=order_status_id)
@@ -1100,8 +1173,9 @@ class SaleOrderViewSet(APIView):
         if serializer.is_valid():
             serializer.save()
             return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
-        
+
         return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
+
 
 #-------------------- Sale Order End ----------------------------------------------------    
 
@@ -2200,6 +2274,12 @@ class QuickPackCreateViewSet(APIView):
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
+def sale_invoice_exists_in_db(sale_invoice_id, db):
+        try:
+            return SaleInvoiceOrders.objects.using(db).filter(sale_invoice_id=sale_invoice_id).exists()
+        except Exception as e:
+            return False
+        
 class SaleReceiptCreateViewSet(APIView):
     """
     API ViewSet for handling Lead creation and related data.
@@ -2310,16 +2390,17 @@ class SaleReceiptCreateViewSet(APIView):
             logger.error(f"Error deleting SaleReceipt with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
+        print("-"*20)
+        print("We entered in create mode...")
         # Extracting data from the request
         given_data = request.data
-
+        print("given_data : ", given_data)
         # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
         """
         All the data in request will be validated here. it will handle the following errors:
@@ -2655,7 +2736,30 @@ class SaleReceiptViewSet(viewsets.ModelViewSet):
         return list_all_objects(self, request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
+        data = request.data
+        db_alias = None
+
+        if isinstance(data, dict) and 'sale_invoice_id' in data:
+            sale_invoice_id = data.get('sale_invoice_id')
+
+            if sale_invoice_exists_in_db(sale_invoice_id, 'default'):
+                db_alias = 'default'
+            elif sale_invoice_exists_in_db(sale_invoice_id, 'mstcnl'):
+                db_alias = 'mstcnl'
+            else:
+                return build_response(0, f"sale_invoice_id {sale_invoice_id} not found in either DB", [], status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(data=data, context={'db_alias': db_alias})
+
+        if serializer.is_valid():
+            instance = serializer.save()
+            data = self.get_serializer(instance).data
+            return build_response(1, "Record created successfully", data, status.HTTP_201_CREATED)
+        else:
+            errors_str = json.dumps(serializer.errors, indent=2)
+            logger.error("Serializer validation error: %s", errors_str)
+            return build_response(0, "Form validation failed", [], errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
@@ -3262,104 +3366,96 @@ class SaleDebitNoteViewset(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# class MoveToNextStageGenericView(APIView):
-#     """
-#     API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) to the next stage in its workflow.
-#     It also supports updating specific fields on the object using the PATCH method.
-#     """
-
-#     def post(self, request, module_name, object_id):
-#         try:
-#             ModelClass = self.get_model_class(module_name)
-#             obj = ModelClass.objects.get(pk=object_id)
-
-#             # Find the current workflow stage
-#             current_stage = WorkflowStage.objects.filter(flow_status_id=obj.flow_status_id).first()
-
-#             if not current_stage:
-#                 return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
-
-#             # Check for "Production" stage
-#             production_stage = WorkflowStage.objects.filter(
-#                 workflow_id=current_stage.workflow_id_id,
-#                 flow_status_id__flow_status_name="Production"
-#             ).first()
-
-#             if current_stage == production_stage:
-#                 # If in "Production", move back to Stage 1
-#                 next_stage = WorkflowStage.objects.filter(
-#                     workflow_id=current_stage.workflow_id_id,
-#                     stage_order=1
-#                 ).first()
-#             else:
-#                 # Otherwise, move to the next stage
-#                 next_stage = WorkflowStage.objects.filter(
-#                     workflow_id=current_stage.workflow_id_id,
-#                     stage_order__gt=current_stage.stage_order
-#                 ).order_by('stage_order').first()
-
-#             if next_stage:
-#                 obj.flow_status_id = next_stage.flow_status_id
-#                 obj.save()
-
-#                 return Response({
-#                     "message": f"{module_name} moved to the next stage.",
-#                     "current_stage": current_stage.flow_status_id.flow_status_name,
-#                     "next_stage": next_stage.flow_status_id.flow_status_name
-#                 }, status=status.HTTP_200_OK)
-
-#             return Response({"message": f"{module_name} has reached the final stage."}, status=status.HTTP_200_OK)
-
-#         except Exception as e:
-#             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class MoveToNextStageGenericView(APIView):
     """
-    API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) 
-    to the next stage in its workflow. Checks which DB the object belongs to before processing.
+    API endpoint to move any module (e.g., Sale Order, Purchase Order, etc.) to the next stage in its workflow.
+    It also supports updating specific fields on the object using the PATCH method.
     """
+
+    # def post(self, request, module_name, object_id):
+    #     try:
+    #         ModelClass = self.get_model_class(module_name)
+    #         obj = ModelClass.objects.get(pk=object_id)
+
+    #         # Find the current workflow stage
+    #         current_stage = WorkflowStage.objects.filter(flow_status_id=obj.flow_status_id).first()
+
+    #         if not current_stage:
+    #             return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    #         # Check for "Production" stage
+    #         production_stage = WorkflowStage.objects.filter(
+    #             workflow_id=current_stage.workflow_id_id,
+    #             flow_status_id__flow_status_name="Production"
+    #         ).first()
+
+    #         if current_stage == production_stage:
+    #             # If in "Production", move back to Stage 1
+    #             next_stage = WorkflowStage.objects.filter(
+    #                 workflow_id=current_stage.workflow_id_id,
+    #                 stage_order=1
+    #             ).first()
+    #         else:
+    #             # Otherwise, move to the next stage
+    #             next_stage = WorkflowStage.objects.filter(
+    #                 workflow_id=current_stage.workflow_id_id,
+    #                 stage_order__gt=current_stage.stage_order
+    #             ).order_by('stage_order').first()
+
+    #         if next_stage:
+    #             obj.flow_status_id = next_stage.flow_status_id
+    #             obj.save()
+
+    #             return Response({
+    #                 "message": f"{module_name} moved to the next stage.",
+    #                 "current_stage": current_stage.flow_status_id.flow_status_name,
+    #                 "next_stage": next_stage.flow_status_id.flow_status_name
+    #             }, status=status.HTTP_200_OK)
+
+    #         return Response({"message": f"{module_name} has reached the final stage."}, status=status.HTTP_200_OK)
+
+    #     except Exception as e:
+    #         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def post(self, request, module_name, object_id):
         try:
             ModelClass = self.get_model_class(module_name)
 
-            # Try fetching from default DB first
+            # Try to get object from default DB
             try:
                 obj = ModelClass.objects.using('default').get(pk=object_id)
-                db_to_use = 'default'
+                print("obj 1: ", obj)
+                db_used = 'default'
             except ModelClass.DoesNotExist:
-                # If not found, try mstcnl
+                # Try to get object from mstcnl DB
                 obj = ModelClass.objects.using('mstcnl').get(pk=object_id)
-                db_to_use = 'mstcnl'
+                print("obj 2: ", obj)
+                db_used = 'mstcnl'
 
-            # Find the current workflow stage
-            current_stage = WorkflowStage.objects.using(db_to_use).filter(flow_status_id=obj.flow_status_id).first()
+            current_stage = WorkflowStage.objects.using(db_used).filter(flow_status_id=obj.flow_status_id).first()
 
             if not current_stage:
                 return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            # Check for "Production" stage
-            production_stage = WorkflowStage.objects.using(db_to_use).filter(
+            production_stage = WorkflowStage.objects.using(db_used).filter(
                 workflow_id=current_stage.workflow_id_id,
                 flow_status_id__flow_status_name="Production"
             ).first()
 
             if current_stage == production_stage:
-                # Move back to stage 1
-                next_stage = WorkflowStage.objects.using(db_to_use).filter(
+                next_stage = WorkflowStage.objects.using(db_used).filter(
                     workflow_id=current_stage.workflow_id_id,
                     stage_order=1
                 ).first()
             else:
-                # Move to next stage
-                next_stage = WorkflowStage.objects.using(db_to_use).filter(
+                next_stage = WorkflowStage.objects.using(db_used).filter(
                     workflow_id=current_stage.workflow_id_id,
                     stage_order__gt=current_stage.stage_order
                 ).order_by('stage_order').first()
 
             if next_stage:
                 obj.flow_status_id = next_stage.flow_status_id
-                obj.save(using=db_to_use)  # Save using the correct DB
+                obj.save(using=db_used)
 
                 return Response({
                     "message": f"{module_name} moved to the next stage.",

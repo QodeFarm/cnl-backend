@@ -251,7 +251,7 @@ class WorkOrderAPIView(APIView):
 
         page, limit = self.get_pagination_params(request)
         queryset = WorkOrder.objects.annotate(
-        pending_qty=F("quantity") - F("completed_qty"))  # ✅ Add pending_qty dynamically
+        pending_qty=F("quantity") - F("completed_qty"))  #  Add pending_qty dynamically
         # total_count = queryset.count()  
         
        # Apply filters

@@ -175,8 +175,11 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
         return self.get_sale_order_details(obj)
     
     def get_products(self, obj):
+        # Detect DB used by the sale order instance
+        db_alias = obj._state.db
+
         # Fetch sale order items and their associated products
-        sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
+        sale_order_items = SaleOrderItems.objects.using(db_alias).filter(sale_order_id=obj.sale_order_id)
         products = []
         
         for item in sale_order_items:
@@ -192,8 +195,11 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
         return products
     
     def get_invoice_no(self, obj):
+        # Detect DB used by the sale order instance
+        db_alias = obj._state.db
+        
     # Retrieve all associated SaleInvoiceOrders instances
-        sale_invoices = SaleInvoiceOrders.objects.filter(sale_order_id=obj.sale_order_id)
+        sale_invoices = SaleInvoiceOrders.objects.using(db_alias).filter(sale_order_id=obj.sale_order_id)
         
         if sale_invoices.exists():
             # Collect all invoice numbers and return as a list
@@ -277,12 +283,32 @@ class WorkflowStageSerializer(serializers.ModelSerializer):
         model = WorkflowStage
         fields = '__all__'
 
+# class SaleReceiptSerializer(serializers.ModelSerializer):
+#     sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+
+#     class Meta:
+#         model = SaleReceipt
+#         fields = '__all__'
+
 class SaleReceiptSerializer(serializers.ModelSerializer):
     sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
 
     class Meta:
         model = SaleReceipt
         fields = '__all__'
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        db_alias = self.context.get('db_alias', 'default')
+        # Dynamically set queryset for FK based on db_alias
+        self.fields['sale_invoice_id'].queryset = SaleInvoiceOrders.objects.using(db_alias).all()
+
+    def create(self, validated_data):
+        db_alias = self.context.get('db_alias', None)
+        if db_alias:
+            return SaleReceipt.objects.using(db_alias).create(**validated_data)
+        return super().create(validated_data)
+
         
 class SaleCreditNoteSerializers(serializers.ModelSerializer):
     sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)

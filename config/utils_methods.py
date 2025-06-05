@@ -101,11 +101,57 @@ def build_response(count, message, data, status_code, errors=None):
         response['errors'] = errors
     return Response(response, status=status_code)
 
-def list_all_objects(self, request, *args, **kwargs):
+def list_all_objects_1(self, request, *args, **kwargs):
     queryset = self.filter_queryset(self.get_queryset())
     serializer = self.get_serializer(queryset, many=True)
     message = "NO RECORDS INSERTED" if not serializer.data else None
     return build_response(queryset.count(), message, serializer.data, status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK)
+
+from itertools import chain
+
+def list_all_objects(self, request, *args, **kwargs):
+    try:
+        filters = request.query_params.dict()
+        sale_order_id = filters.get('sale_order_id')
+        records_all = request.query_params.get("records_all", "false").lower() == "true"
+
+        # Default queryset (from default DB)
+        queryset = self.filter_queryset(self.get_queryset().order_by('-created_at'))
+
+        #  Special logic: only if sale_order_id is provided
+        if sale_order_id:
+            default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id)
+            mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id)
+
+            if default_qs.exists():
+                queryset = self.filter_queryset(default_qs.order_by('-created_at'))
+            elif mstcnl_qs.exists():
+                queryset = self.filter_queryset(mstcnl_qs.order_by('-created_at'))
+            else:
+                queryset = []  # not found in either DB
+
+        #  records_all logic (combine both DBs)
+        elif records_all:
+            default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
+            mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
+            queryset = list(chain(default_qs, mstcnl_qs))
+
+        #  All other cases = default logic is already active
+
+        serializer = self.get_serializer(queryset, many=True)
+        message = "NO RECORDS INSERTED" if not serializer.data else None
+
+        return build_response(
+            len(queryset),
+            message,
+            serializer.data,
+            status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
+        )
+
+    except Exception as e:
+        logger.error(f"Error in list_all_objects: {str(e)}")
+        return build_response(0, "Error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 def create_instance(self, request, *args, **kwargs):
     serializer = self.get_serializer(data=request.data)
@@ -411,7 +457,7 @@ def generic_data_creation(self, valid_data, serializer_class, update_fields=None
         serializer = serializer_class(data=data)
         serializer.is_valid(raise_exception=True)
 
-        # ✅ This is the only line added to respect the 'using' parameter
+        #  This is the only line added to respect the 'using' parameter
         instance = serializer.Meta.model.objects.db_manager(using).create(**serializer.validated_data)
         serializer = serializer_class(instance)
 
@@ -556,7 +602,7 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
 def validate_put_method_data(self, valid_data, serializer_name, update_fields, model_class_name, current_model_pk_field=None, db_to_use=None):
     error_list = []
     
-    # ✅ Prioritize `db_to_use` if given, fallback to `using_db`
+    #  Prioritize `db_to_use` if given, fallback to `using_db`
     selected_db = db_to_use
 
     if valid_data:
@@ -861,7 +907,7 @@ def update_product_stock(parent_model, child_model, data, operation, using='defa
             product_instance.balance += return_qty
         elif operation == 'subtract':
             product_instance.balance -= return_qty
-        product_instance.save(using=using)  # ✅ respect DB
+        product_instance.save(using=using)  #  respect DB
 
         try:
             # Update each product variation stock (Subtract/Add the order QTY from stock)
@@ -874,7 +920,7 @@ def update_product_stock(parent_model, child_model, data, operation, using='defa
                 product_variation_instance.quantity += return_qty
             elif operation == 'subtract':
                 product_variation_instance.quantity -= return_qty
-            product_variation_instance.save(using=using)  # ✅ respect DB
+            product_variation_instance.save(using=using)  #  respect DB
             logger.info(f'Updated stock for Product ID : {product}')
         except Exception:
             logger.info('Direct Product stock is updated.')
