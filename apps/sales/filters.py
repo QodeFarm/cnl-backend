@@ -10,7 +10,10 @@ from django.db.models.functions import Coalesce
 
 
 from rest_framework.response import Response
+from django_filters import BaseInFilter, CharFilter
 
+class CharInFilter(BaseInFilter, CharFilter):
+    pass
 
 logger = logging.getLogger(__name__)
 class SaleOrderFilter(filters.FilterSet):
@@ -19,7 +22,6 @@ class SaleOrderFilter(filters.FilterSet):
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
     # order_date = filters.DateFromToRangeFilter()
     sale_estimate = filters.RangeFilter(field_name='sale_estimate')
-    flow_status_name = filters.CharFilter(field_name='flow_status_id__flow_status_name', lookup_expr='iexact')
     order_date = filters.DateFilter()
     sale_estimate = filters.RangeFilter(field_name='sale_estimate') 
     sale_type_id = filters.CharFilter(method=filter_uuid)
@@ -29,7 +31,7 @@ class SaleOrderFilter(filters.FilterSet):
     advance_amount = filters.RangeFilter()
     tax = filters.ChoiceFilter(field_name='tax', choices=SaleOrder.TAX_CHOICES)
     amount = filters.RangeFilter(field_name='item_value', lookup_expr='icontains')
-    flow_status_name = filters.CharFilter(field_name='flow_status_id__flow_status_name', lookup_expr='iexact')
+    flow_status_name = filters.CharFilter(method='filter_by_flow_status_name')
     status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
@@ -38,22 +40,21 @@ class SaleOrderFilter(filters.FilterSet):
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     # New filter to fetch all child sale orders based on parent order_no
     parent_order_no = filters.CharFilter(method='filter_child_orders')
+
     
-    # def filter_child_orders(self, queryset, name, value):
-    #     """
-    #     Fetch all child sale orders where order_no starts with the parent order number.
-    #     Example: If parent_order_no = 'SO-2501-00002', fetch 'SO-2501-00002-01', 'SO-2501-00002-02', etc.
-    #     """
-    #     if value:
-    #         return queryset.filter(order_no=value) | (order_no__startswith=f"{value}-")  # Correct filtering
-    #     return queryset
+    def filter_by_flow_status_name(self, queryset, name, value):
+        values = [v.strip() for v in value.split(',')]
+        q_filter = Q()
+        for val in values:
+            q_filter |= Q(flow_status_id__flow_status_name__iexact=val)
+        return queryset.filter(q_filter)
     
     def filter_child_orders(self, queryset, name, value):
         """
         Fetch all child sale orders where order_no starts with the parent order number,
         and also include the parent order itself.
         """
-        return queryset.filter(Q(order_no=value) | Q(order_no__startswith=f"{value}-"))  # ✅ Fetch parent + child orders
+        return queryset.filter(Q(order_no=value) | Q(order_no__startswith=f"{value}-"))  #  Fetch parent + child orders
 
 
 
@@ -75,7 +76,7 @@ class SaleOrderFilter(filters.FilterSet):
     class Meta:
         model = SaleOrder 
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['order_no','order_date','sale_estimate','flow_status_name','customer_id','customer','sale_type_id','sale_type','order_status_id','flow_status_name','status_name','created_at','advance_amount','tax','amount','period_name','s','sort','page','limit']
+        fields = ['order_no','order_date','sale_estimate','flow_status_name','customer_id','customer','sale_type_id','sale_type','order_status_id', 'status_name','created_at','advance_amount','tax','amount','period_name','s','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
