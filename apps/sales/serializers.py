@@ -365,10 +365,12 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
     total_amount = serializers.DecimalField(source='sale_invoice.total_amount', max_digits=18, decimal_places=2)
     taxable = serializers.DecimalField(source='sale_invoice.taxable', max_digits=18, decimal_places=2)
     tax_amount = serializers.DecimalField(source='sale_invoice.tax_amount', max_digits=18, decimal_places=2)
+    # customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer_name = serializers.CharField(source='sale_invoice.customer_id.name', read_only=True)
 
     class Meta:
         model = PaymentTransactions
-        fields = ['invoice_no', 'invoice_date', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount', ]
+        fields = ['invoice_no','customer','customer_name','invoice_date', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
 
 class SalesByProductReportSerializer(serializers.ModelSerializer):
     product = serializers.CharField(source="product_id__name")  
