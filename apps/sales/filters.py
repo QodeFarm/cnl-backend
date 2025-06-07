@@ -1,16 +1,18 @@
 # from django.forms import DecimalField, IntegerField
 from django_filters import rest_framework as filters
-from .models import QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
+from .models import PaymentTransactions, QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 from django.db.models import Q, Sum, F, Count, Max, OuterRef, Subquery, DecimalField, IntegerField
 from django.db.models.functions import Coalesce
-
-
 from rest_framework.response import Response
 from django_filters import BaseInFilter, CharFilter
+from django_filters import rest_framework as filters
+from django_filters.filters import DateFilter, CharFilter, RangeFilter, NumberFilter
+
+import django_filters
 
 class CharInFilter(BaseInFilter, CharFilter):
     pass
@@ -473,12 +475,6 @@ class OutstandingSalesReportFilter(filters.FilterSet):
             's', 'sort', 'page', 'limit'
         ]
 
-from django_filters import rest_framework as filters
-from django_filters.filters import DateFilter, CharFilter, RangeFilter, NumberFilter
-
-import django_filters
-
-
 class SalesOrderReportFilter(django_filters.FilterSet):
     order_no = CharFilter(field_name="order_no", lookup_expr="icontains")
     customer = CharFilter(field_name="customer_id__name", lookup_expr="icontains")
@@ -628,3 +624,60 @@ class ProfitMarginReportFilter(filters.FilterSet):
     class Meta:
         model = None 
         fields = ['product', 'total_sales', 'profit_margin', 's', 'sort', 'page', 'limit']
+        
+        
+class PaymentTransactionsReportFilter(filters.FilterSet):
+    """
+    Filter for Sales Payment Receipts Report showing all payment transactions
+    """
+    # Customer filters
+    customer = filters.CharFilter(field_name='customer__name', lookup_expr='icontains')
+    customer_id = filters.NumberFilter(field_name='customer__customer_id')
+    
+    # Receipt filters
+    payment_receipt_no = filters.CharFilter(lookup_expr='icontains')
+    
+    
+    
+    # Invoice filters
+    invoice_no = filters.CharFilter(field_name='sale_invoice__invoice_no', lookup_expr='icontains')
+    
+    # Date filters
+    payment_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+      # Payment details filters
+    payment_method = filters.CharFilter(lookup_expr='icontains')
+    payment_status = filters.ChoiceFilter(
+        choices=[('Pending', 'Pending'), ('Completed', 'Completed'), ('Failed', 'Failed')], lookup_expr='exact'
+    )
+    status_name = filters.CharFilter(field_name='payment_status', lookup_expr='iexact')
+    
+    # Amount filters
+    min_amount = filters.NumberFilter(field_name='adjusted_now', lookup_expr='gte')
+    max_amount = filters.NumberFilter(field_name='adjusted_now', lookup_expr='lte')
+    
+    # Standard filters used across your application
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    created_at = filters.DateFromToRangeFilter(field_name='created_at')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    class Meta:
+        model = PaymentTransactions
+        fields = [
+            'customer', 'customer_id', 'payment_receipt_no', 'invoice_no', 
+            'payment_date', 'payment_method', 'payment_status', 
+            'min_amount', 'max_amount', 'status_name', 'period_name', 'created_at', 's', 'sort', 'page', 'limit'
+        ]        

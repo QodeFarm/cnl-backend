@@ -3782,6 +3782,11 @@ class PaymentTransactionAPIView(APIView):
                 return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
         else:
             transactions = PaymentTransactions.objects.all()
+            if request.query_params:
+                filterset = PaymentTransactionsReportFilter(request.GET, queryset=transactions)
+                if filterset.is_valid():
+                    transactions = filterset.qs  
+            
             serializer = PaymentTransactionSerializer(transactions, many=True)
             return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
 
