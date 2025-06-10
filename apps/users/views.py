@@ -301,12 +301,12 @@ class UserLoginView(APIView):
         try:
             # Fetch usernames from both databases
             default_usernames = list(User.objects.using('default').values_list('username', flat=True))
-            mstcnl_usernames = list(License.objects.using('mstcnl').filter(domain=subdomain).values_list('username', flat=True))
+            mstcnl_usernames = list(License.objects.using('mstcnl').filter(domain=subdomain).values_list('superuser_username', flat=True))
             if any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in default_usernames):
                 user = authenticate(username=username, password=password)
                 if user is not None:
                     user.last_login = timezone.now()
-                    user.save()
+                    user.save(update_fields=["last_login"])
                     token = get_tokens_for_user(user, False)
                     return Response({'count': '1', 'msg': f'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
                 else:

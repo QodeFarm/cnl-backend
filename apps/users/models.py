@@ -209,7 +209,7 @@ class UserRoles(models.Model):
 
 class License(models.Model):
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    username = models.CharField(verbose_name="Username",max_length=255,unique=True)
+    superuser_username = models.CharField(verbose_name="superuser_username",max_length=255,unique=True)
     first_name = models.CharField(max_length=255, null= True, default=None)
     last_name = models.CharField(max_length=255, null= True, default=None)
     last_login = models.DateTimeField(null=True, default=None)
@@ -218,8 +218,16 @@ class License(models.Model):
     domain = models.CharField(max_length=50, null= False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    password = models.CharField(max_length=128)
-
+    superuser_password = models.CharField(max_length=128)
+    database_name = models.CharField(max_length=100)
+    domain_url = models.CharField(max_length=100)
+    start_date = models.DateField(null=False)
+    end_date = models.DateField(null=False)
+    super_user = models.BooleanField(default=False)
+    license_code = models.CharField(max_length=100, unique=True)
+    company_name = models.CharField(max_length=255)
+    company_code = models.CharField(max_length=50, null=True)
+    print_name = models.CharField(max_length=255, null=True)
 
     class Meta:
         db_table = license

@@ -8,8 +8,8 @@ class MstcnlBackend(BaseBackend):
     def authenticate(self, username=None, password=None, **kwargs):
         try:
             # Use 'using' to specify the database
-            user = License.objects.using('mstcnl').get(username=username)
-            if check_password(password, user.password):
+            user = License.objects.using('mstcnl').get(superuser_username=username)
+            if check_password(password, user.superuser_password):
                 return user
         except License.DoesNotExist:
             return None
