@@ -13,15 +13,17 @@ def SubdomainFromMstcnl():
 class DatabaseMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # Get the client domain from the request header (sent by Nginx)
-        # client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
-        subdomain = request.get_host().split('.')[0]  # 'tp'
+        client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
+        # subdomain = request.get_host().split('.')[0]  # 'tp'
         sub_dom_dict = SubdomainFromMstcnl()
         
         # Select the database based on the client domain
-        db_name = sub_dom_dict.get(subdomain, "devcnl")  # Default to devcnl if not found
+        db_name = sub_dom_dict.get(client_domain, "txt")  # Default to devcnl if not found
 
         # Set the correct database connection
         connections.databases["default"]["NAME"] = db_name
 
         # Print to logs for debugging
-        print(f"Using database: {db_name} for client domain: {subdomain}")                                                                          
+        print("*" * 20)
+        print(f"Using database: {db_name} for client domain: {client_domain}")    
+        print("*" * 20)                                                                      
