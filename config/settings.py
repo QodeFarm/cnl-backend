@@ -374,7 +374,7 @@ LOGGING = {
         },
         'file': {
             'class': 'logging.FileHandler',
-            'filename': '/var/log/cnl/capp.log',
+            'filename': os.path.join(BASE_DIR, 'capp.log'),
             'formatter': 'verbose',
         },
     },
