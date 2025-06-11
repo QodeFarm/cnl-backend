@@ -150,20 +150,10 @@ REST_FRAMEWORK = {
 import pymysql
 pymysql.install_as_MySQLdb()
 
-DATABASE_MAPPING = {
-    "master.cnlerp.com": "cnl",
-    "dev.cnlerp.com": "devcnl",
-    "demo.cnlerp.com": "democnl",
-}
-
-def get_database(request):
-    hostname = request.get_host().split(':')[0]  # Get domain without port
-    return DATABASE_MAPPING.get(hostname, "cnl")  # Default to cnl
-
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "devcnl",
+        # "NAME": "cnl2",
         "USER": "root",
         "PASSWORD":"root",
         "HOST": "127.0.0.1",
@@ -182,12 +172,12 @@ DATABASES = {
 DATABASE_ROUTERS = ['config.utils_db_router.DynamicDbRouter']
 
 
-DOMAIN_DATABASE_MAPPING = {
-    "master.cnlerp.com": "cnl",
-    "dev.cnlerp.com": "devcnl",
-    "demo.cnlerp.com": "democnl",
-    "qa.cnlerp.com": "qacnl"
-}
+# DOMAIN_DATABASE_MAPPING = {
+#     "master.cnlerp.com": "cnl",
+#     "dev.cnlerp.com": "devcnl",
+#     "demo.cnlerp.com": "democnl",
+#     "qa.cnlerp.com": "qacnl"
+# }
 
 MIDDLEWARE.insert(1, 'middleware.middleware.DatabaseMiddleware')
 
