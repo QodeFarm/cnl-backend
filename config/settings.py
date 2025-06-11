@@ -172,13 +172,6 @@ DATABASES = {
 DATABASE_ROUTERS = ['config.utils_db_router.DynamicDbRouter']
 
 
-# DOMAIN_DATABASE_MAPPING = {
-#     "master.cnlerp.com": "cnl",
-#     "dev.cnlerp.com": "devcnl",
-#     "demo.cnlerp.com": "democnl",
-#     "qa.cnlerp.com": "qacnl"
-# }
-
 MIDDLEWARE.insert(1, 'middleware.middleware.DatabaseMiddleware')
 
 # Password validation
@@ -362,3 +355,31 @@ CORS_ALLOW_HEADERS = ["*"]
 
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
+
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'capp.log'),
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console', 'file'],
+        'level': 'INFO',
+    },
+}

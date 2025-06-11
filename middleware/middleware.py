@@ -1,6 +1,9 @@
 from django.db import connections
 from django.utils.deprecation import MiddlewareMixin
 from apps.users.models import License
+import logging
+
+logger = logging.getLogger('myapp')
 
 def SubdomainFromMstcnl():
     data = License.objects.using('mstcnl').values_list('domain', 'database_name')
@@ -12,7 +15,7 @@ def SubdomainFromMstcnl():
 class DatabaseMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # Get the client domain from the request header (sent by Nginx)
-        # client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
+        client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
         subdomain = request.get_host().split('.')[0]  # 'tp'
         sub_dom_dict = SubdomainFromMstcnl()
         
@@ -23,6 +26,6 @@ class DatabaseMiddleware(MiddlewareMixin):
         connections.databases["default"]["NAME"] = db_name
 
         # Print to logs for debugging
-        print("*" * 20)
-        print(f"Using database: {db_name} for client domain: {subdomain}")    
-        print("*" * 20)                                                                      
+        logger.info("*" * 20)
+        logger.info(f"{sub_dom_dict} Using database: {db_name} for client domain: {subdomain}")    
+        logger.info("*" * 20)                                                                      

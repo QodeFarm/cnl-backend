@@ -233,5 +233,5 @@ class License(models.Model):
         db_table = license
     
     def __str__(self):
-        return f"{self.domain} + {self.username}"
+        return f"{self.domain} + {self.superuser_username}"
     
