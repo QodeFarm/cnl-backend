@@ -42,7 +42,7 @@ ALLOWED_HOSTS = [
 
 # Set DEBUG = False for master and demo
 if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS or "apicore.cnlerp.com" in ALLOWED_HOSTS:
-    DEBUG = True
+    DEBUG = False
 else:
     DEBUG = True
 # DEBUG = True
@@ -356,27 +356,4 @@ CORS_ALLOW_HEADERS = ["*"]
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
 
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename':os.path.join(BASE_DIR, 'debug.log'),
-        },
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['file'],
-            'level': 'WARNING',  # Only log errors and warnings from Django itself
-            'propagate': False,
-        },
-        'myapp': {  # your Django app name
-            'handlers': ['file'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-    },
-}
 
