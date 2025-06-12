@@ -17,7 +17,12 @@ class DatabaseMiddleware(MiddlewareMixin):
         # Get the client domain from the request header (sent by Nginx)
         client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
         subdomain = request.get_host().split('.')[0]  # 'tp'
-        sub_dom_dict = SubdomainFromMstcnl()
+        sub_dom_dict = {'prod' : 'cnl_cl002_prod', 
+                        'rudhra': 'rudhra_DB',
+                        '127': 'bct'
+                       }
+
+ #SubdomainFromMstcnl()
         
         # Select the database based on the client domain
         db_name = sub_dom_dict.get(subdomain, "txt")  # Default to devcnl if not found
