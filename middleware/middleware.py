@@ -10,14 +10,17 @@ logger = logging.getLogger('myapp')
 def get_db_name(request):
     # First try to get custom header
     domain_header = request.headers.get("X-Client-Domain")
-    
     if not domain_header:
         # Fall back to actual host
         domain_header = request.get_host().split(':')[0]  # strips port like 8000
 
     # Ensure urlparse works
     parsed_url = urlparse(f"http://{domain_header}")
+    logger.info(f"parsed_url {parsed_url}")
+
     full_domain = parsed_url.hostname
+    logger.info(f"full_domain {full_domain}")
+   
 
     if not full_domain:
         return "txt"
@@ -27,7 +30,7 @@ def get_db_name(request):
     else:
         subdomain = full_domain.split('.')[0]
 
-    print("===>>", subdomain)
+    logger.info(f"===>>  {subdomain}")
 
     DOMAIN_DATABASE_MAPPING = {
         'prod': 'cnl_cl002_prod',
