@@ -42,7 +42,7 @@ ALLOWED_HOSTS = [
 
 # Set DEBUG = False for master and demo
 if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS or "apicore.cnlerp.com" in ALLOWED_HOSTS:
-    DEBUG = False
+    DEBUG = True
 else:
     DEBUG = True
 # DEBUG = True
@@ -153,7 +153,7 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        # "NAME": "cnl2",
+        # "NAME": "cnl_cl001_rudhra",
         "USER": "root",
         "PASSWORD":"root",
         "HOST": "127.0.0.1",
