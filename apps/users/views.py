@@ -305,9 +305,9 @@ class UserLoginView(APIView):
                     auth_user.last_login = timezone.now()
                     auth_user.save(update_fields=["last_login"])
                     token = get_tokens_for_user(auth_user, False)
-                    return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
+                    return Response({'count': subdomain, 'msg': 'Login Success,' , 'data': [token]}, status=status.HTTP_200_OK)
                 else:
-                    return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+                    return Response({'count': subdomain, 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
             # Check if user exists in mstcnl DB
             mstcnl_user_exists = License.objects.using('mstcnl').filter(
@@ -326,16 +326,16 @@ class UserLoginView(APIView):
                     token_user = User.objects.using('default').filter(company_created_user=True).first()
                     if token_user:
                         token = get_tokens_for_user(token_user, True)
-                        return Response({'count': '1', 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)
+                        return Response({'count': subdomain, 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)
                     else:
-                        return Response({'count': '1', 'msg': 'Internal configuration error', 'data': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        return Response({'count': subdomain, 'msg': 'Internal configuration error', 'data': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 else:
-                    return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+                    return Response({'count': subdomain, 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
-            return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'count': subdomain, 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
         except Exception as e:
-            return Response({'count': '1', 'msg': 'Unknown Error Occurred', 'data': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'count': subdomain, 'msg': 'Unknown Error Occurred', 'data': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 #===================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]
