@@ -767,3 +767,14 @@ class RolePermissionsCreateView(APIView):
 #             final_PATCH_data = serializer.data
 #             return build_response(len(final_PATCH_data), "User Updated Successfully!",  final_PATCH_data, status.HTTP_200_OK)
 #         return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+
+#=====================
+
+class DebugView(APIView):
+    def get(self, request):
+        return Response({
+            "host": request.get_host(),
+            "subdomain": request.get_host().split('.')[0],
+            "headers": dict(request.headers),
+        })
