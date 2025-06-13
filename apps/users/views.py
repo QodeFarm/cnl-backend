@@ -771,21 +771,36 @@ class RolePermissionsCreateView(APIView):
 
 #========================================================================================================================
 from urllib.parse import urlparse
-
 class DebugDomainView(APIView):
     def get(self, request):
+        # Get frontend URL from custom header
         frontend_url = request.headers.get("X-Frontend-URL")
-        parsed = urlparse(frontend_url) if frontend_url else None
+        parsed_frontend = urlparse(frontend_url) if frontend_url else None
 
-        frontend_host = parsed.hostname if parsed else None
-        frontend_subdomain = frontend_host.split('.')[0] if frontend_host else None
-        client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
+        # Frontend details
+        frontend_info = {
+            "url": frontend_url,
+            "host": parsed_frontend.hostname if parsed_frontend else None,
+            "subdomain_using_spit_fun": parsed_frontend.hostname.split('.')[0] if parsed_frontend and parsed_frontend.hostname else None,
+            "subdomain_using_t_way" : request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0],
+            "scheme": parsed_frontend.scheme if parsed_frontend else None,
+            "path": parsed_frontend.path if parsed_frontend else None,
+            "fragment": parsed_frontend.fragment if parsed_frontend else None,
+        }
 
+        # Backend details
+        backend_host = request.get_host()
+        backend_info = {
+            "host": backend_host,
+            "subdomain": backend_host.split('.')[0],
+            "subdomain_using_t_way" : request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0],
 
+        }
+
+        # Final response
         return Response({
-            "frontend_url": frontend_url,
-            "frontend_host": frontend_host,
-            "frontend_subdomain_using_split": frontend_subdomain,
-            "frontend_subdomain_t_way" : client_domain,
+            "frontend": frontend_info,
+            "backend": backend_info,
             "headers": dict(request.headers),
         })
+
