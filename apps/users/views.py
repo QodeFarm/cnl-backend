@@ -250,7 +250,7 @@ class UserAccessAPIView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
-def get_tokens_for_user(user,sp_user_flag, subdomain, client_domain, parsed_frontend, subdomain_using_t_way):
+def get_tokens_for_user(user,sp_user_flag, subdomain, client_domain):
     refresh = RefreshToken.for_user(user)
 
     company = Companies.objects.first()  # Get the first company
@@ -284,12 +284,10 @@ def get_tokens_for_user(user,sp_user_flag, subdomain, client_domain, parsed_fron
         'role_name' : role_name,
         'company_name' : company_name,
         'company_code' : company_code,
-        'is_sp_user' : sp_user_flag,
+        'is_sp_user' : sp_user_flag, 
         'subdomain' : subdomain, 
-        'client_domain' : client_domain,
-        "subdomain_using_spit_fun": parsed_frontend.hostname.split('.')[0] if parsed_frontend and parsed_frontend.hostname else None,
-        "subdomain_using_t_way" : subdomain_using_t_way
- 
+        'client_domain ': client_domain
+
     }
 
 #====================================USER-LOGIN-VIEW=============================================================
@@ -301,12 +299,9 @@ class UserLoginView(APIView):
         serializer.is_valid(raise_exception=True)
         username = serializer.validated_data.get('username')
         password = serializer.validated_data.get('password')
-        subdomain = request.get_host().split('.')[0]
+        # subdomain = request.get_host().split('.')[0]
         client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
-        frontend_url = request.headers.get("X-Frontend-URL")
-        parsed_frontend = urlparse(frontend_url) if frontend_url else None
-        subdomain_using_t_way = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0],
-                   
+        subdomain =  client_domain.split('.')[0]
 
         try:
             # Check if user exists in the default DB
@@ -316,7 +311,7 @@ class UserLoginView(APIView):
                 if auth_user:
                     auth_user.last_login = timezone.now()
                     auth_user.save(update_fields=["last_login"])
-                    token = get_tokens_for_user(auth_user, False, subdomain, client_domain, parsed_frontend, subdomain_using_t_way)
+                    token = get_tokens_for_user(auth_user, False, subdomain, client_domain)
                     return Response({'count': '1', 'msg': 'Login Success,' , 'data': [token]}, status=status.HTTP_200_OK)
                 else:
                     return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
@@ -337,7 +332,7 @@ class UserLoginView(APIView):
                     # Return token from default DB user having company_created_user=True
                     token_user = User.objects.using('default').filter(company_created_user=True).first()
                     if token_user:
-                        token = get_tokens_for_user(token_user, True, subdomain, client_domain, parsed_frontend, subdomain_using_t_way)
+                        token = get_tokens_for_user(token_user, True, subdomain, client_domain)
                         return Response({'count': '1', 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)
                     else:
                         return Response({'count': '1', 'msg': 'Internal configuration error', 'data': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
