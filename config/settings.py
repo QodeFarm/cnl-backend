@@ -153,7 +153,7 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": "rudhra_rd001_prod",
+        # "NAME": "cnl2",
         "USER": "root",
         "PASSWORD":"root",
         "HOST": "127.0.0.1",
@@ -172,7 +172,7 @@ DATABASES = {
 DATABASE_ROUTERS = ['config.utils_db_router.DynamicDbRouter']
 
 
-# MIDDLEWARE.insert(1, 'middleware.middleware.DatabaseMiddleware')
+MIDDLEWARE.insert(1, 'middleware.middleware.DatabaseMiddleware')
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
