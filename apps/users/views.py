@@ -769,13 +769,23 @@ class RolePermissionsCreateView(APIView):
 #         return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
-#=====================
+#========================================================================================================================
+from urllib.parse import urlparse
 
-class DebugView(APIView):
+class DebugDomainView(APIView):
     def get(self, request):
+        frontend_url = request.headers.get("X-Frontend-URL")
+        parsed = urlparse(frontend_url) if frontend_url else None
+
+        frontend_host = parsed.hostname if parsed else None
+        frontend_subdomain = frontend_host.split('.')[0] if frontend_host else None
+        client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
+
+
         return Response({
-            "host": request.get_host(),
-            "subdomain": request.get_host().split('.')[0],
-            "frontend_url": request.headers.get("X-Frontend-URL"),  # <-- Your frontend URL
+            "frontend_url": frontend_url,
+            "frontend_host": frontend_host,
+            "frontend_subdomain_using_split": frontend_subdomain,
+            "frontend_subdomain_t_way" : client_domain,
             "headers": dict(request.headers),
         })
