@@ -29,6 +29,8 @@ from rest_framework import status
 from django.utils import timezone
 import uuid
 import re
+from urllib.parse import urlparse
+
 
 import logging
 # Set up basic configuration for logging
@@ -248,7 +250,7 @@ class UserAccessAPIView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 #====================================USER-TOKEN-CREATE-FUNCTION=============================================================
-def get_tokens_for_user(user,sp_user_flag):
+def get_tokens_for_user(user,sp_user_flag, subdomain, client_domain, parsed_frontend, subdomain_using_t_way):
     refresh = RefreshToken.for_user(user)
 
     company = Companies.objects.first()  # Get the first company
@@ -282,7 +284,12 @@ def get_tokens_for_user(user,sp_user_flag):
         'role_name' : role_name,
         'company_name' : company_name,
         'company_code' : company_code,
-        'is_sp_user' : sp_user_flag
+        'is_sp_user' : sp_user_flag,
+        'subdomain' : subdomain, 
+        'client_domain' : client_domain,
+        "subdomain_using_spit_fun": parsed_frontend.hostname.split('.')[0] if parsed_frontend and parsed_frontend.hostname else None,
+        "subdomain_using_t_way" : subdomain_using_t_way
+ 
     }
 
 #====================================USER-LOGIN-VIEW=============================================================
@@ -295,6 +302,11 @@ class UserLoginView(APIView):
         username = serializer.validated_data.get('username')
         password = serializer.validated_data.get('password')
         subdomain = request.get_host().split('.')[0]
+        client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
+        frontend_url = request.headers.get("X-Frontend-URL")
+        parsed_frontend = urlparse(frontend_url) if frontend_url else None
+        subdomain_using_t_way = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0],
+                   
 
         try:
             # Check if user exists in the default DB
@@ -304,10 +316,10 @@ class UserLoginView(APIView):
                 if auth_user:
                     auth_user.last_login = timezone.now()
                     auth_user.save(update_fields=["last_login"])
-                    token = get_tokens_for_user(auth_user, False)
-                    return Response({'count': subdomain, 'msg': 'Login Success,' , 'data': [token]}, status=status.HTTP_200_OK)
+                    token = get_tokens_for_user(auth_user, False, subdomain, client_domain, parsed_frontend, subdomain_using_t_way)
+                    return Response({'count': '1', 'msg': 'Login Success,' , 'data': [token]}, status=status.HTTP_200_OK)
                 else:
-                    return Response({'count': subdomain, 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+                    return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
             # Check if user exists in mstcnl DB
             mstcnl_user_exists = License.objects.using('mstcnl').filter(
@@ -325,17 +337,17 @@ class UserLoginView(APIView):
                     # Return token from default DB user having company_created_user=True
                     token_user = User.objects.using('default').filter(company_created_user=True).first()
                     if token_user:
-                        token = get_tokens_for_user(token_user, True)
-                        return Response({'count': subdomain, 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)
+                        token = get_tokens_for_user(token_user, True, subdomain, client_domain, parsed_frontend, subdomain_using_t_way)
+                        return Response({'count': '1', 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)
                     else:
-                        return Response({'count': subdomain, 'msg': 'Internal configuration error', 'data': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        return Response({'count': '1', 'msg': 'Internal configuration error', 'data': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 else:
-                    return Response({'count': subdomain, 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+                    return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
-            return Response({'count': subdomain, 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
         except Exception as e:
-            return Response({'count': subdomain, 'msg': 'Unknown Error Occurred', 'data': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'count': '1', 'msg': 'Unknown Error Occurred', 'data': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 #===================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]
@@ -770,7 +782,6 @@ class RolePermissionsCreateView(APIView):
 
 
 #========================================================================================================================
-from urllib.parse import urlparse
 class DebugDomainView(APIView):
     def get(self, request):
         # Get frontend URL from custom header
@@ -780,7 +791,7 @@ class DebugDomainView(APIView):
         # Frontend details
         frontend_info = {
             "url": frontend_url,
-            "host": parsed_frontend.hostname if parsed_frontend else None,
+            "host": parsed_frontend.hostname if parsed_frontend else None,   #"rudhra.cnlerp.com"
             "subdomain_using_spit_fun": parsed_frontend.hostname.split('.')[0] if parsed_frontend and parsed_frontend.hostname else None,
             "subdomain_using_t_way" : request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0],
             "scheme": parsed_frontend.scheme if parsed_frontend else None,
