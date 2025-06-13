@@ -776,5 +776,6 @@ class DebugView(APIView):
         return Response({
             "host": request.get_host(),
             "subdomain": request.get_host().split('.')[0],
+            "frontend_url": request.headers.get("X-Frontend-URL"),  # <-- Your frontend URL
             "headers": dict(request.headers),
         })
