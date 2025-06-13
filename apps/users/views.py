@@ -769,13 +769,38 @@ class RolePermissionsCreateView(APIView):
 #         return build_response(0, "User Not Updated!",  serializer.errors, status.HTTP_400_BAD_REQUEST)
 
 
-#=====================
-
-class DebugView(APIView):
+#========================================================================================================================
+from urllib.parse import urlparse
+class DebugDomainView(APIView):
     def get(self, request):
+        # Get frontend URL from custom header
+        frontend_url = request.headers.get("X-Frontend-URL")
+        parsed_frontend = urlparse(frontend_url) if frontend_url else None
+
+        # Frontend details
+        frontend_info = {
+            "url": frontend_url,
+            "host": parsed_frontend.hostname if parsed_frontend else None,
+            "subdomain_using_spit_fun": parsed_frontend.hostname.split('.')[0] if parsed_frontend and parsed_frontend.hostname else None,
+            "subdomain_using_t_way" : request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0],
+            "scheme": parsed_frontend.scheme if parsed_frontend else None,
+            "path": parsed_frontend.path if parsed_frontend else None,
+            "fragment": parsed_frontend.fragment if parsed_frontend else None,
+        }
+
+        # Backend details
+        backend_host = request.get_host()
+        backend_info = {
+            "host": backend_host,
+            "subdomain": backend_host.split('.')[0],
+            "subdomain_using_t_way" : request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0],
+
+        }
+
+        # Final response
         return Response({
-            "host": request.get_host(),
-            "subdomain": request.get_host().split('.')[0],
-            "frontend_url": request.headers.get("X-Frontend-URL"),  # <-- Your frontend URL
+            "frontend": frontend_info,
+            "backend": backend_info,
             "headers": dict(request.headers),
         })
+
