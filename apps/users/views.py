@@ -289,46 +289,54 @@ def get_tokens_for_user(user,sp_user_flag):
 @permission_classes([AllowAny])
 class UserLoginView(APIView):
     renderer_classes = [UserRenderer]
-
     def post(self, request, format=None):
-        host = request.get_host()  # e.g., 'tp.maxxerp.com'
-        subdomain = host.split('.')[0]  # 'tp'
-
         serializer = UserLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        username = serializer.data.get('username')
-        password = serializer.data.get('password')
+        username = serializer.validated_data.get('username')
+        password = serializer.validated_data.get('password')
+        subdomain = request.get_host().split('.')[0]
+
         try:
-            # Fetch usernames from both databases
-            default_usernames = list(User.objects.using('default').values_list('username', flat=True))
-            mstcnl_usernames = list(License.objects.using('mstcnl').filter(domain=subdomain).values_list('superuser_username', flat=True))
-            if any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in default_usernames):
-                user = authenticate(username=username, password=password)
-                if user is not None:
-                    user.last_login = timezone.now()
-                    user.save(update_fields=["last_login"])
-                    token = get_tokens_for_user(user, False)
-                    return Response({'count': '1', 'msg': f'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
+            # Check if user exists in the default DB
+            user = User.objects.using('default').filter(username__iexact=username).first()
+            if user:
+                auth_user = authenticate(username=username, password=password)
+                if auth_user:
+                    auth_user.last_login = timezone.now()
+                    auth_user.save(update_fields=["last_login"])
+                    token = get_tokens_for_user(auth_user, False)
+                    return Response({'count': '1', 'msg': 'Login Success', 'data': [token]}, status=status.HTTP_200_OK)
                 else:
-                  return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data':[]}, status=status.HTTP_401_UNAUTHORIZED)
-                    
-            elif any(re.fullmatch(re.escape(username), item, re.IGNORECASE) for item in mstcnl_usernames):
+                    return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+
+            # Check if user exists in mstcnl DB
+            mstcnl_user_exists = License.objects.using('mstcnl').filter(
+                domain=subdomain,
+                superuser_username__iexact=username
+            ).exists()
+
+            if mstcnl_user_exists:
                 backend = MstcnlBackend()
-                user = backend.authenticate(username=username, password=password)
-                if user is not None:
-                    user.last_login = timezone.now()
-                    user.save(using='mstcnl')  # Ensure last_login is saved in mstcnl
-                    company_created_user = User.objects.using('default').filter(company_created_user=True)
-                    for user in company_created_user:
-                        token = get_tokens_for_user(user, True)
-                        return Response({'count': '1', 'msg': f'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)  
+                mstcnl_user = backend.authenticate(username=username, password=password)
+                if mstcnl_user:
+                    mstcnl_user.last_login = timezone.now()
+                    mstcnl_user.save(using='mstcnl', update_fields=["last_login"])
+
+                    # Return token from default DB user having company_created_user=True
+                    token_user = User.objects.using('default').filter(company_created_user=True).first()
+                    if token_user:
+                        token = get_tokens_for_user(token_user, True)
+                        return Response({'count': '1', 'msg': 'Login Success (mstcnl)', 'data': [token]}, status=status.HTTP_200_OK)
+                    else:
+                        return Response({'count': '1', 'msg': 'Internal configuration error', 'data': []}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 else:
-                  return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data':[]}, status=status.HTTP_401_UNAUTHORIZED)
-            else:
-                return Response({'count': '1', 'msg': 'Username or Password is not valid', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+                    return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+
+            return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
+
         except Exception as e:
-                return Response({'count': '1', 'msg': 'Unknown Error Occurred ', 'data': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-#====================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
+            return Response({'count': '1', 'msg': 'Unknown Error Occurred', 'data': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#===================================USER-CHANGE-KNOW-PASSWD-VIEW=============================================================
 class UserChangePasswordView(APIView):
     renderer_classes = [UserRenderer]
 
