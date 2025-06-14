@@ -611,7 +611,7 @@ class CustomerCreateViews(APIView):
                         return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
 
             # Validate the rest of customer_data
-            customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
+            customer_error = validate_payload_data(self, customer_data, CustomerSerializer, using=set_db('default'))
         else:
             customer_error = ["customer_data is required."]
 
@@ -659,38 +659,38 @@ class CustomerCreateViews(APIView):
         customer_id = new_customer_data[0].get("customer_id", None)
         logger.info('Customer - created*')
 
-        # # Step 2: Create entry in mstcnl.customers table
-        # from your_app.models import Companies, CustomersMstModel  # Adjust this import based on your project structure
+        # # # Step 2: Create entry in mstcnl.customers table
+        # # from your_app.models import Companies, CustomersMstModel  # Adjust this import based on your project structure
 
-        customer_name = new_customer_data[0].get("name")
-        phone = new_customer_data[0].get("phone")
-        email = new_customer_data[0].get("email")
-        company_id = new_customer_data[0].get("company_id")
+        # customer_name = new_customer_data[0].get("name")
+        # phone = new_customer_data[0].get("phone")
+        # email = new_customer_data[0].get("email")
+        # company_id = new_customer_data[0].get("company_id")
 
-        try:
-            company = Companies.objects.first()
-            print("-"*20)
-            print("company : ", company)
-            print("-"*20)
-            company_id = company.company_id
-            company_name = company.name
-            phone = addresses_data[0].get("phone") if addresses_data else None
-            print("phone : ", phone)
-            email = addresses_data[0].get("email") if addresses_data else None
-            print("email : ", email)
-            # Create the record in mstcnl DB
-            CustomersMstModel.objects.using('mstcnl').create(
-                customer_id=customer_id,
-                name=customer_name,
-                phone=phone,
-                email=email,
-                company_id=company_id,
-                company_name=company_name
-            )
-            logger.info("Customer also created in mstcnl.customers table")
+        # try:
+        #     company = Companies.objects.first()
+        #     print("-"*20)
+        #     print("company : ", company)
+        #     print("-"*20)
+        #     company_id = company.company_id
+        #     company_name = company.name
+        #     phone = addresses_data[0].get("phone") if addresses_data else None
+        #     print("phone : ", phone)
+        #     email = addresses_data[0].get("email") if addresses_data else None
+        #     print("email : ", email)
+        #     # Create the record in mstcnl DB
+        #     CustomersMstModel.objects.using('mstcnl').create(
+        #         customer_id=customer_id,
+        #         name=customer_name,
+        #         phone=phone,
+        #         email=email,
+        #         company_id=company_id,
+        #         company_name=company_name
+        #     )
+        #     logger.info("Customer also created in mstcnl.customers table")
 
-        except Companies.DoesNotExist:
-            logger.warning(f"Company with ID {company_id} not found. Skipping mstcnl customer creation.")
+        # except Companies.DoesNotExist:
+        #     logger.warning(f"Company with ID {company_id} not found. Skipping mstcnl customer creation.")
 
         # Step 3: Create CustomerAttachment Data
         update_fields = {'customer_id': customer_id}
