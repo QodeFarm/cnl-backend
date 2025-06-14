@@ -616,21 +616,21 @@ class CustomerCreateViews(APIView):
         # Validate customer_attachments
         attachments_data = given_data.pop('customer_attachments', None)
         if attachments_data:
-            attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers, ['customer_id'])
+            attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers, ['customer_id'], using_db=set_db('default'))
         else:
             attachment_error = []
 
         # Validate customer_addresses
         addresses_data = given_data.pop('customer_addresses', None)
         if addresses_data:
-            addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers, ['customer_id'])
+            addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers, ['customer_id'], using_db=set_db('default'))
         else:
             addresses_error = []
 
         # Validate custom_field_values
         custom_fields_data = given_data.get('custom_field_values', None)
         if custom_fields_data:
-            custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+            custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=set_db('default'))
         else:
             custom_fields_error = []
 
