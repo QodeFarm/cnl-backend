@@ -652,53 +652,53 @@ class CustomerCreateViews(APIView):
             return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
 
         # Step 1: Create Customer Data in devcnl
-        new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer)
+        new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer, using='default')
         customer_id = new_customer_data[0].get("customer_id", None)
         logger.info('Customer - created*')
 
-        # # # Step 2: Create entry in mstcnl.customers table
-        # # from your_app.models import Companies, CustomersMstModel  # Adjust this import based on your project structure
+        # # Step 2: Create entry in mstcnl.customers table
+        # from your_app.models import Companies, CustomersMstModel  # Adjust this import based on your project structure
 
-        # customer_name = new_customer_data[0].get("name")
-        # phone = new_customer_data[0].get("phone")
-        # email = new_customer_data[0].get("email")
-        # company_id = new_customer_data[0].get("company_id")
+        customer_name = new_customer_data[0].get("name")
+        phone = new_customer_data[0].get("phone")
+        email = new_customer_data[0].get("email")
+        company_id = new_customer_data[0].get("company_id")
 
-        # try:
-        #     company = Companies.objects.first()
-        #     print("-"*20)
-        #     print("company : ", company)
-        #     print("-"*20)
-        #     company_id = company.company_id
-        #     company_name = company.name
-        #     phone = addresses_data[0].get("phone") if addresses_data else None
-        #     print("phone : ", phone)
-        #     email = addresses_data[0].get("email") if addresses_data else None
-        #     print("email : ", email)
-        #     # Create the record in mstcnl DB
-        #     CustomersMstModel.objects.using('mstcnl').create(
-        #         customer_id=customer_id,
-        #         name=customer_name,
-        #         phone=phone,
-        #         email=email,
-        #         company_id=company_id,
-        #         company_name=company_name
-        #     )
-        #     logger.info("Customer also created in mstcnl.customers table")
+        try:
+            company = Companies.objects.first()
+            print("-"*20)
+            print("company : ", company)
+            print("-"*20)
+            company_id = company.company_id
+            company_name = company.name
+            phone = addresses_data[0].get("phone") if addresses_data else None
+            print("phone : ", phone)
+            email = addresses_data[0].get("email") if addresses_data else None
+            print("email : ", email)
+            # Create the record in mstcnl DB
+            CustomersMstModel.objects.using('mstcnl').create(
+                customer_id=customer_id,
+                name=customer_name,
+                phone=phone,
+                email=email,
+                company_id=company_id,
+                company_name=company_name
+            )
+            logger.info("Customer also created in mstcnl.customers table")
 
-        # except Companies.DoesNotExist:
-        #     logger.warning(f"Company with ID {company_id} not found. Skipping mstcnl customer creation.")
+        except Companies.DoesNotExist:
+            logger.warning(f"Company with ID {company_id} not found. Skipping mstcnl customer creation.")
 
         # Step 3: Create CustomerAttachment Data
         update_fields = {'customer_id': customer_id}
         if attachments_data:
-            attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields)
+            attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields, using='default')
             logger.info('CustomerAttachments - created*')
         else:
             attachments_data = []
 
         # Step 4: Create CustomerAddress Data
-        addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields)
+        addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields, using='default')
         logger.info('CustomerAddresses - created*')
 
         # Step 5: Handle CustomFieldValues
@@ -706,7 +706,7 @@ class CustomerCreateViews(APIView):
         if custom_fields_data:
             for custom_field in custom_fields_data:
                 custom_field['custom_id'] = customer_id
-            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer)
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, using='default')
             logger.info('CustomFieldValues - created*')
         else:
             custom_fields_data = []
