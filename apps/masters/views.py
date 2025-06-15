@@ -846,6 +846,9 @@ class GPackageUnitViewSet(viewsets.ModelViewSet):
 class FlowStatusViews(viewsets.ModelViewSet):
     queryset = FlowStatus.objects.all().order_by('-created_at')	
     serializer_class = FlowStatusSerializers
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = FlowStatusFilter
+    ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

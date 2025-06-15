@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter
 
 from config.utils_filter_methods import filter_by_limit, filter_by_page, filter_by_search, filter_by_sort
-from .models import BrandSalesman,Country, CustomerPaymentTerms, FirmStatuses, GPackageUnit, GstCategories, GstTypes, LedgerGroups, OrderStatuses, OrderTypes, PackageUnit, PaymentLinkTypes, PriceCategories, ProductBrands, ProductItemType, ProductTypes, ProductUniqueQuantityCodes, PurchaseTypes, SaleTypes, State, City, Statuses, TaskPriorities, Territory, Transporters, UnitOptions, UserGroupMembers, UserGroups
+from .models import BrandSalesman,Country, CustomerPaymentTerms, FirmStatuses, FlowStatus, GPackageUnit, GstCategories, GstTypes, LedgerGroups, OrderStatuses, OrderTypes, PackageUnit, PaymentLinkTypes, PriceCategories, ProductBrands, ProductItemType, ProductTypes, ProductUniqueQuantityCodes, PurchaseTypes, SaleTypes, State, City, Statuses, TaskPriorities, Territory, Transporters, UnitOptions, UserGroupMembers, UserGroups
 import django_filters
 from config.utils_filter_methods import filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 
@@ -651,3 +651,11 @@ class GPackageUnitFilter(FilterSet):
     class Meta:
         model = GPackageUnit 
         fields = ['unit_name','s', 'sort','page','limit']
+
+class FlowStatusFilter(django_filters.FilterSet):
+    flow_status_name = django_filters.CharFilter(lookup_expr='icontains')  # allows partial match, case-insensitive
+    created_at = django_filters.DateFromToRangeFilter()
+
+    class Meta:
+        model = FlowStatus
+        fields = ['flow_status_name', 'created_at']
