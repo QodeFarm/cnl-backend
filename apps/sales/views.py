@@ -1793,7 +1793,7 @@ class SaleReturnOrdersViewSet(APIView):
         - Invalid foreign keys
         - nulls in required fields
         """
-
+        db_name = set_db('default')
         # Vlidated SaleReturnOrders Data
         sale_return_order_data = given_data.pop('sale_return_order', None)  # parent_data
         if sale_return_order_data:
@@ -1807,13 +1807,13 @@ class SaleReturnOrdersViewSet(APIView):
         sale_return_items_data = given_data.pop('sale_return_items', None)
         if sale_return_items_data:
             item_error = validate_multiple_data(
-                self, sale_return_items_data, SaleReturnItemsSerializer, ['sale_return_id'])
+                self, sale_return_items_data, SaleReturnItemsSerializer, ['sale_return_id'], using_db=db_name)
 
         # Vlidated OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
         if order_attachments_data:
             attachment_error = validate_multiple_data(
-                self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'])
+                self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'], using_db=db_name)
         else:
             # Since 'order_attachments' is optional, so making an error is empty list
             attachment_error = []
@@ -1822,7 +1822,7 @@ class SaleReturnOrdersViewSet(APIView):
         order_shipments_data = given_data.pop('order_shipments', None)
         if order_shipments_data:
             shipments_error = validate_multiple_data(
-                self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'])
+                self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'], using_db=db_name)
         else:
             # Since 'order_shipments' is optional, so making an error is empty list
             shipments_error = []
@@ -1830,7 +1830,7 @@ class SaleReturnOrdersViewSet(APIView):
         # Validate Custom Fields Data
         custom_fields_data = given_data.pop('custom_field_values', None)
         if custom_fields_data:
-            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=db_name)
         else:
             custom_error = []
 
@@ -1862,7 +1862,7 @@ class SaleReturnOrdersViewSet(APIView):
         # Hence the data is validated , further it can be created.
 
         # Create SaleReturnOrders Data
-        new_sale_return_order_data = generic_data_creation(self, [sale_return_order_data], SaleReturnOrdersSerializer)
+        new_sale_return_order_data = generic_data_creation(self, [sale_return_order_data], SaleReturnOrdersSerializer, using=db_name)
         new_sale_return_order_data = new_sale_return_order_data[0]
         sale_return_id = new_sale_return_order_data.get("sale_return_id", None)  # Fetch sale_return_id from mew instance
         logger.info('SaleReturnOrders - created*')
@@ -1870,7 +1870,7 @@ class SaleReturnOrdersViewSet(APIView):
         # Create SaleReturnItems Data
         update_fields = {'sale_return_id': sale_return_id}
         items_data = generic_data_creation(
-            self, sale_return_items_data, SaleReturnItemsSerializer, update_fields)
+            self, sale_return_items_data, SaleReturnItemsSerializer, update_fields, using=db_name)
         logger.info('SaleReturnItems - created*')
 
         # Get order_type_id from OrderTypes model
@@ -1882,7 +1882,7 @@ class SaleReturnOrdersViewSet(APIView):
         update_fields = {'order_id': sale_return_id, 'order_type_id': type_id}
         if order_attachments_data:
             order_attachments = generic_data_creation(
-                self, order_attachments_data, OrderAttachmentsSerializer, update_fields)
+                self, order_attachments_data, OrderAttachmentsSerializer, update_fields, using=db_name)
             logger.info('OrderAttchments - created*')
         else:
             # Since OrderAttchments Data is optional, so making it as an empty data list
@@ -1891,7 +1891,7 @@ class SaleReturnOrdersViewSet(APIView):
         # create OrderShipments Data
         if order_shipments_data:
             order_shipments = generic_data_creation(
-                self, [order_shipments_data], OrderShipmentsSerializer, update_fields)
+                self, [order_shipments_data], OrderShipmentsSerializer, update_fields, using=db_name)
             order_shipments = order_shipments[0]
             logger.info('OrderShipments - created*')
         else:
@@ -1901,7 +1901,7 @@ class SaleReturnOrdersViewSet(APIView):
         # Assign `custom_id = vendor_id` for CustomFieldValues
         if custom_fields_data:
             update_fields = {'custom_id': sale_return_id}  # Now using `custom_id` like `order_id`
-            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields)
+            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields, using=db_name)
             logger.info('CustomFieldValues - created*')
         else:
             custom_fields_data = []
@@ -2929,18 +2929,19 @@ class SaleCreditNoteViewset(APIView):
         # Extracting data from the request
         given_data = request.data
 
+        db_name = set_db('default')
         # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
         # Vlidated SaleOrder Data
         sale_credit_note_data = given_data.pop('sale_credit_note', None)  # parent_data
         if sale_credit_note_data:
             credit_note_error = validate_payload_data(
-                self, sale_credit_note_data, SaleCreditNoteSerializers)
+                self, sale_credit_note_data, SaleCreditNoteSerializers, using=db_name)
 
         # Vlidated SaleOrderItems Data
         sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
         if sale_credit_items_data:
             item_error = validate_multiple_data(
-                self, sale_credit_items_data, SaleCreditNoteItemsSerializers, ['credit_note_id'])
+                self, sale_credit_items_data, SaleCreditNoteItemsSerializers, ['credit_note_id'], using_db=db_name)
 
         # Ensure mandatory data is present
         if not sale_credit_note_data or not sale_credit_items_data:
@@ -2963,7 +2964,7 @@ class SaleCreditNoteViewset(APIView):
         # Hence the data is validated , further it can be created.
 
         # Create SaleCreditNotes Data
-        new_sale_credit_note_data = generic_data_creation(self, [sale_credit_note_data], SaleCreditNoteSerializers)
+        new_sale_credit_note_data = generic_data_creation(self, [sale_credit_note_data], SaleCreditNoteSerializers, using=db_name)
         new_sale_credit_note_data = new_sale_credit_note_data[0]
         credit_note_id = new_sale_credit_note_data.get("credit_note_id", None)
         logger.info('SaleCreditNotes - created*')
@@ -2971,7 +2972,7 @@ class SaleCreditNoteViewset(APIView):
         # Create SaleCreditNotesItems Data
         update_fields = {'credit_note_id': credit_note_id}
         items_data = generic_data_creation(
-            self, sale_credit_items_data, SaleCreditNoteItemsSerializers, update_fields)
+            self, sale_credit_items_data, SaleCreditNoteItemsSerializers, update_fields, using=db_name)
         logger.info('SaleCreditNotesItems - created*')
 
 
