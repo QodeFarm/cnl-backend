@@ -189,6 +189,7 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
                     "product_id": product.product_id,
                     "product_name": product.name,
                     "quantity": item.quantity,
+                    "work_order_created": item.work_order_created  # Include the field here
                 }
                 products.append(product_data)
         
