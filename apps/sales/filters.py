@@ -42,6 +42,17 @@ class SaleOrderFilter(filters.FilterSet):
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     # New filter to fetch all child sale orders based on parent order_no
     parent_order_no = filters.CharFilter(method='filter_child_orders')
+    work_order_created = filters.CharFilter(method='filter_by_work_order_created')
+    
+    
+    def filter_by_work_order_created(self, queryset, name, value):
+        """
+        Filters sale orders that have at least one product with work_order_created=VALUE
+        value should be 'YES' or 'NO'
+        """
+        if value.upper() in ['YES', 'NO']:
+            return queryset.filter(products__work_order_created=value.upper()).distinct()
+        return queryset
 
     
     def filter_by_flow_status_name(self, queryset, name, value):
