@@ -13,6 +13,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 from rest_framework.filters import OrderingFilter
 from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, StockJournalFilter, WorkOrderFilter,BOMReportFilter, BillOfMaterialsFilter, MachineFilter, MachineUtilizationReportFilter, MaterialFilter, ProductionCostReportFilter, ProductionStatusFilter, ProductionSummaryReportFilter, RawMaterialConsumptionReportFilter, WorkOrderFilter
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from apps.products.models import Products, ProductVariation
@@ -524,6 +525,7 @@ class WorkOrderAPIView(APIView):
         - nulls in required fields
         """
 
+        db_name = set_db('default')
         # Validated WorkOrder Data
         work_order_data = given_data.pop('work_order', None) # parent_data
         if work_order_data:
@@ -533,12 +535,12 @@ class WorkOrderAPIView(APIView):
                 work_order_data['status_id'] = id
             else:
                 return build_response(0, " ValidationError: 'ProductionStatus' has no status named 'open'. ", [], status.HTTP_400_BAD_REQUEST)
-            work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer, [])
+            work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer, [], using_db=db_name)
 
         # Validated BillOfMaterial Data
         bom_data = normalize_value(given_data.pop('bom', None))
         if bom_data:
-            bom_error = validate_multiple_data(self, bom_data, BillOfMaterialsSerializer, ['reference_id'])
+            bom_error = validate_multiple_data(self, bom_data, BillOfMaterialsSerializer, ['reference_id'], using_db=db_name)
         else:
             bom_error = []
             return build_response(0, "Bill Of Materials are required.", [], status.HTTP_400_BAD_REQUEST)
@@ -546,21 +548,21 @@ class WorkOrderAPIView(APIView):
         # Validated WorkOrderMachine Data
         work_order_machines_data = normalize_value(given_data.pop('work_order_machines', None))
         if work_order_machines_data:
-            machinery_error = validate_multiple_data(self, work_order_machines_data, WorkOrderMachineSerializer, ['work_order_id'])
+            machinery_error = validate_multiple_data(self, work_order_machines_data, WorkOrderMachineSerializer, ['work_order_id'], using_db=db_name)
         else:
             machinery_error = [] # Since 'default_machinery' is optional, so making an error is empty list
 
         # Validated ProductionWorker Data
         workers_data = normalize_value(given_data.pop('workers', None))
         if workers_data:
-            workers_error = validate_multiple_data(self, workers_data , ProductionWorkerSerializer,['work_order_id'])
+            workers_error = validate_multiple_data(self, workers_data , ProductionWorkerSerializer,['work_order_id'], using_db=db_name)
         else:
             workers_error = []
 
         # Validated WorkOrderStage Data
         stages_data = normalize_value(given_data.pop('work_order_stages', None))
         if stages_data:
-            stages_error = validate_multiple_data(self, stages_data , WorkOrderStageSerializer,['work_order_id'])
+            stages_error = validate_multiple_data(self, stages_data , WorkOrderStageSerializer,['work_order_id'], using_db=db_name)
         else:
             stages_error = []
 
@@ -595,27 +597,27 @@ class WorkOrderAPIView(APIView):
         """
         # Hence the data is validated , further it can be created.
         # Create WorkOrder Data
-        order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, {})
+        order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, {}, using=db_name)
         new_work_order_data = order_data[0]
         work_order_id = new_work_order_data.get("work_order_id", None) #Fetch work_order_id from mew instance
         logger.info('WorkOrder - created*')
  
         # Create BillOfMaterials Data
         update_fields = {'reference_id': work_order_id}
-        bom_data = generic_data_creation(self, bom_data, BillOfMaterialsSerializer, update_fields)
+        bom_data = generic_data_creation(self, bom_data, BillOfMaterialsSerializer, update_fields, using=db_name)
         logger.info('BillOfMaterials - created*')
 
         # Create WorkOrderMachine Data
         update_fields = {'work_order_id': work_order_id}
-        work_order_machines_data = generic_data_creation(self, work_order_machines_data, WorkOrderMachineSerializer, update_fields)
+        work_order_machines_data = generic_data_creation(self, work_order_machines_data, WorkOrderMachineSerializer, update_fields, using=db_name)
         logger.info('DefaultMachinery - created*')
 
         # create ProductionWorker Data
-        workers_data = generic_data_creation(self, workers_data, ProductionWorkerSerializer, update_fields)
+        workers_data = generic_data_creation(self, workers_data, ProductionWorkerSerializer, update_fields, using=db_name)
         logger.info('ProductionWorker - created*')
 
         # create WorkOrderStage Data
-        stages_data = generic_data_creation(self, stages_data, WorkOrderStageSerializer, update_fields)
+        stages_data = generic_data_creation(self, stages_data, WorkOrderStageSerializer, update_fields, using=db_name)
         logger.info('WorkOrderStage - created*')      
 
         custom_data = {
