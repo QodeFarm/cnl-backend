@@ -13,10 +13,10 @@ class DatabaseMiddleware(MiddlewareMixin):
         client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
         subdomain =  client_domain.split('.')[0]
         # Select the database based on the frontend domain
-        db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "rudhra_rd001_prod")  # Default to devcnl if not found
+        db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "cnl_cl002_prod_2")  # Default to devcnl if not found
 
         # Set the correct database connection
-        connections.databases["default"]["NAME"] = 'rudhra_rd001_prod' #db_name
+        connections.databases["default"]["NAME"] = 'cnl_cl002_prod_2' #db_name
 
         # Print to logs for debugging
         print(f"Using database: {db_name} for client domain: {client_domain}")                                                                          
