@@ -24,8 +24,7 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
         instance.save(update_fields=['pending_amount'])  # Save only the pending_amount field
 
         # Step 2: Calculating total pending (balance_amount) for that customer
-        total_pending = SaleInvoiceOrders.objects.filter(customer_id=instance.customer_id).aggregate(
-            total_pending=Sum('pending_amount'))['total_pending'] or 0.00
+        total_pending = SaleInvoiceOrders.objects.filter(customer_id=instance.customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
 
         # Step 3: Get "sale account" from ChartOfAccounts
         try:

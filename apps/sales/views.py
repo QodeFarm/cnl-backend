@@ -15,6 +15,7 @@ from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
+from apps.finance.models import JournalEntryLines
 from rest_framework.filters import OrderingFilter
 from apps.customer.models import CustomerBalance
 from django.shortcuts import get_object_or_404
@@ -3739,8 +3740,9 @@ class PaymentTransactionAPIView(APIView):
                         if new_outstanding == Decimal('0.00'):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
-                                            
-                    journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, remaining_amount, data.get('payment_receipt_no'))
+                    
+                    total_pending = SaleInvoiceOrders.objects.filter(customer_id=customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
+                    journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, total_pending, data.get('payment_receipt_no'))
                     customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_amount)
 
                 # Prepare response
