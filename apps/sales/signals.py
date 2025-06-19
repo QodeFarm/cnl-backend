@@ -1,7 +1,8 @@
-from apps.finance.models import JournalEntryLines, ChartOfAccounts
 from .models import SaleCreditNotes, SaleInvoiceOrders, PaymentTransactions, SaleReturnOrders
+from apps.finance.models import JournalEntryLines, ChartOfAccounts
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.signals import post_save
+from decimal import Decimal, InvalidOperation
 from django.dispatch import receiver
 from django.db import transaction
 from django.db.models import Sum
@@ -24,7 +25,12 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
         instance.save(update_fields=['pending_amount'])  # Save only the pending_amount field
 
         # Step 2: Calculating total pending (balance_amount) for that customer
-        total_pending = SaleInvoiceOrders.objects.filter(customer_id=instance.customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
+        # total_pending = SaleInvoiceOrders.objects.filter(customer_id=instance.customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
+        existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
+                                                                            .order_by('-created_at')                   # most recent entry first
+                                                                            .values_list('balance', flat=True)         # get only the balance field
+                                                                            .first()) or Decimal('0.00')               # grab the first result
+        new_balance =  Decimal(instance.total_amount) + Decimal(existing_balance)
 
         # Step 3: Get "sale account" from ChartOfAccounts
         try:
@@ -40,7 +46,7 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
             credit=0.00,
             description=f"Goods sold to {instance.customer_id.name}",
             customer_id=instance.customer_id,
-            balance=total_pending
+            balance=new_balance 
         )
 
 
@@ -63,7 +69,8 @@ def update_Sale_Invoice_balance_after_payment_transaction(sender, instance, crea
             # Calling the model method to update balance and paid amount
             sale_invoice_orders_data.update_paid_amount_balance_amount_after_payment_transactions(instance.amount, instance.outstanding_amount, instance.adjusted_now)
 
-  
+
+from django.db.models import F
 @receiver(post_save, sender=SaleCreditNotes)
 def update_balance_after_credit(sender, instance, created, **kwargs):
     """
@@ -71,11 +78,24 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
     """
     if created:  # Ensuring it's a new record
         try:
+
+            existing_balance = (
+                JournalEntryLines.objects
+                .filter(customer_id=instance.customer_id)       # filter by your customer
+                .order_by('-created_at')                   # most recent entry first
+                .values_list('balance', flat=True)         # get only the balance field
+                .first()                                   # grab the first result
+            )or Decimal('0.00')
+            bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
             sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
+        
         except ChartOfAccounts.DoesNotExist:
             sale_account = None  
+        except (InvalidOperation, TypeError, ValueError) as e:
+            return Decimal('0.00')              
 
         # Step 3: Creating JournalEntryLines record
+        print("total_pending ==>", bal_amt)
         JournalEntryLines.objects.create(
             account_id=sale_account,  
             debit=0.00,
@@ -83,7 +103,7 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
             credit=instance.total_amount,
             description=f"Credit note gives to {instance.customer_id.name}",
             customer_id=instance.customer_id,
-            balance=instance.total_amount
+            balance=bal_amt
         )
         
         
@@ -94,9 +114,16 @@ def update_balance_after_return(sender, instance, created, **kwargs):
     """
     if created:  # Ensuring it's a new record
         try:
+            existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
+                                                                            .order_by('-created_at')                   # most recent entry first
+                                                                            .values_list('balance', flat=True)         # get only the balance field
+                                                                            .first() ) or Decimal('0.00')          
+            bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
             sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
         except ChartOfAccounts.DoesNotExist:
             sale_account = None  
+        except (InvalidOperation, TypeError, ValueError) as e:
+            return Decimal('0.00')          
 
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
@@ -106,5 +133,5 @@ def update_balance_after_return(sender, instance, created, **kwargs):
             credit=0.00,
             description=f"Return gives to {instance.customer_id.name}",
             customer_id=instance.customer_id,
-            balance=instance.total_amount
+            balance=bal_amt
         )
