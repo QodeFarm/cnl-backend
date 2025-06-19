@@ -3741,6 +3741,7 @@ class PaymentTransactionAPIView(APIView):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
                     
+                    print("input_amount :", input_amount)
                     total_pending = SaleInvoiceOrders.objects.filter(customer_id=customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
                     journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, total_pending, data.get('payment_receipt_no'))
                     customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_amount)
