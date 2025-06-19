@@ -3573,7 +3573,7 @@ class PaymentTransactionAPIView(APIView):
                     for data in data_list:
                         # Validate and convert adjustNow using Decimal
                         try:
-                            input_adjustNow = Decimal(data.get('adjustNow', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                            input_adjustNow = Decimal(data.get('adjustNow', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                             if input_adjustNow <= 0:
                                 return build_response(0, "Adjust Now Amount Must Be Positive.", None, status.HTTP_406_NOT_ACCEPTABLE)
                         except (ValueError, TypeError):
@@ -3658,7 +3658,7 @@ class PaymentTransactionAPIView(APIView):
             # Validate and convert amount
             try:
                 # Convert the incoming amount into a Decimal for accurate arithmetic & Round the amount to 4 decimal places
-                input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                 if input_amount <= 0:
                     return build_response(1, "Amount must be positive", None, status.HTTP_406_NOT_ACCEPTABLE)
             except (ValueError, TypeError):
