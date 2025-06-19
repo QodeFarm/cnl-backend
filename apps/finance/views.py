@@ -95,26 +95,27 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
 class JournalEntryLinesAPIView(APIView):
     def post(self, customer_id, account_id, amount, description, balance_amount, invoice_no):
         '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
-        try:
-            # Use serializer to create journal entry line
-            entry_data = {
-                "customer_id": customer_id,
-                "account_id": account_id,
-                "credit": int(amount),
-                "description": description,
-                "balance" : int(balance_amount),
-                "voucher_no" : invoice_no
-            }
-            serializer = JournalEntryLinesSerializer(data=entry_data)
-            if serializer.is_valid():
-                serializer.save() 
-            else:
-                raise ValueError(f"serializer validation failed, {serializer.errors}")
-        
-        except(ValueError, TypeError) as e:
-            return build_response(1, f"Invalid Data provided For Journal Entry Lines.", str(e), status.HTTP_406_NOT_ACCEPTABLE)
-        
-        return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
+        with transaction.atomic():
+            try:
+                # Use serializer to create journal entry line
+                entry_data = {
+                    "customer_id": customer_id,
+                    "account_id": account_id,
+                    "credit": int(amount),
+                    "description": description,
+                    "balance" : (balance_amount),
+                    "voucher_no" : invoice_no
+                }
+                serializer = JournalEntryLinesSerializer(data=entry_data)
+                if serializer.is_valid():
+                    serializer.save() 
+                else:
+                    raise ValueError(f"serializer validation failed, {serializer.errors}")
+            
+            except(ValueError, TypeError) as e:
+                return build_response(1, f"Invalid Data provided For Journal Entry Lines.", str(e), status.HTTP_406_NOT_ACCEPTABLE)
+            
+            return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
     
     def get(self, request, input_id):  
             # Try to determine if this UUID is for a customer
