@@ -97,12 +97,13 @@ class JournalEntryLinesAPIView(APIView):
         '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
         try:
             # Use serializer to create journal entry line
+            print("amount in JournalEntryLinesAPIView", amount)
             entry_data = {
                 "customer_id": customer_id,
                 "account_id": account_id,
-                "credit": int(amount),
+                "credit": (amount),
                 "description": description,
-                "balance" : int(balance_amount),
+                "balance" : (balance_amount),
                 "voucher_no" : invoice_no
             }
             serializer = JournalEntryLinesSerializer(data=entry_data)

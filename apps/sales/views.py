@@ -15,6 +15,7 @@ from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
+from apps.finance.models import JournalEntryLines
 from rest_framework.filters import OrderingFilter
 from apps.customer.models import CustomerBalance
 from django.shortcuts import get_object_or_404
@@ -3682,7 +3683,7 @@ class PaymentTransactionAPIView(APIView):
                     for data in data_list:
                         # Validate and convert adjustNow using Decimal
                         try:
-                            input_adjustNow = Decimal(data.get('adjustNow', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                            input_adjustNow = Decimal(data.get('adjustNow', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                             if input_adjustNow <= 0:
                                 return build_response(0, "Adjust Now Amount Must Be Positive.", None, status.HTTP_406_NOT_ACCEPTABLE)
                         except (ValueError, TypeError):
@@ -3767,7 +3768,7 @@ class PaymentTransactionAPIView(APIView):
             # Validate and convert amount
             try:
                 # Convert the incoming amount into a Decimal for accurate arithmetic & Round the amount to 4 decimal places
-                input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+                input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                 if input_amount <= 0:
                     return build_response(1, "Amount must be positive", None, status.HTTP_406_NOT_ACCEPTABLE)
             except (ValueError, TypeError):
@@ -3849,8 +3850,15 @@ class PaymentTransactionAPIView(APIView):
                         if new_outstanding == Decimal('0.00'):
                             SaleInvoiceOrders.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(order_status_id=completed_status)
                             PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).update(payment_status="Completed")
-                                            
-                    journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, remaining_amount, data.get('payment_receipt_no'))
+                    
+                    existing_balance = (JournalEntryLines.objects.filter(customer_id=customer_id)
+                                                                            .order_by('-created_at')                   # most recent entry first
+                                                                            .values_list('balance', flat=True)         # get only the balance field
+                                                                            .first() ) or Decimal('0.00')                               # grab the first result
+                    
+                    total_pending = Decimal(existing_balance) - Decimal(input_amount)
+                
+                    journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, total_pending, data.get('payment_receipt_no'))
                     customer_balance_response = CustomerBalanceView.post(self, request, customer_id, remaining_amount)
 
                 # Prepare response
