@@ -5,7 +5,7 @@ from django.db.models.signals import post_save
 from decimal import Decimal, InvalidOperation
 from django.dispatch import receiver
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum,F
 import logging
 
 # Set up basic configuration for logging
@@ -70,7 +70,6 @@ def update_Sale_Invoice_balance_after_payment_transaction(sender, instance, crea
             sale_invoice_orders_data.update_paid_amount_balance_amount_after_payment_transactions(instance.amount, instance.outstanding_amount, instance.adjusted_now)
 
 
-from django.db.models import F
 @receiver(post_save, sender=SaleCreditNotes)
 def update_balance_after_credit(sender, instance, created, **kwargs):
     """
@@ -95,12 +94,11 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
             return Decimal('0.00')              
 
         # Step 3: Creating JournalEntryLines record
-        print("total_pending ==>", bal_amt)
         JournalEntryLines.objects.create(
             account_id=sale_account,  
-            debit=0.00,
+            debit=instance.total_amount,
             voucher_no = instance.credit_note_number,
-            credit=instance.total_amount,
+            credit=0.00,
             description=f"Credit note gives to {instance.customer_id.name}",
             customer_id=instance.customer_id,
             balance=bal_amt
