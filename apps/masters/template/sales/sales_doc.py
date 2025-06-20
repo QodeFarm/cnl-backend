@@ -29,6 +29,9 @@ def sale_order_sales_invoice_data(pk, document_type):
                
 
             obj = get_object_or_404(model, pk=pk)
+            print("-"*20)
+            print("obkect data : ", obj)
+            print("-"*20)
             customer_data_for_cust_data = serializer(obj).data
             
             print("-"*20)
@@ -58,7 +61,7 @@ def sale_order_sales_invoice_data(pk, document_type):
             
             discountAmt = customer_data_for_cust_data.get("dis_amt")
             discountAmt = float(discountAmt) if discountAmt is not None else 0.0  # Convert to float
-            print("billing_address : ", billing_address)
+            
             if billing_address and 'Andhra Pradesh' in billing_address:
                 print("Intra-state transaction (CGST + SGST)")
             net_value = customer_data_for_cust_data.get('total_amount')
@@ -72,11 +75,17 @@ def sale_order_sales_invoice_data(pk, document_type):
             # ====== COMPLETE COMPANY DATA FETCH ======
             # Get the first company (you can modify this if you need specific company)
             company = Companies.objects.first()  # Get the first company
+            print("company : ", company)
             company_name = company.name if company else "N/A"
+            print("company_name : ", company_name)
             company_gst = company.gst_tin if company else "N/A"
+            print("company_gst : ", company_gst)
             company_address = company.address if company else "N/A"
+            print("company_address : ", company_address)
             company_phone = company.phone if company else "N/A"
+            print("company_phone : ", company_phone)
             company_email = company.email if company else "N/A"
+            print("company_email : ", company_email)
             company_logo = (
                 company.logo[0]['attachment_path'] 
                 if company and isinstance(company.logo, list) and company.logo else "N/A"
@@ -107,7 +116,7 @@ def sale_order_sales_invoice_data(pk, document_type):
             
             print("Items data : ", items_data)
 
-            total_amt = total_qty = cgst = sgst = igst = total_cgst = total_sgst= total_igst = total_disc_amt = round_0ff = party_old_balance = net_value = 0.0
+            total_amt = total_qty = cgst = sgst = igst = total_cgst = total_sgst= total_igst = cessAmt = total_disc_amt = round_0ff = party_old_balance = net_value = 0.0
             # Assuming cgst and sgst are not being mixed
             for item in items_data:
                 total_amt += float(item['amount']) if item['amount'] is not None else 0
@@ -134,18 +143,26 @@ def sale_order_sales_invoice_data(pk, document_type):
 
 
             
-            bill_amount_in_words = convert_amount_to_words(total_amt)
-
             product_data = extract_product_data(items_data)
             
             # final_tax = total_cgst + total_sgst + total_igst
             finalDiscount = 0
             finalDiscount = discountAmt + total_disc_amt
             
-            final_total = itemstotal + total_cgst + total_sgst + total_igst
+            cessAmt = customer_data_for_cust_data.get("cess_amount")
+            cessAmt = float(cessAmt) if cessAmt is not None else 0.0  # Convert to float
             
-            net_value = party_old_balance + final_total - finalDiscount
-
+            final_total = itemstotal + total_cgst + total_sgst + total_igst + cessAmt
+            
+            # raw = party_old_balance + final_total - finalDiscount
+            # net_value = round(raw, 2)
+            
+            
+            net_value = round(party_old_balance + final_total - finalDiscount)
+            
+            round_0ff = round(net_value - (party_old_balance + final_total - finalDiscount), 2)  # e.g., "+0.00", "-0.01"
+            bill_amount_in_words = convert_amount_to_words(net_value)
+            
             return {
                 'sale_estimate': sale_estimate,
                 # Add the doc_header to the returned data
@@ -196,6 +213,7 @@ def sale_order_sales_invoice_data(pk, document_type):
                 'finalDiscount' : finalDiscount,
                 # 'total_txbl_amt' : total_txbl_amt,
                 'total_disc_amt' : total_disc_amt,
+                'cess_amount' : cessAmt,
                 'round_0ff' : round_0ff,
                 'party_old_balance' :  party_old_balance,
                 'net_value' : net_value
@@ -209,7 +227,7 @@ def sale_order_sales_invoice_doc(
     customer_name, billing_address, phone, city,
     product_data,
     total_qty, total_amt, total_cgst, total_sgst, total_igst,
-    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, round_0ff, 
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, round_0ff, cess_amount,
     party_old_balance, net_lbl, net_value
 ):  
     
@@ -234,7 +252,7 @@ def sale_order_sales_invoice_doc(
     # Append product total details in words
     elements.append(product_total_details_inwords(
         bill_amount_in_words, itemstotal,finalDiscount,
-        total_cgst, total_sgst, total_igst, round_0ff, 
+        total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
         party_old_balance, net_lbl, net_value
     ))
     
@@ -246,11 +264,11 @@ def sale_order_sales_invoice_doc(
     
 def sales_invoice_doc(
     elements, doc, company_logo, company_name, company_gst, company_address, company_phone, company_email, bank_name, bank_acno, bank_ifsc, bank_branch,
-    cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
+    number_lbl, number_value, date_lbl, date_value,
     customer_name, city, country, phone, dest, shipping_address, billing_address,
     product_data,
     total_qty, total_amt, total_cgst, total_sgst, total_igst,
-    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, round_0ff, 
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, cess_amount, round_0ff, 
     party_old_balance, net_lbl, net_value
 ):  
 
@@ -275,7 +293,7 @@ def sales_invoice_doc(
     # Append product total details in words
     elements.append(product_total_details_inwords(
         bill_amount_in_words, itemstotal,
-        finalDiscount, total_cgst, total_sgst, total_igst, round_0ff,
+        finalDiscount, total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
         party_old_balance, net_lbl, net_value
     ))
     

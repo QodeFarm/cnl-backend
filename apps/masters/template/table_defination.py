@@ -233,7 +233,7 @@ def product_total_details(ttl_Qty, ttl_Amount,total_disc):
     ]))
     return table
 
-def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, total_cgst, total_sgst, total_igst, round_off, Party_Old_Balance, net_lbl, net_value):
+def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, total_cgst, total_sgst, total_igst, cess_amount, round_off, Party_Old_Balance, net_lbl, net_value):
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']
 
@@ -243,7 +243,7 @@ def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, 
     # Financial details table
     financials_data = [
         [Paragraph("<b>Sub Total:</b>", normal_style), Paragraph(f"<b>{SubTotal}</b>", normal_style)],
-        [Paragraph("<b>Discount Amt:</b>", normal_style), Paragraph(f"<b>{Discount_Amt}</b>", normal_style)],
+        [Paragraph("<b>Discount Amt:</b>", normal_style), Paragraph(f"<b>-{Discount_Amt}</b>", normal_style)],
         # [Paragraph("<b>Taxable Amt:</b>", normal_style), Paragraph(f"<b>{final_tax}</b>", normal_style)],
     ]
     
@@ -255,6 +255,7 @@ def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, 
         financials_data.append([Paragraph("<b>SGST:</b>", normal_style), Paragraph(f"<b>{total_sgst}</b>", normal_style)])
 
     financials_data.extend([
+        [Paragraph("<b>Cess AMT:</b>", normal_style), Paragraph(f"<b>{cess_amount}</b>", normal_style)],
         [Paragraph("<b>Round Off:</b>", normal_style), Paragraph(f"<b>{round_off}</b>", normal_style)],
         [Paragraph("<b>Party Old Balance:</b>", normal_style), Paragraph(f"<b>{Party_Old_Balance}</b>", normal_style)],
         [Paragraph(f"<b>{net_lbl}:</b>", normal_style), Paragraph(f"<b>{net_value}</b>", normal_style)]
