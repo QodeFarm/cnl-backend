@@ -1107,12 +1107,22 @@ class SaleOrderViewSet(APIView):
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
-    
     # def patch(self, request, pk, format=None):
+    #     # Determine which DB the sale_order belongs to
+    #     if SaleOrder.objects.using('default').filter(pk=pk).exists():
+    #         db_alias = 'default'
+    #     elif SaleOrder.objects.using('mstcnl').filter(pk=pk).exists():
+    #         db_alias = 'mstcnl'
+    #     else:
+    #         return build_response(0, f"sale_order_id {pk} not found in either DB", [], status.HTTP_400_BAD_REQUEST)
+
+    #     # Set DB context
+    #     set_db(db_alias)
+
     #     sale_order = self.get_object(pk)
     #     if not sale_order:
     #         return Response(status=status.HTTP_404_NOT_FOUND)
-        
+
     #     flow_status_id = request.data.get("flow_status_id")
     #     order_status_id = request.data.get("order_status_id")
 
@@ -1122,7 +1132,7 @@ class SaleOrderViewSet(APIView):
     #             sale_order.flow_status_id = new_flow_status
     #         except FlowStatus.DoesNotExist:
     #             return build_response(0, "Invalid flow_status_id", [], status.HTTP_400_BAD_REQUEST)
-            
+
     #     if order_status_id:
     #         try:
     #             new_order_status = OrderStatuses.objects.get(pk=order_status_id)
@@ -1130,13 +1140,59 @@ class SaleOrderViewSet(APIView):
     #         except OrderStatuses.DoesNotExist:
     #             return build_response(0, "Invalid order_status_id", [], status.HTTP_400_BAD_REQUEST)
 
+    #     # ✅ Temporarily pop sale_order_items to handle separately
+    #     sale_order_items_data = request.data.pop("sale_order_items", None)
+
+    #     # Serialize the main sale_order data (excluding items)
     #     serializer = SaleOrderOptionsSerializer(sale_order, data=request.data, partial=True)
     #     if serializer.is_valid():
     #         serializer.save()
+
+    #         # # ✅ Handle sale_order_items after saving main order
+    #         # if sale_order_items_data is not None:
+
+    #         #     selected_item_ids = [item['sale_order_item_id'] for item in sale_order_items_data]
+    #         #     print("Selected sale_order_item_ids to delete:", selected_item_ids)  # Debug log
+    #         #     # Delete only those selected items from the parent sale order
+    #         #     SaleOrderItems.objects.using(db_alias).filter(pk__in=selected_item_ids, sale_order_id=sale_order.pk).delete()
+    #         if sale_order_items_data is not None:
+
+    #             selected_item_ids = [item.get('sale_order_item_id') for item in sale_order_items_data]
+    #             SaleOrderItems.objects.using(db_alias).filter(
+    #                 pk__in=selected_item_ids, sale_order_id=sale_order.pk
+    #             ).delete()
+
+    #             # Recalculate totals based on remaining items
+    #             remaining_items = SaleOrderItems.objects.using(db_alias).filter(sale_order_id=sale_order.pk)
+
+    #             total_amount = 0
+    #             tax_amount = 0
+    #             cess_amount = 0
+
+    #             for item in remaining_items:
+    #                 amount = int(item.amount or 0)
+    #                 discount = float(item.discount or 0)
+    #                 item_total = amount - (amount * discount / 100)
+
+    #                 igst = int(item.igst or 0)
+    #                 cgst = int(item.cgst or 0)
+    #                 sgst = int(item.sgst or 0)
+
+    #                 total_amount += item_total + igst + cgst + sgst
+    #                 tax_amount += igst + cgst + sgst
+    #                 # cess_amount += int(item.cess_amount or 0)
+
+    #             # Update the sale_order record with new calculated values
+    #             sale_order.total_amount = total_amount
+    #             sale_order.tax_amount = tax_amount
+    #             sale_order.cess_amount = cess_amount
+    #             sale_order.save()
+
+
     #         return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
-        
+
     #     return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
-    
+
     def patch(self, request, pk, format=None):
         # Determine which DB the sale_order belongs to
         if SaleOrder.objects.using('default').filter(pk=pk).exists():
@@ -1150,6 +1206,7 @@ class SaleOrderViewSet(APIView):
         set_db(db_alias)
 
         sale_order = self.get_object(pk)
+        # print("Sale Order data : ", sale_order)
         if not sale_order:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -1170,9 +1227,62 @@ class SaleOrderViewSet(APIView):
             except OrderStatuses.DoesNotExist:
                 return build_response(0, "Invalid order_status_id", [], status.HTTP_400_BAD_REQUEST)
 
+        # ✅ Remove selected items if provided
+        sale_order_items_data = request.data.pop("sale_order_items", None)
+
         serializer = SaleOrderOptionsSerializer(sale_order, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+
+            if sale_order_items_data is not None:
+                # from sales.models import SaleOrderItems
+
+                # Delete only the selected items
+                selected_item_ids = [item.get('sale_order_item_id') for item in sale_order_items_data]
+                SaleOrderItems.objects.using(db_alias).filter(
+                    pk__in=selected_item_ids, sale_order_id=sale_order.pk
+                ).delete()
+
+                remaining_items = SaleOrderItems.objects.using(db_alias).filter(sale_order_id=sale_order.pk)
+
+                item_value_total = 0
+                tax_amount_total = 0
+                product_discount_total = 0
+
+                for item in remaining_items:
+                    try:
+                        quantity = float(item.quantity or 0)
+                        rate = float(item.rate or 0)
+                        discount = float(item.discount or 0)
+                        cgst = float(item.cgst or 0)
+                        sgst = float(item.sgst or 0)
+                        igst = float(item.igst or 0)
+
+                        item_value = quantity * rate
+                        item_discount_amount = (item_value * discount) / 100
+                        tax_total = cgst + sgst + igst
+
+                        item_value_total += item_value
+                        tax_amount_total += tax_total
+                        product_discount_total += item_discount_amount
+                    except Exception as e:
+                        print(f"Error in item {item.pk}: {e}")
+
+                overall_discount = float(sale_order.dis_amt or 0)
+                cess_amount = float(sale_order.cess_amount or 0)
+
+                # Final total calculation
+                total_amount = item_value_total - product_discount_total - overall_discount + tax_amount_total + cess_amount
+
+                # Round final amount (optional to 2 decimal places)
+                rounded_total_amount = round(total_amount, 2)
+
+                # ✅ Save updated values
+                sale_order.total_amount = rounded_total_amount
+                sale_order.tax_amount = tax_amount_total
+                sale_order.dis_amt = overall_discount  # unchanged
+                sale_order.save()          
+
             return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
 
         return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
@@ -1383,14 +1493,14 @@ class SaleInvoiceOrdersViewSet(APIView):
 
         # Determine DB before any validation
         bill_type = given_data.get('sale_invoice_order', {}).get('bill_type')
-        print("-"*20)
-        print("bill_type : ", bill_type)
+        # print("-"*20)
+        # print("bill_type : ", bill_type)
         is_other_bill = bill_type == "OTHERS"
-        print("is_other_bill : ", is_other_bill)
+        # print("is_other_bill : ", is_other_bill)
         using_db = 'mstcnl' if is_other_bill else 'default'
         set_db(using_db)
-        print("using_db:", using_db)
-        print("-"*20)
+        # print("using_db:", using_db)
+        # print("-"*20)
         # Extract payload
         sale_invoice_data = given_data.pop('sale_invoice_order', None)
         sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
