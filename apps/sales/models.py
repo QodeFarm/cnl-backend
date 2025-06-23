@@ -113,17 +113,18 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
 
             except FlowStatus.DoesNotExist:
                 raise ValueError("FlowStatus 'Ready for Invoice' not found")
-        super().save(*args, **kwargs)  # Save the order
 
         if is_new_record:
             # Increment the order number only for parent orders
             if not self.is_child_order(self.order_no):  # Skip increment for child orders
                 # increment_order_number(self.order_no_prefix)
                 increment_order_number(self.get_order_prefix())
+                
 
         else:
             print("from edit", self.pk)
-
+        # super().save(*args, **kwargs)  # Save the order
+        
         # Handle transitions for existing records
         if not is_new_record:
             if self.is_child_order(self.order_no):
@@ -131,7 +132,9 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
                 self.handle_child_order_transition()
             else:
                 # Force parent order status update
-                self.force_parent_status_update()            
+                self.force_parent_status_update()  
+                # Save the record
+        super().save(*args, **kwargs)          
 
     def force_parent_status_update(self):
         """
@@ -954,3 +957,189 @@ class PaymentTransactions(OrderNumberMixin):
             increment_order_number(self.order_no_prefix)
         else:
             print(f"Updating existing payment receipt: {self.payment_receipt_no}")
+            
+#---------------------------mstcnl-db-----------------------------------------------------
+import uuid
+from django.db import models
+
+
+class MstcnlSaleOrder(models.Model):
+    sale_order_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    sale_type_id = models.CharField(max_length=36, null=True, blank=True)
+    order_no = models.CharField(max_length=20, unique=True)
+    order_date = models.DateField()
+    customer_id = models.CharField(max_length=36)
+    # order_type = models.CharField(max_length=36)
+    gst_type_id = models.CharField(max_length=36, null=True, blank=True)
+    email = models.CharField(max_length=255, null=True, blank=True)
+    delivery_date = models.DateField()
+    ref_no = models.CharField(max_length=255, null=True, blank=True)
+    ref_date = models.DateField()
+    customer_address_id = models.CharField(max_length=36, null=True, blank=True)
+    payment_term_id = models.CharField(max_length=36, null=True, blank=True)
+    remarks = models.TextField(null=True, blank=True)
+    advance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    ledger_account_id = models.CharField(max_length=36, null=True, blank=True)
+    item_value = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    dis_amt = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    taxable = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    tax_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    cess_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    round_off = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    doc_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    vehicle_name = models.CharField(max_length=255, null=True, blank=True)
+    total_boxes = models.IntegerField(null=True, blank=True)
+    order_status_id = models.CharField(max_length=36, null=True, blank=True)
+    sale_return_id = models.CharField(max_length=36, null=True, blank=True)
+    shipping_address = models.TextField(null=True, blank=True)
+    billing_address = models.TextField(null=True, blank=True)
+    tax = models.CharField(max_length=10, choices=[('Exclusive', 'Exclusive'), ('Inclusive', 'Inclusive')], null=True, blank=True)
+    sale_estimate = models.CharField(max_length=5, choices=[('Yes', 'Yes'), ('No', 'No')], default='No')
+    flow_status_id = models.CharField(max_length=36, null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    use_workflow = models.BooleanField(default=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'sale_orders'
+
+
+class MstcnlSaleOrderItem(models.Model):
+    sale_order_item_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    sale_order_id = models.CharField(max_length=36)
+    product_id = models.CharField(max_length=36)
+    unit_options_id = models.CharField(max_length=36)
+    print_name = models.CharField(max_length=255, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    total_boxes = models.IntegerField(null=True, blank=True)
+    rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    remarks = models.CharField(max_length=255, null=True, blank=True)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    size_id = models.CharField(max_length=36, null=True, blank=True)
+    color_id = models.CharField(max_length=36, null=True, blank=True)
+    invoiced = models.CharField(max_length=3, default='NO')
+    work_order_created = models.CharField(max_length=3, default='NO')
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    cgst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    igst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'sale_order_items'
+        managed = False
+
+
+class MstcnlSaleInvoiceOrder(models.Model):
+    sale_invoice_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    bill_type = models.CharField(max_length=10, choices=[('CASH', 'CASH'), ('CREDIT', 'CREDIT'), ('OTHERS', 'OTHERS')], null=True, blank=True)
+    invoice_date = models.DateField()
+    invoice_no = models.CharField(max_length=20, unique=True)
+    customer_id = models.CharField(max_length=36)
+    gst_type_id = models.CharField(max_length=36, null=True, blank=True)
+    email = models.CharField(max_length=255, null=True, blank=True)
+    ref_no = models.CharField(max_length=255, null=True, blank=True)
+    ref_date = models.DateField()
+    order_salesman_id = models.CharField(max_length=36, null=True, blank=True)
+    customer_address_id = models.CharField(max_length=36, null=True, blank=True)
+    payment_term_id = models.CharField(max_length=36, null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    payment_link_type_id = models.CharField(max_length=36, null=True, blank=True)
+    remarks = models.TextField(null=True, blank=True)
+    advance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    ledger_account_id = models.CharField(max_length=36, null=True, blank=True)
+    item_value = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    dis_amt = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    taxable = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    tax_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    cess_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    transport_charges = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    round_off = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    vehicle_name = models.CharField(max_length=255, null=True, blank=True)
+    total_boxes = models.IntegerField(null=True, blank=True)
+    order_status_id = models.CharField(max_length=36, null=True, blank=True)
+    shipping_address = models.TextField(null=True, blank=True)
+    billing_address = models.TextField(null=True, blank=True)
+    sale_order_id = models.CharField(max_length=36, null=True, blank=True)
+    tax = models.CharField(max_length=10, choices=[('Exclusive', 'Exclusive'), ('Inclusive', 'Inclusive')], null=True, blank=True)
+    paid_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    balance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    pending_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'sale_invoice_orders'
+        managed = False
+
+
+class MstcnlSaleInvoiceItem(models.Model):
+    sale_invoice_item_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    sale_invoice_id = models.CharField(max_length=36)
+    product_id = models.CharField(max_length=36)
+    unit_options_id = models.CharField(max_length=36)
+    print_name = models.CharField(max_length=255, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    total_boxes = models.IntegerField(null=True, blank=True)
+    rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    remarks = models.CharField(max_length=255, null=True, blank=True)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    size_id = models.CharField(max_length=36, null=True, blank=True)
+    color_id = models.CharField(max_length=36, null=True, blank=True)
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    cgst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    igst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'sale_invoice_items'
+        managed = False
+
+
+class MstcnlOrderShipment(models.Model):
+    shipment_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    order_id = models.CharField(max_length=36)
+    destination = models.CharField(max_length=255, null=True, blank=True)
+    shipping_mode_id = models.CharField(max_length=36, null=True, blank=True)
+    shipping_company_id = models.CharField(max_length=36, null=True, blank=True)
+    shipping_tracking_no = models.CharField(max_length=20)
+    shipping_date = models.DateField(null=True, blank=True)
+    shipping_charges = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    vehicle_vessel = models.CharField(max_length=255, null=True, blank=True)
+    charge_type = models.CharField(max_length=255, null=True, blank=True)
+    document_through = models.CharField(max_length=255, null=True, blank=True)
+    port_of_landing = models.CharField(max_length=255, null=True, blank=True)
+    port_of_discharge = models.CharField(max_length=255, null=True, blank=True)
+    no_of_packets = models.IntegerField(null=True, blank=True)
+    weight = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    order_type_id = models.CharField(max_length=36)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'order_shipments'
+        managed = False
+
+
+class MstcnlOrderAttachment(models.Model):
+    attachment_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    order_id = models.CharField(max_length=36)
+    attachment_name = models.CharField(max_length=255)
+    attachment_path = models.CharField(max_length=255)
+    order_type_id = models.CharField(max_length=36)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        db_table = 'order_attachments'
+        managed = False

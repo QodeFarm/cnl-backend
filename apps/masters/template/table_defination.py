@@ -243,7 +243,7 @@ def product_total_details_inwords(Bill_Amount_In_Words, SubTotal, Discount_Amt, 
     # Financial details table
     financials_data = [
         [Paragraph("<b>Sub Total:</b>", normal_style), Paragraph(f"<b>{SubTotal}</b>", normal_style)],
-        [Paragraph("<b>Discount Amt:</b>", normal_style), Paragraph(f"<b>-{Discount_Amt}</b>", normal_style)],
+        [Paragraph("<b>Total Discount:</b>", normal_style), Paragraph(f"<b>-{Discount_Amt}</b>", normal_style)],
         # [Paragraph("<b>Taxable Amt:</b>", normal_style), Paragraph(f"<b>{final_tax}</b>", normal_style)],
     ]
     
@@ -461,21 +461,78 @@ def comp_address_last_tbl(comp_address, comp_phone, comp_email):
     return table
 
 #Sale invoice logics ....
+# def invoice_doc_details(company_logo, company_name, company_gst, company_address, company_phone, company_email, sno_lbl, sno, sdate_lbl, sdate): 
+#     styles = getSampleStyleSheet()
+#     style_normal = styles['Normal']
+#     style_bold = styles['Heading4']
+
+#     image_filename = "company_1_1afdb5.jpg"
+#     media_folder = r"C:/Users/Pramod Kumar/CNL_Backend/document_format/cnl-backend/media/doc_generater"
+#     image_path = os.path.join(media_folder, image_filename)
+
+#     # Check if image exists
+#     if not os.path.exists(image_path):
+#         raise FileNotFoundError(f"Image file not found: {image_path}")
+
+#     # Create an image object
+#     company_logo = Image(image_path, width=60, height=60)
+
+#     # Define company details as a Paragraph
+#     company_details_content = Paragraph(
+#         f"<b>{company_name}</b><br/>"
+#         f"<b>GSTIN: {company_gst}</b><br/>"
+#         f"{company_address}<br/>"
+#         f"<b>Mobile:</b> {company_phone}<br/>"
+#         f"<b>Email:</b> {company_email}",
+#         style_normal
+#     )
+
+#     # Create a table with two columns: [Logo, Company Details]
+#     col_widths = [1.2*inch, 3.8*inch, 2.5*inch, 2.5*inch]  # Adjust width for better spacing
+
+#     table_data_1 = [
+#         [company_logo, company_details_content, f'{sno_lbl} : \n{sno}', f'{sdate_lbl} : \n{sdate}']
+#     ]
+    
+#     table = Table(table_data_1, colWidths=col_widths)
+#     table.setStyle(TableStyle([
+        
+#         ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+#         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+#         ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
+#         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+#         ('GRID', (2, 0), (-1, 0), 1, colors.black),  # Only add grid for Invoice No. and Invoice Date
+#         ('BOX', (0, 0), (-1, 0), 1, colors.black),  # Full outer border
+#         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+#         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+#     ]))
+    
+#     return table
+
 def invoice_doc_details(company_logo, company_name, company_gst, company_address, company_phone, company_email, sno_lbl, sno, sdate_lbl, sdate): 
+    from reportlab.platypus import Image, Paragraph, Table, TableStyle
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    import os
+
     styles = getSampleStyleSheet()
     style_normal = styles['Normal']
     style_bold = styles['Heading4']
 
-    image_filename = "company_1_1afdb5.jpg"
-    media_folder = r"C:/Users/Pramod Kumar/CNL_Backend/document_format/cnl-backend/media/doc_generater"
-    image_path = os.path.join(media_folder, image_filename)
+    # Check if image path is valid
+    # if not os.path.exists(company_logo):
+    #     raise FileNotFoundError(f"Company logo file not found: {company_logo}")
 
-    # Check if image exists
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image file not found: {image_path}")
-
-    # Create an image object
-    company_logo = Image(image_path, width=60, height=60)
+    # # Create an image object from the provided dynamic path
+    # company_logo = Image(company_logo, width=60, height=60)
+    
+    # ✅ Validate and convert path string to Image object
+    if company_logo and os.path.exists(company_logo):
+        company_logo = Image(company_logo, width=80, height=80)
+    else:
+        # Fallback to empty space or a default image
+        company_logo = Paragraph("<b>No Logo</b>", getSampleStyleSheet()['Normal'])
 
     # Define company details as a Paragraph
     company_details_content = Paragraph(
@@ -487,27 +544,27 @@ def invoice_doc_details(company_logo, company_name, company_gst, company_address
         style_normal
     )
 
-    # Create a table with two columns: [Logo, Company Details]
-    col_widths = [1.2*inch, 3.8*inch, 2.5*inch, 2.5*inch]  # Adjust width for better spacing
+    # Table layout
+    col_widths = [1.2*inch, 3.8*inch, 2.5*inch, 2.5*inch]
 
     table_data_1 = [
         [company_logo, company_details_content, f'{sno_lbl} : \n{sno}', f'{sdate_lbl} : \n{sdate}']
     ]
-    
+
     table = Table(table_data_1, colWidths=col_widths)
     table.setStyle(TableStyle([
-        
         ('BACKGROUND', (0, 0), (-1, 0), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, 0), 'LEFT'),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-        ('GRID', (2, 0), (-1, 0), 1, colors.black),  # Only add grid for Invoice No. and Invoice Date
-        ('BOX', (0, 0), (-1, 0), 1, colors.black),  # Full outer border
+        ('GRID', (2, 0), (-1, 0), 1, colors.black),
+        ('BOX', (0, 0), (-1, 0), 1, colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
     ]))
-    
+
     return table
+
 
 
 
@@ -784,42 +841,42 @@ def return_customer_details(cust_name, billing_address, phone, city):
     ]))
     return table
 
-def return_product_details(data):
-    styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
+# def return_product_details(data):
+#     styles = getSampleStyleSheet()
+#     style_normal = styles['Normal']
     
-    # Column widths (match financial section)
-    col_widths = [4.5*inch, 1.5*inch, 1.5*inch, 2.5*inch]
+#     # Column widths (match financial section)
+#     col_widths = [4.5*inch, 1.5*inch, 1.5*inch, 2.5*inch]
     
-    # Table data with headers and products
-    table_data = [
-        [Paragraph("<b>Description</b>", style_normal),
-         Paragraph("<b>Qty</b>", style_normal),
-         Paragraph("<b>MRP</b>", style_normal),
-         Paragraph("<b>Amount</b>", style_normal)]
-    ]
+#     # Table data with headers and products
+#     table_data = [
+#         [Paragraph("<b>Description</b>", style_normal),
+#          Paragraph("<b>Qty</b>", style_normal),
+#          Paragraph("<b>MRP</b>", style_normal),
+#          Paragraph("<b>Amount</b>", style_normal)]
+#     ]
     
-    # Add product rows
-    for item in data:
-        table_data.append([
-            Paragraph(str(item[1])),  # Description
-            Paragraph(format_numeric(item[2])),  # Qty
-            Paragraph(format_numeric(item[4])),  # MRP
-            Paragraph(format_numeric(item[5]))   # Amount
-        ])
+#     # Add product rows
+#     for item in data:
+#         table_data.append([
+#             Paragraph(str(item[1])),  # Description
+#             Paragraph(format_numeric(item[2])),  # Qty
+#             Paragraph(format_numeric(item[4])),  # MRP
+#             Paragraph(format_numeric(item[5]))   # Amount
+#         ])
     
-    # Add empty rows for spacing (optional)
-    for _ in range(4 - len(data)):
-        table_data.append(["", "", "", ""])
+#     # Add empty rows for spacing (optional)
+#     for _ in range(4 - len(data)):
+#         table_data.append(["", "", "", ""])
     
-    return table_data
+#     return table_data
 
-def return_complete_table(data, total_qty, sub_total, discount_amt, bill_total, amount_in_words):
+def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount, total_cgst, total_sgst, total_igst, round_0ff, bill_total, amount_in_words):
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']
     
     # Column widths
-    col_widths = [4.5*inch, 1.5*inch, 1.5*inch, 2.5*inch]
+    col_widths = [4.5*inch, 1.5*inch, 1.5*inch, 1.5*inch, 1*inch]
     
     # Table data with headers
     table_data = [
@@ -827,7 +884,8 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, bill_total, 
             Paragraph("<b>Description</b>", normal_style),
             Paragraph("<b>Qty</b>", normal_style),
             Paragraph("<b>MRP</b>", normal_style),
-            Paragraph("<b>Amount</b>", normal_style)
+            Paragraph("<b>Amount</b>", normal_style),
+            Paragraph("<b>Discount</b>", normal_style)
         ]
     ]
     
@@ -837,7 +895,8 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, bill_total, 
             Paragraph(str(item[1])),  # Description
             Paragraph(format_numeric(item[2])),  # Qty
             Paragraph(format_numeric(item[4])),  # MRP
-            Paragraph(format_numeric(item[5]))   # Amount
+            Paragraph(format_numeric(item[5])),   # Amount
+            Paragraph(format_numeric(item[6]))   # Amount
         ])
     
     # Add empty rows if less than 4 products
@@ -846,12 +905,24 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, bill_total, 
     
     # Add financial rows
     table_data.extend([
-        ["Total Quantity",  "", "", total_qty],
-        ["Sub Total", "", "", sub_total],
-        ["Discount Amt", "", "", f"-{discount_amt}"],
-        ["Bill Total", "", "", bill_total],
+        ["Total Quantity", "", "", "", total_qty],
+        ["Sub Total", "", "", "", sub_total],
+        ["Total Discount", "", "", "", f"-{discount_amt}"],
+        ["Cess Amt", "", "", "", f"{cess_amount}"] #cess_amount
+    ])
+
+    if float(total_igst) > 0:
+        table_data.append(["IGST", "", "", "", f"{total_igst}"])
+    elif float(total_cgst) > 0 and float(total_sgst) > 0:
+        table_data.append(["CGST", "", "", "", f"{total_cgst}"])
+        table_data.append(["SGST", "", "", "", f"{total_sgst}"])
+
+    table_data.extend([
+        ["Round Off", "", "", "", round_0ff],
+        ["Bill Total", "", "", "", bill_total],
         [Paragraph(f"<b>Amount in Words:</b> {amount_in_words}", normal_style), "", "", ""]
     ])
+
     
     # Create table
     table = Table(table_data, colWidths=col_widths)
@@ -869,9 +940,15 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, bill_total, 
         ('LINEABOVE', (0, len(data)+1), (-1, len(data)+1), 1, colors.black),  # Above Total
         ('LINEABOVE', (0, len(data)+3), (-1, len(data)+3), 1, colors.black),  # Above Bill Total
         
+        # Key dividers
+        ('LINEABOVE', (0, len(data)+1), (-1, len(data)+1), 1, colors.black),  # Above Total
+        ('LINEABOVE', (0, len(data)+3), (-1, len(data)+3), 1, colors.black),  # Above Bill Total
+        ('LINEABOVE', (0, -2), (-1, -2), 0.5, colors.grey),  # Line above Amount in Words
+        
         # Right-align numbers
         ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
         
+       
         # Span amount in words
         ('SPAN', (0, -1), (-1, -1)),
         

@@ -86,11 +86,20 @@ def sale_order_sales_invoice_data(pk, document_type):
             print("company_phone : ", company_phone)
             company_email = company.email if company else "N/A"
             print("company_email : ", company_email)
-            company_logo = (
-                company.logo[0]['attachment_path'] 
-                if company and isinstance(company.logo, list) and company.logo else "N/A"
-            )
+            from django.conf import settings
+            # Safe fallback
+            company_logo_path = None
 
+            if company and isinstance(company.logo, list) and company.logo:
+                attachment_path = company.logo[0].get('attachment_path')
+                if attachment_path:
+                    company_logo_path = os.path.normpath(os.path.join(settings.MEDIA_ROOT, attachment_path))
+
+            print("company_logo_filename:", attachment_path)
+            print("company_logo_path:", company_logo_path)
+            print("Exists:", os.path.exists(company_logo_path))
+
+            company_logo = company_logo_path
             #fetching Bank details 
             bank = BankAccount.objects.first()
             bank_name = bank.bank_name if bank else "N/A"
@@ -313,7 +322,7 @@ def sale_return_doc(
     cust_bill_dtl, number_lbl, final_invoice, date_lbl, final_invoiceDate,
     customer_name, billing_address, phone, city,
     product_data,
-    total_qty, total_amt, itemstotal, total_disc_amt,
+    total_qty, total_amt, cess_amount, total_cgst, total_sgst, total_igst, itemstotal, finalDiscount,
     bill_amount_in_words, round_0ff,
     party_old_balance, net_lbl, net_value
 ):  
@@ -337,7 +346,12 @@ def sale_return_doc(
         data=product_data,
         total_qty=format_numeric(total_qty),
         sub_total=format_numeric(itemstotal),
-        discount_amt=format_numeric(total_disc_amt),
+        discount_amt=format_numeric(finalDiscount),
+        cess_amount = format_numeric(cess_amount),
+        total_cgst = format_numeric(total_cgst),
+        total_sgst =format_numeric(total_sgst),
+        total_igst = format_numeric(total_igst),
+        round_0ff = format_numeric(round_0ff),
         bill_total=format_numeric(net_value),
         amount_in_words=bill_amount_in_words
     ))
