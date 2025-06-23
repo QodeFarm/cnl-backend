@@ -1347,7 +1347,19 @@ class SaleInvoiceOrdersViewSet(APIView):
             else:
                 logger.info("Fetching sale orders only from devcnl")
                 # Only query from the 'devcnl' database
-                queryset = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
+                # queryset = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
+                
+                # Get cancelled status IDs
+                canceled_status_ids = list(OrderStatuses.objects.filter(
+                status_name__in=['Cancelled']
+                ).values_list('order_status_id', flat=True))
+            
+                # queryset = SaleInvoiceOrders.objects.all().order_by('-invoice_date')
+                queryset = SaleInvoiceOrders.objects.exclude(
+                order_status_id__in=canceled_status_ids
+                                   ).order_by('-created_at')
+        
+                total_count = SaleInvoiceOrders.objects.count()
                 # Apply filters manually
                 if request.query_params:
                     filterset = SaleInvoiceOrdersFilter(request.GET, queryset=queryset)
@@ -1461,7 +1473,52 @@ class SaleInvoiceOrdersViewSet(APIView):
         try:
             # Get the SaleInvoiceOrders instance
             instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
+            
+             # Get or create "Canceled" order status
+            canceled_status = None
+            try:
+                canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
+            except OrderStatuses.DoesNotExist:
+                logger.error("'Cancelled' status found in OrderStatuses table")
+                return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Store the invoice amount before marking as canceled
+            # invoice_amount = instance.total_amount
+            customer_id = instance.customer_id
+            invoice_no = instance.invoice_no
+            
+            # Update the invoice status to "Cancelled" instead of deleting
+            instance.order_status_id = canceled_status
+            instance.save(using=db_to_use)
+            existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
+                                                                            .order_by('-created_at')                   # most recent entry first
+                                                                            .values_list('balance', flat=True)         # get only the balance field
+                                                                            .first()) or Decimal('0.00')               # grab the first result
+            # new_balance =  Decimal(instance.total_amount) - Decimal(existing_balance)
+            latest_balance = existing_balance - Decimal(instance.total_amount)
 
+            
+            # Create offsetting credit entry in the finance system
+            try:
+                # Here we would typically call your finance module to create a credit entry
+                # This is a placeholder - implement according to your actual finance module
+                journal_entry = JournalEntryLines.objects.using(db_to_use).create(
+                    description=f"Cancellation of invoice {invoice_no}",
+                    credit=instance.total_amount,
+                    debit=0,
+                    voucher_no=invoice_no,
+                    customer_id=customer_id,
+                    balance=latest_balance  
+                )
+                logger.info(f"Created offsetting credit entry of {instance.total_amount} for canceled invoice {invoice_no}")
+
+                
+            except Exception as e:
+                logger.error(f"Error creating offsetting credit entry: {str(e)}")
+            
+            # Return success response for cancellation
+            return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
+            
             # Delete related OrderAttachments and OrderShipments
             if not delete_multi_instance(pk, SaleInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -3049,21 +3106,21 @@ class SaleCreditNoteViewset(APIView):
                 self, sale_credit_note_data, SaleCreditNoteSerializers, using=db_name)
 
         # Vlidated SaleOrderItems Data
-        sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
-        if sale_credit_items_data:
-            item_error = validate_multiple_data(
-                self, sale_credit_items_data, SaleCreditNoteItemsSerializers, ['credit_note_id'], using_db=db_name)
+        # sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
+        # if sale_credit_items_data:
+        #     item_error = validate_multiple_data(
+        #         self, sale_credit_items_data, SaleCreditNoteItemsSerializers, ['credit_note_id'], using_db=db_name)
 
         # Ensure mandatory data is present
-        if not sale_credit_note_data or not sale_credit_items_data:
-            logger.error("SaleCreditNote and SaleCreditNote items are mandatory but not provided.")
-            return build_response(0, "SaleCreditNote and SaleCreditNote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        # if not sale_credit_note_data or not sale_credit_items_data:
+        #     logger.error("SaleCreditNote and SaleCreditNote items are mandatory but not provided.")
+        #     return build_response(0, "SaleCreditNote and SaleCreditNote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if credit_note_error:
             errors["sale_credit_note"] = credit_note_error
-        if item_error:
-            errors["sale_credit_note_items"] = item_error
+        # if item_error:
+        #     errors["sale_credit_note_items"] = item_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
@@ -3082,14 +3139,14 @@ class SaleCreditNoteViewset(APIView):
 
         # Create SaleCreditNotesItems Data
         update_fields = {'credit_note_id': credit_note_id}
-        items_data = generic_data_creation(
-            self, sale_credit_items_data, SaleCreditNoteItemsSerializers, update_fields, using=db_name)
+        # items_data = generic_data_creation(
+        #     self, sale_credit_items_data, SaleCreditNoteItemsSerializers, update_fields, using=db_name)
         logger.info('SaleCreditNotesItems - created*')
 
 
         custom_data = {
             "sale_credit_note": new_sale_credit_note_data,
-            "sale_credit_note_items": items_data,
+            # "sale_credit_note_items": items_data,
         }
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
@@ -3118,11 +3175,11 @@ class SaleCreditNoteViewset(APIView):
                 self, [sale_credit_note_data], SaleCreditNoteSerializers, ['credit_note_number'])
 
         # Vlidated SaleOrderItems Data
-        sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
-        if sale_credit_items_data:
-            exclude_fields = ['credit_note_id']
-            item_error = validate_put_method_data(self, sale_credit_items_data, SaleCreditNoteItemsSerializers,
-                                                  exclude_fields, SaleCreditNoteItems, current_model_pk_field='credit_note_item_id')
+        # sale_credit_items_data = given_data.pop('sale_credit_note_items', None)
+        # if sale_credit_items_data:
+        #     exclude_fields = ['credit_note_id']
+        #     item_error = validate_put_method_data(self, sale_credit_items_data, SaleCreditNoteItemsSerializers,
+        #                                           exclude_fields, SaleCreditNoteItems, current_model_pk_field='credit_note_item_id')
 
         # Vlidated OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
@@ -3150,16 +3207,16 @@ class SaleCreditNoteViewset(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not sale_credit_note_data or not sale_credit_items_data:
-            logger.error(
-                "SaleCreditNote and SaleCreditNote items are mandatory but not provided.")
-            return build_response(0, "SaleCreditNote and SaleCreditNote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        # if not sale_credit_note_data or not sale_credit_items_data:
+        #     logger.error(
+        #         "SaleCreditNote and SaleCreditNote items are mandatory but not provided.")
+        #     return build_response(0, "SaleCreditNote and SaleCreditNote items are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if credit_note_error:
             errors["sale_credit_note"] = credit_note_error
-        if item_error:
-            errors["sale_credit_note_items"] = item_error
+        # if item_error:
+        #     errors["sale_credit_note_items"] = item_error
         if attachment_error:
             errors['order_attachments'] = attachment_error
         if shipments_error:
@@ -3179,12 +3236,12 @@ class SaleCreditNoteViewset(APIView):
 
         # Update the 'sale_order_items'
         update_fields = {'credit_note_id': pk}
-        items_data = update_multi_instances(self, pk, sale_credit_items_data, SaleCreditNoteItems, SaleCreditNoteItemsSerializers,
-                                            update_fields, main_model_related_field='credit_note_id', current_model_pk_field='credit_note_item_id')
+        # items_data = update_multi_instances(self, pk, sale_credit_items_data, SaleCreditNoteItems, SaleCreditNoteItemsSerializers,
+        #                                     update_fields, main_model_related_field='credit_note_id', current_model_pk_field='credit_note_item_id')
 
         custom_data = {
             "sale_credit_note": salecreditnote_data[0] if salecreditnote_data else {},
-            "sale_credit_note_items": items_data if items_data else []
+            # "sale_credit_note_items": items_data if items_data else []
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
