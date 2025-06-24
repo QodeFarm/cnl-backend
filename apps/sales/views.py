@@ -1,12 +1,15 @@
 from datetime import timedelta
 import json
+import time
+
+from django.forms import model_to_dict
 from apps.users.models import User
 from itertools import chain
 from config.utils_db_router import set_db
 from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
-from .models import PaymentTransactions, SaleInvoiceOrders, OrderStatuses
+from .models import *
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.finance.serializers import JournalEntryLinesSerializer
 from django_filters.rest_framework import DjangoFilterBackend
@@ -764,19 +767,19 @@ class SaleOrderViewSet(APIView):
         Based on the sale_order_id, it checks the appropriate database and deletes the records.
         """
         db_to_use = None
-        try:
-            # Check which database the SaleOrder belongs to
-            SaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
-            set_db('mstcnl')
-            db_to_use = 'mstcnl'
-        except SaleOrder.DoesNotExist:
-            try:
-                SaleOrder.objects.using('default').get(sale_order_id=pk)
-                set_db('default')
-                db_to_use = 'default'
-            except SaleOrder.DoesNotExist:
-                logger.warning(f"SaleOrder with ID {pk} does not exist in any database.")
-                return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        # try:
+        #     # Check which database the SaleOrder belongs to
+        #     SaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
+        #     set_db('mstcnl')
+        #     db_to_use = 'mstcnl'
+        # except SaleOrder.DoesNotExist:
+        #     try:
+        #         SaleOrder.objects.using('default').get(sale_order_id=pk)
+        #         set_db('default')
+        #         db_to_use = 'default'
+        #     except SaleOrder.DoesNotExist:
+        #         logger.warning(f"SaleOrder with ID {pk} does not exist in any database.")
+        #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
         try:
             # Get the SaleOrder instance from the appropriate database
@@ -810,25 +813,14 @@ class SaleOrderViewSet(APIView):
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
-    
+#---------------------------------------------------------
+
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         given_data = request.data
-
-        # Determine DB before any validation
-        sale_type_id = given_data.get('sale_order', {}).get('sale_type_id')
-        sale_type_val = None
-        if sale_type_id:
-            try:
-                sale_type_obj = SaleTypes.objects.get(sale_type_id=sale_type_id)
-                sale_type_val = sale_type_obj.name
-            except SaleTypes.DoesNotExist:
-                sale_type_val = None
-
-        is_other_sale = sale_type_val == 'Other'
-        using_db = 'mstcnl' if is_other_sale else 'default'
-        set_db(using_db)
-        print("using_db : ", using_db)
+        print("-" * 30)
+        print("Given data:", given_data)
+        print("-" * 30)
 
         # Extract payload after DB is known
         sale_order_data = given_data.pop('sale_order', None)
@@ -837,7 +829,168 @@ class SaleOrderViewSet(APIView):
         order_shipments_data = given_data.pop('order_shipments', None)
         custom_fields_data = given_data.pop('custom_field_values', None)
 
+        sale_type_name = sale_order_data.get("sale_type", {}).get("name")
+        flow_status_name = sale_order_data.get("flow_status", {}).get("flow_status_name")
+        is_mstcnl = sale_type_name == "Other" and flow_status_name == "Completed"
+
+        if is_mstcnl:
+            try:
+                # Flatten FKs
+                sale_order_id = sale_order_data.get("sale_order_id")
+                order_no = sale_order_data.get("order_no")
+                ref_no = sale_order_data.get("ref_no")
+                ref_date = sale_order_data.get("ref_date")
+                order_date = sale_order_data.get("order_date")
+                delivery_date = sale_order_data.get("delivery_date")
+                customer_name = sale_order_data.get("customer", {}).get("name")
+                sale_type = sale_order_data.get("sale_type", {}).get("name")
+                flow_status = sale_order_data.get("flow_status", {}).get("flow_status_name")
+                order_status = sale_order_data.get("order_status", {}).get("status_name")
+
+                # Optional fields
+                remarks = sale_order_data.get("remarks")
+                email = sale_order_data.get("email")
+                total_amount = sale_order_data.get("total_amount")
+                item_value = sale_order_data.get("item_value")
+                tax_amount = sale_order_data.get("tax_amount")
+                discount = sale_order_data.get("discount")
+                tax = sale_order_data.get("tax")
+                sale_estimate = sale_order_data.get("sale_estimate")
+                use_workflow = sale_order_data.get("use_workflow")
+                shipping_address = sale_order_data.get("shipping_address")
+                billing_address = sale_order_data.get("billing_address")
+
+                # Create the record in mstcnl DB
+                MstcnlSaleOrder.objects.using('mstcnl').create(
+                    sale_order_id=sale_order_id,
+                    order_no=order_no,
+                    ref_no=ref_no,
+                    ref_date=ref_date,
+                    order_date=order_date,
+                    delivery_date=delivery_date,
+                    customer_id=customer_name,
+                    sale_type_id=sale_type,
+                    flow_status_id=flow_status,
+                    order_status_id=order_status,
+                    remarks=remarks,
+                    email=email,
+                    total_amount=total_amount,
+                    item_value=item_value,
+                    tax_amount=tax_amount,
+                    discount=discount,
+                    tax=tax,
+                    sale_estimate=sale_estimate,
+                    use_workflow=use_workflow,
+                    shipping_address=shipping_address,
+                    billing_address=billing_address,
+                    created_at=timezone.now(),
+                    updated_at=timezone.now(),
+                    # order_type='sale_order'
+                )
+
+                logger.info("✅ SaleOrder created in mstcnl DB")
+                # return build_response(1, "Sale Order replicated to mstcnl DB", {"sale_order_id": sale_order_id}, status.HTTP_201_CREATED)
+        
+                # STEP 2: Create sale_order_items in mstcnl DB
+                for item in sale_order_items_data:
+                    try:
+                        MstcnlSaleOrderItem.objects.using('mstcnl').create(
+                            sale_order_item_id=item.get("sale_order_item_id"),
+                            sale_order_id=sale_order_id,
+                            product_id=item.get("product", {}).get("name"),
+                            # code=item.get("product", {}).get("code"),
+                            # print_name=item.get("print_name"),
+                            unit_options_id=item.get("unit_options", {}).get("unit_name"),
+                            size_id=item.get("size", {}).get("size_name"),
+                            color_id=item.get("color", {}).get("color_name"),
+                            quantity=item.get("quantity"),
+                            rate=item.get("rate"),
+                            amount=item.get("amount"),
+                            discount=item.get("discount"),
+                            tax=item.get("tax"),
+                            cgst=item.get("cgst"),
+                            sgst=item.get("sgst"),
+                            igst=item.get("igst"),
+                            invoiced=item.get("invoiced"),
+                            work_order_created=item.get("work_order_created"),
+                            remarks=item.get("remarks"),
+                            created_at=timezone.now(),
+                            updated_at=timezone.now(),
+                            
+                        )
+                        logger.info("✅ SaleOrder items created in mstcnl DB")
+                        # return build_response(1, "Sale Order items replicated to mstcnl DB", {"sale_order_item_id": item.get('sale_order_item_id')}, status.HTTP_201_CREATED)
+                    except Exception as e:
+                        logger.warning(f"❌ Failed to replicate SaleOrderItem {item.get('sale_order_item_id')} to mstcnl DB: {e}")
+
+                # ✅ Attachments: only if present and list
+                if order_attachments_data and isinstance(order_attachments_data, list):
+                    for attachment in order_attachments_data:
+                        try:
+                            MstcnlOrderAttachment.objects.using('mstcnl').create(
+                                attachment_id=attachment.get("attachment_id"),
+                                order_id=sale_order_id,
+                                order_type_id=attachment.get("order_type", {}).get("name"),
+                                attachment_name=attachment.get("attachment_name"),
+                                attachment_path=attachment.get("attachment_path"),
+                                # file_size=attachment.get("file_size", 0),
+                                created_at=timezone.now(),
+                                updated_at=timezone.now(),
+                            )
+                            logger.info("✅ Order Attachments items created in mstcnl DB")
+                        except Exception as e:
+                            logger.warning(f"❌ Failed to replicate OrderAttachment to mstcnl DB: {e}")
+
+                # ✅ Shipments: only if present and has shipment_id
+                if order_shipments_data and isinstance(order_shipments_data, dict) and order_shipments_data.get("shipment_id"):
+                    try:
+                        MstcnlOrderShipment.objects.using('mstcnl').create(
+                            shipment_id=order_shipments_data.get("shipment_id"),
+                            order_id=sale_order_id,
+                            order_type_id=order_shipments_data.get("order_type", {}).get("name"),
+                            shipping_mode_id=order_shipments_data.get("shipping_mode"),
+                            shipping_company_id=order_shipments_data.get("shipping_company"),
+                            shipping_tracking_no=order_shipments_data.get("shipping_tracking_no"),
+                            shipping_date=order_shipments_data.get("shipping_date"),
+                            # expected_delivery_date=None,  # Not in payload
+                            destination=order_shipments_data.get("destination"),
+                            created_at=timezone.now(),
+                            updated_at=timezone.now(),
+                        )
+                        logger.info("✅ Order Shipments items created in mstcnl DB")
+                    except Exception as e:
+                        logger.warning(f"❌ Failed to replicate OrderShipment to mstcnl DB: {e}")
+                        
+                # Add a 2-second delay before deletion
+                time.sleep(3)
+
+                # ✅ Delete from default DB
+                try:
+                    set_db('default')
+                    using_db = 'default'
+
+                    # Delete sale order from default DB if exists
+                    print("We are in the delete mode...")
+                    SaleOrderItems.objects.using('default').filter(sale_order_id=sale_order_id).delete()
+                    OrderAttachments.objects.using('default').filter(order_id=sale_order_id).delete()
+                    OrderShipments.objects.using('default').filter(order_id=sale_order_id).delete()
+                    SaleOrder.objects.using('default').filter(sale_order_id=sale_order_id).delete()
+                    print("After delete mode...")
+
+                except Exception as delete_error:
+                    logger.warning(f"⚠️ Failed to delete original records from default DB: {delete_error}")
+
+                return build_response(1, "Sale Order and related data replicated to mstcnl DB", {}, status.HTTP_201_CREATED)
+            except Exception as e:
+                logger.error(f"❌ Failed to replicate SaleOrder to mstcnl DB: {e}")
+                return build_response(0, "Replication failed", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
         # ---------------------- VALIDATION ----------------------------------#
+        
+      
+        set_db('default')
+        using_db = 'default'
         order_error, item_error, attachment_error, shipments_error, custom_error = [], [], [], [], []
 
         if sale_order_data:
@@ -945,6 +1098,8 @@ class SaleOrderViewSet(APIView):
         }
         return build_response(1, "Sale Order created successfully", custom_data, status.HTTP_201_CREATED)
 
+
+#--------------------------------------------------------
 
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
@@ -1107,91 +1262,6 @@ class SaleOrderViewSet(APIView):
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
-    # def patch(self, request, pk, format=None):
-    #     # Determine which DB the sale_order belongs to
-    #     if SaleOrder.objects.using('default').filter(pk=pk).exists():
-    #         db_alias = 'default'
-    #     elif SaleOrder.objects.using('mstcnl').filter(pk=pk).exists():
-    #         db_alias = 'mstcnl'
-    #     else:
-    #         return build_response(0, f"sale_order_id {pk} not found in either DB", [], status.HTTP_400_BAD_REQUEST)
-
-    #     # Set DB context
-    #     set_db(db_alias)
-
-    #     sale_order = self.get_object(pk)
-    #     if not sale_order:
-    #         return Response(status=status.HTTP_404_NOT_FOUND)
-
-    #     flow_status_id = request.data.get("flow_status_id")
-    #     order_status_id = request.data.get("order_status_id")
-
-    #     if flow_status_id:
-    #         try:
-    #             new_flow_status = FlowStatus.objects.get(pk=flow_status_id)
-    #             sale_order.flow_status_id = new_flow_status
-    #         except FlowStatus.DoesNotExist:
-    #             return build_response(0, "Invalid flow_status_id", [], status.HTTP_400_BAD_REQUEST)
-
-    #     if order_status_id:
-    #         try:
-    #             new_order_status = OrderStatuses.objects.get(pk=order_status_id)
-    #             sale_order.order_status_id = new_order_status
-    #         except OrderStatuses.DoesNotExist:
-    #             return build_response(0, "Invalid order_status_id", [], status.HTTP_400_BAD_REQUEST)
-
-    #     # ✅ Temporarily pop sale_order_items to handle separately
-    #     sale_order_items_data = request.data.pop("sale_order_items", None)
-
-    #     # Serialize the main sale_order data (excluding items)
-    #     serializer = SaleOrderOptionsSerializer(sale_order, data=request.data, partial=True)
-    #     if serializer.is_valid():
-    #         serializer.save()
-
-    #         # # ✅ Handle sale_order_items after saving main order
-    #         # if sale_order_items_data is not None:
-
-    #         #     selected_item_ids = [item['sale_order_item_id'] for item in sale_order_items_data]
-    #         #     print("Selected sale_order_item_ids to delete:", selected_item_ids)  # Debug log
-    #         #     # Delete only those selected items from the parent sale order
-    #         #     SaleOrderItems.objects.using(db_alias).filter(pk__in=selected_item_ids, sale_order_id=sale_order.pk).delete()
-    #         if sale_order_items_data is not None:
-
-    #             selected_item_ids = [item.get('sale_order_item_id') for item in sale_order_items_data]
-    #             SaleOrderItems.objects.using(db_alias).filter(
-    #                 pk__in=selected_item_ids, sale_order_id=sale_order.pk
-    #             ).delete()
-
-    #             # Recalculate totals based on remaining items
-    #             remaining_items = SaleOrderItems.objects.using(db_alias).filter(sale_order_id=sale_order.pk)
-
-    #             total_amount = 0
-    #             tax_amount = 0
-    #             cess_amount = 0
-
-    #             for item in remaining_items:
-    #                 amount = int(item.amount or 0)
-    #                 discount = float(item.discount or 0)
-    #                 item_total = amount - (amount * discount / 100)
-
-    #                 igst = int(item.igst or 0)
-    #                 cgst = int(item.cgst or 0)
-    #                 sgst = int(item.sgst or 0)
-
-    #                 total_amount += item_total + igst + cgst + sgst
-    #                 tax_amount += igst + cgst + sgst
-    #                 # cess_amount += int(item.cess_amount or 0)
-
-    #             # Update the sale_order record with new calculated values
-    #             sale_order.total_amount = total_amount
-    #             sale_order.tax_amount = tax_amount
-    #             sale_order.cess_amount = cess_amount
-    #             sale_order.save()
-
-
-    #         return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
-
-    #     return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
 
     def patch(self, request, pk, format=None):
         # Determine which DB the sale_order belongs to
@@ -1544,34 +1614,133 @@ class SaleInvoiceOrdersViewSet(APIView):
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
     
+    # @transaction.atomic
+    # def create(self, request, *args, **kwargs):
+    #     given_data = request.data
+
+    #     # Determine DB before any validation
+    #     bill_type = given_data.get('sale_invoice_order', {}).get('bill_type')
+
+    #     is_other_bill = bill_type == "OTHERS"
+
+    #     using_db = 'mstcnl' if is_other_bill else 'default'
+    #     set_db(using_db)
+
+    #     # Extract payload
+    #     sale_invoice_data = given_data.pop('sale_invoice_order', None)
+    #     sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
+    #     order_attachments_data = given_data.pop('order_attachments', None)
+    #     order_shipments_data = given_data.pop('order_shipments', None)
+    #     custom_fields_data = given_data.pop('custom_field_values', None)
+
+    #     # ---------------------- VALIDATION ----------------------------------#
+    #     invoice_error, item_error, attachment_error, shipment_error, custom_error = [], [], [], [], []
+
+    #     if sale_invoice_data:
+    #         invoice_error = validate_payload_data(self, sale_invoice_data, SaleInvoiceOrdersSerializer, using=using_db)
+    #         validate_order_type(sale_invoice_data, invoice_error, OrderTypes, look_up='order_type')
+            
+    #     if sale_invoice_items_data:
+    #         item_error = validate_multiple_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, ['sale_invoice_id'], using_db=using_db)
+
+    #     if order_attachments_data:
+    #         attachment_error = validate_multiple_data(self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+
+    #     if order_shipments_data:
+    #         if len(order_shipments_data) > 1:
+    #             shipment_error = validate_multiple_data(self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+    #         else:
+    #             order_shipments_data = {}
+    #             shipment_error = []
+
+    #     if custom_fields_data:
+    #         custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
+
+    #     if not sale_invoice_data or not sale_invoice_items_data:
+    #         logger.error("Sale invoice and items are mandatory but not provided.")
+    #         return build_response(0, "Sale invoice and items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+    #     errors = {}
+    #     if invoice_error: errors["sale_invoice_order"] = invoice_error
+    #     if item_error: errors["sale_invoice_items"] = item_error
+    #     if attachment_error: errors["order_attachments"] = attachment_error
+    #     if shipment_error: errors["order_shipments"] = shipment_error
+    #     if custom_error: errors["custom_field_values"] = custom_error
+
+    #     if errors:
+    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+    #     # ---------------------- D A T A   C R E A T I O N ----------------------------#
+    #     new_invoice_data = generic_data_creation(self, [sale_invoice_data], SaleInvoiceOrdersSerializer, using=using_db)[0]
+    #     sale_invoice_id = new_invoice_data.get("sale_invoice_id", None)
+    #     logger.info(f'SaleInvoiceOrder - created in {using_db} DB')
+
+    #     # Update child data with invoice_id
+    #     if sale_invoice_id:
+    #         update_fields = {'sale_invoice_id': sale_invoice_id}
+    #         invoice_items = generic_data_creation(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, update_fields, using=using_db)
+    #         logger.info(f'SaleInvoiceItems - created in {using_db} DB')
+
+    #     order_type_val = sale_invoice_data.get('order_type')
+    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
+    #     type_id = order_type.order_type_id if order_type else None
+
+    #     update_fields = {'order_id': sale_invoice_id, 'order_type_id': type_id}
+    #     if order_attachments_data:
+    #         order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields, using=using_db)
+    #         logger.info(f'OrderAttachments - created in {using_db} DB')
+    #     else:
+    #         order_attachments = []
+
+    #     if order_shipments_data:
+    #         order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields, using=using_db)
+    #         logger.info(f'OrderShipments - created in {using_db} DB')
+    #     else:
+    #         order_shipments = []
+
+    #     if custom_fields_data:
+    #         update_fields = {'custom_id': sale_invoice_id}
+    #         custom_fields = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields, using=using_db)
+    #         logger.info(f'CustomFieldValues - created in {using_db} DB')
+    #     else:
+    #         custom_fields = []
+
+    #     # ---------------------- R E S P O N S E ----------------------------#
+    #     custom_data = {
+    #         "sale_invoice_order": new_invoice_data,
+    #         "sale_invoice_items": invoice_items,
+    #         "order_attachments": order_attachments,
+    #         "order_shipments": order_shipments,
+    #         "custom_field_values": custom_fields
+    #     }
+    #     return build_response(1, "Sale Invoice created successfully", custom_data, status.HTTP_201_CREATED)
+    
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         given_data = request.data
 
-        # Determine DB before any validation
-        bill_type = given_data.get('sale_invoice_order', {}).get('bill_type')
-        # print("-"*20)
-        # print("bill_type : ", bill_type)
-        is_other_bill = bill_type == "OTHERS"
-        # print("is_other_bill : ", is_other_bill)
-        using_db = 'mstcnl' if is_other_bill else 'default'
+        # Always start with default DB
+        using_db = 'default'
         set_db(using_db)
-        # print("using_db:", using_db)
-        # print("-"*20)
+
         # Extract payload
         sale_invoice_data = given_data.pop('sale_invoice_order', None)
         sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
         order_attachments_data = given_data.pop('order_attachments', None)
         order_shipments_data = given_data.pop('order_shipments', None)
         custom_fields_data = given_data.pop('custom_field_values', None)
+    
 
         # ---------------------- VALIDATION ----------------------------------#
+        set_db('default')
+        using_db='default'
+        
         invoice_error, item_error, attachment_error, shipment_error, custom_error = [], [], [], [], []
 
         if sale_invoice_data:
             invoice_error = validate_payload_data(self, sale_invoice_data, SaleInvoiceOrdersSerializer, using=using_db)
             validate_order_type(sale_invoice_data, invoice_error, OrderTypes, look_up='order_type')
-            
+
         if sale_invoice_items_data:
             item_error = validate_multiple_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, ['sale_invoice_id'], using_db=using_db)
 
@@ -1607,7 +1776,6 @@ class SaleInvoiceOrdersViewSet(APIView):
         sale_invoice_id = new_invoice_data.get("sale_invoice_id", None)
         logger.info(f'SaleInvoiceOrder - created in {using_db} DB')
 
-        # Update child data with invoice_id
         if sale_invoice_id:
             update_fields = {'sale_invoice_id': sale_invoice_id}
             invoice_items = generic_data_creation(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, update_fields, using=using_db)
@@ -1637,6 +1805,10 @@ class SaleInvoiceOrdersViewSet(APIView):
         else:
             custom_fields = []
 
+        # ---------------------- Replication Trigger (Completed + OTHERS) ----------------------------#
+        if sale_invoice_data.get('order_status') == "Completed" and sale_invoice_data.get('bill_type') == "OTHERS":
+            replicate_invoice_to_mstcnl(sale_invoice_id)
+
         # ---------------------- R E S P O N S E ----------------------------#
         custom_data = {
             "sale_invoice_order": new_invoice_data,
@@ -1646,6 +1818,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             "custom_field_values": custom_fields
         }
         return build_response(1, "Sale Invoice created successfully", custom_data, status.HTTP_201_CREATED)
+
 
 
     def put(self, request, *args, **kwargs):
@@ -1809,6 +1982,37 @@ class SaleInvoiceOrdersViewSet(APIView):
         }
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+def replicate_invoice_to_mstcnl(sale_invoice_id):
+    try:
+        source_db = 'default'
+        target_db = 'mstcnl'
+
+        invoice = SaleInvoiceOrders.objects.using(source_db).get(sale_invoice_id=sale_invoice_id)
+        invoice_items = SaleInvoiceItems.objects.using(source_db).filter(sale_invoice_id=sale_invoice_id)
+        order_attachments = OrderAttachments.objects.using(source_db).filter(order_id=sale_invoice_id)
+        order_shipments = OrderShipments.objects.using(source_db).filter(order_id=sale_invoice_id)
+
+        # Replicate sale_invoice_order
+        invoice_data = model_to_dict(invoice)
+        invoice_data.pop('id', None)
+        SaleInvoiceOrders.objects.using(target_db).create(**invoice_data)
+
+        # Replicate sale_invoice_items
+        new_items = [SaleInvoiceItems(**{**model_to_dict(i), 'id': None}) for i in invoice_items]
+        SaleInvoiceItems.objects.using(target_db).bulk_create(new_items)
+
+        # Replicate order_attachments
+        new_attachments = [OrderAttachments(**{**model_to_dict(a), 'id': None}) for a in order_attachments]
+        OrderAttachments.objects.using(target_db).bulk_create(new_attachments)
+
+        # Replicate order_shipments
+        new_shipments = [OrderShipments(**{**model_to_dict(s), 'id': None}) for s in order_shipments]
+        OrderShipments.objects.using(target_db).bulk_create(new_shipments)
+
+        logger.info(f"Sale invoice {sale_invoice_id} replicated to mstcnl DB.")
+    except Exception as e:
+        logger.error(f"Error replicating invoice to mstcnl: {str(e)}")
 
 
 class SaleReturnOrdersViewSet(APIView):
@@ -3984,3 +4188,5 @@ class FetchSalesInvoicesForPaymentReceiptTable(APIView):
             return build_response(len(serializer.data), "Sale Invoices", sorted_data, status.HTTP_200_OK)
         except Exception as e:
             return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

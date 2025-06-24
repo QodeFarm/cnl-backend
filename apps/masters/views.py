@@ -554,23 +554,13 @@ def get_next_order_number(order_type_prefix):
         sequence_number_str = f"{sequence_number + 1:05d}"
         return f"{order_type_prefix}-{sequence_number_str}"
 
-    # # For date-based prefixes
-    # current_date = timezone.now()
-    # date_str = current_date.strftime('%y%m')
-    # key = f"{order_type_prefix}-{date_str}"
-    # sequence_number = cache.get(key, 0)
-    # cache.set(key, sequence_number)  # UPDATE cache
-    # sequence_number_str = f"{sequence_number + 1:05d}"  # +1 for the next number
-    # return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
-    
-    # For date-based prefixes like SOO-2504-00001
+    # For date-based prefixes
     current_date = timezone.now()
-    date_str = current_date.strftime('%y%m')  # e.g., '2504'
+    date_str = current_date.strftime('%y%m')
     key = f"{order_type_prefix}-{date_str}"
     sequence_number = cache.get(key, 0)
-    sequence_number += 1  # INCREMENT HERE
     cache.set(key, sequence_number)  # UPDATE cache
-    sequence_number_str = f"{sequence_number:05d}"
+    sequence_number_str = f"{sequence_number + 1:05d}"  # +1 for the next number
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
 
     
@@ -619,7 +609,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'], 
                                    pdf_data['product_data'],
                                    pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
-                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['cess_amount'], pdf_data['round_0ff'],
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['round_0ff'], pdf_data['cess_amount'], 
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                                 )
                 
@@ -650,8 +640,8 @@ class DocumentGeneratorView(APIView):
                     pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'],
                     pdf_data['city'],
                     pdf_data['product_data'],
-                    pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['itemstotal'],
-                    pdf_data['total_disc_amt'], pdf_data['bill_amount_in_words'],
+                    pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['cess_amount'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], pdf_data['itemstotal'],
+                    pdf_data['finalDiscount'], pdf_data['bill_amount_in_words'],
                     pdf_data['round_0ff'],
                     pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                 )
