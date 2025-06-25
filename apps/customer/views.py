@@ -185,34 +185,34 @@ class CustomerCreateViews(APIView):
         logger.info("Retrieving customer summary")
 
         page, limit = self.get_pagination_params(request)
-        using_db = self.resolve_db_from_request(request)
+        # using_db = self.resolve_db_from_request(request)
 
-        queryset = Customer.objects.using(using_db).all().order_by('-created_at')
+        queryset = Customer.objects.all().order_by('-created_at')
 
         if request.query_params:
             filterset = CustomerFilters(request.GET, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
 
-        total_count = Customer.objects.using(using_db).count()
+        total_count = Customer.objects.count()
         serializer = CustomerOptionSerializer(queryset, many=True)
 
         return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
-    def resolve_db_from_request(self, request):
-        """
-        Determines the DB to use:
-        - If `sale_type=Other` --> use 'mstcnl'
-        - If `bill_type=Others` --> use 'mstcnl' 
-        - Else → use 'default'
-        """
-        bill_type = request.query_params.get("bill_type")
-        sale_type = request.query_params.get("sale_type")
+    # def resolve_db_from_request(self, request):
+    #     """
+    #     Determines the DB to use:
+    #     - If `sale_type=Other` --> use 'mstcnl'
+    #     - If `bill_type=Others` --> use 'mstcnl' 
+    #     - Else → use 'default'
+    #     """
+    #     bill_type = request.query_params.get("bill_type")
+    #     sale_type = request.query_params.get("sale_type")
 
-        if (bill_type and bill_type.lower() == 'others') or (sale_type and sale_type.lower() == 'other'):
-            return 'mstcnl'
+    #     if (bill_type and bill_type.lower() == 'others') or (sale_type and sale_type.lower() == 'other'):
+    #         return 'mstcnl'
 
-        return 'default'
+    #     return 'default'
 
     def get_customer_summary_report(self, request):
         """Fetches a summary report of total sales and outstanding payments per customer."""
