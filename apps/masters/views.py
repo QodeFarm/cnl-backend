@@ -1,7 +1,7 @@
 from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
 from apps.products.models import Products
 from apps.purchase.models import PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
-from apps.sales.models import OrderShipments, PaymentTransactions, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
+from apps.sales.models import OrderShipments, PaymentTransactions, SaleCreditNotes, SaleDebitNotes, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
@@ -553,6 +553,8 @@ ORDER_MODEL_MAPPING = {
     'PO': (PurchaseOrders, 'order_no'), #PurchaseInvoiceOrders
     'PO-INV': (PurchaseInvoiceOrders, 'invoice_no'), #PurchaseInvoiceOrders
     'PR': (PurchaseReturnOrders, 'return_no'),
+    'CN': (SaleCreditNotes, 'credit_note_number'),
+    'DN': (SaleDebitNotes, 'debit_note_number'),
     'SHIP': (OrderShipments, 'shipping_tracking_no'),
     'PRD': (Products, 'code'),
     # Add others as needed
