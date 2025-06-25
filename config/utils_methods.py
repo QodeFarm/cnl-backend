@@ -179,37 +179,91 @@ def perform_update(self, serializer):
 
 #=========================== Patterns /  Order number related =====================================================
 
-def generate_order_number(order_type_prefix):
+# def generate_order_number(order_type_prefix):
+#     """
+#     Generate an order number based on the given prefix and the current date.
+
+#     Args:
+#         order_type_prefix (str): The prefix for the order type.
+
+#     Returns:
+#         str: The generated order number.
+#     """
+#     if order_type_prefix == "PRD":
+#         key = f"{order_type_prefix}"
+#         sequence_number = cache.get(key, 0)
+#         sequence_number += 1
+#         cache.set(key, sequence_number, timeout=None)
+
+#         sequence_number_str = f"{sequence_number:05d}"
+#         order_number = f"{order_type_prefix}-{sequence_number_str}"
+#     else:
+
+#         current_date = timezone.now()
+#         date_str = current_date.strftime('%y%m')
+
+#         key = f"{order_type_prefix}-{date_str}"
+#         sequence_number = cache.get(key, 0)
+#         sequence_number += 1
+#         cache.set(key, sequence_number, timeout=None)
+
+#         sequence_number_str = f"{sequence_number:05d}"
+#         order_number = f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+#     return order_number
+
+#---------------------------pavan-end--------------------------------------------------
+
+def generate_order_number(order_type_prefix, model_class=None, field_name=None, override_prefix=None):
     """
-    Generate an order number based on the given prefix and the current date.
+    Generate an order number using the last record in the database, safe against server restarts.
 
     Args:
         order_type_prefix (str): The prefix for the order type.
+        model_class (Model): The model class to query for last number.
+        field_name (str): The field name storing the order number (e.g., 'return_no').
 
     Returns:
         str: The generated order number.
     """
-    if order_type_prefix == "PRD":
-        key = f"{order_type_prefix}"
-        sequence_number = cache.get(key, 0)
-        sequence_number += 1
-        cache.set(key, sequence_number, timeout=None)
+    current_date = timezone.now()
+    date_str = current_date.strftime('%y%m')
+    
+    prefix = override_prefix if override_prefix else order_type_prefix
+    
 
-        sequence_number_str = f"{sequence_number:05d}"
-        order_number = f"{order_type_prefix}-{sequence_number_str}"
-    else:
+    if prefix == "PRD":
+        # Handle non-date-based types
+        # prefix = f"{order_type_prefix}"
+        if model_class and field_name:
+            filter_kwargs = {f"{field_name}__startswith": prefix}
+            last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
+            last_number = 0
+            if last_record:
+                try:
+                    last_number = int(getattr(last_record, field_name).split('-')[-1])
+                except Exception:
+                    last_number = 0
+            return f"{prefix}-{last_number + 1:05d}"
+        return f"{prefix}-00001"  # fallback
 
-        current_date = timezone.now()
-        date_str = current_date.strftime('%y%m')
+    # Handle date-based formats like SR-2506-0001
+    prefix = f"{order_type_prefix}-{date_str}"
+    last_number = 0
 
-        key = f"{order_type_prefix}-{date_str}"
-        sequence_number = cache.get(key, 0)
-        sequence_number += 1
-        cache.set(key, sequence_number, timeout=None)
+    if model_class and field_name:
+        filter_kwargs = {f"{field_name}__startswith": prefix}
+        last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
 
-        sequence_number_str = f"{sequence_number:05d}"
-        order_number = f"{order_type_prefix}-{date_str}-{sequence_number_str}"
-    return order_number
+        if last_record:
+            try:
+                last_number = int(getattr(last_record, field_name).split('-')[-1])
+            except Exception:
+                last_number = 0
+
+    return f"{prefix}-{last_number + 1:05d}"
+
+
+#----------------------------Pramod-end------------------------------------------------
 
 class OrderNumberMixin(models.Model):
     order_no_prefix = ''
@@ -231,7 +285,7 @@ class OrderNumberMixin(models.Model):
                 return 'SOO-INV'
         
         # Validate existing prefix before returning
-        valid_prefixes = ['SO', 'SOO', 'PO', 'INV']  # add all that you use
+        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD']  # add all that you use
         if self.order_no_prefix not in valid_prefixes:
             raise ValueError("Invalid prefix")  # <== this will surface clearly
 

@@ -1,5 +1,7 @@
 from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
-from apps.sales.models import PaymentTransactions
+from apps.products.models import Products
+from apps.purchase.models import PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
+from apps.sales.models import OrderShipments, PaymentTransactions, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
@@ -510,6 +512,8 @@ class OrderTypesView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+
+#-------------------------------------pavan-start---------------------------------------------
 @api_view(['GET'])
 def generate_order_number_view(request):
     """
@@ -535,6 +539,45 @@ def generate_order_number_view(request):
             'data': {'order_number': order_number}
         }
         return Response(response_data, status=status.HTTP_200_OK)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#-------------------------------------pavan-end---------------------------------------------------
+
+ORDER_MODEL_MAPPING = {
+    'SO': (SaleOrder, 'order_no'),
+    'SOO': (SaleOrder, 'order_no'),
+    'SO-INV': (SaleInvoiceOrders, 'invoice_no'),
+    'SOO-INV': (SaleInvoiceOrders, 'invoice_no'),
+    'SR': (SaleReturnOrders, 'return_no'),
+    'PO': (PurchaseOrders, 'order_no'), #PurchaseInvoiceOrders
+    'PO-INV': (PurchaseInvoiceOrders, 'invoice_no'), #PurchaseInvoiceOrders
+    'PR': (PurchaseReturnOrders, 'return_no'),
+    'SHIP': (OrderShipments, 'shipping_tracking_no'),
+    'PRD': (Products, 'code'),
+    # Add others as needed
+}
+
+@api_view(['GET'])
+def generate_order_number_view(request):
+    order_type_prefix = request.GET.get('type')
+
+    if not order_type_prefix:
+        return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
+
+    order_type_prefix = order_type_prefix.upper()
+
+    if order_type_prefix not in ORDER_MODEL_MAPPING:
+        return Response({"error": f"Unsupported prefix: {order_type_prefix}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    model_class, field_name = ORDER_MODEL_MAPPING[order_type_prefix]
+
+    try:
+        order_number = generate_order_number(order_type_prefix, model_class, field_name)
+        return Response({
+            'msg': 'Next available order number',
+            'data': {'order_number': order_number}
+        }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

@@ -1557,112 +1557,15 @@ class SaleInvoiceOrdersViewSet(APIView):
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
     
-    # @transaction.atomic
-    # def create(self, request, *args, **kwargs):
-    #     given_data = request.data
-
-    #     # Determine DB before any validation
-    #     bill_type = given_data.get('sale_invoice_order', {}).get('bill_type')
-
-    #     is_other_bill = bill_type == "OTHERS"
-
-    #     using_db = 'mstcnl' if is_other_bill else 'default'
-    #     set_db(using_db)
-
-    #     # Extract payload
-    #     sale_invoice_data = given_data.pop('sale_invoice_order', None)
-    #     sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
-    #     order_attachments_data = given_data.pop('order_attachments', None)
-    #     order_shipments_data = given_data.pop('order_shipments', None)
-    #     custom_fields_data = given_data.pop('custom_field_values', None)
-
-    #     # ---------------------- VALIDATION ----------------------------------#
-    #     invoice_error, item_error, attachment_error, shipment_error, custom_error = [], [], [], [], []
-
-    #     if sale_invoice_data:
-    #         invoice_error = validate_payload_data(self, sale_invoice_data, SaleInvoiceOrdersSerializer, using=using_db)
-    #         validate_order_type(sale_invoice_data, invoice_error, OrderTypes, look_up='order_type')
-            
-    #     if sale_invoice_items_data:
-    #         item_error = validate_multiple_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, ['sale_invoice_id'], using_db=using_db)
-
-    #     if order_attachments_data:
-    #         attachment_error = validate_multiple_data(self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
-
-    #     if order_shipments_data:
-    #         if len(order_shipments_data) > 1:
-    #             shipment_error = validate_multiple_data(self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
-    #         else:
-    #             order_shipments_data = {}
-    #             shipment_error = []
-
-    #     if custom_fields_data:
-    #         custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
-
-    #     if not sale_invoice_data or not sale_invoice_items_data:
-    #         logger.error("Sale invoice and items are mandatory but not provided.")
-    #         return build_response(0, "Sale invoice and items are mandatory", [], status.HTTP_400_BAD_REQUEST)
-
-    #     errors = {}
-    #     if invoice_error: errors["sale_invoice_order"] = invoice_error
-    #     if item_error: errors["sale_invoice_items"] = item_error
-    #     if attachment_error: errors["order_attachments"] = attachment_error
-    #     if shipment_error: errors["order_shipments"] = shipment_error
-    #     if custom_error: errors["custom_field_values"] = custom_error
-
-    #     if errors:
-    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
-
-    #     # ---------------------- D A T A   C R E A T I O N ----------------------------#
-    #     new_invoice_data = generic_data_creation(self, [sale_invoice_data], SaleInvoiceOrdersSerializer, using=using_db)[0]
-    #     sale_invoice_id = new_invoice_data.get("sale_invoice_id", None)
-    #     logger.info(f'SaleInvoiceOrder - created in {using_db} DB')
-
-    #     # Update child data with invoice_id
-    #     if sale_invoice_id:
-    #         update_fields = {'sale_invoice_id': sale_invoice_id}
-    #         invoice_items = generic_data_creation(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, update_fields, using=using_db)
-    #         logger.info(f'SaleInvoiceItems - created in {using_db} DB')
-
-    #     order_type_val = sale_invoice_data.get('order_type')
-    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
-    #     type_id = order_type.order_type_id if order_type else None
-
-    #     update_fields = {'order_id': sale_invoice_id, 'order_type_id': type_id}
-    #     if order_attachments_data:
-    #         order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields, using=using_db)
-    #         logger.info(f'OrderAttachments - created in {using_db} DB')
-    #     else:
-    #         order_attachments = []
-
-    #     if order_shipments_data:
-    #         order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields, using=using_db)
-    #         logger.info(f'OrderShipments - created in {using_db} DB')
-    #     else:
-    #         order_shipments = []
-
-    #     if custom_fields_data:
-    #         update_fields = {'custom_id': sale_invoice_id}
-    #         custom_fields = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields, using=using_db)
-    #         logger.info(f'CustomFieldValues - created in {using_db} DB')
-    #     else:
-    #         custom_fields = []
-
-    #     # ---------------------- R E S P O N S E ----------------------------#
-    #     custom_data = {
-    #         "sale_invoice_order": new_invoice_data,
-    #         "sale_invoice_items": invoice_items,
-    #         "order_attachments": order_attachments,
-    #         "order_shipments": order_shipments,
-    #         "custom_field_values": custom_fields
-    #     }
-    #     return build_response(1, "Sale Invoice created successfully", custom_data, status.HTTP_201_CREATED)
-    
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         given_data = request.data
 
-        # Always start with default DB
+        # Determine DB before any validation
+        # bill_type = given_data.get('sale_invoice_order', {}).get('bill_type')
+
+        # is_other_bill = bill_type == "OTHERS"
+
         using_db = 'default'
         set_db(using_db)
 
@@ -1672,18 +1575,14 @@ class SaleInvoiceOrdersViewSet(APIView):
         order_attachments_data = given_data.pop('order_attachments', None)
         order_shipments_data = given_data.pop('order_shipments', None)
         custom_fields_data = given_data.pop('custom_field_values', None)
-    
 
         # ---------------------- VALIDATION ----------------------------------#
-        set_db('default')
-        using_db='default'
-        
         invoice_error, item_error, attachment_error, shipment_error, custom_error = [], [], [], [], []
 
         if sale_invoice_data:
             invoice_error = validate_payload_data(self, sale_invoice_data, SaleInvoiceOrdersSerializer, using=using_db)
             validate_order_type(sale_invoice_data, invoice_error, OrderTypes, look_up='order_type')
-
+            
         if sale_invoice_items_data:
             item_error = validate_multiple_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, ['sale_invoice_id'], using_db=using_db)
 
@@ -1719,6 +1618,7 @@ class SaleInvoiceOrdersViewSet(APIView):
         sale_invoice_id = new_invoice_data.get("sale_invoice_id", None)
         logger.info(f'SaleInvoiceOrder - created in {using_db} DB')
 
+        # Update child data with invoice_id
         if sale_invoice_id:
             update_fields = {'sale_invoice_id': sale_invoice_id}
             invoice_items = generic_data_creation(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, update_fields, using=using_db)
@@ -1748,10 +1648,6 @@ class SaleInvoiceOrdersViewSet(APIView):
         else:
             custom_fields = []
 
-        # ---------------------- Replication Trigger (Completed + OTHERS) ----------------------------#
-        if sale_invoice_data.get('order_status') == "Completed" and sale_invoice_data.get('bill_type') == "OTHERS":
-            replicate_invoice_to_mstcnl(sale_invoice_id)
-
         # ---------------------- R E S P O N S E ----------------------------#
         custom_data = {
             "sale_invoice_order": new_invoice_data,
@@ -1761,6 +1657,110 @@ class SaleInvoiceOrdersViewSet(APIView):
             "custom_field_values": custom_fields
         }
         return build_response(1, "Sale Invoice created successfully", custom_data, status.HTTP_201_CREATED)
+    
+    # @transaction.atomic
+    # def create(self, request, *args, **kwargs):
+    #     given_data = request.data
+
+    #     # Always start with default DB
+    #     using_db = 'default'
+    #     set_db(using_db)
+
+    #     # Extract payload
+    #     sale_invoice_data = given_data.pop('sale_invoice_order', None)
+    #     sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
+    #     order_attachments_data = given_data.pop('order_attachments', None)
+    #     order_shipments_data = given_data.pop('order_shipments', None)
+    #     custom_fields_data = given_data.pop('custom_field_values', None)
+    
+
+    #     # ---------------------- VALIDATION ----------------------------------#
+    #     set_db('default')
+    #     using_db='default'
+        
+    #     invoice_error, item_error, attachment_error, shipment_error, custom_error = [], [], [], [], []
+
+    #     if sale_invoice_data:
+    #         invoice_error = validate_payload_data(self, sale_invoice_data, SaleInvoiceOrdersSerializer, using=using_db)
+    #         validate_order_type(sale_invoice_data, invoice_error, OrderTypes, look_up='order_type')
+
+    #     if sale_invoice_items_data:
+    #         item_error = validate_multiple_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, ['sale_invoice_id'], using_db=using_db)
+
+    #     if order_attachments_data:
+    #         attachment_error = validate_multiple_data(self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+
+    #     if order_shipments_data:
+    #         if len(order_shipments_data) > 1:
+    #             shipment_error = validate_multiple_data(self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+    #         else:
+    #             order_shipments_data = {}
+    #             shipment_error = []
+
+    #     if custom_fields_data:
+    #         custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
+
+    #     if not sale_invoice_data or not sale_invoice_items_data:
+    #         logger.error("Sale invoice and items are mandatory but not provided.")
+    #         return build_response(0, "Sale invoice and items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+    #     errors = {}
+    #     if invoice_error: errors["sale_invoice_order"] = invoice_error
+    #     if item_error: errors["sale_invoice_items"] = item_error
+    #     if attachment_error: errors["order_attachments"] = attachment_error
+    #     if shipment_error: errors["order_shipments"] = shipment_error
+    #     if custom_error: errors["custom_field_values"] = custom_error
+
+    #     if errors:
+    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+    #     # ---------------------- D A T A   C R E A T I O N ----------------------------#
+    #     new_invoice_data = generic_data_creation(self, [sale_invoice_data], SaleInvoiceOrdersSerializer, using=using_db)[0]
+    #     sale_invoice_id = new_invoice_data.get("sale_invoice_id", None)
+    #     logger.info(f'SaleInvoiceOrder - created in {using_db} DB')
+
+    #     if sale_invoice_id:
+    #         update_fields = {'sale_invoice_id': sale_invoice_id}
+    #         invoice_items = generic_data_creation(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, update_fields, using=using_db)
+    #         logger.info(f'SaleInvoiceItems - created in {using_db} DB')
+
+    #     order_type_val = sale_invoice_data.get('order_type')
+    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
+    #     type_id = order_type.order_type_id if order_type else None
+
+    #     update_fields = {'order_id': sale_invoice_id, 'order_type_id': type_id}
+    #     if order_attachments_data:
+    #         order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields, using=using_db)
+    #         logger.info(f'OrderAttachments - created in {using_db} DB')
+    #     else:
+    #         order_attachments = []
+
+    #     if order_shipments_data:
+    #         order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields, using=using_db)
+    #         logger.info(f'OrderShipments - created in {using_db} DB')
+    #     else:
+    #         order_shipments = []
+
+    #     if custom_fields_data:
+    #         update_fields = {'custom_id': sale_invoice_id}
+    #         custom_fields = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields, using=using_db)
+    #         logger.info(f'CustomFieldValues - created in {using_db} DB')
+    #     else:
+    #         custom_fields = []
+
+    #     # ---------------------- Replication Trigger (Completed + OTHERS) ----------------------------#
+    #     if sale_invoice_data.get('order_status') == "Completed" and sale_invoice_data.get('bill_type') == "OTHERS":
+    #         replicate_invoice_to_mstcnl(sale_invoice_id)
+
+    #     # ---------------------- R E S P O N S E ----------------------------#
+    #     custom_data = {
+    #         "sale_invoice_order": new_invoice_data,
+    #         "sale_invoice_items": invoice_items,
+    #         "order_attachments": order_attachments,
+    #         "order_shipments": order_shipments,
+    #         "custom_field_values": custom_fields
+    #     }
+    #     return build_response(1, "Sale Invoice created successfully", custom_data, status.HTTP_201_CREATED)
 
 
 

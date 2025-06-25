@@ -114,27 +114,48 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             except FlowStatus.DoesNotExist:
                 raise ValueError("FlowStatus 'Ready for Invoice' not found")
 
-        if is_new_record:
-            # Increment the order number only for parent orders
-            if not self.is_child_order(self.order_no):  # Skip increment for child orders
-                # increment_order_number(self.order_no_prefix)
-                increment_order_number(self.get_order_prefix())
-                
+        # Only generate and set the order number if this is a new record
+        if is_new_record and not getattr(self, self.order_no_field):
+            prefix = 'SOO' if self.sale_type_id and self.sale_type_id.name.lower() == 'other' else self.order_no_prefix
 
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=SaleOrder,
+                field_name='order_no',
+                override_prefix=prefix
+            )
+            setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
         else:
             print("from edit", self.pk)
-        # super().save(*args, **kwargs)  # Save the order
+        # if is_new_record:
+        #     # Increment the order number only for parent orders
+        #     if not self.is_child_order(self.order_no):  # Skip increment for child orders
+        #         # increment_order_number(self.order_no_prefix)
+        #         increment_order_number(self.get_order_prefix())
+                
+
+        # else:
+        #     print("from edit", self.pk)
+        # # super().save(*args, **kwargs)  # Save the order
         
-        # Handle transitions for existing records
-        if not is_new_record:
-            if self.is_child_order(self.order_no):
-                # Handle child order transition
-                self.handle_child_order_transition()
-            else:
-                # Force parent order status update
-                self.force_parent_status_update()  
-                # Save the record
-        super().save(*args, **kwargs)          
+        # # Handle transitions for existing records
+        # if not is_new_record:
+        #     if self.is_child_order(self.order_no):
+        #         # Handle child order transition
+        #         self.handle_child_order_transition()
+        #     else:
+        #         # Force parent order status update
+        #         self.force_parent_status_update()  
+        #         # Save the record
+        # super().save(*args, **kwargs)          
 
     def force_parent_status_update(self):
         """
@@ -430,11 +451,23 @@ class SaleInvoiceOrders(OrderNumberMixin):
             self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
 
         # Only generate and set the order number if this is a new record
-        if is_new_record:
-            # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+        if is_new_record and not getattr(self, self.order_no_field):
+            # order_number = generate_order_number(
+            #     self.order_no_prefix,
+            #     model_class=SaleInvoiceOrders,
+            #     field_name='invoice_no'
+            # )
+            # setattr(self, self.order_no_field, order_number)
+            custom_prefix = 'SOO-INV' if self.bill_type and self.bill_type.lower() == 'others' else self.order_no_prefix
+
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=SaleInvoiceOrders,
+                field_name='invoice_no',
+                override_prefix=custom_prefix
+            )
+
+            setattr(self, self.order_no_field, order_number)
 
         # Save the record
         super().save(*args, **kwargs)
@@ -442,7 +475,7 @@ class SaleInvoiceOrders(OrderNumberMixin):
         # After the record is saved, increment the order number sequence only for new records
         if is_new_record:
             print("from create", self.pk)
-            increment_order_number(self.get_order_prefix())
+            increment_order_number(self.order_no_prefix)
         else:
             print("from edit", self.pk)
     
@@ -580,11 +613,17 @@ class SaleReturnOrders(OrderNumberMixin):
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Only generate and set the order number if this is a new record
-        if is_new_record:
+        if is_new_record and not getattr(self, self.order_no_field):
             # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+            # if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+            #     order_number = generate_order_number(self.order_no_prefix)
+            #     setattr(self, self.order_no_field, order_number)
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=SaleReturnOrders,
+                field_name='return_no'
+            )
+            setattr(self, self.order_no_field, order_number)
 
         # Save the record
         super().save(*args, **kwargs)

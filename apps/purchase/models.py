@@ -167,11 +167,17 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Only generate and set the order number if this is a new record
-        if is_new_record:
+        if is_new_record and not getattr(self, self.order_no_field):
             # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+            # if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+            #     order_number = generate_order_number(self.order_no_prefix)
+            #     setattr(self, self.order_no_field, order_number)
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=PurchaseInvoiceOrders,
+                field_name='invoice_no'
+            )
+            setattr(self, self.order_no_field, order_number)
 
         # Save the record
         super().save(*args, **kwargs)
@@ -268,11 +274,17 @@ class PurchaseReturnOrders(OrderNumberMixin):
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Only generate and set the order number if this is a new record
-        if is_new_record:
+        if is_new_record and not getattr(self, self.order_no_field):
             # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+            # if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+            #     order_number = generate_order_number(self.order_no_prefix)
+            #     setattr(self, self.order_no_field, order_number)
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=PurchaseReturnOrders,
+                field_name='return_no'
+            )
+            setattr(self, self.order_no_field, order_number)
 
         # Save the record
         super().save(*args, **kwargs)
