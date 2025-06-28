@@ -2170,7 +2170,7 @@ class SaleReturnOrdersViewSet(APIView):
         sale_return_order_data = given_data.pop('sale_return_order', None)  # parent_data
         if sale_return_order_data:
             order_error = validate_payload_data(
-                self, sale_return_order_data, SaleReturnOrdersSerializer)
+                self, sale_return_order_data, SaleReturnOrdersSerializer, using=db_name)
             # validate the order_type in 'sale_return_order' data
             validate_order_type(sale_return_order_data, order_error,
                                 OrderTypes, look_up='order_type')
