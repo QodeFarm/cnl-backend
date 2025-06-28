@@ -949,7 +949,7 @@ def previous_product_instance_verification(model_name, data): # In case of Produ
 def update_product_stock(parent_model, child_model, data, operation, using='default'):
     for item in data:
         product = item.get('product_id', None)
-        return_qty = int(item.get('quantity', None))
+        return_qty = float(item.get('quantity', None))
         size = item.get('size_id', None)
         color = item.get('color_id', None)
 
