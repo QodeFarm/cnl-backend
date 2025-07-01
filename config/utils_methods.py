@@ -1165,26 +1165,58 @@ def convert_rupees_to_indian_words(number):
     
     return " ".join(parts)
 
-def extract_product_data(data):
+def extract_product_data(data, tax_type=None):
     product_data = []
     
     for index, item in enumerate(data, start=1):
         product = item['product']
         unit_options = item['unit_options']        
         product_name = product['name']
-        quantity = float(item['quantity'])#item['quantity']
+        total_boxes = item['total_boxes']
+        quantity = float(item['quantity'])
         unit_name = unit_options['unit_name']
-        rate = float(item['rate']) #item['rate']
-        # amount = item['amount']
-        # discount = item['amount'] * item['discount']/100
-        amount = float(item['amount'])  # Convert to float
-        discount = quantity * rate * float(item['discount']) / 100  # Convert discount to float
-        tax = (item['tax'] if item['tax'] is not None else 0)
-        
+        rate = float(item['rate'])
+        amount = float(quantity * rate)
+        discount_percent = item['discount']
+        discount = quantity * rate * float(discount_percent) / 100      
+        total_amount = float(item['amount'])
+
+        cgst = float(item['cgst'])
+        sgst = float(item['sgst'])
+        igst = float(item['igst'])
+        gst_tax = 0.0 if tax_type == 'Inclusive' else float(cgst + sgst + igst)
+
         product_data.append([
-            index, product_name, quantity, unit_name, rate, amount, discount, tax])
+            index, product_name, total_boxes, quantity, unit_name, rate, amount, discount_percent, discount, gst_tax, total_amount
+        ])
 
     return product_data
+
+
+# def extract_product_data(data):
+#     product_data = []
+    
+#     for index, item in enumerate(data, start=1):
+#         product = item['product']
+#         unit_options = item['unit_options']        
+#         product_name = product['name']
+#         total_boxes = item['total_boxes']
+#         quantity = float(item['quantity'])#item['quantity']
+#         unit_name = unit_options['unit_name']
+#         rate = float(item['rate']) #item['rate']
+#         amount = float(quantity * rate)
+#         discount_percent = item['discount']  # Convert discount to float
+#         discount = quantity * rate * float(item['discount']) / 100  # Convert discount to float      
+#         total_amount = float(item['amount'])  # Convert to float
+#         cgst = float(item['cgst'])
+#         sgst = float(item['sgst'])
+#         igst = float(item['igst'])
+#         gst_tax = float(cgst + sgst + igst)
+        
+#         product_data.append([
+#             index, product_name, total_boxes, quantity, unit_name, rate, amount, discount_percent, discount, gst_tax, total_amount ])
+
+#     return product_data
 
 def path_generate(document_type):
     # Generate a random filename
