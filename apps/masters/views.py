@@ -632,13 +632,15 @@ class DocumentGeneratorView(APIView):
 
         try:
             flag = request.data.get('flag')
+            format_value = request.data.get('format')
+            print("format_value : ", format_value)
             pk = kwargs.get('pk')
             document_type = kwargs.get('document_type')
             doc_name, file_path, relative_file_path = path_generate(document_type)
             
 #   #=======================================ReportLab Code Started============================          
             if document_type == "sale_order":
-                pdf_data = sale_order_sales_invoice_data(pk, document_type)
+                pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)
                 # Override doc_header based on sale_estimate directly in the view
                 
                 print("pdf_data.get('sale_estimate') : ", pdf_data.get('sale_estimate'))
@@ -652,10 +654,10 @@ class DocumentGeneratorView(APIView):
                                    elements, doc, 
                                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
                                    pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'], 
-                                   pdf_data['product_data'],
-                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
+                                   pdf_data['product_data'], 
+                                   pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
                                    pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['round_0ff'], pdf_data['cess_amount'], 
-                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type']
                                 )
                 
             if document_type == "sale_invoice":
@@ -669,7 +671,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'], pdf_data['shipping_address'],
                                    pdf_data['billing_address'],
                                    pdf_data['product_data'],
-                                   pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
+                                   pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
                                    pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'],pdf_data['finalDiscount'], pdf_data['cess_amount'], pdf_data['round_0ff'], #finalDiscount
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
                                 )

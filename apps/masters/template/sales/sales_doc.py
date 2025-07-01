@@ -9,7 +9,7 @@ from apps.masters.template.table_defination import *
 from apps.masters.utils.docs_variables import doc_data
 from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,get_related_data
 
-def sale_order_sales_invoice_data(pk, document_type):
+def sale_order_sales_invoice_data(pk, document_type, format_value=None):
     # Get the relevant data from the doc_data dictionary
             model_data = doc_data.get(document_type)
             print("-"*20)
@@ -50,6 +50,19 @@ def sale_order_sales_invoice_data(pk, document_type):
             is_estimate = getattr(obj, 'sale_estimate', 'No') == 'Yes'  # Safely get the attribute
             sale_estimate = customer_data_for_cust_data.get('sale_estimate')
             doc_header = "SALES QUOTATION" if is_estimate else "SALES ORDER"
+            
+            # tax_type = getattr(obj, 'tax')  # Default from model
+            print("-"*30)
+            print("format_value check : ", format_value)
+            print("-"*30)
+            # Override tax_type display based on format selection
+            if format_value == 'cnl-in-sale-order':
+                print("We are in the method...1")
+                tax_type = 'Inclusive'
+            elif format_value == 'cnl-ex-sale-order':
+                print("We are in the method...2")
+                tax_type = 'Exclusive'
+            print("final tax type : ", tax_type)
             
             itemstotal=0 #making itemstotal value 0.            
             # itemstotal = customer_data_for_cust_data.get('item_value')
@@ -152,24 +165,27 @@ def sale_order_sales_invoice_data(pk, document_type):
 
 
             
-            product_data = extract_product_data(items_data)
+            # product_data = extract_product_data(items_data)
+            product_data = extract_product_data(items_data, tax_type=tax_type)
             
             # final_tax = total_cgst + total_sgst + total_igst
             finalDiscount = 0
             finalDiscount = discountAmt + total_disc_amt
             
             cessAmt = customer_data_for_cust_data.get("cess_amount")
-            cessAmt = float(cessAmt) if cessAmt is not None else 0.0  # Convert to float
+            cessAmt = round(float(cessAmt) if cessAmt is not None else 0.0, 2)  # Convert to float
             
-            final_total = itemstotal + total_cgst + total_sgst + total_igst + cessAmt
+            final_total = round(itemstotal - total_disc_amt, 2)
+            
+            final_amount = round(itemstotal + total_cgst + total_sgst + total_igst + cessAmt, 2)
             
             # raw = party_old_balance + final_total - finalDiscount
             # net_value = round(raw, 2)
             
             
-            net_value = round(party_old_balance + final_total - finalDiscount)
+            net_value = round(party_old_balance + final_amount - finalDiscount)
             
-            round_0ff = round(net_value - (party_old_balance + final_total - finalDiscount), 2)  # e.g., "+0.00", "-0.01"
+            round_0ff = round(net_value - (party_old_balance + final_amount - finalDiscount), 2)  # e.g., "+0.00", "-0.01"
             bill_amount_in_words = convert_amount_to_words(net_value)
             
             return {
@@ -211,13 +227,15 @@ def sale_order_sales_invoice_data(pk, document_type):
                 'bill_amount_in_words' : bill_amount_in_words,
 
                 'product_data' : product_data,
+                'tax_type': tax_type,
                 
                 'itemstotal' : itemstotal,
+                'final_total': final_total,
                 'total_amt' : total_amt,
                 'total_qty' : total_qty,
-                'total_cgst' : total_cgst,
-                'total_sgst' : total_sgst,
-                'total_igst' : total_igst,
+                'total_cgst' : round(total_cgst, 2),
+                'total_sgst' : round(total_sgst, 2),
+                'total_igst' : round(total_igst, 2),
                 
                 'finalDiscount' : finalDiscount,
                 # 'total_txbl_amt' : total_txbl_amt,
@@ -235,9 +253,9 @@ def sale_order_sales_invoice_doc(
     elements, doc,cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
     customer_name, billing_address, phone, city,
     product_data,
-    total_qty, total_amt, total_cgst, total_sgst, total_igst,
+    total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
     bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, round_0ff, cess_amount,
-    party_old_balance, net_lbl, net_value
+    party_old_balance, net_lbl, net_value, tax_type
 ):  
     
     # Append document details
@@ -250,19 +268,26 @@ def sale_order_sales_invoice_doc(
         customer_name, billing_address, phone, city
     ))
     
+    # # Extract tax type from `cust_bill_dtl` (you may already have it)
+    # tax_type = cust_bill_dtl.get('tax', 'Exclusive')  # Default to Exclusive
+
+    # # Extract product data
+    # product_data = extract_product_data(['sale_order_items'], tax_type=tax_type)
+    
     # Append product details
-    elements.append(product_details(product_data))
+    elements.append(product_details(product_data, show_gst=(tax_type != 'Inclusive')))
+
     
     # Append product total details
     elements.append(product_total_details(
-        total_qty, total_amt, total_disc_amt
+        total_qty, itemstotal, final_total, total_disc_amt, show_gst=(tax_type != 'Inclusive')
     ))
     
     # Append product total details in words
     elements.append(product_total_details_inwords(
         bill_amount_in_words, itemstotal,finalDiscount,
         total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
-        party_old_balance, net_lbl, net_value
+        party_old_balance, net_lbl, net_value, tax_type=tax_type
     ))
     
     # Append declaration
@@ -276,7 +301,7 @@ def sales_invoice_doc(
     number_lbl, number_value, date_lbl, date_value,
     customer_name, city, country, phone, dest, shipping_address, billing_address,
     product_data,
-    total_qty, total_amt, total_cgst, total_sgst, total_igst,
+    total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
     bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, cess_amount, round_0ff, 
     party_old_balance, net_lbl, net_value
 ):  
@@ -296,7 +321,7 @@ def sales_invoice_doc(
     
     # Append product total details
     elements.append(invoice_product_total_details(
-        total_qty, total_amt, total_disc_amt
+        total_qty, itemstotal, final_total, total_disc_amt
     ))
     
     # Append product total details in words
