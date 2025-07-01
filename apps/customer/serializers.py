@@ -86,10 +86,11 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     customer_addresses = serializers.SerializerMethodField()
     city = serializers.SerializerMethodField() 
     ledger_account = serializers.SerializerMethodField()
+    pin_code = serializers.SerializerMethodField()
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days']
+        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
@@ -138,6 +139,25 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
 
     def get_customer_addresses(self, obj):
         return self.get_customer_details(obj)[3]
+    
+    def get_pin_code(self, obj):
+        addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
+        # Try to get pin code from shipping address first
+        shipping_address = addresses.filter(address_type='Shipping').first()
+        if shipping_address and shipping_address.pin_code:
+            return shipping_address.pin_code
+            
+        # # If no shipping address pin code, try billing address
+        # billing_address = addresses.filter(address_type='Billing').first()
+        # if billing_address and billing_address.pin_code:
+        #     return billing_address.pin_code
+        
+        # If no specific address with pin code, try any address
+        for address in addresses:
+            if address.pin_code:
+                return address.pin_code
+        
+        return None
     
     # def get_ledger_account(self, obj):
     #     if obj.ledger_account_id:
