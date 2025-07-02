@@ -131,7 +131,7 @@ class ModproductsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
     class Meta:
         model = Products
-        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'discount']
+        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'discount', 'gst_input']
 
 class ModStockJournalProductSerializer(serializers.ModelSerializer):
     class Meta:
