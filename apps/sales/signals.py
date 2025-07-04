@@ -99,7 +99,7 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
             debit=instance.total_amount,
             voucher_no = instance.credit_note_number,
             credit=0.00,
-            description=f"Credit note gives to {instance.customer_id.name}",
+            description=f"Credit note gives to {instance.customer_id.name} ( {instance.reason} )",
             customer_id=instance.customer_id,
             balance=bal_amt
         )
@@ -111,25 +111,26 @@ def update_balance_after_return(sender, instance, created, **kwargs):
     Signal to update when a new SaleReturnOrders record is created.
     """
     if created:  # Ensuring it's a new record
-        try:
-            existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
-                                                                            .order_by('-created_at')                   # most recent entry first
-                                                                            .values_list('balance', flat=True)         # get only the balance field
-                                                                            .first() ) or Decimal('0.00')          
-            bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
-            sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
-        except ChartOfAccounts.DoesNotExist:
-            sale_account = None  
-        except (InvalidOperation, TypeError, ValueError) as e:
-            return Decimal('0.00')          
+       if instance.return_option_id and instance.return_option_id.name.lower() != 'credit note': 
+            try:
+                existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
+                                                                                .order_by('-created_at')                   # most recent entry first
+                                                                                .values_list('balance', flat=True)         # get only the balance field
+                                                                                .first() ) or Decimal('0.00')          
+                bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
+                sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
+            except ChartOfAccounts.DoesNotExist:
+                sale_account = None  
+            except (InvalidOperation, TypeError, ValueError) as e:
+                return Decimal('0.00')          
 
-        # Step 3: Creating JournalEntryLines record
-        JournalEntryLines.objects.create(
-            account_id=sale_account,  
-            debit=instance.total_amount,
-            voucher_no = instance.return_no,
-            credit=0.00,
-            description=f"Return gives to {instance.customer_id.name}",
-            customer_id=instance.customer_id,
-            balance=bal_amt
-        )
+            # Step 3: Creating JournalEntryLines record
+            JournalEntryLines.objects.create(
+                account_id=sale_account,  
+                debit=instance.total_amount,
+                voucher_no = instance.return_no,
+                credit=0.00,
+                description= f"Return gives to {instance.customer_id.name} ({instance.return_reason})",
+                customer_id=instance.customer_id,
+                balance=bal_amt
+            )
