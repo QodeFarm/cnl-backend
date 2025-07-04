@@ -285,7 +285,7 @@ class OrderNumberMixin(models.Model):
                 return 'SOO-INV'
         
         # Validate existing prefix before returning
-        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD']  # add all that you use
+        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD', 'PTR']  # add all that you use
         if self.order_no_prefix not in valid_prefixes:
             raise ValueError("Invalid prefix")  # <== this will surface clearly
 

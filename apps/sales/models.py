@@ -845,11 +845,13 @@ class SaleCreditNotes(OrderNumberMixin):
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Only generate and set the order number if this is a new record
-        if is_new_record:
-            # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+        if is_new_record and not getattr(self, self.order_no_field):
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=SaleCreditNotes,
+                field_name='credit_note_number'
+            )
+            setattr(self, self.order_no_field, order_number)
 
         # Save the record
         super().save(*args, **kwargs)
@@ -911,12 +913,20 @@ class SaleDebitNotes(OrderNumberMixin):
         if not self.order_status_id:
             self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
-        # Only generate and set the order number if this is a new record
-        if is_new_record:
-            # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+        # # Only generate and set the order number if this is a new record
+        # if is_new_record:
+        #     # Generate the order number if it's not already set
+        #     if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+        #         order_number = generate_order_number(self.order_no_prefix)
+        #         setattr(self, self.order_no_field, order_number)
+        
+        if is_new_record and not getattr(self, self.order_no_field):
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=SaleDebitNotes,
+                field_name='debit_note_number'
+            )
+            setattr(self, self.order_no_field, order_number)
 
         # Save the record
         super().save(*args, **kwargs)
@@ -949,7 +959,7 @@ class SaleDebitNoteItems(models.Model):
 class PaymentTransactions(OrderNumberMixin):
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     payment_receipt_no = models.CharField(max_length=50, unique=True, default='')
-    order_no_prefix = 'PR'  # Payment Receipt prefix
+    order_no_prefix = 'PTR'  # Payment Receipt prefix
     order_no_field = 'payment_receipt_no'  # Field to store the order number
     payment_date = models.DateTimeField(auto_now_add=True)
     payment_method = models.CharField(max_length=100, null=True, blank=True)
@@ -981,11 +991,13 @@ class PaymentTransactions(OrderNumberMixin):
         is_new_record = self._state.adding
         
         # Only generate and set the order number if this is a new record
-        if is_new_record:
-            # Generate the order number if it's not already set
-            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
-                order_number = generate_order_number(self.order_no_prefix)
-                setattr(self, self.order_no_field, order_number)
+        if is_new_record and not getattr(self, self.order_no_field):
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=PaymentTransactions,
+                field_name='payment_receipt_no'
+            )
+            setattr(self, self.order_no_field, order_number)
 
         # Save the record
         super().save(*args, **kwargs)
