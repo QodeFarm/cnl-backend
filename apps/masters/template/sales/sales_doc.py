@@ -56,12 +56,14 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             print("format_value check : ", format_value)
             print("-"*30)
             # Override tax_type display based on format selection
-            if format_value == 'cnl-in-sale-order':
+            if format_value == 'CNL_Standard_Incl':
                 print("We are in the method...1")
                 tax_type = 'Inclusive'
-            elif format_value == 'cnl-ex-sale-order':
+            elif format_value == 'CNL_Standard_Excl':
                 print("We are in the method...2")
                 tax_type = 'Exclusive'
+            # else:
+            #     tax_type = getattr(obj, 'tax', 'Exclusive')  # fallback default
             print("final tax type : ", tax_type)
             
             itemstotal=0 #making itemstotal value 0.            
@@ -303,7 +305,7 @@ def sales_invoice_doc(
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
     bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, cess_amount, round_0ff, 
-    party_old_balance, net_lbl, net_value
+    party_old_balance, net_lbl, net_value, tax_type
 ):  
 
     # Append document details
@@ -317,18 +319,19 @@ def sales_invoice_doc(
     ))
     
     # Append product details
-    elements.append(invoice_product_details(product_data))
+    elements.append(invoice_product_details(product_data, show_gst=(tax_type != 'Inclusive')))
     
     # Append product total details
     elements.append(invoice_product_total_details(
-        total_qty, itemstotal, final_total, total_disc_amt
+        total_qty, itemstotal, final_total, total_disc_amt, show_gst=(tax_type != 'Inclusive')
+        # total_qty, itemstotal, final_total, total_disc_amt
     ))
     
     # Append product total details in words
     elements.append(product_total_details_inwords(
-        bill_amount_in_words, itemstotal,
-        finalDiscount, total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
-        party_old_balance, net_lbl, net_value
+        bill_amount_in_words, itemstotal,finalDiscount,
+        total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
+        party_old_balance, net_lbl, net_value, tax_type=tax_type
     ))
     
     # Add to your PDF story just like other tables
@@ -349,7 +352,7 @@ def sale_return_doc(
     product_data,
     total_qty, total_amt, cess_amount, total_cgst, total_sgst, total_igst, itemstotal, finalDiscount,
     bill_amount_in_words, round_0ff,
-    party_old_balance, net_lbl, net_value
+    party_old_balance, net_lbl, net_value, tax_type
 ):  
     # 1. Add company header
     elements.extend(
@@ -374,12 +377,14 @@ def sale_return_doc(
         discount_amt=format_numeric(finalDiscount),
         cess_amount = format_numeric(cess_amount),
         total_cgst = format_numeric(total_cgst),
-        total_sgst =format_numeric(total_sgst),
+        total_sgst = format_numeric(total_sgst),
         total_igst = format_numeric(total_igst),
         round_0ff = format_numeric(round_0ff),
         bill_total=format_numeric(net_value),
-        amount_in_words=bill_amount_in_words
+        amount_in_words=bill_amount_in_words,
+        show_gst=(tax_type != 'Inclusive')
     ))
+
     
     # 5. Build PDF
     doc.build(elements)

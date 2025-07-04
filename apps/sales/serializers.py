@@ -371,7 +371,7 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PaymentTransactions
-        fields = ['invoice_no','customer','customer_name','invoice_date', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
+        fields = ['transaction_id', 'invoice_no','customer','customer_name','invoice_date', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
 
 class SalesByProductReportSerializer(serializers.ModelSerializer):
     product = serializers.CharField(source="product_id__name")  

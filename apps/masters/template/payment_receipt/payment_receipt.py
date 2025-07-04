@@ -101,7 +101,7 @@ def payment_receipt_data(pk, document_type):
         raise ValueError(f"Unknown document type: {document_type}")
 
     # Get the payment transaction
-    obj = get_object_or_404(PaymentTransactions, customer_id=pk)
+    obj = get_object_or_404(PaymentTransactions, transaction_id=pk)
     payment_data = model_data['Serializer'](obj).data
     print("-"*20)
     print("payment_data : ", payment_data)

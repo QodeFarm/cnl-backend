@@ -557,6 +557,7 @@ ORDER_MODEL_MAPPING = {
     'DN': (SaleDebitNotes, 'debit_note_number'),
     'SHIP': (OrderShipments, 'shipping_tracking_no'),
     'PRD': (Products, 'code'),
+    'PTR': (PaymentTransactions, 'payment_receipt_no'),
     # Add others as needed
 }
 
@@ -661,7 +662,7 @@ class DocumentGeneratorView(APIView):
                                 )
                 
             if document_type == "sale_invoice":
-                pdf_data = sale_order_sales_invoice_data(pk, document_type)  
+                pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)  
                 elements, doc = doc_heading(file_path, pdf_data['doc_header'], '')
                 sales_invoice_doc(
                                    elements, doc, 
@@ -673,11 +674,11 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['product_data'],
                                    pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
                                    pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'],pdf_data['finalDiscount'], pdf_data['cess_amount'], pdf_data['round_0ff'], #finalDiscount
-                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type']
                                 )
             # Add this in the DocumentGeneratorView class after the sale_invoice condition
             if document_type == "sale_return":
-                pdf_data = sale_order_sales_invoice_data(pk, document_type)
+                pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)
                 elements, doc = doc_heading(file_path, "BILL OF SUPPLY", '')  # Modified header for returns
                 sale_return_doc(
                     elements, doc, 
@@ -690,7 +691,7 @@ class DocumentGeneratorView(APIView):
                     pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['cess_amount'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], pdf_data['itemstotal'],
                     pdf_data['finalDiscount'], pdf_data['bill_amount_in_words'],
                     pdf_data['round_0ff'],
-                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value']
+                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type']
                 )
             if document_type == "purchase_order" or document_type == "purchase_return":
                 pdf_data = purchase_data(pk, document_type)
