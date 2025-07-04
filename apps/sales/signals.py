@@ -111,11 +111,7 @@ def update_balance_after_return(sender, instance, created, **kwargs):
     Signal to update when a new SaleReturnOrders record is created.
     """
     if created:  # Ensuring it's a new record
-        print("===>>> return_option_id:", instance.return_option_id_id)
-        print("===>>> return_option name:", instance.return_option_id)
-        if instance.return_option_id and instance.return_option_id.name.lower() != 'credit note': 
-            print("===>>> return_option_id:", instance.return_option_id_id)
-            print("===>>> return_option name:", instance.return_option_id)
+       if instance.return_option_id and instance.return_option_id.name.lower() != 'credit note': 
             try:
                 existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
                                                                                 .order_by('-created_at')                   # most recent entry first
