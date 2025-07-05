@@ -84,10 +84,10 @@ def doc_heading(file_path, doc_header, sub_header):
     return elements, doc
 
 
-def doc_details(cust_bill_dtl, sno_lbl, sno, sdate_lbl, sdate): 
+def doc_details(cust_bill_dtl, sno_lbl, receipt_no, sdate_lbl, receipt_date): 
     col_widths = [3.3*inch, 3.4*inch, 3.3*inch]
     table_data_1 = [
-        [cust_bill_dtl, f'{sno_lbl} : {sno}', f'{sdate_lbl} : {sdate}'],
+        [cust_bill_dtl, f'{sno_lbl} : {receipt_no}', f'{sdate_lbl} : {receipt_date}'],
     ]
     
     table = Table(table_data_1, colWidths=col_widths)
@@ -1855,6 +1855,7 @@ def payment_details_table(payment_data):
     return table
 
 def payment_amount_summary(outstanding, amount_in_words):
+    print("outstanding--->>", outstanding)
     styles = getSampleStyleSheet()
     normal_style = styles['Normal']
     bold_style = styles['Heading3']
@@ -1864,23 +1865,15 @@ def payment_amount_summary(outstanding, amount_in_words):
         f"<b>Amount in Words:</b> {amount_in_words}",
         normal_style
     )
-    
-    # Amount breakdown
-    amounts_data = [
-        # [Paragraph("<b>Amount Paid:</b>", bold_style), format_numeric(amount)],
-        [Paragraph("Outstanding Balance:", normal_style), format_numeric(outstanding)],
-        # [Paragraph("Original Total:", normal_style), format_numeric(total)],
-    ]
-    
-    amounts_table = Table(amounts_data, colWidths=[3*inch, 2*inch])
-    amounts_table.setStyle(TableStyle([
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    
+
+    Outstanding_paragraph = Paragraph(
+        f"<b>Outstanding Balance:</b> {outstanding}",
+        normal_style
+    )
+        
     # Combine both sections
     combined = Table([
-        [amount_paragraph, amounts_table]
+        [amount_paragraph, Outstanding_paragraph]
     ], colWidths=[6*inch, 4*inch])
     
     combined.setStyle(TableStyle([
