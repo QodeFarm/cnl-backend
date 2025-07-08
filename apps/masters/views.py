@@ -774,7 +774,7 @@ class DocumentGeneratorView(APIView):
         return build_response(1, pdf_send_response , [], status.HTTP_200_OK)
 
 class ReturnOptionsViewset(viewsets.ModelViewSet):
-    queryset = ReturnOptions.objects.all().order_by('-created_at')	
+    queryset = ReturnOptions.objects.exclude(name__iexact='Sale order').order_by('-created_at')
     serializer_class = ReturnOptionsSerializers
 
     def list(self, request, *args, **kwargs):
