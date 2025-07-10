@@ -694,7 +694,7 @@ class DocumentGeneratorView(APIView):
                     pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type']
                 )
             if document_type == "purchase_order" or document_type == "purchase_return":
-                pdf_data = purchase_data(pk, document_type)
+                pdf_data = purchase_data(pk, document_type, format_value)
                 # sub_header = 'Receipt Voucher'
                 elements, doc = doc_heading(file_path, "PURCHASE BILL", '')
                 purchase_doc(elements, doc, 
@@ -702,7 +702,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
                                    pdf_data['customer_name'], pdf_data['v_billing_address'], pdf_data['v_shipping_address_lbl'],  pdf_data['v_shipping_address'],
                                    pdf_data['product_data'],
-                                   pdf_data['total_qty'], pdf_data['total_amt'],pdf_data['total_disc_amt'], pdf_data['total_txbl_amt'], pdf_data['total_sub_amt'], pdf_data['total_bill_amt'],
+                                   pdf_data['total_qty'], pdf_data['itemstotal'],  pdf_data['total_disc_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], pdf_data['final_total'], pdf_data['final_total'], pdf_data['total_txbl_amt'], pdf_data['total_sub_amt'], pdf_data['total_bill_amt'],
                                    pdf_data['destination'], pdf_data['tax_type'], pdf_data['shipping_mode_name'], pdf_data['port_of_landing'], pdf_data['port_of_discharge'],
                                    pdf_data['comp_name'],
                                    pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'],  pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
