@@ -73,8 +73,8 @@ class Vendor(models.Model):
     name = models.CharField(max_length=255)
     print_name = models.CharField(max_length=255)
     identification = models.CharField(max_length=255, null=True, default=None)
-    code = models.CharField(max_length=255)
-    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE, db_column='ledger_account_id')
+    code = models.CharField(max_length=255,null=True)
+    ledger_account_id = models.ForeignKey(LedgerAccounts,null=True, on_delete=models.CASCADE, db_column='ledger_account_id')
     vendor_common_for_sales_purchase = models.BooleanField(null=True, default=None)
     is_sub_vendor = models.BooleanField(null=True, default=None)
     firm_status_id = models.ForeignKey(FirmStatuses, on_delete=models.CASCADE, null=True, default=None, db_column='firm_status_id')
@@ -91,7 +91,7 @@ class Vendor(models.Model):
     TAX_TYPE_CHOICES = [('Inclusive', 'Inclusive'),
                         ('Exclusive', 'Exclusive')
                         ]
-    tax_type = models.CharField(max_length=20, choices=TAX_TYPE_CHOICES , default= 'Inclusive')
+    tax_type = models.CharField(max_length=20, choices=TAX_TYPE_CHOICES ,null=True, default= 'Inclusive')
     distance = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     tds_on_gst_applicable = models.BooleanField(null=True, default=None)
     tds_applicable = models.BooleanField(null=True, default=None)
