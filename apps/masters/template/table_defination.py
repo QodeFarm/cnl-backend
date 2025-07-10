@@ -301,6 +301,42 @@ def product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gs
     ]))
     return table
 
+def product_total_details_purchase(ttl_Qty, final_Amount, total_disc, ttl_Amount, show_gst=False):
+    if show_gst:
+        print("Entered with show_gst")
+        col_widths = [
+            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
+            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
+            0.8 * inch, 0.8 * inch, 1.0 * inch
+        ]
+        row = [
+            '', 'Total', '', ttl_Qty, '', '', final_Amount,
+            '', total_disc, '', ttl_Amount
+        ]
+    else:
+        print("Entered with out show_gst")
+        col_widths = [
+            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
+            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
+            0.8 * inch, 1.0 * inch  # One less column
+        ]
+        row = [
+            '', 'Total', '', ttl_Qty, '', '', final_Amount,
+            '', total_disc, ttl_Amount
+        ]
+
+    table = Table([row], colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, 0), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+    ]))
+    return table
+
 
 
 def product_total_details_inwords(
