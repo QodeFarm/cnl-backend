@@ -109,7 +109,7 @@ def payment_receipt_data(pk, document_type):
     # Get company details
     company = Companies.objects.first()
     company_name = company.name if company else "N/A"
-    company_address = company.address if company else "N/A"
+    company_address = company.address if company and company.address else "Address\xa0Not\xa0Provided"
     company_phone = company.phone if company else "N/A"
     company_email = company.email if company else "N/A"
     
@@ -124,7 +124,7 @@ def payment_receipt_data(pk, document_type):
     ).first()
     
     # Format amounts
-    amount = float(payment_data.get('adjusted_now', 0) or float(payment_data.get('amount', 0)))
+    amount = float(payment_data.get('amount', 0))
     outstanding = float(payment_data.get('outstanding_amount', 0))
     total = float(payment_data.get('total_amount', 0))
     
@@ -176,11 +176,11 @@ def payment_receipt_data(pk, document_type):
     
 def payment_receipt_doc(
     elements, doc, company_name, company_address, company_phone,
-    cust_bill_dtl, number_lbl, invoice_no, date_lbl, invoice_date,
+    cust_bill_dtl, number_lbl, invoice_no, date_lbl, receipt_date,
     customer_name, billing_address, phone, email,
     payment_data,
     amount, outstanding, total,
-    amount_in_words,
+    amount_in_words,receipt_no
 ):
     
     # 1. Add company header
@@ -189,7 +189,7 @@ def payment_receipt_doc(
     )
     # Append document details
     elements.append(doc_details(
-        cust_bill_dtl, number_lbl, invoice_no, date_lbl, invoice_date
+        cust_bill_dtl, number_lbl, receipt_no, date_lbl, receipt_date
     ))
     
     # Append customer details (modified for payment receipt)

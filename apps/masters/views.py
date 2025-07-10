@@ -711,6 +711,7 @@ class DocumentGeneratorView(APIView):
                 
             elif document_type == "payment_receipt":
                 pdf_data = payment_receipt_data(pk, document_type)
+                print("pdf_data--->>>", pdf_data)
                 sub_header = 'Receipt Voucher'
                 # Use same doc_heading pattern as sale order
                 elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header)
@@ -723,7 +724,7 @@ class DocumentGeneratorView(APIView):
                     pdf_data['number_lbl'], 
                     pdf_data['invoice_no'], 
                     pdf_data['date_lbl'], 
-                    pdf_data['invoice_date'],
+                    pdf_data['receipt_date'],
                     pdf_data['customer_name'], 
                     pdf_data['billing_address'], 
                     pdf_data['phone'],
@@ -739,6 +740,7 @@ class DocumentGeneratorView(APIView):
                     pdf_data['outstanding'],
                     pdf_data['total'],
                     pdf_data['amount_in_words'],
+                    pdf_data['receipt_no'],
                     # pdf_data['net_lbl'],
                     # pdf_data['amount']  # Using amount as net_value
                 )
@@ -772,7 +774,7 @@ class DocumentGeneratorView(APIView):
         return build_response(1, pdf_send_response , [], status.HTTP_200_OK)
 
 class ReturnOptionsViewset(viewsets.ModelViewSet):
-    queryset = ReturnOptions.objects.all().order_by('-created_at')	
+    queryset = ReturnOptions.objects.exclude(name__iexact='Sale order').order_by('-created_at')
     serializer_class = ReturnOptionsSerializers
 
     def list(self, request, *args, **kwargs):
