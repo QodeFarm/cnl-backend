@@ -61,7 +61,7 @@ class Customer(models.Model):
     # is_super_customer = models.BooleanField(default=False)  # New field
     print_name = models.CharField(max_length=255)
     identification = models.CharField(max_length=255, null=True, default=None)
-    code = models.CharField(max_length=50)
+    code = models.CharField(max_length=50,null=True)
     #ledger_account = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE)
     ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE, null=True, db_column='ledger_account_id')
     customer_common_for_sales_purchase = models.BooleanField(default=False, null=True)
@@ -70,7 +70,7 @@ class Customer(models.Model):
     territory_id = models.ForeignKey(Territory, on_delete=models.CASCADE, null=True, default=None, db_column='territory_id')
     customer_category_id = models.ForeignKey(CustomerCategories, on_delete=models.CASCADE, null=True, default=None, db_column='customer_category_id')
     contact_person = models.CharField(max_length=255, null=True, default=None,)
-    picture = models.JSONField(null=True)
+    picture = models.JSONField(null=True, default=None)
     # customfield_values = models.JSONField(default=dict, blank=True)
     gst = models.CharField(max_length=50, null=True, default=None)
     registration_date = models.DateField(auto_now_add=True, null=True)
