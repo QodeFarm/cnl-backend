@@ -278,6 +278,7 @@ class WorkOrderAPIView(APIView):
                 queryset = filterset.qs
 
         total_count = queryset.count()  
+        print("total_count===>> ",total_count)
         # queryset = self.apply_filters(request, queryset, WorkOrder)
         data = WorkOrderOptionsSerializer.get_work_order_summary(queryset)
         return filter_response(len(data), "Success", data, page, limit, total_count, status.HTTP_200_OK)
@@ -289,7 +290,10 @@ class WorkOrderAPIView(APIView):
         page, limit = self.get_pagination_params(request)
         queryset = WorkOrder.objects.all().order_by("-created_at")
         total_count = queryset.count() 
-        queryset = self.apply_filters(request, queryset, WorkOrder)
+        if request.query_params:
+            filterset = WorkOrderFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
 
         serializer = StockJournalSerializer(queryset, many=True)
         return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
