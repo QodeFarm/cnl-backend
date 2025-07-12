@@ -71,6 +71,7 @@ class Employees(models.Model):
     employee_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     first_name =  models.CharField(max_length=55)
     last_name =  models.CharField(max_length=55)
+    full_name = models.CharField(max_length=511, editable=False)
     phone = PhoneNumberField(help_text="Enter the phone number with country code, e.g., +91 XXXXXXXXXX")
     email = models.EmailField(max_length=255, null=True, default=None)
     address = models.CharField(max_length=255, null=True, default=None)
@@ -84,7 +85,7 @@ class Employees(models.Model):
     nationality = models.CharField(max_length=20, null=True, default=None)
     emergency_contact = models.CharField(max_length=20, null=True, default=None)
     emergency_contact_relationship = models.CharField(max_length=55, null=True, default=None)
-    job_type_id = models.ForeignKey(JobTypes, on_delete=models.CASCADE, db_column='job_type_id')
+    job_type_id = models.ForeignKey(JobTypes, on_delete=models.CASCADE, null=True, db_column='job_type_id')
     designation_id = models.ForeignKey(Designations, on_delete=models.CASCADE, db_column='designation_id', null=True, default=None)
     job_code_id = models.ForeignKey(JobCodes, on_delete=models.CASCADE, db_column='job_code_id', null=True, default=None)
     department_id = models.ForeignKey(Departments, on_delete=models.CASCADE, db_column='department_id', null=True, default=None)
@@ -95,9 +96,14 @@ class Employees(models.Model):
 
     class Meta:
         db_table = employees
+        
+    def save(self, *args, **kwargs):
+        self.full_name = f"{self.first_name} {self.last_name}".strip()
+        super().save(*args, **kwargs)    
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"  
+    
 
 class EmployeeSalary(models.Model):
     salary_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
