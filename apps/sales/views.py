@@ -490,6 +490,45 @@ class SaleOrderViewSet(APIView):
     #     serializer = SalesOrderReportSerializer(queryset, many=True)
     #     return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
     
+    # def get_sales_order_report(self, request):
+    #     """Fetches sales order details with required fields."""
+    #     logger.info("Retrieving sales order report data")
+    #     page, limit = self.get_pagination_params(request)
+    #     report_type = request.query_params.get("report_type", "regular").lower()
+
+    #     if report_type == "all":
+    #         logger.info("Fetching sales order report from both mstcnl and default databases")
+
+    #         queryset_default = SaleOrder.objects.using('default').all().order_by('-created_at')
+    #         queryset_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+    #         combined_queryset = list(chain(queryset_default, queryset_mstcnl))
+
+    #         total_count = len(combined_queryset)
+    #         start_index = (page - 1) * limit
+    #         end_index = start_index + limit
+    #         paginated_results = combined_queryset[start_index:end_index]
+
+    #         serializer = SalesOrderReportSerializer(paginated_results, many=True)
+    #         return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    #     elif report_type == "other":
+    #         logger.info("Fetching sales order report from mstcnl database")
+    #         queryset = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+
+    #     else:  # default to 'regular'
+    #         logger.info("Fetching sales order report from default database")
+    #         queryset = SaleOrder.objects.using('default').all().order_by('-created_at')
+
+    #     if request.query_params:
+    #         filterset = SalesOrderReportFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     total_count = queryset.count()
+    #     paginated_results = queryset[(page - 1) * limit: page * limit]
+    #     serializer = SalesOrderReportSerializer(paginated_results, many=True)
+    #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
     def get_sales_order_report(self, request):
         """Fetches sales order details with required fields."""
         logger.info("Retrieving sales order report data")
@@ -500,20 +539,29 @@ class SaleOrderViewSet(APIView):
             logger.info("Fetching sales order report from both mstcnl and default databases")
 
             queryset_default = SaleOrder.objects.using('default').all().order_by('-created_at')
-            queryset_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
-            combined_queryset = list(chain(queryset_default, queryset_mstcnl))
+            queryset_mstcnl = MstcnlSaleOrder.objects.using('mstcnl').all().order_by('-created_at')
 
+            combined_queryset = list(chain(queryset_default, queryset_mstcnl))
             total_count = len(combined_queryset)
+
             start_index = (page - 1) * limit
             end_index = start_index + limit
             paginated_results = combined_queryset[start_index:end_index]
 
-            serializer = SalesOrderReportSerializer(paginated_results, many=True)
-            return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+            # Separate for correct serializer if needed
+            paginated_mstcnl = [obj for obj in paginated_results if isinstance(obj, MstcnlSaleOrder)]
+            paginated_devcnl = [obj for obj in paginated_results if isinstance(obj, SaleOrder)]
+
+            serializer_mstcnl = MstcnlSaleOrderSerializer(paginated_mstcnl, many=True)
+            serializer_devcnl = SalesOrderReportSerializer(paginated_devcnl, many=True)
+
+            final_results = serializer_mstcnl.data + serializer_devcnl.data
+
+            return filter_response(total_count, "Success", final_results, page, limit, total_count, status.HTTP_200_OK)
 
         elif report_type == "other":
             logger.info("Fetching sales order report from mstcnl database")
-            queryset = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+            queryset = MstcnlSaleOrder.objects.using('mstcnl').all().order_by('-created_at')
 
         else:  # default to 'regular'
             logger.info("Fetching sales order report from default database")
@@ -526,8 +574,15 @@ class SaleOrderViewSet(APIView):
 
         total_count = queryset.count()
         paginated_results = queryset[(page - 1) * limit: page * limit]
-        serializer = SalesOrderReportSerializer(paginated_results, many=True)
+
+        # Use correct serializer for single DB
+        if report_type == "other":
+            serializer = MstcnlSaleOrderSerializer(paginated_results, many=True)
+        else:
+            serializer = SalesOrderReportSerializer(paginated_results, many=True)
+
         return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
 
     def get_sales_invoice_report(self, request):
         """Fetches detailed sales invoice report data."""
