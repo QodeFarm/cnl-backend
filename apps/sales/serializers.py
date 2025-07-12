@@ -465,3 +465,8 @@ class MstcnlOrderShipmentsSerializer(serializers.ModelSerializer):
     class Meta:
         model = MstcnlOrderShipment
         fields = '__all__'
+        
+class MstcnlCustomFieldValueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlCustomFieldValue
+        fields = '__all__'
