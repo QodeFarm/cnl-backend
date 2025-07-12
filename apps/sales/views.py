@@ -756,30 +756,56 @@ class SaleOrderViewSet(APIView):
 
             # Step 1: Try to fetch from mstcnl
             try:
-                sale_order = SaleOrder.objects.using('mstcnl').get(pk=pk)
+                sale_order = MstcnlSaleOrder.objects.using('mstcnl').get(pk=pk)
                 using_db = 'mstcnl'
                 logger.info(f"Sale order found in 'mstcnl' database with pk: {pk}")
-            except SaleOrder.DoesNotExist:
+            except MstcnlSaleOrder.DoesNotExist:
                 # Step 2: If not found in mstcnl, try devcnl (default)
                 try:
                     sale_order = SaleOrder.objects.using('default').get(pk=pk)
                     using_db = 'default'
-                    logger.info(f"Sale order found in 'devcnl' database with pk: {pk}")
+                    logger.info(f"Sale order found in 'default' database with pk: {pk}")
+
+                    # ✅ Use Mstcnl serializer for mstcnl
+                    sale_order_serializer = MstcnlSaleOrderSerializer(sale_order)
                 except SaleOrder.DoesNotExist:
                     # Step 3: Not found anywhere
                     logger.error(f"Sale order with pk {pk} does not exist in any database.")
                     return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
             # Step 4: Serialize the sale order
-            sale_order_serializer = SaleOrderSerializer(sale_order)
+            # sale_order_serializer = SaleOrderSerializer(sale_order)
+            
+            # Step 3: Serialize the sale order
+            if using_db == 'mstcnl':
+                sale_order_serializer = MstcnlSaleOrderSerializer(sale_order)
+            else:
+                sale_order_serializer = SaleOrderSerializer(sale_order)
 
+            # Step 4: Fetch related data using correct database
             # Step 5: Fetch related data using correct database
-            items_data = self.get_related_data(SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk, using_db)
-            attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk, using_db)
-            shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk, using_db)
-            shipments_data = shipments_data[0] if len(shipments_data) > 0 else {}
+            if using_db == 'mstcnl':
+                items_data = self.get_related_data(
+                    MstcnlSaleOrderItem, MstcnlSaleOrderItemsSerializer,
+                    'sale_order_id', pk, using_db
+                )
+                attachments_data = self.get_related_data(
+                    MstcnlOrderAttachment, MstcnlOrderAttachmentsSerializer,
+                    'order_id', pk, using_db
+                )
+                shipments_data = self.get_related_data(
+                    MstcnlOrderShipment, MstcnlOrderShipmentsSerializer,
+                    'order_id', pk, using_db
+                )
+                custom_field_values_data = []
+            else:
+                # Step 5: Fetch related data using correct database
+                items_data = self.get_related_data(SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk, using_db)
+                attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk, using_db)
+                shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk, using_db)
+                shipments_data = shipments_data[0] if len(shipments_data) > 0 else {}
 
-            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk, using_db)
+                custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk, using_db)
 
             custom_data = {
                 "sale_order": sale_order_serializer.data,

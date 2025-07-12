@@ -450,3 +450,18 @@ class MstcnlSaleOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = MstcnlSaleOrder
         fields = '__all__'
+        
+class MstcnlSaleOrderItemsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlSaleOrderItem
+        fields = '__all__'
+
+class MstcnlOrderAttachmentsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlOrderAttachment
+        fields = '__all__'
+
+class MstcnlOrderShipmentsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlOrderShipment
+        fields = '__all__'
