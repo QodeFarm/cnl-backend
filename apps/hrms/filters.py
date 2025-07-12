@@ -10,6 +10,7 @@ class EmployeesFilter(filters.FilterSet):
     employee_id = filters.CharFilter(method=filter_uuid)
     first_name = filters.CharFilter(lookup_expr='icontains')
     last_name = filters.CharFilter(lookup_expr='icontains')
+    full_name = filters.CharFilter(lookup_expr='icontains')
     email = filters.CharFilter(lookup_expr='exact')
     phone = filters.CharFilter(lookup_expr='exact')
     address = filters.CharFilter(lookup_expr='icontains')
@@ -19,7 +20,7 @@ class EmployeesFilter(filters.FilterSet):
     job_code_id = filters.CharFilter(field_name='job_code_id__job_code', lookup_expr='icontains')
     department_id = filters.CharFilter(field_name='department_id__department_name', lookup_expr='icontains')
     shift_id = filters.CharFilter(field_name='shift_id__shift_name', lookup_expr='icontains')
-    manager_id = filters.CharFilter(field_name='manager_id__first_name', lookup_expr='icontains')
+    manager_id = filters.CharFilter(field_name='manager_id__full_name', lookup_expr='icontains')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
@@ -45,7 +46,7 @@ class EmployeesFilter(filters.FilterSet):
     class Meta:
         model = Employees
         #do not change "first_name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['hire_date','first_name','last_name','employee_id','email','phone','address','hire_date','job_type_id','designation_id','job_code_id','department_id','shift_id','manager_id','created_at','period_name','s','sort','page','limit']
+        fields =['hire_date','first_name','last_name','full_name','employee_id','email','phone','address','hire_date','job_type_id','designation_id','job_code_id','department_id','shift_id','manager_id','created_at','period_name','s','sort','page','limit']
 
 
 class EmployeeSalaryFilter(filters.FilterSet):
@@ -53,7 +54,7 @@ class EmployeeSalaryFilter(filters.FilterSet):
     salary_currency = filters.CharFilter(lookup_expr='icontains') 
     salary_start_date = filters.DateFilter()
     salary_end_date = filters.DateFilter() 
-    employee_id = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
+    employee_id = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
@@ -85,7 +86,7 @@ class EmployeeLeavesFilter(filters.FilterSet):
     start_date = filters.DateFilter()
     end_date = filters.DateFilter() 
     comments = filters.CharFilter(lookup_expr='icontains') 
-    employee = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
+    employee = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
     employee_id = filters.CharFilter(method=filter_uuid)
     leave_type_id = filters.CharFilter(method=filter_uuid)
     leave_type = filters.CharFilter(field_name='leave_type_id__leave_type_name', lookup_expr='icontains')
@@ -121,8 +122,9 @@ class LeaveApprovalsFilter(filters.FilterSet):
     approval_date = filters.DateFilter()
     status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
     status_name = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
-    leave_id = filters.CharFilter(field_name='leave_id__comments', lookup_expr='icontains')
-    approver = filters.CharFilter(field_name='approver_id__first_name', lookup_expr='icontains')
+    # leave_id = filters.CharFilter(field_name='leave_id__comments', lookup_expr='icontains')
+    leave_id = filters.CharFilter(field_name='leave_id__employee_id__full_name', lookup_expr='icontains')
+    approver = filters.CharFilter(field_name='approver_id__full_name', lookup_expr='icontains')
     approver_id = filters.CharFilter(method=filter_uuid)
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
@@ -154,7 +156,7 @@ class LeaveApprovalsFilter(filters.FilterSet):
 
 class EmployeeLeaveBalanceFilter(filters.FilterSet):
     employee_id = filters.CharFilter(method=filter_uuid)
-    employee = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
+    employee = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
     leave_type_id = filters.CharFilter(method=filter_uuid)
     leave_type = filters.CharFilter(field_name='leave_type_id__leave_type_name', lookup_expr='icontains')
     leave_balance = filters.RangeFilter()
@@ -188,7 +190,7 @@ class EmployeeLeaveBalanceFilter(filters.FilterSet):
         fields =['employee_id','employee','leave_type_id','leave_type','leave_balance','leave_bal','year','created_at','period_name','s','sort','page','limit']
 
 class EmployeeAttendanceFilter(filters.FilterSet):
-    employee = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
+    employee = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
     employee_id = filters.CharFilter(method=filter_uuid)
     attendance_date = filters.DateFilter()
     absent = filters.BooleanFilter()
@@ -222,7 +224,7 @@ class EmployeeAttendanceFilter(filters.FilterSet):
 
 
 class SwipesFilter(filters.FilterSet):
-    employee_id = filters.CharFilter(field_name='employee_id__first_name', lookup_expr='icontains')
+    employee_id = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
     swipe_time = DateFromToRangeFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
