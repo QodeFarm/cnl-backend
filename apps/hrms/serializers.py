@@ -70,6 +70,7 @@ class EmployeesSerializer(serializers.ModelSerializer):
     department = ModDepartmentsSerializer(source='department_id',read_only=True)
     shift = ModShiftsSerializer(source = 'shift_id',read_only=True)
     manager = ModEmployeesSerializer(source = 'manager_id',read_only=True)
+    full_name = serializers.CharField(read_only=True)
     class Meta:
         model = Employees
         fields = '__all__'
