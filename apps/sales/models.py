@@ -1194,3 +1194,17 @@ class MstcnlOrderAttachment(models.Model):
     class Meta:
         db_table = 'order_attachments'
         managed = False
+
+class MstcnlCustomFieldValue(models.Model):
+    custom_field_value_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    custom_field_id = models.CharField(max_length=36)
+    entity_id = models.CharField(max_length=36)
+    field_value = models.CharField(max_length=255, null=True, blank=True)
+    field_value_type = models.CharField(max_length=50, null=True, blank=True)
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField()
+    custom_id = models.CharField(max_length=36)
+
+    class Meta:
+        managed = False  # Because the table already exists, no migrations
+        db_table = 'custom_field_values'

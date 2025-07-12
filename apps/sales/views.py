@@ -797,7 +797,11 @@ class SaleOrderViewSet(APIView):
                     MstcnlOrderShipment, MstcnlOrderShipmentsSerializer,
                     'order_id', pk, using_db
                 )
-                custom_field_values_data = []
+                # custom_field_values_data = []
+                custom_field_values_data = self.get_related_data(
+                    MstcnlCustomFieldValue, MstcnlCustomFieldValueSerializer,
+                    'custom_id', pk, using_db
+                )
             else:
                 # Step 5: Fetch related data using correct database
                 items_data = self.get_related_data(SaleOrderItems, SaleOrderItemsSerializer, 'sale_order_id', pk, using_db)
