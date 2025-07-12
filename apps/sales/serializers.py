@@ -445,3 +445,28 @@ class AgingReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = SaleInvoiceOrders
         fields = ['invoice_no', 'due_date', 'pending_amount', 'days_overdue', 'aging_category']       
+        
+class MstcnlSaleOrderSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlSaleOrder
+        fields = '__all__'
+        
+class MstcnlSaleOrderItemsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlSaleOrderItem
+        fields = '__all__'
+
+class MstcnlOrderAttachmentsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlOrderAttachment
+        fields = '__all__'
+
+class MstcnlOrderShipmentsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlOrderShipment
+        fields = '__all__'
+        
+class MstcnlCustomFieldValueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlCustomFieldValue
+        fields = '__all__'
