@@ -70,7 +70,7 @@ class VendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerialize
     price_category = ModPriceCategoriesSerializers(source='price_category_id', read_only = True)
     vendor_agent = ModVendorAgentSerializer(source='vendor_agent_id', read_only = True)
     transporter = ModTransportersSerializers(source='transporter_id', read_only = True)
-    picture = PictureSerializer(many=True)
+    picture = PictureSerializer(required=False, allow_null=True, many=True)
 
     class Meta:
         model = Vendor

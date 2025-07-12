@@ -26,7 +26,9 @@ class CustomerSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     firm_status = ModFirmStatusesSerializers(source='firm_status_id', read_only=True)
     territory = ModTerritorySerializers(source='territory_id', read_only=True)
-    picture = PictureSerializer(many=True)
+    # picture = PictureSerializer(many=True)
+    picture = PictureSerializer(required=False, allow_null=True, many=True)
+
     customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
     gst_category = GstCategoriesSerializers(source='gst_category_id', read_only=True)
     payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
