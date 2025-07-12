@@ -692,3 +692,39 @@ class PaymentTransactionsReportFilter(filters.FilterSet):
             'payment_date', 'payment_method', 'payment_status', 
             'min_amount', 'max_amount', 'status_name', 'period_name', 'created_at', 's', 'sort', 'page', 'limit'
         ]        
+        
+#mstcnl filters
+import django_filters
+from .models import MstcnlSaleOrder
+
+class MstcnlSaleOrderFilter(django_filters.FilterSet):
+    """
+    FilterSet for MstcnlSaleOrder.
+    Only include fields you really expect to filter by from the front-end!
+    """
+    sale_order_id = django_filters.CharFilter(field_name='sale_order_id', lookup_expr='exact')
+    order_no = django_filters.CharFilter(field_name='order_no', lookup_expr='icontains')
+    customer_id = django_filters.CharFilter(field_name='customer_id', lookup_expr='exact')
+    order_status_id = django_filters.CharFilter(field_name='order_status_id', lookup_expr='exact')
+    flow_status_id = django_filters.CharFilter(field_name='flow_status_id', lookup_expr='exact')
+
+    # Date range filter for order_date
+    order_date = django_filters.DateFromToRangeFilter(field_name='order_date')
+    delivery_date = django_filters.DateFromToRangeFilter(field_name='delivery_date')
+
+    created_at = django_filters.DateFromToRangeFilter(field_name='created_at')
+    updated_at = django_filters.DateFromToRangeFilter(field_name='updated_at')
+
+    class Meta:
+        model = MstcnlSaleOrder
+        fields = [
+            'sale_order_id',
+            'order_no',
+            'customer_id',
+            'order_status_id',
+            'flow_status_id',
+            'order_date',
+            'delivery_date',
+            'created_at',
+            'updated_at',
+        ]
