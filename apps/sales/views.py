@@ -1,6 +1,8 @@
 from datetime import timedelta
 import json
 import time
+from django.db.models import Q
+
 
 from django.forms import model_to_dict
 from apps.users.models import User
@@ -4060,6 +4062,8 @@ class PaymentTransactionAPIView(APIView):
         # Fetch Pending, Completed status IDs
         try:
             pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
+            in_progress = OrderStatuses.objects.get(status_name="In Progress").order_status_id
+            dispatched = OrderStatuses.objects.get(status_name="Dispatched").order_status_id
             completed_status = OrderStatuses.objects.get(status_name="Completed").order_status_id
         except ObjectDoesNotExist:
             return build_response(1, "Required order statuses 'Pending' or 'Completed' not found.", None, status.HTTP_404_NOT_FOUND)
@@ -4175,7 +4179,8 @@ class PaymentTransactionAPIView(APIView):
             # Step 1: Get all pending invoices (ordered by date)
             pending_invoices = SaleInvoiceOrders.objects.filter(
                 customer_id=customer_id,
-                order_status_id=pending_status
+                order_status_id__in=[pending_status, in_progress, dispatched]
+                #order_status_id=pending_status
             ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
 
             pending_invoice_ids = pending_invoices.values_list('sale_invoice_id', flat=True)
