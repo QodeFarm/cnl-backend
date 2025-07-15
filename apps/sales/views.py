@@ -1,6 +1,8 @@
 from datetime import timedelta
 import json
 import time
+from django.db.models import Q
+
 
 from django.forms import model_to_dict
 from apps.users.models import User
@@ -490,6 +492,45 @@ class SaleOrderViewSet(APIView):
     #     serializer = SalesOrderReportSerializer(queryset, many=True)
     #     return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
     
+    # def get_sales_order_report(self, request):
+    #     """Fetches sales order details with required fields."""
+    #     logger.info("Retrieving sales order report data")
+    #     page, limit = self.get_pagination_params(request)
+    #     report_type = request.query_params.get("report_type", "regular").lower()
+
+    #     if report_type == "all":
+    #         logger.info("Fetching sales order report from both mstcnl and default databases")
+
+    #         queryset_default = SaleOrder.objects.using('default').all().order_by('-created_at')
+    #         queryset_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+    #         combined_queryset = list(chain(queryset_default, queryset_mstcnl))
+
+    #         total_count = len(combined_queryset)
+    #         start_index = (page - 1) * limit
+    #         end_index = start_index + limit
+    #         paginated_results = combined_queryset[start_index:end_index]
+
+    #         serializer = SalesOrderReportSerializer(paginated_results, many=True)
+    #         return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    #     elif report_type == "other":
+    #         logger.info("Fetching sales order report from mstcnl database")
+    #         queryset = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+
+    #     else:  # default to 'regular'
+    #         logger.info("Fetching sales order report from default database")
+    #         queryset = SaleOrder.objects.using('default').all().order_by('-created_at')
+
+    #     if request.query_params:
+    #         filterset = SalesOrderReportFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     total_count = queryset.count()
+    #     paginated_results = queryset[(page - 1) * limit: page * limit]
+    #     serializer = SalesOrderReportSerializer(paginated_results, many=True)
+    #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    
     def get_sales_order_report(self, request):
         """Fetches sales order details with required fields."""
         logger.info("Retrieving sales order report data")
@@ -500,20 +541,29 @@ class SaleOrderViewSet(APIView):
             logger.info("Fetching sales order report from both mstcnl and default databases")
 
             queryset_default = SaleOrder.objects.using('default').all().order_by('-created_at')
-            queryset_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
-            combined_queryset = list(chain(queryset_default, queryset_mstcnl))
+            queryset_mstcnl = MstcnlSaleOrder.objects.using('mstcnl').all().order_by('-created_at')
 
+            combined_queryset = list(chain(queryset_default, queryset_mstcnl))
             total_count = len(combined_queryset)
+
             start_index = (page - 1) * limit
             end_index = start_index + limit
             paginated_results = combined_queryset[start_index:end_index]
 
-            serializer = SalesOrderReportSerializer(paginated_results, many=True)
-            return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+            # Separate for correct serializer if needed
+            paginated_mstcnl = [obj for obj in paginated_results if isinstance(obj, MstcnlSaleOrder)]
+            paginated_devcnl = [obj for obj in paginated_results if isinstance(obj, SaleOrder)]
+
+            serializer_mstcnl = MstcnlSaleOrderSerializer(paginated_mstcnl, many=True)
+            serializer_devcnl = SalesOrderReportSerializer(paginated_devcnl, many=True)
+
+            final_results = serializer_mstcnl.data + serializer_devcnl.data
+
+            return filter_response(total_count, "Success", final_results, page, limit, total_count, status.HTTP_200_OK)
 
         elif report_type == "other":
             logger.info("Fetching sales order report from mstcnl database")
-            queryset = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+            queryset = MstcnlSaleOrder.objects.using('mstcnl').all().order_by('-created_at')
 
         else:  # default to 'regular'
             logger.info("Fetching sales order report from default database")
@@ -526,8 +576,15 @@ class SaleOrderViewSet(APIView):
 
         total_count = queryset.count()
         paginated_results = queryset[(page - 1) * limit: page * limit]
-        serializer = SalesOrderReportSerializer(paginated_results, many=True)
+
+        # Use correct serializer for single DB
+        if report_type == "other":
+            serializer = MstcnlSaleOrderSerializer(paginated_results, many=True)
+        else:
+            serializer = SalesOrderReportSerializer(paginated_results, many=True)
+
         return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
 
     def get_sales_invoice_report(self, request):
         """Fetches detailed sales invoice report data."""
@@ -4005,6 +4062,8 @@ class PaymentTransactionAPIView(APIView):
         # Fetch Pending, Completed status IDs
         try:
             pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
+            in_progress = OrderStatuses.objects.get(status_name="In Progress").order_status_id
+            dispatched = OrderStatuses.objects.get(status_name="Dispatched").order_status_id
             completed_status = OrderStatuses.objects.get(status_name="Completed").order_status_id
         except ObjectDoesNotExist:
             return build_response(1, "Required order statuses 'Pending' or 'Completed' not found.", None, status.HTTP_404_NOT_FOUND)
@@ -4120,7 +4179,8 @@ class PaymentTransactionAPIView(APIView):
             # Step 1: Get all pending invoices (ordered by date)
             pending_invoices = SaleInvoiceOrders.objects.filter(
                 customer_id=customer_id,
-                order_status_id=pending_status
+                order_status_id__in=[pending_status, in_progress, dispatched]
+                #order_status_id=pending_status
             ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
 
             pending_invoice_ids = pending_invoices.values_list('sale_invoice_id', flat=True)
