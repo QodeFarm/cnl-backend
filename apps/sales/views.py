@@ -1,6 +1,8 @@
 from datetime import timedelta
 import json
 import time
+from django.db.models import Q
+
 
 from django.forms import model_to_dict
 from apps.users.models import User
@@ -4194,7 +4196,8 @@ class PaymentTransactionAPIView(APIView):
             # Step 1: Get all pending invoices (ordered by date)
             pending_invoices = SaleInvoiceOrders.objects.filter(
                 customer_id=customer_id,
-                order_status_id=pending_status
+                order_status_id__in=[pending_status]
+                #order_status_id=pending_status
             ).order_by('invoice_date').only('sale_invoice_id', 'invoice_no', 'total_amount', 'order_status_id')
 
             pending_invoice_ids = pending_invoices.values_list('sale_invoice_id', flat=True)
