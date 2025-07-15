@@ -1,6 +1,6 @@
 # from django.forms import DecimalField, IntegerField
 from django_filters import rest_framework as filters
-from .models import PaymentTransactions, QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
+from .models import MstcnlSaleInvoiceOrder, PaymentTransactions, QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
@@ -724,6 +724,39 @@ class MstcnlSaleOrderFilter(django_filters.FilterSet):
             'order_status_id',
             'flow_status_id',
             'order_date',
+            'delivery_date',
+            'created_at',
+            'updated_at',
+        ]
+        
+class MstcnlSaleInvoiceFilter(django_filters.FilterSet):
+    """
+    FilterSet for MstcnlSaleInvoiceOrder.
+    Only include fields you really expect to filter by from the front-end!
+    """
+    sale_invoice_id = django_filters.CharFilter(field_name='sale_invoice_id', lookup_expr='exact')
+    invoice_no = django_filters.CharFilter(field_name='invoice_no', lookup_expr='icontains')
+    bill_type = django_filters.CharFilter(field_name='bill_type', lookup_expr='icontains')
+    customer_id = django_filters.CharFilter(field_name='customer_id', lookup_expr='exact')
+    order_status_id = django_filters.CharFilter(field_name='order_status_id', lookup_expr='exact')
+    flow_status_id = django_filters.CharFilter(field_name='flow_status_id', lookup_expr='exact')
+
+    # Date range filter for order_date
+    invoice_date = django_filters.DateFromToRangeFilter(field_name='invoice_date')
+    delivery_date = django_filters.DateFromToRangeFilter(field_name='delivery_date')
+
+    created_at = django_filters.DateFromToRangeFilter(field_name='created_at')
+    updated_at = django_filters.DateFromToRangeFilter(field_name='updated_at')
+
+    class Meta:
+        model = MstcnlSaleInvoiceOrder
+        fields = [
+            'sale_invoice_id',
+            'invoice_no',
+            'customer_id',
+            'order_status_id',
+            'flow_status_id',
+            'invoice_date',
             'delivery_date',
             'created_at',
             'updated_at',

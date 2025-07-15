@@ -451,9 +451,19 @@ class MstcnlSaleOrderSerializer(serializers.ModelSerializer):
         model = MstcnlSaleOrder
         fields = '__all__'
         
+class MstcnlSaleInvoiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlSaleInvoiceOrder
+        fields = '__all__'
+        
 class MstcnlSaleOrderItemsSerializer(serializers.ModelSerializer):
     class Meta:
         model = MstcnlSaleOrderItem
+        fields = '__all__'
+        
+class MstcnlSaleInvoiceItemsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstcnlSaleInvoiceItem
         fields = '__all__'
 
 class MstcnlOrderAttachmentsSerializer(serializers.ModelSerializer):

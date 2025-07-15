@@ -300,11 +300,14 @@ class SaleOrderViewSet(APIView):
             if request.query_params.get("records_all", "false").lower() == "true" :
                 return self.get_summary_data(request)
             
+            if request.query_params.get("records_mstcnl", "false").lower() == "true" :
+                return self.get_summary_data(request)
+            
             if request.query_params.get("sales_order_report", "false").lower() == "true" :
                 return self.get_sales_order_report(request)
             
-            if request.query_params.get("sales_invoice_report", "false").lower() == "true" :
-                return self.get_sales_invoice_report(request)
+            # if request.query_params.get("sales_invoice_report", "false").lower() == "true" :
+            #     return self.get_sales_invoice_report(request)
             
             if request.query_params.get("sales_by_product", "false").lower() == "true":
                 return self.get_sales_by_product(request)
@@ -361,56 +364,8 @@ class SaleOrderViewSet(APIView):
 
         page, limit = self.get_pagination_params(request)
         records_all = request.query_params.get("records_all", "false").lower() == "true"
+        records_mstcnl = request.query_params.get("records_mstcnl", "false").lower() == "true"
 
-        # if records_all:
-        #     logger.info("Fetching sale order summary from both mstcnl and default databases")
-            
-        #     saleorders_mstcnl = SaleOrder.objects.using('mstcnl').all().order_by('-created_at')
-        #     saleorders_devcnl = SaleOrder.objects.using('default').all().order_by('-created_at')
-            
-        #     filterset_mstcnl = SaleOrderFilter(request.GET, queryset=base_queryset_mstcnl)
-        #     filterset_devcnl = SaleOrderFilter(request.GET, queryset=base_queryset_devcnl)
-            
-        #     combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
-        #     total_count = len(combined_queryset)
-
-        #     start_index = (page - 1) * limit
-        #     end_index = start_index + limit
-        #     paginated_results = combined_queryset[start_index:end_index]
-
-        #     serializer = SaleOrderOptionsSerializer(paginated_results, many=True)
-        #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
-        # if records_all:
-        #     logger.info("Fetching sale order summary from both mstcnl and default databases")
-
-        #     # Apply filters from SaleOrderFilter to both DBs
-        #     base_queryset_mstcnl = MstcnlSaleOrder.objects.using('mstcnl').all().order_by('-created_at')
-        #     logger.info("Fetching sale order summary base_queryset_mstcnl")
-        #     base_queryset_devcnl = SaleOrder.objects.using('default').all().order_by('-created_at')
-        #     logger.info("Fetching sale order summary base_queryset_mstcnl")
-
-        #     filterset_mstcnl = MstcnlSaleOrderFilter(request.GET, queryset=base_queryset_mstcnl)
-        #     filterset_devcnl = SaleOrderFilter(request.GET, queryset=base_queryset_devcnl)
-
-        #     if filterset_mstcnl.is_valid():
-        #         saleorders_mstcnl = filterset_mstcnl.qs
-        #     else:
-        #         saleorders_mstcnl = base_queryset_mstcnl
-
-        #     if filterset_devcnl.is_valid():
-        #         saleorders_devcnl = filterset_devcnl.qs
-        #     else:
-        #         saleorders_devcnl = base_queryset_devcnl
-
-        #     combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
-        #     total_count = len(combined_queryset)
-
-        #     start_index = (page - 1) * limit
-        #     end_index = start_index + limit
-        #     paginated_results = combined_queryset[start_index:end_index]
-
-        #     serializer = SaleOrderOptionsSerializer(paginated_results, many=True)
-        #     return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
         if records_all:
                 logger.info("Fetching sale order summary from both mstcnl and default databases")
 
@@ -459,6 +414,33 @@ class SaleOrderViewSet(APIView):
                     total_count,
                     status.HTTP_200_OK
                 )
+        elif records_mstcnl:        
+            logger.info("Fetching sale orders only from mstcnl database")
+
+            base_queryset_mstcnl = MstcnlSaleOrder.objects.using('mstcnl').all().order_by('-created_at')
+
+            filterset_mstcnl = MstcnlSaleOrderFilter(request.GET, queryset=base_queryset_mstcnl)
+            if filterset_mstcnl.is_valid():
+                saleorders_mstcnl = filterset_mstcnl.qs
+            else:
+                saleorders_mstcnl = base_queryset_mstcnl
+
+            total_count = saleorders_mstcnl.count()
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            paginated_results = saleorders_mstcnl[start_index:end_index]
+
+            serializer_mstcnl = MstcnlSaleOrderSerializer(paginated_results, many=True)
+
+            return filter_response(
+                total_count,
+                "Success",
+                serializer_mstcnl.data,
+                page,
+                limit,
+                total_count,
+                status.HTTP_200_OK
+            )
 
         else:
             logger.info("Fetching sale order summary only from default database")
@@ -561,7 +543,7 @@ class SaleOrderViewSet(APIView):
 
             return filter_response(total_count, "Success", final_results, page, limit, total_count, status.HTTP_200_OK)
 
-        elif report_type == "other":
+        elif report_type == "Other":
             logger.info("Fetching sales order report from mstcnl database")
             queryset = MstcnlSaleOrder.objects.using('mstcnl').all().order_by('-created_at')
 
@@ -578,7 +560,7 @@ class SaleOrderViewSet(APIView):
         paginated_results = queryset[(page - 1) * limit: page * limit]
 
         # Use correct serializer for single DB
-        if report_type == "other":
+        if report_type == "Other":
             serializer = MstcnlSaleOrderSerializer(paginated_results, many=True)
         else:
             serializer = SalesOrderReportSerializer(paginated_results, many=True)
@@ -586,53 +568,76 @@ class SaleOrderViewSet(APIView):
         return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
 
-    def get_sales_invoice_report(self, request):
-        """Fetches detailed sales invoice report data."""
-        logger.info("Retrieving detailed sales invoice report data")
-        page, limit = self.get_pagination_params(request)
+    # def get_sales_invoice_report(self, request):
+    #     """Fetches detailed sales invoice report data."""
+    #     logger.info("Retrieving detailed sales invoice report data")
+    #     page, limit = self.get_pagination_params(request)
 
-        # NEW: Get invoice_type from query params (default is 'Regular')
-        invoice_type = request.query_params.get('invoice_type', 'Regular')
+    #     # NEW: Get invoice_type from query params (default is 'Regular')
+    #     invoice_type = request.query_params.get('invoice_type', 'Regular')
+    #     bill_type = request.query_params.get('bill_type', 'Regular')
 
-        # NEW: Determine database and fetch queryset accordingly
-        if invoice_type == 'other':
-            queryset = SaleInvoiceOrders.objects.using('mstcnl').all().order_by('-invoice_date')
-            total_count = SaleInvoiceOrders.objects.using('mstcnl').count()
-        elif invoice_type == 'all':
-            logger.info("Fetching sales order report from both mstcnl and default databases")
+    #     # NEW: Determine database and fetch queryset accordingly
+    #     if bill_type == 'Others':
+    #         queryset = MstcnlSaleInvoiceOrder.objects.using('mstcnl').all().order_by('-invoice_date')
+    #         # total_count = MstcnlSaleInvoiceOrder.objects.using('mstcnl').count()
+    #     elif invoice_type == 'all':
+    #         logger.info("Fetching sale order summary from both mstcnl and default databases")
 
-            queryset_default = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
-            queryset_mstcnl = SaleInvoiceOrders.objects.using('mstcnl').all().order_by('-created_at')
-            combined_queryset = list(chain(queryset_default, queryset_mstcnl))
+    #         base_queryset_mstcnl = MstcnlSaleInvoiceOrder.objects.using('mstcnl').all().order_by('-created_at')
+    #         filterset_mstcnl = MstcnlSaleInvoiceFilter(request.GET, queryset=base_queryset_mstcnl)
+    #         saleorders_mstcnl = filterset_mstcnl.qs if filterset_mstcnl.is_valid() else base_queryset_mstcnl
 
-            total_count = len(combined_queryset)
-            start_index = (page - 1) * limit
-            end_index = start_index + limit
-            paginated_results = combined_queryset[start_index:end_index]
+    #         base_queryset_devcnl = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
+    #         filterset_devcnl = SaleInvoiceOrdersFilter(request.GET, queryset=base_queryset_devcnl)
+    #         saleorders_devcnl = filterset_devcnl.qs if filterset_devcnl.is_valid() else base_queryset_devcnl
 
-            serializer = SalesInvoiceReportSerializer(paginated_results, many=True)
-            return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    #         combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
+    #         total_count = len(combined_queryset)
 
-        else:  # Default to Regular
-            queryset = SaleInvoiceOrders.objects.all().order_by('-invoice_date')
-            total_count = SaleInvoiceOrders.objects.count()
+    #         start_index = (page - 1) * limit
+    #         end_index = start_index + limit
+    #         paginated_results = combined_queryset[start_index:end_index]
 
-        # Existing filtering logic
-        if request.query_params:
-            filterset = SalesInvoiceReportFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+    #         paginated_mstcnl = [obj for obj in paginated_results if isinstance(obj, MstcnlSaleOrder)]
+    #         paginated_devcnl = [obj for obj in paginated_results if isinstance(obj, SaleOrder)]
 
-        serializer = SalesInvoiceReportSerializer(queryset, many=True)
-        return filter_response(
-            queryset.count() if hasattr(queryset, 'count') else len(queryset),
-            "Success",
-            serializer.data,
-            page,
-            limit,
-            total_count,
-            status.HTTP_200_OK
-        )
+    #         serializer_mstcnl = MstcnlSaleInvoiceSerializer(paginated_mstcnl, many=True)
+    #         serializer_devcnl = SaleInvoiceOrdersSerializer(paginated_devcnl, many=True)
+
+    #         final_results = serializer_mstcnl.data + serializer_devcnl.data
+
+    #         return filter_response(
+    #             total_count,
+    #             "Success",
+    #             final_results,
+    #             page,
+    #             limit,
+    #             total_count,
+    #             status.HTTP_200_OK
+    #         )
+
+    #     else:  # Default to Regular
+    #         queryset = SaleInvoiceOrders.objects.all().order_by('-invoice_date')
+    #         total_count = SaleInvoiceOrders.objects.count()
+
+    #     # Existing filtering logic
+    #     if request.query_params:
+    #         filterset = SalesInvoiceReportFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     serializer = SalesInvoiceReportSerializer(queryset, many=True)
+    #     return filter_response(
+    #         queryset.count() if hasattr(queryset, 'count') else len(queryset),
+    #         "Success",
+    #         serializer.data,
+    #         page,
+    #         limit,
+    #         total_count,
+    #         status.HTTP_200_OK
+    #     )
+
 
 
     def get_sales_by_product(self, request):
@@ -1516,10 +1521,11 @@ class SaleInvoiceOrdersViewSet(APIView):
         try:
             # Check if the 'records_all' filter is set in the query params
             records_all = request.query_params.get("records_all", "false").lower() == "true"
+            records_mstcnl = request.query_params.get("records_mstcnl", "false").lower() == "true"
             
             logger.info(f"Fetching records_all: {records_all}")
             
-            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving sale invoice order summary")
                 saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('-created_at')
@@ -1533,23 +1539,82 @@ class SaleInvoiceOrdersViewSet(APIView):
 
             queryset = SaleInvoiceOrders.objects.all().order_by('-created_at')
 
-            # If records_all is true, fetch records from both mstcnl and devcnl databases
             if records_all:
-                logger.info("Fetching sale Invoice orders from both mstcnl and devcnl databases")
-                
-                # Query the 'mstcnl' database
-                saleinvoiceorders_mstcnl = SaleInvoiceOrders.objects.using('mstcnl').all().order_by('-created_at')
-                # Query the 'devcnl' database
-                saleinvoiceorders_devcnl = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
+                logger.info("Fetching sale order summary from both mstcnl and default databases")
 
-                # Combine the two querysets
-                combined_queryset = list(chain(saleinvoiceorders_mstcnl, saleinvoiceorders_devcnl))
+                # DB: mstcnl
+                base_queryset_mstcnl = MstcnlSaleInvoiceOrder.objects.using('mstcnl').all().order_by('-created_at')
+                filterset_mstcnl = MstcnlSaleInvoiceFilter(request.GET, queryset=base_queryset_mstcnl)
+                if filterset_mstcnl.is_valid():
+                    saleorders_mstcnl = filterset_mstcnl.qs
+                else:
+                    saleorders_mstcnl = base_queryset_mstcnl
 
-                # We need to paginate the combined result manually since it's from multiple databases
+                # DB: default
+                base_queryset_devcnl = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
+                filterset_devcnl = SaleInvoiceOrdersFilter(request.GET, queryset=base_queryset_devcnl)
+                if filterset_devcnl.is_valid():
+                    saleorders_devcnl = filterset_devcnl.qs
+                else:
+                    saleorders_devcnl = base_queryset_devcnl
+
+                # Combine both
+                combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
                 total_count = len(combined_queryset)
+
+                # Manual pagination on combined list
                 start_index = (page - 1) * limit
                 end_index = start_index + limit
                 paginated_results = combined_queryset[start_index:end_index]
+
+                # Separate the paginated slice into two: mstcnl & devcnl
+                paginated_mstcnl = [obj for obj in paginated_results if isinstance(obj, MstcnlSaleInvoiceOrder)]
+                paginated_devcnl = [obj for obj in paginated_results if isinstance(obj, SaleInvoiceOrders)]
+
+                # Serialize each with its correct serializer
+                serializer_mstcnl = MstcnlSaleInvoiceSerializer(paginated_mstcnl, many=True)
+                serializer_devcnl = SaleInvoiceOrdersSerializer(paginated_devcnl, many=True)
+
+                # Combine results
+                final_results = serializer_mstcnl.data + serializer_devcnl.data
+
+                return filter_response(
+                    total_count,
+                    "Success",
+                    final_results,
+                    page,
+                    limit,
+                    total_count,
+                    status.HTTP_200_OK
+                )
+            elif records_mstcnl:
+                logger.info("Fetching sale orders only from mstcnl database")
+
+                base_queryset_mstcnl = MstcnlSaleInvoiceOrder.objects.using('mstcnl').all().order_by('-created_at')
+
+                filterset_mstcnl = MstcnlSaleInvoiceFilter(request.GET, queryset=base_queryset_mstcnl)
+                if filterset_mstcnl.is_valid():
+                    saleorders_mstcnl = filterset_mstcnl.qs
+                else:
+                    saleorders_mstcnl = base_queryset_mstcnl
+
+                total_count = saleorders_mstcnl.count()
+                start_index = (page - 1) * limit
+                end_index = start_index + limit
+                paginated_results = saleorders_mstcnl[start_index:end_index]
+
+                serializer_mstcnl = MstcnlSaleInvoiceSerializer(paginated_results, many=True)
+
+                return filter_response(
+                    total_count,
+                    "Success",
+                    serializer_mstcnl.data,
+                    page,
+                    limit,
+                    total_count,
+                    status.HTTP_200_OK
+                )
+
             else:
                 logger.info("Fetching sale orders only from devcnl")
                 # Only query from the 'devcnl' database
@@ -4765,6 +4830,7 @@ def replicate_sale_order_to_mstcnl(sale_order_id):
                 remarks = sale_order.remarks,
                 email = sale_order.email,
                 total_amount = sale_order.total_amount,
+                advance_amount = sale_order.advance_amount,
                 item_value = sale_order.item_value,
                 tax_amount = sale_order.tax_amount,
                 discount = sale_order.discount,
