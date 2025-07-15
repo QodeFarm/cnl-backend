@@ -113,11 +113,33 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
             "billing_address": None,
             "shipping_address": None
         }
+        
+        def format_address(addr):
+            if not addr:
+                return None
 
+            parts = [
+                addr.address or '',
+                addr.city_id.city_name if addr.city_id else '',
+                addr.state_id.state_name if addr.state_id else '',
+                addr.country_id.country_name if addr.country_id else '',
+                addr.pin_code or '',
+                f"Phone: {addr.phone}" if addr.phone else '',
+                f"email: {addr.email}" if addr.email else ''
+            ]
+            return ', '.join([p for p in parts if p])  # remove empty parts        
+
+       
+        
         if billing_address:
-            vendor_addresses["billing_address"] = f"{billing_address.address}, {billing_address.city_id.city_name}, {billing_address.state_id.state_name}, {billing_address.country_id.country_name}, {billing_address.pin_code}, Phone: {billing_address.phone},email: {billing_address.email}"
+            vendor_addresses["billing_address"] = format_address(billing_address)
         if shipping_address:
-            vendor_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone},email: {shipping_address.email}"
+            vendor_addresses["shipping_address"] = format_address(shipping_address)
+
+        # if billing_address:
+        #     vendor_addresses["billing_address"] = f"{billing_address.address}, {billing_address.city_id.city_name}, {billing_address.state_id.state_name}, {billing_address.country_id.country_name}, {billing_address.pin_code}, Phone: {billing_address.phone},email: {billing_address.email}"
+        # if shipping_address:
+        #     vendor_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone},email: {shipping_address.email}"
 
         return email, phone, city, vendor_addresses
 
