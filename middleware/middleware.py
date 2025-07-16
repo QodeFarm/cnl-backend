@@ -7,16 +7,15 @@ class DatabaseMiddleware(MiddlewareMixin):
 
         data = License.objects.using('mstcnl').values_list('domain', 'database_name')   
         DOMAIN_DATABASE_MAPPING =  dict(data)
-        print(DOMAIN_DATABASE_MAPPING)
 
         # Get the client domain from the request header (sent by Nginx)
         client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
         subdomain =  client_domain.split('.')[0]
         # Select the database based on the frontend domain
-        db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "devcnl")  # Default to devcnl if not found
+        db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "rcnl")  # Default to devcnl if not found
 
         # Set the correct database connection
-        connections.databases["default"]["NAME"] = db_name
+        connections.databases["default"]["NAME"] = 'rcnl'
 
         # Print to logs for debugging
         print(f"Using database: {db_name} for client domain: {client_domain}")                                                                          
