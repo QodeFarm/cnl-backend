@@ -8,9 +8,10 @@ from .models import *
 #----------Modified Serializers--------------------------
 
 class ModSaleOrderSerializer(serializers.ModelSerializer):
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id','customer_id','order_date','delivery_date', 'sale_estimate']
+        fields = ['sale_order_id','customer','order_date','delivery_date', 'sale_estimate']
 
 class UdfSaleOrderSerializer(serializers.ModelSerializer):
     status_name = serializers.SerializerMethodField()

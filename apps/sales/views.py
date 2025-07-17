@@ -4765,36 +4765,36 @@ def replicate_sale_invoice_to_mstcnl(invoice_id):
             #print(" CustomFields replicated to mstcnl")
             
             #  9) Replicate related SaleOrder if valid
-            if sale_invoice.sale_order_id.sale_order_id:
+            if sale_invoice.sale_order_id:
                 replicate_sale_order_to_mstcnl(sale_invoice.sale_order_id.sale_order_id)
             else:
                 return {"message": "Sale order id is None — Only invoice will replicated in mstcnl DB."}
 
-            # #  10) Delete from default DB
-            # time.sleep(1)
+            #  10) Delete from default DB
+            time.sleep(1)
 
-            # SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-            # OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-            # OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-            # CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
-            # SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
+            SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
+            OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
+            OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
+            CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
+            SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
 
-            # return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
+            return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
     
-    finally:
-        #  Always delete source records
-        time.sleep(1)
+    # finally:
+    #     #  Always delete source records
+    #     time.sleep(1)
         
-        SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-        OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-        OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-        CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
-        SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
+    #     SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
+    #     OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
+    #     OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
+    #     CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
+    #     SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
         #print(" Default DB records deleted.")
 
     return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
