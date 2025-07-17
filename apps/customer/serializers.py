@@ -40,9 +40,10 @@ class CustomerSerializer(serializers.ModelSerializer):
            
         
 class ModCustomersSerializer(serializers.ModelSerializer):
+    customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name']
+        fields = ['customer_id', 'name', 'customer_category']
         
 class CustomerAttachmentsSerializers(serializers.ModelSerializer):
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
@@ -89,10 +90,11 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     city = serializers.SerializerMethodField() 
     ledger_account = serializers.SerializerMethodField()
     pin_code = serializers.SerializerMethodField()
+    customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code']
+        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code', 'customer_category']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
