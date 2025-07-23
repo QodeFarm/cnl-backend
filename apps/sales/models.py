@@ -1208,3 +1208,31 @@ class MstcnlCustomFieldValue(models.Model):
     class Meta:
         managed = False  # Because the table already exists, no migrations
         db_table = 'custom_field_values'
+        
+
+class MstCnlPaymentTransactions(models.Model):
+    PAYMENT_STATUS_CHOICES = [
+        ('Pending', 'Pending'),
+        ('Completed', 'Completed'),
+        ('Failed', 'Failed'),
+    ]
+
+    transaction_id = models.CharField(max_length=36, primary_key=True)
+    payment_receipt_no = models.CharField(max_length=50)
+    payment_date = models.DateTimeField(auto_now_add=True)
+    payment_method = models.CharField(max_length=100, null=True, blank=True)
+    cheque_no = models.CharField(max_length=50, null=True, blank=True)
+    amount = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    outstanding_amount = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    adjusted_now = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='Pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    sale_invoice_id = models.CharField(max_length=36)
+    customer_id = models.CharField(max_length=36)
+    invoice_no = models.CharField(max_length=20, null=True, blank=True)
+    total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    account_id = models.CharField(max_length=36, null=True, blank=True)
+
+    class Meta:
+        db_table = 'payment_transactions'
