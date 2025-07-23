@@ -1218,7 +1218,7 @@ class MstCnlPaymentTransactions(models.Model):
     ]
 
     transaction_id = models.CharField(max_length=36, primary_key=True)
-    Payment_receipt_No = models.CharField(max_length=50)
+    payment_receipt_no = models.CharField(max_length=50)
     payment_date = models.DateTimeField(auto_now_add=True)
     payment_method = models.CharField(max_length=100, null=True, blank=True)
     cheque_no = models.CharField(max_length=50, null=True, blank=True)
