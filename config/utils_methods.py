@@ -22,6 +22,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 
+# from apps.sales.models import MstcnlSaleOrder, SaleOrder
 from config.settings import MEDIA_ROOT, MEDIA_URL
 
 
@@ -229,11 +230,8 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
     date_str = current_date.strftime('%y%m')
     
     prefix = override_prefix if override_prefix else order_type_prefix
-    
 
     if prefix == "PRD":
-        # Handle non-date-based types
-        # prefix = f"{order_type_prefix}"
         if model_class and field_name:
             filter_kwargs = {f"{field_name}__startswith": prefix}
             last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
@@ -244,9 +242,73 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
                 except Exception:
                     last_number = 0
             return f"{prefix}-{last_number + 1:05d}"
-        return f"{prefix}-00001"  # fallback
+        return f"{prefix}-00001"
 
-    # Handle date-based formats like SR-2506-0001
+    if prefix == "SOO":
+        from apps.sales.models import SaleOrder, MstcnlSaleOrder
+        filter_kwargs = {f"{field_name}__startswith": f"{prefix}-{date_str}"}
+        
+        last_default = SaleOrder.objects.using('default').filter(**filter_kwargs).order_by(f"-{field_name}").first()
+        last_mstcnl = MstcnlSaleOrder.objects.using('mstcnl').filter(**filter_kwargs).order_by(f"-{field_name}").first()
+
+        def extract_seq(obj):
+            if not obj:
+                return 0
+            try:
+                return int(getattr(obj, field_name).split('-')[-1])
+            except Exception:
+                return 0
+
+        max_default = extract_seq(last_default)
+        max_mstcnl = extract_seq(last_mstcnl)
+        next_seq = max(max_default, max_mstcnl) + 1
+
+        return f"{prefix}-{date_str}-{next_seq:05d}"
+    
+    if prefix == "SOO-INV":
+        # ✅ Late import to avoid circular
+        from apps.sales.models import SaleInvoiceOrders, MstcnlSaleInvoiceOrder
+        filter_kwargs = {f"{field_name}__startswith": f"{prefix}-{date_str}"}
+
+        last_default = SaleInvoiceOrders.objects.using('default').filter(**filter_kwargs).order_by(f"-{field_name}").first()
+        last_mstcnl = MstcnlSaleInvoiceOrder.objects.using('mstcnl').filter(**filter_kwargs).order_by(f"-{field_name}").first()
+
+        def extract_seq(obj):
+            if not obj:
+                return 0
+            try:
+                return int(getattr(obj, field_name).split('-')[-1])
+            except Exception:
+                return 0
+
+        max_default = extract_seq(last_default)
+        max_mstcnl = extract_seq(last_mstcnl)
+        next_seq = max(max_default, max_mstcnl) + 1
+
+        return f"{prefix}-{date_str}-{next_seq:05d}"
+    
+    if prefix == "PTR":
+        from apps.sales.models import PaymentTransactions, MstCnlPaymentTransactions
+        filter_kwargs = {f"{field_name}__startswith": f"{prefix}-{date_str}"}
+
+        last_default = PaymentTransactions.objects.using('default').filter(**filter_kwargs).order_by(f"-{field_name}").first()
+        last_mstcnl = MstCnlPaymentTransactions.objects.using('mstcnl').filter(**filter_kwargs).order_by(f"-{field_name}").first()
+
+        def extract_seq(obj):
+            if not obj:
+                return 0
+            try:
+                return int(getattr(obj, field_name).split('-')[-1])
+            except Exception:
+                return 0
+
+        max_default = extract_seq(last_default)
+        max_mstcnl = extract_seq(last_mstcnl)
+        next_seq = max(max_default, max_mstcnl) + 1
+
+        return f"{prefix}-{date_str}-{next_seq:05d}"
+
+    # Normal date-based flow — unchanged
     prefix = f"{order_type_prefix}-{date_str}"
     last_number = 0
 
@@ -261,7 +323,6 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
                 last_number = 0
 
     return f"{prefix}-{last_number + 1:05d}"
-
 
 #----------------------------Pramod-end------------------------------------------------
 

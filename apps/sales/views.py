@@ -4695,15 +4695,17 @@ def replicate_sale_invoice_to_mstcnl(invoice_id):
     finally:
         #  Always delete source records
         time.sleep(1)
-        
-        SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-        OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-        OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-        CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
-        SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
-        print(" Default DB records deleted.")
+        if sale_invoice.bill_type != 'OTHERS' and sale_invoice.order_status_id != 'Completed':
+            return {"message": "Condition not matched — invoice will remain in default DB."}
+        else:
+            SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
+            OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
+            OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
+            CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
+            SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
+            print(" Default DB records deleted.")
 
-    # return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
+    return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
 
 
 def replicate_sale_order_to_mstcnl(sale_order_id):
