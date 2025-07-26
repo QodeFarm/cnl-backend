@@ -481,3 +481,11 @@ class MstcnlCustomFieldValueSerializer(serializers.ModelSerializer):
     class Meta:
         model = MstcnlCustomFieldValue
         fields = '__all__'
+        
+
+from .models import MstCnlPaymentTransactions
+
+class MstCnlPaymentTransactionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstCnlPaymentTransactions
+        fields = '__all__'

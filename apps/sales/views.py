@@ -4392,29 +4392,76 @@ class PaymentTransactionAPIView(APIView):
             else:
                 return build_response(0, "No Invoices", [], status.HTTP_204_NO_CONTENT)
 
+    def get(self, request, customer_id=None):
+        records_all = request.query_params.get('records_all', 'false').lower() == 'true'
 
-    def get(self, request, customer_id = None):
         if customer_id:
-            '''Fetch All Payment Transactions for a Customer'''
-            payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).select_related('sale_invoice').order_by('-created_at')
-            
-            if not payment_transactions.exists():
-                return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND) 
+            payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).order_by('-created_at')
 
-            try:
-                serializer = PaymentTransactionSerializer(payment_transactions, many=True)
-                return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
-            except Exception as e:
-                return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            mstcnl_payment_transactions = []
+            if records_all:
+                mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(customer_id=customer_id).order_by('-created_at')
+
+            combined = []
+            if payment_transactions.exists():
+                serializer_default = PaymentTransactionSerializer(payment_transactions, many=True)
+                combined.extend(serializer_default.data)
+
+            if mstcnl_payment_transactions:
+                serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_payment_transactions, many=True)
+                combined.extend(serializer_mstcnl.data)
+
+            if not combined:
+                return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND)
+
+            return build_response(len(combined), "Payment Transactions", combined, status.HTTP_200_OK)
+
         else:
             transactions = PaymentTransactions.objects.all()
+
             if request.query_params:
                 filterset = PaymentTransactionsReportFilter(request.GET, queryset=transactions)
                 if filterset.is_valid():
-                    transactions = filterset.qs  
+                    transactions = filterset.qs
+
+            mstcnl_transactions = []
+            if records_all:
+                mstcnl_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').all()
+
+            combined = []
+            if transactions.exists():
+                serializer_default = PaymentTransactionSerializer(transactions, many=True)
+                combined.extend(serializer_default.data)
+
+            if mstcnl_transactions:
+                serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_transactions, many=True)
+                combined.extend(serializer_mstcnl.data)
+
+            return build_response(len(combined), "Payment Transactions", combined, status.HTTP_200_OK)
+
+
+    # def get(self, request, customer_id = None):
+    #     if customer_id:
+    #         '''Fetch All Payment Transactions for a Customer'''
+    #         payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).select_related('sale_invoice').order_by('-created_at')
             
-            serializer = PaymentTransactionSerializer(transactions, many=True)
-            return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
+    #         if not payment_transactions.exists():
+    #             return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND) 
+
+    #         try:
+    #             serializer = PaymentTransactionSerializer(payment_transactions, many=True)
+    #             return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
+    #         except Exception as e:
+    #             return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #     else:
+    #         transactions = PaymentTransactions.objects.all()
+    #         if request.query_params:
+    #             filterset = PaymentTransactionsReportFilter(request.GET, queryset=transactions)
+    #             if filterset.is_valid():
+    #                 transactions = filterset.qs  
+            
+    #         serializer = PaymentTransactionSerializer(transactions, many=True)
+    #         return build_response(len(serializer.data), "Payment Transactions", serializer.data, status.HTTP_200_OK)
 
 class FetchSalesInvoicesForPaymentReceiptTable(APIView):
     '''This API is used to fetch all information related to sales invoices for 
@@ -4439,170 +4486,6 @@ class FetchSalesInvoicesForPaymentReceiptTable(APIView):
 from django.db import transaction
 from django.utils import timezone
 import time
-
-# def replicate_sale_invoice_to_mstcnl(invoice_id):
-#     #print("---------------: we entered in correct way...")
-#     try:
-#         with transaction.atomic():
-#             #  1) Fetch invoice from default DB
-#             sale_invoice = SaleInvoiceOrders.objects.using('default').get(pk=invoice_id)
-#             #print("sale_invoice from emthod: ", sale_invoice)
-#             #print("sale_invoice bill_type emthod: ", sale_invoice.bill_type)
-#             #print("sale_invoice order_status_id emthod: ", sale_invoice.order_status_id)
-            
-#             # status_value = sale_invoice.order_status_id
-#             # status_name = None
-
-#             # try:
-#             #     # Try to treat it as UUID
-#             #     uuid.UUID(status_value)
-#             #     status_obj = OrderStatuses.objects.using('default').filter(pk=status_value).first()
-#             #     if status_obj:
-#             #         status_name = status_obj.status_name
-#             # except Exception:
-#             #     # Not a UUID → assume it’s the name already
-#             #     status_name = status_value
-
-#             # #print("Resolved status_name:", status_name)
-
-#             #  Final condition: bill_type must be OTHERS and status must be Completed
-#             if sale_invoice.bill_type != 'OTHERS' and sale_invoice.order_status_id != 'Completed':
-#                 return {"message": "Condition not matched — invoice will remain in default DB."}
-
-#             #  2) Copy to mstcnl
-#             MstcnlSaleInvoiceOrder.objects.using('mstcnl').create(
-#                 sale_invoice_id=sale_invoice.sale_invoice_id,
-#                 bill_type=sale_invoice.bill_type,
-#                 invoice_date=sale_invoice.invoice_date,
-#                 invoice_no=sale_invoice.invoice_no,
-#                 customer_id=sale_invoice.customer_id,
-#                 gst_type_id=sale_invoice.gst_type_id,
-#                 email=sale_invoice.email,
-#                 ref_no=sale_invoice.ref_no,
-#                 ref_date=sale_invoice.ref_date,
-#                 order_salesman_id=sale_invoice.order_salesman_id,
-#                 customer_address_id=sale_invoice.customer_address_id,
-#                 payment_term_id=sale_invoice.payment_term_id,
-#                 due_date=sale_invoice.due_date,
-#                 payment_link_type_id=sale_invoice.payment_link_type_id,
-#                 remarks=sale_invoice.remarks,
-#                 advance_amount=sale_invoice.advance_amount,
-#                 ledger_account_id=sale_invoice.ledger_account_id,
-#                 item_value=sale_invoice.item_value,
-#                 discount=sale_invoice.discount,
-#                 dis_amt=sale_invoice.dis_amt,
-#                 taxable=sale_invoice.taxable,
-#                 tax_amount=sale_invoice.tax_amount,
-#                 cess_amount=sale_invoice.cess_amount,
-#                 transport_charges=sale_invoice.transport_charges,
-#                 round_off=sale_invoice.round_off,
-#                 total_amount=sale_invoice.total_amount,
-#                 vehicle_name=sale_invoice.vehicle_name,
-#                 total_boxes=sale_invoice.total_boxes,
-#                 order_status_id=sale_invoice.order_status_id,
-#                 shipping_address=sale_invoice.shipping_address,
-#                 billing_address=sale_invoice.billing_address,
-#                 sale_order_id=sale_invoice.sale_order_id,
-#                 tax=sale_invoice.tax,
-#                 paid_amount=sale_invoice.paid_amount,
-#                 # balance_amount=sale_invoice.balance_amount,
-#                 pending_amount=sale_invoice.pending_amount,
-#                 created_at=sale_invoice.created_at,
-#                 updated_at=timezone.now()
-#             )
-
-#             #  3) Copy SaleInvoiceItems
-#             invoice_items = SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id)
-#             for item in invoice_items:
-#                 MstcnlSaleInvoiceItem.objects.using('mstcnl').create(
-#                     sale_invoice_item_id=item.sale_invoice_item_id,
-#                     sale_invoice_id=item.sale_invoice_id,
-#                     product_id=item.product_id,
-#                     unit_options_id=item.unit_options_id,
-#                     print_name=item.print_name,
-#                     quantity=item.quantity,
-#                     total_boxes=item.total_boxes,
-#                     rate=item.rate,
-#                     amount=item.amount,
-#                     tax=item.tax,
-#                     remarks=item.remarks,
-#                     discount=item.discount,
-#                     size_id=item.size_id,
-#                     color_id=item.color_id,
-#                     sgst=item.sgst,
-#                     cgst=item.cgst,
-#                     igst=item.igst,
-#                     created_at=item.created_at,
-#                     updated_at=timezone.now()
-#                 )
-
-#             #  4) Copy Shipments
-#             shipments = OrderShipments.objects.using('default').filter(order_id=invoice_id)
-#             for shipment in shipments:
-#                 MstcnlOrderShipment.objects.using('mstcnl').create(
-#                     shipment_id=shipment.shipment_id,
-#                     order_id=shipment.order_id,
-#                     destination=shipment.destination,
-#                     shipping_mode_id=shipment.shipping_mode_id,
-#                     shipping_company_id=shipment.shipping_company_id,
-#                     shipping_tracking_no=shipment.shipping_tracking_no,
-#                     shipping_date=shipment.shipping_date,
-#                     shipping_charges=shipment.shipping_charges,
-#                     vehicle_vessel=shipment.vehicle_vessel,
-#                     charge_type=shipment.charge_type,
-#                     document_through=shipment.document_through,
-#                     port_of_landing=shipment.port_of_landing,
-#                     port_of_discharge=shipment.port_of_discharge,
-#                     no_of_packets=shipment.no_of_packets,
-#                     weight=shipment.weight,
-#                     order_type_id=shipment.order_type_id,
-#                     created_at=shipment.created_at,
-#                     updated_at=timezone.now()
-#                 )
-
-#             #  5) Copy Attachments
-#             attachments = OrderAttachments.objects.using('default').filter(order_id=invoice_id)
-#             for attachment in attachments:
-#                 MstcnlOrderAttachment.objects.using('mstcnl').create(
-#                     attachment_id=attachment.attachment_id,
-#                     order_id=attachment.order_id,
-#                     attachment_name=attachment.attachment_name,
-#                     attachment_path=attachment.attachment_path,
-#                     order_type_id=attachment.order_type_id,
-#                     created_at=attachment.created_at,
-#                     updated_at=timezone.now()
-#                 )
-
-#             #  6) Copy Custom Fields
-#             custom_fields = CustomFieldValue.objects.using('default').filter(entity_id=invoice_id)
-#             for cf in custom_fields:
-#                 MstcnlCustomFieldValue.objects.using('mstcnl').create(
-#                     custom_field_value_id=cf.custom_field_value_id,
-#                     custom_field_id=cf.custom_field_id,
-#                     entity_id=cf.entity_id,
-#                     field_value=cf.field_value,
-#                     field_value_type=cf.field_value_type,
-#                     created_at=cf.created_at,
-#                     updated_at=timezone.now(),
-#                     custom_id=cf.custom_id
-#                 )
-
-#             #  Delay + Delete
-#             time.sleep(2)
-
-#             SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-#             OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-#             OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-#             CustomFieldValue.objects.using('default').filter(entity_id=invoice_id).delete()
-#             SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
-
-#             return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
-
-#     except Exception as e:
-#         import traceback
-#         traceback.print_exc()
-#         return {"error": str(e)}
-
 
 def replicate_sale_invoice_to_mstcnl(invoice_id):
     #print("---------------: we entered in correct way...")
@@ -4761,8 +4644,30 @@ def replicate_sale_invoice_to_mstcnl(invoice_id):
                     updated_at = timezone.now(),
                     custom_id = cf.custom_id
                 )
+                
+            # === ✅ NEW: Copy Payment Transactions ===
+            payment_txns = PaymentTransactions.objects.using('default').filter(sale_invoice_id=invoice_id)
+            for txn in payment_txns:
+                MstCnlPaymentTransactions.objects.using('mstcnl').create(
+                    transaction_id=txn.transaction_id,
+                    payment_receipt_no=txn.payment_receipt_no,
+                    payment_date=txn.payment_date,
+                    payment_method=txn.payment_method,
+                    cheque_no=txn.cheque_no,
+                    amount=txn.amount,
+                    outstanding_amount=txn.outstanding_amount,
+                    adjusted_now=txn.adjusted_now,
+                    payment_status=txn.payment_status,
+                    created_at=txn.created_at,
+                    updated_at=timezone.now(),
+                    sale_invoice_id=txn.sale_invoice.sale_invoice_id,
+                    customer_id=txn.customer.name,
+                    invoice_no=txn.invoice_no,
+                    total_amount=txn.total_amount,
+                    account_id=txn.account.account_id
+                )
 
-            #print(" CustomFields replicated to mstcnl")
+            print(" Payment replicated to mstcnl")
             
             #  9) Replicate related SaleOrder if valid
             if sale_invoice.sale_order_id:
@@ -4770,32 +4675,35 @@ def replicate_sale_invoice_to_mstcnl(invoice_id):
             else:
                 return {"message": "Sale order id is None — Only invoice will replicated in mstcnl DB."}
 
+            print("Completed whole sale invoice and payment transactions in mstcnl")
             #  10) Delete from default DB
-            time.sleep(1)
+            # time.sleep(1)
 
-            SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-            OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-            OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-            CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
-            SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
+            # SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
+            # OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
+            # OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
+            # CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
+            # SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
 
-            return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
+            # return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
 
     except Exception as e:
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
     
-    # finally:
-    #     #  Always delete source records
-    #     time.sleep(1)
-        
-    #     SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-    #     OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-    #     OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-    #     CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
-    #     SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
-        #print(" Default DB records deleted.")
+    finally:
+        #  Always delete source records
+        time.sleep(1)
+        if sale_invoice.bill_type != 'OTHERS' and sale_invoice.order_status_id != 'Completed':
+            return {"message": "Condition not matched — invoice will remain in default DB."}
+        else:
+            SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
+            OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
+            OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
+            CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
+            SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
+            print(" Default DB records deleted.")
 
     return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
 
