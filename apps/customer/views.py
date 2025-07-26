@@ -26,6 +26,19 @@ from rest_framework.serializers import ValidationError
 from django.core.exceptions import  ObjectDoesNotExist
 from django.db.models import Sum, F, DecimalField, ExpressionWrapper,When,Value,Case,FloatField,Max
 from django.db.models.functions import Coalesce
+from .models import Customer
+from openpyxl import Workbook
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
+from django.http import HttpResponse
+from openpyxl.comments import Comment
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+import openpyxl
+import os
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -915,3 +928,430 @@ class CustomerBalanceView(APIView):
 
     def update():
         pass
+
+
+   
+# ------------------------------
+# Lookup Field Mappings
+# ------------------------------
+CUSTOMER_LOOKUP_FIELDS = {
+    'firm_status_id': 'firm_status',
+    'territory_id': 'territory',
+    'customer_category_id': 'customer_category',
+    'gst_category_id': 'gst_category',
+    'payment_term_id': 'payment_term',
+    'price_category_id': 'price_category',
+    'transporter_id': 'transporter',
+    'ledger_account_id': 'ledger_account',
+}
+
+ADDRESS_LOOKUP_FIELDS = {
+    'city_id': 'city',
+    'state_id': 'state',
+    'country_id': 'country',
+}
+
+REQUIRED_CUSTOMER_FIELDS = ["name", "print_name", "customer_category"]
+REQUIRED_ADDRESS_FIELDS = []
+
+def download_customer_template(request):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "CustomerTemplate"
+
+    # ------------------------------
+    # 1. CUSTOMER HEADERS
+    # ------------------------------
+    customer_fields = []
+    for field in Customer._meta.get_fields():
+        if field.auto_created or field.name in ['customer_id', 'created_at', 'updated_at', 'picture']:
+            continue
+        if field.name in CUSTOMER_LOOKUP_FIELDS:
+            customer_fields.append(CUSTOMER_LOOKUP_FIELDS[field.name])
+        else:
+            customer_fields.append(field.name)
+
+
+    # ------------------------------
+    # 2. ADDRESS HEADERS
+    # ------------------------------
+    def get_address_fields(prefix):
+        result_fields = []
+        for field in CustomerAddresses._meta.get_fields():
+            if field.auto_created or field.name in ['customer_address_id', 'customer_id', 'created_at', 'updated_at', 'address_type', 'route_map']:
+                continue
+            if field.name in ADDRESS_LOOKUP_FIELDS:
+                result_fields.append(f"{prefix}_{ADDRESS_LOOKUP_FIELDS[field.name]}")
+            else:
+                result_fields.append(f"{prefix}_{field.name}")
+        return result_fields
+
+    billing_fields = get_address_fields("billing")
+    shipping_fields = get_address_fields("shipping")
+
+    # Add ledger_group next to ledger_account
+    ledger_account_index = customer_fields.index('ledger_account')
+    customer_fields.insert(ledger_account_index + 1, 'ledger_group')
+    
+    # ------------------------------
+    # 3. Combine All Headers (explicitly NOT including shipping_same_as_billing)
+    # ------------------------------
+    headers = customer_fields + billing_fields + shipping_fields
+    ws.append(headers)
+
+    # ------------------------------
+    # 4. Header Styling + Required Marking
+    # ------------------------------
+    header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+    font_bold = Font(bold=True)
+    align_center = Alignment(horizontal="center")
+
+    for col_num, column_title in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_num)
+        cell.fill = header_fill
+        cell.font = font_bold
+        cell.alignment = align_center
+
+        is_required = False
+        if column_title in REQUIRED_CUSTOMER_FIELDS:
+            is_required = True
+        elif column_title.startswith("billing_") or column_title.startswith("shipping_"):
+            for req in REQUIRED_ADDRESS_FIELDS:
+                if column_title.endswith(req.replace("_id", "")) or column_title.endswith(req):
+                    is_required = True
+                    break
+
+        if is_required:
+            cell.comment = Comment("This field is required", "System")
+
+        ws.column_dimensions[get_column_letter(col_num)].width = len(str(column_title)) + 4
+
+    # ------------------------------
+    # 5. Return Response
+    # ------------------------------
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename=Customer_Import_Template.xlsx'
+    wb.save(response)
+    return response
+
+
+
+# ------------------------------
+# Customer Excel Import/Export
+# ------------------------------
+class CustomerExcelImport(BaseExcelImportExport):
+    """
+    Customer Excel import/export functionality
+    """
+    MODEL_CLASS = Customer
+    SERIALIZER_CLASS = CustomerSerializer
+    REQUIRED_COLUMNS = ["name", "print_name", "customer_category"]
+    TEMPLATE_FILENAME = "Customer_Import_Template.xlsx"
+    
+    FIELD_MAP = {
+        "name": "name",
+        "print_name": "print_name",
+        "identification": "identification",
+        "code": "code",
+        "ledger_account": ("ledger_account_id", LedgerAccounts),
+        "ledger_group": "ledger_group",  # For creating LedgerAccounts with proper group
+        "customer_common_for_sales_purchase": "customer_common_for_sales_purchase",
+        "is_sub_customer": "is_sub_customer",
+        "firm_status": ("firm_status_id", FirmStatuses),
+        "territory": ("territory_id", Territory),
+        "customer_category": ("customer_category_id", CustomerCategories),
+        "contact_person": "contact_person",
+        "gst": "gst",
+        "registration_date": "registration_date",
+        "cin": "cin",
+        "pan": "pan",
+        "gst_category": ("gst_category_id", GstCategories),
+        "gst_suspend": "gst_suspend",
+        "tax_type": "tax_type",
+        "distance": "distance",
+        "tds_on_gst_applicable": "tds_on_gst_applicable",
+        "tds_applicable": "tds_applicable",
+        "website": "website",
+        "facebook": "facebook",
+        "skype": "skype",
+        "twitter": "twitter",
+        "linked_in": "linked_in",
+        "payment_term": ("payment_term_id", CustomerPaymentTerms),
+        "price_category": ("price_category_id", PriceCategories),
+        "batch_rate_category": "batch_rate_category",
+        "transporter": ("transporter_id", Transporters),
+        "credit_limit": "credit_limit",
+        "max_credit_days": "max_credit_days",
+        "interest_rate_yearly": "interest_rate_yearly",
+    }
+    
+    BOOLEAN_FIELDS = [
+        "customer_common_for_sales_purchase", 
+        "is_sub_customer", 
+        "gst_suspend", 
+        "tds_applicable", 
+        "tds_on_gst_applicable"
+    ]
+    
+    # Special handling for foreign keys that require additional fields
+    FK_REQUIRED_FIELDS = {
+        "LedgerAccounts": {
+            "ledger_group_id": lambda: LedgerGroups.objects.first()
+        }
+    }
+    
+    @classmethod
+    def create_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
+        """Create customer record with addresses from Excel data"""
+        field_map = field_map or cls.FIELD_MAP
+        boolean_fields = boolean_fields or cls.BOOLEAN_FIELDS
+        
+        with transaction.atomic():
+            # 1. Process the customer data
+            customer_data = {}
+            
+            # Special handling for ledger account with group
+            ledger_account_name = row_data.get("ledger_account")
+            ledger_group_name = row_data.get("ledger_group")
+            
+            if ledger_account_name:
+                if ledger_group_name:
+                    # Get or create the ledger group first
+                    ledger_group = LedgerGroups.objects.filter(name__iexact=ledger_group_name).first()
+                    if not ledger_group:
+                        logger.info(f"Creating LedgerGroup with name='{ledger_group_name}'")
+                        ledger_group = LedgerGroups.objects.create(name=ledger_group_name)
+                        
+                    # Now get or create ledger account with the right group
+                    ledger_account = LedgerAccounts.objects.filter(name__iexact=ledger_account_name).first()
+                    if not ledger_account:
+                        logger.info(f"Creating LedgerAccount with name='{ledger_account_name}' and group='{ledger_group_name}'")
+                        ledger_account = LedgerAccounts.objects.create(
+                            name=ledger_account_name,
+                            ledger_group_id=ledger_group
+                        )
+                else:
+                    # If no group specified, use default group
+                    default_group = LedgerGroups.objects.first()
+                    ledger_account = LedgerAccounts.objects.filter(name__iexact=ledger_account_name).first()
+                    if not ledger_account:
+                        if not default_group:
+                            raise ValueError("Cannot create LedgerAccount without a LedgerGroup")
+                        logger.info(f"Creating LedgerAccount with name='{ledger_account_name}' and default group")
+                        ledger_account = LedgerAccounts.objects.create(
+                            name=ledger_account_name,
+                            ledger_group_id=default_group
+                        )
+                
+                customer_data['ledger_account_id'] = ledger_account
+            
+            # Process other fields
+            for excel_col, mapping in field_map.items():
+                # Skip already processed fields
+                if excel_col in ['ledger_account', 'ledger_group']:
+                    continue
+                    
+                value = row_data.get(excel_col)
+                
+                # Skip empty values
+                if value is None or value == '':
+                    continue
+                
+                if isinstance(mapping, tuple):
+                    # Handle foreign key fields
+                    field_name, model = mapping
+                    customer_data[field_name] = cls.get_or_create_fk(model, value)
+                else:
+                    # Handle regular fields
+                    if mapping in boolean_fields:
+                        customer_data[mapping] = cls.parse_boolean(value)
+                    else:
+                        customer_data[mapping] = value
+            
+            # Create the customer record
+            customer = Customer.objects.create(**customer_data)
+            
+            # 2. Create billing address
+            country = cls.get_or_create_country(row_data.get("billing_country"))
+            state = cls.get_or_create_state(row_data.get("billing_state"), country) if country else None
+            city = cls.get_or_create_city(row_data.get("billing_city"), state) if state else None
+            
+            CustomerAddresses.objects.create(
+                customer_id=customer,
+                address_type="Billing",
+                address=row_data.get("billing_address"),
+                city_id=city,
+                state_id=state,
+                country_id=country,
+                pin_code=row_data.get("billing_pin_code"),
+                phone=row_data.get("billing_phone"),
+                email=row_data.get("billing_email"),
+                longitude=row_data.get("billing_longitude"),
+                latitude=row_data.get("billing_latitude")
+            )
+            
+            # 3. Create shipping address only if explicitly provided
+            # No automatic copy from billing address, only create shipping if data is provided
+            if row_data.get("shipping_address"):
+                # Create new shipping address
+                s_country = cls.get_or_create_country(row_data.get("shipping_country"))
+                s_state = cls.get_or_create_state(row_data.get("shipping_state"), s_country) if s_country else None
+                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state) if s_state else None
+                
+                CustomerAddresses.objects.create(
+                    customer_id=customer,
+                    address_type="Shipping",
+                    address=row_data.get("shipping_address"),
+                    city_id=s_city,
+                    state_id=s_state,
+                    country_id=s_country,
+                    pin_code=row_data.get("shipping_pin_code"),
+                    phone=row_data.get("shipping_phone"),
+                    email=row_data.get("shipping_email"),
+                    longitude=row_data.get("shipping_longitude"),
+                    latitude=row_data.get("shipping_latitude")
+                )
+                
+            return customer
+
+    @classmethod
+    def generate_template(cls, extra_columns=None):
+        """Generate Excel template with address fields"""
+        wb = super().generate_template(extra_columns)
+        ws = wb.active
+        
+        # Add address fields
+        address_headers = []
+        
+        # Billing address fields
+        billing_fields = [
+            "billing_address", "billing_country", "billing_state", 
+            "billing_city", "billing_pin_code", "billing_phone", 
+            "billing_email", "billing_longitude", "billing_latitude"
+        ]
+        address_headers.extend(billing_fields)
+        
+        # Shipping address fields (no shipping_same_as_billing field)
+        shipping_fields = [
+            "shipping_address", "shipping_country", "shipping_state", 
+            "shipping_city", "shipping_pin_code", "shipping_phone", 
+            "shipping_email", "shipping_longitude", "shipping_latitude"
+        ]
+        address_headers.extend(shipping_fields)
+        
+        # Get the last row and append the address headers
+        last_row = ws.max_row
+        for col_num, header in enumerate(address_headers, 1 + len(list(cls.FIELD_MAP.keys()))):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+            ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
+            
+        return wb
+    
+    @classmethod
+    def get_or_create_country(cls, name):
+        """Get or create a country"""
+        if not name:
+            return None
+            
+        country = Country.objects.filter(country_name__iexact=name).first()
+        if not country:
+            logger.info(f"Creating Country with name='{name}'")
+            country = Country.objects.create(
+                country_name=name,
+                country_code=name[:3].upper()
+            )
+        return country
+        
+    @classmethod
+    def get_or_create_state(cls, name, country):
+        """Get or create a state linked to country"""
+        if not name or not country:
+            return None
+            
+        state = State.objects.filter(state_name__iexact=name).first()
+        if not state:
+            logger.info(f"Creating State with state_name='{name}'")
+            state = State.objects.create(
+                state_name=name,
+                state_code=name[:3].upper(),
+                country_id=country
+            )
+        elif not state.country_id:
+            # Ensure state has country_id
+            state.country_id = country
+            state.save()
+        return state
+        
+    @classmethod
+    def get_or_create_city(cls, name, state):
+        """Get or create a city linked to state"""
+        if not name or not state:
+            return None
+            
+        city = City.objects.filter(city_name__iexact=name).first()
+        if not city:
+            logger.info(f"Creating City with city_name='{name}'")   
+            city = City.objects.create(
+                city_name=name,
+                city_code=name[:3].upper(),
+                state_id=state
+            )
+        elif not city.state_id:
+            # Ensure city has state_id
+            city.state_id = state
+            city.save()
+        return city
+
+
+# API Views for Customer Excel import/export
+class CustomerTemplateAPIView(APIView):
+    """
+    API for downloading the customer import template.
+    """
+    
+    def get(self, request, *args, **kwargs):
+        return CustomerExcelImport.get_template_response(request)
+
+class CustomerExcelUploadAPIView(APIView):
+    """
+    API for importing customers from Excel files.
+    """
+    parser_classes = (MultiPartParser, FormParser)
+    
+    def post(self, request, *args, **kwargs):
+        try:
+            # Upload and validate file
+            file_path, status_code = CustomerExcelImport.upload_file(request)
+            
+            # If there was an error with the file
+            if status_code != status.HTTP_200_OK:
+                return build_response(0, file_path.get("error", "Unknown error"), [], status_code)
+                
+            # Process the Excel file
+            result, status_code = CustomerExcelImport.process_excel_file(
+                request.FILES.get('file'),
+                CustomerExcelImport.create_record
+            )
+            
+            # Check for validation errors
+            if status_code != status.HTTP_200_OK:
+                return build_response(0, result.get("error", "Import failed"), [], status_code)
+                
+            # Success response
+            success_count = len(result.get("errors", [])) if isinstance(result.get("errors"), list) else 0
+            return build_response(
+                result.get("success", 0),
+                result.get("message", f"{success_count} customers imported successfully."),
+                [],
+                status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in customer Excel import: {str(e)}")
+            return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
