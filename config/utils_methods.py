@@ -36,9 +36,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
-
-from config.utils_methods import build_response
-
 logger = logging.getLogger(__name__)
 
 
