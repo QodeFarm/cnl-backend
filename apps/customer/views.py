@@ -1228,7 +1228,19 @@ class CustomerExcelImport(BaseExcelImportExport):
         """Generate Excel template with address fields"""
         wb = super().generate_template(extra_columns)
         ws = wb.active
-        
+
+        # Add data validation for GST classification type
+        if 'gst_classification' in cls.FIELD_MAP:
+            gst_col = list(cls.FIELD_MAP.keys()).index('gst_classification') + 1
+            # Add dropdown validation with allowed values from the model
+            dv = DataValidation(type="list", formula1='"HSN,SAC,Both"', allow_blank=True)
+            dv.add(f"{get_column_letter(gst_col)}2:{get_column_letter(gst_col)}1000")
+            ws.add_data_validation(dv)
+            
+            # Add a comment explaining valid values
+            gst_cell = ws.cell(row=1, column=gst_col)
+            comment = Comment('Valid values: HSN, SAC, Both', 'System')
+            gst_cell.comment = comment
         
         # Add hints for constrained fields like tax_type
         if 'tax_type' in cls.FIELD_MAP:
