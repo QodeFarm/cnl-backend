@@ -32,6 +32,7 @@ from openpyxl.styles import PatternFill, Font, Alignment
 from openpyxl.utils import get_column_letter
 from django.http import HttpResponse
 from openpyxl.comments import Comment
+from openpyxl.worksheet.datavalidation import DataValidation
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
@@ -1039,7 +1040,7 @@ def download_customer_template(request):
 
 
 # ------------------------------
-# Customer Excel Import/Export
+# Customer Excel Import
 # ------------------------------
 class CustomerExcelImport(BaseExcelImportExport):
     """
@@ -1167,6 +1168,12 @@ class CustomerExcelImport(BaseExcelImportExport):
                     # Handle regular fields
                     if mapping in boolean_fields:
                         customer_data[mapping] = cls.parse_boolean(value)
+                    elif mapping == 'tax_type':
+                        # Special validation for tax_type to ensure it matches allowed choices
+                        valid_tax_types = ['Inclusive', 'Exclusive', 'Both']
+                        if value not in valid_tax_types:
+                            raise ValueError(f"Invalid tax_type '{value}'. Must be one of: {', '.join(valid_tax_types)}")
+                        customer_data[mapping] = value
                     else:
                         customer_data[mapping] = value
             
@@ -1221,6 +1228,32 @@ class CustomerExcelImport(BaseExcelImportExport):
         """Generate Excel template with address fields"""
         wb = super().generate_template(extra_columns)
         ws = wb.active
+
+        # Add data validation for GST classification type
+        if 'gst_classification' in cls.FIELD_MAP:
+            gst_col = list(cls.FIELD_MAP.keys()).index('gst_classification') + 1
+            # Add dropdown validation with allowed values from the model
+            dv = DataValidation(type="list", formula1='"HSN,SAC,Both"', allow_blank=True)
+            dv.add(f"{get_column_letter(gst_col)}2:{get_column_letter(gst_col)}1000")
+            ws.add_data_validation(dv)
+            
+            # Add a comment explaining valid values
+            gst_cell = ws.cell(row=1, column=gst_col)
+            comment = Comment('Valid values: HSN, SAC, Both', 'System')
+            gst_cell.comment = comment
+        
+        # Add hints for constrained fields like tax_type
+        if 'tax_type' in cls.FIELD_MAP:
+            tax_type_col = list(cls.FIELD_MAP.keys()).index('tax_type') + 1
+            # Add data validation for tax_type
+            dv = DataValidation(type="list", formula1='"Inclusive,Exclusive,Both"', allow_blank=True)
+            dv.add(f"{get_column_letter(tax_type_col)}2:{get_column_letter(tax_type_col)}1000")
+            ws.add_data_validation(dv)
+            
+            # Add a comment explaining valid values
+            tax_type_cell = ws.cell(row=1, column=tax_type_col)
+            comment = Comment('Valid values: Inclusive, Exclusive, Both', 'System')
+            tax_type_cell.comment = comment
         
         # Add address fields
         address_headers = []
@@ -1339,18 +1372,46 @@ class CustomerExcelUploadAPIView(APIView):
                 CustomerExcelImport.create_record
             )
             
-            # Check for validation errors
+            # # Check for validation errors
+            # if status_code != status.HTTP_200_OK:
+            #     return build_response(0, result.get("error", "Import failed"), [], status_code)
             if status_code != status.HTTP_200_OK:
-                return build_response(0, result.get("error", "Import failed"), [], status_code)
+                error_msg = result.get("error", "Import failed")
+                error_details = {}
                 
-            # Success response
-            success_count = len(result.get("errors", [])) if isinstance(result.get("errors"), list) else 0
-            return build_response(
-                result.get("success", 0),
-                result.get("message", f"{success_count} customers imported successfully."),
-                [],
-                status.HTTP_200_OK
-            )
+                # Add more detailed error information
+                if "missing_columns" in result:
+                    error_details["missing_columns"] = result["missing_columns"]
+                if "unexpected_columns" in result:
+                    error_details["unexpected_columns"] = result["unexpected_columns"]
+                if "missing_expected_columns" in result:
+                    error_details["missing_expected_columns"] = result["missing_expected_columns"]
+                if "missing_data_rows" in result:
+                    error_details["missing_data_rows"] = result["missing_data_rows"]
+                    
+                return build_response(0, error_msg, error_details, status_code)
+                
+            # Check for processing errors from row processing
+            success_count = result.get("success", 0)
+            errors = result.get("errors", [])
+            
+            if errors:
+                # Return the first error as the main message with all errors in the data field
+                first_error = errors[0]["error"] if errors else "Unknown error during import"
+                return build_response(
+                    0,
+                    f"Import failed: {first_error}",
+                    {"row_errors": errors},
+                    status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                # Success response - only if there were no errors
+                return build_response(
+                    success_count,
+                    result.get("message", f"{success_count} customers imported successfully."),
+                    [],
+                    status.HTTP_200_OK
+                )
             
         except Exception as e:
             logger.error(f"Error in customer Excel import: {str(e)}")

@@ -24,6 +24,23 @@ from rest_framework.serializers import ValidationError
 
 # from apps.sales.models import MstcnlSaleOrder, SaleOrder
 from config.settings import MEDIA_ROOT, MEDIA_URL
+import os
+import logging
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
+from openpyxl.comments import Comment
+from django.http import HttpResponse
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+
+from config.utils_methods import build_response
+
+logger = logging.getLogger(__name__)
+
 
 
 
@@ -1359,22 +1376,6 @@ class IsAdminRoles(BasePermission):
             getattr(user.role_id, 'role_name', '').lower() == "admin"
         )
     
-import os
-import logging
-import openpyxl
-from openpyxl.styles import PatternFill, Font, Alignment
-from openpyxl.utils import get_column_letter
-from openpyxl.comments import Comment
-from django.http import HttpResponse
-from rest_framework.views import APIView
-from rest_framework.parsers import MultiPartParser, FormParser
-from rest_framework.response import Response
-from rest_framework import status
-from django.db import transaction
-
-from config.utils_methods import build_response
-
-logger = logging.getLogger(__name__)
 
 class BaseExcelImportExport:
     """
@@ -1475,28 +1476,18 @@ class BaseExcelImportExport:
             for chunk in file.chunks():
                 dest.write(chunk)
         return file_path
-    
+
     @classmethod
     def process_excel_file(cls, file, create_record_func, get_or_create_funcs=None):
-        """
-        Process the uploaded Excel file and import records.
-        
-        Args:
-            file: The uploaded file
-            create_record_func: Function to create a record from row data
-            get_or_create_funcs: Dictionary of functions to get or create related objects
-            
-        Returns:
-            Dict with results of import process
-        """
+        """Process the uploaded Excel file and import records."""
         if not file:
             return {"error": "No file uploaded"}, status.HTTP_400_BAD_REQUEST
-            
+        
         # Check file type
         file_name = file.name.lower()
         if not (file_name.endswith('.xlsx') or file_name.endswith('.xls')):
             return {"error": "Invalid file format. Only Excel files (.xlsx or .xls) are supported."}, status.HTTP_400_BAD_REQUEST
-            
+        
         # Save and process the file
         file_path = cls.save_upload(file)
         
@@ -1513,19 +1504,50 @@ class BaseExcelImportExport:
             for col in cls.REQUIRED_COLUMNS:
                 if col.lower() not in headers:
                     missing_columns.append(col)
-                    
+            
             if missing_columns:
                 return {
                     "error": "Excel template format mismatch. Required columns are missing.",
                     "missing_columns": missing_columns,
                 }, status.HTTP_400_BAD_REQUEST
-                
+            
+            # Get ALL valid columns - including any additional headers defined in child classes
+            all_expected_columns = list(cls.FIELD_MAP.keys())
+            
+            # Add additional special headers from any class-specific header collections
+            special_header_attributes = [attr for attr in dir(cls) if attr.endswith('_HEADERS') and attr != 'REQUIRED_COLUMNS']
+            for attr in special_header_attributes:
+                if hasattr(cls, attr):
+                    additional_headers = getattr(cls, attr)
+                    if isinstance(additional_headers, list):
+                        all_expected_columns.extend(additional_headers)
+            
+            # Also allow address-related fields with billing_ or shipping_ prefixes
+            # Check for columns in Excel that are not in our expected list
+            unexpected_columns = []
+            for header in headers:
+                if header and header not in [col.lower() for col in all_expected_columns] and not header.startswith('billing_') and not header.startswith('shipping_'):
+                    unexpected_columns.append(header)
+            
+            # Check for expected columns that are missing from Excel (only from FIELD_MAP, not additional headers)
+            missing_expected_columns = []
+            for expected_col in cls.FIELD_MAP.keys():  # Only check main fields, not additional headers
+                if expected_col.lower() not in headers:
+                    missing_expected_columns.append(expected_col)
+            
+            if unexpected_columns or missing_expected_columns:
+                return {
+                    "error": "Excel template format mismatch.",
+                    "unexpected_columns": unexpected_columns,
+                    "missing_expected_columns": missing_expected_columns,
+                }, status.HTTP_400_BAD_REQUEST
+            
             # Extract data rows
             data_rows = []
             for row in list(sheet.iter_rows(min_row=2, values_only=True)):
                 if any(cell is not None for cell in row):
                     data_rows.append(row)
-                    
+            
             # Check for missing required data
             missing_data_rows = []
             for idx, row in enumerate(data_rows, start=2):
@@ -1533,7 +1555,7 @@ class BaseExcelImportExport:
                 missing_fields = []
                 
                 for field in cls.REQUIRED_COLUMNS:
-                    if not row_data.get(field):
+                    if field.lower() in headers and not row_data.get(field.lower()):
                         missing_fields.append(field)
                 
                 if missing_fields:
@@ -1541,13 +1563,13 @@ class BaseExcelImportExport:
                         "row": idx,
                         "missing_fields": missing_fields
                     })
-                    
+            
             if missing_data_rows:
                 return {
-                    "error": "Import failed. Some rows are missing required data.",
-                    "missing_data_rows": missing_data_rows,
+                    "error": "Some rows are missing required data.",
+                    "missing_data_rows": missing_data_rows
                 }, status.HTTP_400_BAD_REQUEST
-                
+            
             # Process valid rows
             results = cls.process_rows(headers, data_rows, create_record_func, get_or_create_funcs)
             return results, status.HTTP_200_OK

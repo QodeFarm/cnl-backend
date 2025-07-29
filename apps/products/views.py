@@ -1,3 +1,4 @@
+import decimal
 import logging
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,6 +9,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import transaction
+from apps.masters.models import City, Country, State
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from config.utils_variables import *
 from config.utils_methods import *
@@ -518,3 +520,464 @@ class ProductViewSet(APIView):
         except Exception as e:
             logger.error(f"Error deleting Leads with ID {pk}: {str(e)}")
             return build_response(0, f"Record deletion failed due to an error : {e}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+from openpyxl.worksheet.datavalidation import DataValidation
+
+
+
+class ProductExcelImport(BaseExcelImportExport):
+    """
+    Product Excel import/export functionality
+    
+    This class handles importing product data from Excel files and 
+    exporting product templates to Excel.
+    """
+    MODEL_CLASS = Products
+    SERIALIZER_CLASS = productsSerializer  # You need to create this if not exists
+    REQUIRED_COLUMNS = ["name", "print_name"]
+    TEMPLATE_FILENAME = "Product_Import_Template.xlsx"
+    
+    FIELD_MAP = {
+        # Basic Info
+        "name": "name",
+        "print_name": "print_name",
+        "code": "code",  # This will be auto-generated, but included for completeness
+        "barcode": "barcode",
+        "packet_barcode": "packet_barcode",
+        "status": "status",
+        
+        # Foreign Keys - Primary Classifications
+        "product_group": ("product_group_id", ProductGroups, "group_name"),
+        "category": ("category_id", ProductCategories, "category_name"),
+        "product_type": ("type_id", ProductTypes, "type_name"),
+        "brand": ("brand_id", ProductBrands, "brand_name"),
+        
+        # Foreign Keys - Units
+        "stock_unit": ("stock_unit_id", ProductStockUnits, "stock_unit_name"),
+        "pack_unit": ("pack_unit_id", ProductStockUnits, "stock_unit_name"),
+        "g_pack_unit": ("g_pack_unit_id", ProductStockUnits, "stock_unit_name"),
+        "unit_options": ("unit_options_id", UnitOptions, "unit_name"),
+        # For nested relationship, we'll handle it specially in the code
+        "quantity_code": ("quantity_code", ProductUniqueQuantityCodes, "quantity_code_name"),
+        
+        # Product Attributes
+        "item_type": ("item_type_id", ProductItemType, "item_name"),
+        "drug_type": ("drug_type_id", ProductDrugTypes, "drug_type_name"),
+        "gst_classification": ("gst_classification_id", ProductGstClassifications, 'type'),
+        
+        # GL Accounts
+        "sales_gl": ("sales_gl_id", ProductSalesGl, "name"),
+        "purchase_gl": ("purchase_gl_id", ProductPurchaseGl, "name"),
+        
+        # Descriptions
+        "sales_description": "sales_description",
+        "purchase_description": "purchase_description",
+        "salt_composition": "salt_composition",
+        
+        # Pricing
+        "mrp": "mrp",
+        "minimum_price": "minimum_price",
+        "sales_rate": "sales_rate",
+        "wholesale_rate": "wholesale_rate",
+        "dealer_rate": "dealer_rate",
+        "rate_factor": "rate_factor",
+        "discount": "discount",
+        "dis_amount": "dis_amount",
+        "purchase_rate": "purchase_rate",
+        "purchase_rate_factor": "purchase_rate_factor",
+        "purchase_discount": "purchase_discount",
+        
+        # Inventory
+        "minimum_level": "minimum_level",
+        "maximum_level": "maximum_level",
+        "balance": "balance",
+        "pack_vs_stock": "pack_vs_stock",
+        "g_pack_vs_pack": "g_pack_vs_pack",
+        
+        # Other attributes
+        "hsn_code": "hsn_code",
+        "gst_input": "gst_input",
+        "print_barcode": "print_barcode",
+        "weighscale_mapping_code": "weighscale_mapping_code",
+        "purchase_warranty_months": "purchase_warranty_months", 
+        "sales_warranty_months": "sales_warranty_months"
+    }
+    
+    BOOLEAN_FIELDS = ["print_barcode"]
+    
+    # Additional fields for product variations
+    VARIATION_HEADERS = [
+        "size_category", "size_name", "color_name", "sku", "variation_price", "variation_quantity"
+    ]
+     # Additional fields for warehouse locations
+    WAREHOUSE_HEADERS = ["warehouse_name", "location_name", "location_quantity"]        
+
+    @classmethod
+    def create_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
+        """
+        Create a product record with variations from Excel data
+        
+        This method handles:
+        1. Creating the main product record
+        2. Processing all foreign key relationships
+        3. Creating product variations (if provided)
+        4. Setting default values when needed
+        """
+        field_map = field_map or cls.FIELD_MAP
+        boolean_fields = boolean_fields or cls.BOOLEAN_FIELDS
+        
+        with transaction.atomic():
+            # 1. Process the product data
+            product_data = {}
+            
+            # Validate required fields
+            for required_field in cls.REQUIRED_COLUMNS:
+                if not row_data.get(required_field):
+                    raise ValueError(f"Required field '{required_field}' is missing")
+            
+            # Process foreign key fields and regular fields
+            for excel_col, mapping in field_map.items():
+                value = row_data.get(excel_col)
+                
+                # Skip empty values
+                if value is None or value == '':
+                    continue
+                
+                try:
+                    if isinstance(mapping, tuple):
+                        # Handle foreign key fields
+                        field_name, model_class, lookup_field = mapping if len(mapping) > 2 else (mapping[0], mapping[1], None)
+                        
+                        # Determine lookup field if not provided
+                        if not lookup_field:
+                            if hasattr(model_class, 'name'):
+                                lookup_field = 'name'
+                            elif hasattr(model_class, model_class.__name__.lower() + '_name'):
+                                lookup_field = model_class.__name__.lower() + '_name'
+                        
+                        # Create lookup filters
+                        lookup_kwargs = {f"{lookup_field}__iexact": value}
+                        
+                        # Handle the special case of quantity_code (nested foreign key)
+                        if field_name == "quantity_code":
+                            # This is not directly a field in the product, store it for later use
+                            # when we process stock_unit, pack_unit, and g_pack_unit fields
+                            quantity_code_obj = model_class.objects.filter(**lookup_kwargs).first()
+                            if not quantity_code_obj:
+                                # Create new quantity code if not found
+                                create_kwargs = {lookup_field: value}
+                                logger.info(f"Creating {model_class.__name__} with {lookup_field}='{value}'")
+                                quantity_code_obj = model_class.objects.create(**create_kwargs)
+                            
+                            # Store the quantity_code object for later use
+                            row_data['_quantity_code_obj'] = quantity_code_obj
+                            
+                            # We don't add this directly to product_data since it's not a field in Products
+                            continue
+                            
+                        # Try to find existing object
+                        obj = model_class.objects.filter(**lookup_kwargs).first()
+                        
+                        if not obj:
+                            # Create new object if not found
+                            create_kwargs = {lookup_field: value}
+                            logger.info(f"Creating {model_class.__name__} with {lookup_field}='{value}'")
+                            
+                            # Special handling for code fields
+                            if hasattr(model_class, 'code'):
+                                create_kwargs['code'] = value[:3].upper()
+                            
+                            # Special handling for ProductStockUnits when we have a quantity_code
+                            if model_class == ProductStockUnits and '_quantity_code_obj' in row_data:
+                                create_kwargs['quantity_code_id'] = row_data['_quantity_code_obj']
+                                
+                            obj = model_class.objects.create(**create_kwargs)
+                            
+                        # Special handling for updating ProductStockUnits with quantity_code if needed
+                        if model_class == ProductStockUnits and '_quantity_code_obj' in row_data and not obj.quantity_code_id:
+                            obj.quantity_code_id = row_data['_quantity_code_obj']
+                            obj.save()
+                            
+                        product_data[field_name] = obj
+                    else:
+                        # Handle regular fields
+                        if mapping in boolean_fields:
+                            product_data[mapping] = cls.parse_boolean(value)
+                        # Inside the method that processes fields in the create_record method
+                        elif excel_col == "gst_classification":
+                            # Special handling for gst_classification to ensure it matches allowed values
+                            valid_types = ['HSN', 'SAC', 'Both']
+                            if value and value not in valid_types:
+                                raise ValueError(f"Invalid gst_classification '{value}'. Must be one of: {', '.join(valid_types)}")
+                            product_data[mapping] = value   
+                        else:
+                            # Convert decimal fields from string
+                            if mapping in ['mrp', 'minimum_price', 'sales_rate', 'wholesale_rate', 
+                                        'dealer_rate', 'rate_factor', 'discount', 'dis_amount',
+                                        'purchase_rate', 'purchase_rate_factor', 'purchase_discount']:
+                                try:
+                                    product_data[mapping] = decimal.Decimal(str(value))
+                                except (decimal.InvalidOperation, TypeError):
+                                    logger.warning(f"Invalid decimal value '{value}' for field '{mapping}', skipping")
+                                    continue
+                            else:
+                                product_data[mapping] = value
+                except Exception as e:
+                    logger.error(f"Error processing field {excel_col}: {str(e)}")
+                    raise ValueError(f"Failed to process field {excel_col}: {str(e)}")
+            
+            # 2. Create the product record
+            try:
+                # The 'code' field will be auto-generated in the save() method
+                if 'code' in product_data:
+                    del product_data['code']
+                    
+                product = Products.objects.create(**product_data)
+                logger.info(f"Created product: {product.name} (ID: {product.product_id})")
+            except Exception as e:
+                logger.error(f"Failed to create product: {str(e)}")
+                raise ValueError(f"Failed to create product record: {str(e)}")
+            
+            # 3. Create product variations if provided
+            has_variation = any(row_data.get(f) for f in cls.VARIATION_HEADERS)
+            
+            if has_variation:
+                try:
+                    # Check if we have enough variation data
+                    if not row_data.get('size_name') or not row_data.get('color_name'):
+                        raise ValueError("Both size_name and color_name are required for variations")
+                    
+                    # Get or create size
+                    size_category = row_data.get('size_category', 'Standard')
+                    size_name = row_data.get('size_name')
+                    
+                    size = Size.objects.filter(size_name__iexact=size_name).first()
+                    if not size:
+                        logger.info(f"Creating Size with name='{size_name}'")
+                        size = Size.objects.create(
+                            size_name=size_name,
+                            size_category=size_category
+                            )
+                        
+                        # Get or create color
+                        color_name = row_data.get('color_name')
+                        color = Color.objects.filter(color_name__iexact=color_name).first()
+                        if not color:
+                            logger.info(f"Creating Color with name='{color_name}'")
+                            color = Color.objects.create(color_name=color_name)
+                        
+                        # Create product variation
+                        sku = row_data.get('sku', f"{product.code}-{size_name}-{color_name}")
+                        price = decimal.Decimal(str(row_data.get('variation_price', 0)))
+                        quantity = int(row_data.get('variation_quantity', 0))
+                        
+                        variation = ProductVariation.objects.create(
+                            product_id=product,
+                            size_id=size,
+                            color_id=color,
+                            sku=sku,
+                            price=price,
+                            quantity=quantity
+                        )
+                        logger.info(f"Created product variation: {sku}")
+                        
+                except Exception as e:
+                    logger.error(f"Error creating product variation: {str(e)}")
+                    raise ValueError(f"Failed to create product variation: {str(e)}")
+                
+                # 4. Create product inventory balance if warehouse and location are provided
+                warehouse_name = row_data.get('warehouse_name')
+                location_name = row_data.get('location_name')
+                quantity = row_data.get('location_quantity')
+                
+                if warehouse_name and location_name and quantity is not None:
+                    try:
+                        # Get or create the warehouse - using correct field name 'name'
+                        warehouse = Warehouses.objects.filter(name__iexact=warehouse_name).first()
+                        if not warehouse:
+                            logger.info(f"Creating Warehouse with name='{warehouse_name}'")
+                            # Since Warehouses requires city_id, state_id fields which are mandatory,
+                            # you might need to create with default values or handle appropriately
+                            try:
+                                # Get default city/state/country if available
+                                default_city = City.objects.first()
+                                default_state = State.objects.first()
+                                default_country = Country.objects.first()
+                                
+                                if not (default_city and default_state):
+                                    raise ValueError("Cannot create warehouse without city and state. Please create them first.")
+                                    
+                                warehouse = Warehouses.objects.create(
+                                    name=warehouse_name,
+                                    code=warehouse_name[:10] if warehouse_name else None,
+                                    city_id=default_city,
+                                    state_id=default_state,
+                                    country_id=default_country
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to create warehouse: {str(e)}")
+                                raise ValueError(f"Failed to create warehouse: {str(e)}")
+                        
+                        # Get or create the warehouse location
+                        location = WarehouseLocations.objects.filter(
+                            location_name__iexact=location_name,
+                            warehouse_id=warehouse
+                        ).first()
+                        
+                        if not location:
+                            logger.info(f"Creating WarehouseLocation with name='{location_name}' in warehouse '{warehouse_name}'")
+                            location = WarehouseLocations.objects.create(
+                                location_name=location_name,
+                                warehouse_id=warehouse
+                            )
+                        
+                        # Create the product item balance
+                        try:
+                            quantity_int = int(float(quantity))
+                        except (ValueError, TypeError):
+                            logger.warning(f"Invalid quantity value '{quantity}', defaulting to 0")
+                            quantity_int = 0
+                        
+                        ProductItemBalance.objects.create(
+                            product_id=product,
+                            warehouse_location_id=location,
+                            quantity=quantity_int
+                        )
+                        logger.info(f"Created product item balance: {quantity_int} units in {location_name}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error creating product inventory balance: {str(e)}")
+                        raise ValueError(f"Failed to create product inventory balance: {str(e)}")
+            
+            # Move this return statement outside the if block so all products are returned
+            return product
+                
+            
+    @classmethod
+    def generate_template(cls, extra_columns=None):
+        """
+        Generate Excel template with product-specific fields and variation fields
+        """
+        wb = super().generate_template(extra_columns)
+        ws = wb.active
+
+        # Add data validation for GST classification type
+        if 'gst_classification' in cls.FIELD_MAP:
+            gst_col = list(cls.FIELD_MAP.keys()).index('gst_classification') + 1
+            # Add dropdown validation with allowed values from the model
+            dv = DataValidation(type="list", formula1='"HSN,SAC,Both"', allow_blank=True)
+            dv.add(f"{get_column_letter(gst_col)}2:{get_column_letter(gst_col)}1000")
+            ws.add_data_validation(dv)
+            
+            # Add a comment explaining valid values
+            gst_cell = ws.cell(row=1, column=gst_col)
+            comment = Comment('Valid values: HSN, SAC, Both', 'System')
+            gst_cell.comment = comment
+        
+        # Add variation headers after the main product fields
+        variation_headers = cls.VARIATION_HEADERS
+        
+        # Get the last column and append variation headers with same color as main fields
+        for col_num, header in enumerate(variation_headers, 1 + len(list(cls.FIELD_MAP.keys()))):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")  # Light blue color
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+            ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
+            
+        # Add a helper note in row 2 for the quantity_code field
+        if 'quantity_code' in cls.FIELD_MAP:
+            col = list(cls.FIELD_MAP.keys()).index('quantity_code') + 1
+            note_cell = ws.cell(row=2, column=col)
+            note_cell.font = Font(italic=True, color="666666")
+            note_cell.alignment = Alignment(horizontal="center")
+        
+        # Add warehouse headers after the variation fields with same color
+        warehouse_headers = ["warehouse_name", "location_name", "location_quantity"]
+        
+        last_col = len(list(cls.FIELD_MAP.keys())) + len(cls.VARIATION_HEADERS)
+        
+        for col_num, header in enumerate(warehouse_headers, 1 + last_col):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")  # Light blue color
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+            ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
+        
+        # Return statement should be outside of the loop
+        return wb
+
+
+
+class ProductTemplateAPIView(APIView):
+    """
+    API for downloading the product import template.
+    """
+    
+    def get(self, request, *args, **kwargs):
+        return ProductExcelImport.get_template_response(request)
+
+class ProductExcelUploadAPIView(APIView):
+    """
+    API for importing products from Excel files.
+    """
+    parser_classes = (MultiPartParser, FormParser)
+    
+    def post(self, request, *args, **kwargs):
+        try:
+            # Upload and validate file
+            file_path, status_code = ProductExcelImport.upload_file(request)
+            
+            # If there was an error with the file
+            if status_code != status.HTTP_200_OK:
+                return build_response(0, file_path.get("error", "Unknown error"), [], status_code)
+                
+            # Process the Excel file
+            result, status_code = ProductExcelImport.process_excel_file(
+                request.FILES.get('file'),
+                ProductExcelImport.create_record
+            )
+            
+            # # Check for validation errors
+            # if status_code != status.HTTP_200_OK:
+            #     return build_response(0, result.get("error", "Import failed"), [], status_code)
+            # Check for validation errors
+            if status_code != status.HTTP_200_OK:
+                error_msg = result.get("error", "Import failed")
+                error_details = {}
+                
+                # Add more detailed error information
+                if "missing_columns" in result:
+                    error_details["missing_columns"] = result["missing_columns"]
+                if "unexpected_columns" in result:
+                    error_details["unexpected_columns"] = result["unexpected_columns"]
+                if "missing_expected_columns" in result:
+                    error_details["missing_expected_columns"] = result["missing_expected_columns"]
+                if "missing_data_rows" in result:
+                    error_details["missing_data_rows"] = result["missing_data_rows"]
+                    
+                return build_response(0, error_msg, error_details, status_code)
+            
+                
+            # Check for processing errors
+            success_count = result.get("success", 0)
+            errors = result.get("errors", [])
+            
+            if errors:
+                # Return the first error as the main message
+                first_error = errors[0]["error"] if errors else "Unknown error during import"
+                return build_response(0,f"Import failed: {first_error}",{"errors": errors},status.HTTP_400_BAD_REQUEST)
+            else:
+                # Success response
+                return build_response(
+                    success_count,
+                    result.get("message", f"{success_count} products imported successfully."),
+                    [],
+                    status.HTTP_200_OK
+                )
+            
+        except Exception as e:
+            logger.error(f"Error in product Excel import: {str(e)}")
+            return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
