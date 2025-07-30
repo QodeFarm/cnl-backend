@@ -437,33 +437,69 @@ def get_object_or_none(model, **kwargs):
 #         return False
 #     return True
 
+# def delete_multi_instance(del_value, main_model_class, related_model_class, main_model_field_name=None, using_db=None):
+#     """
+#     Deletes instances from a related model based on a field value from the main model.
+#     Allows for database selection (using_db).
+
+#     :param del_value: Value of the main model field to filter related model instances.
+#     :param main_model_class: The main model class.
+#     :param related_model_class: The related model class from which to delete instances.
+#     :param main_model_field_name: The field name in the related model that references the main model.
+#     :param using_db: The database to use for the deletion operation (e.g., 'mstcnl', 'devcnl').
+#     """
+#     try:
+#         # Get the main model's primary key field name
+#         main_model_pk_field_name = main_model_class._meta.pk.name
+
+#         # Arrange arguments to filter
+#         filter_kwargs = {main_model_field_name or main_model_pk_field_name: del_value}
+
+#         # Delete related instances from the specified database
+#         deleted_count, _ = related_model_class.objects.using(using_db).filter(**filter_kwargs).delete()
+#         logger.info(f"Deleted {deleted_count} instances from {related_model_class.__name__} where {filter_kwargs}.")
+
+#     except Exception as e:
+#         logger.error(f"Error deleting instances from {related_model_class.__name__}: {str(e)}")
+#         return False
+
+#     return True
+
 def delete_multi_instance(del_value, main_model_class, related_model_class, main_model_field_name=None, using_db=None):
     """
-    Deletes instances from a related model based on a field value from the main model.
-    Allows for database selection (using_db).
+    Soft deletes instances from a related model by setting is_deleted=True,
+    based on a field value from the main model. Allows for database selection (using_db).
 
     :param del_value: Value of the main model field to filter related model instances.
     :param main_model_class: The main model class.
-    :param related_model_class: The related model class from which to delete instances.
+    :param related_model_class: The related model class from which to soft delete instances.
     :param main_model_field_name: The field name in the related model that references the main model.
-    :param using_db: The database to use for the deletion operation (e.g., 'mstcnl', 'devcnl').
+    :param using_db: The database to use for the operation (e.g., 'mstcnl', 'devcnl').
     """
     try:
-        # Get the main model's primary key field name
         main_model_pk_field_name = main_model_class._meta.pk.name
-
-        # Arrange arguments to filter
         filter_kwargs = {main_model_field_name or main_model_pk_field_name: del_value}
 
-        # Delete related instances from the specified database
-        deleted_count, _ = related_model_class.objects.using(using_db).filter(**filter_kwargs).delete()
-        logger.info(f"Deleted {deleted_count} instances from {related_model_class.__name__} where {filter_kwargs}.")
+        related_qs = related_model_class.objects.using(using_db) if using_db else related_model_class.objects
+        related_instances = related_qs.filter(**filter_kwargs)
+
+        count = 0
+        for instance in related_instances:
+            instance.is_deleted = True
+            if using_db:
+                instance.save(using=using_db)
+            else:
+                instance.save()
+            count += 1
+
+        logger.info(f"Soft deleted {count} instances from {related_model_class.__name__} where {filter_kwargs}.")
 
     except Exception as e:
-        logger.error(f"Error deleting instances from {related_model_class.__name__}: {str(e)}")
+        logger.error(f"Error soft deleting instances from {related_model_class.__name__}: {str(e)}")
         return False
 
     return True
+
 
 
 # def validate_multiple_data(self, bulk_data, model_serializer, exclude_fields):

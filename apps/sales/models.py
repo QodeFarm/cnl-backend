@@ -18,7 +18,7 @@ from decimal import Decimal
 class SaleOrder(OrderNumberMixin): #required fields are updated
     sale_order_id  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     gst_type_id = models.ForeignKey(GstTypes, on_delete=models.CASCADE, null=True, default=None, db_column='gst_type_id')
-    customer_id = models.ForeignKey(Customer, on_delete=models.CASCADE, db_column='customer_id')
+    customer_id = models.ForeignKey(Customer, on_delete=models.PROTECT, db_column='customer_id')
     email = models.CharField(max_length=255, null=True, default=None)
     delivery_date = models.DateField()
     order_date = models.DateField()
