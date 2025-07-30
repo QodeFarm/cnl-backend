@@ -24,6 +24,20 @@ from rest_framework.serializers import ValidationError
 
 # from apps.sales.models import MstcnlSaleOrder, SaleOrder
 from config.settings import MEDIA_ROOT, MEDIA_URL
+import os
+import logging
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
+from openpyxl.comments import Comment
+from django.http import HttpResponse
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+logger = logging.getLogger(__name__)
+
 
 
 
@@ -1394,3 +1408,397 @@ class IsAdminRoles(BasePermission):
             hasattr(user, 'role_id') and 
             getattr(user.role_id, 'role_name', '').lower() == "admin"
         )
+    
+
+class BaseExcelImportExport:
+    """
+    Base class for Excel import/export functionality that can be reused across different models.
+    This class provides a foundation for Excel template generation, file upload, validation,
+    and data import across different components in the application.
+    
+    Usage:
+        1. Create a subclass for your specific model (e.g., CustomerExcelImport)
+        2. Override the class attributes (MODEL_CLASS, FIELD_MAP, etc.)
+        3. Implement the create_record method
+        4. Set up API views that use your subclass
+    """
+    # Override these in child classes
+    MODEL_CLASS = None
+    SERIALIZER_CLASS = None
+    REQUIRED_COLUMNS = []
+    FIELD_MAP = {}
+    BOOLEAN_FIELDS = []
+    LOOKUP_FIELDS = {}  # Maps foreign keys to their lookup models
+    TEMPLATE_FILENAME = "Export_Template.xlsx"
+    
+    @classmethod
+    def generate_template(cls, extra_columns=None):
+        """
+        Generate an Excel template for the model
+        
+        Args:
+            extra_columns: Additional columns to include in the template
+            
+        Returns:
+            Openpyxl workbook object
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "ImportTemplate"
+        
+        # Get all fields from FIELD_MAP
+        headers = list(cls.FIELD_MAP.keys())
+        
+        # Add extra columns if provided
+        if extra_columns:
+            headers.extend(extra_columns)
+        
+        # Add headers to worksheet
+        ws.append(headers)
+        
+        # Style headers
+        header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        font_bold = Font(bold=True)
+        align_center = Alignment(horizontal="center")
+        
+        for col_num, column_title in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = font_bold
+            cell.alignment = align_center
+            
+            # Mark required fields
+            if column_title in cls.REQUIRED_COLUMNS:
+                cell.comment = Comment("This field is required", "System")
+            
+            # Set column width
+            ws.column_dimensions[get_column_letter(col_num)].width = len(str(column_title)) + 4
+        
+        return wb
+        
+    @classmethod
+    def get_template_response(cls, request, extra_columns=None):
+        """
+        Generates an Excel template with headers based on FIELD_MAP and extra_columns.
+        
+        Args:
+            request: HTTP request object
+            extra_columns: Additional columns to include in the template
+            
+        Returns:
+            HttpResponse with Excel file attachment
+        """
+        wb = cls.generate_template(extra_columns)
+        
+        # Create and return the response
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename={cls.TEMPLATE_FILENAME}'
+        wb.save(response)
+        return response
+
+    @classmethod
+    def save_upload(cls, file):
+        """Save the uploaded file to disk"""
+        upload_dir = 'media/uploads'
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        file_path = os.path.join(upload_dir, file.name)
+        with open(file_path, 'wb+') as dest:
+            for chunk in file.chunks():
+                dest.write(chunk)
+        return file_path
+
+    @classmethod
+    def process_excel_file(cls, file, create_record_func, get_or_create_funcs=None):
+        """Process the uploaded Excel file and import records."""
+        if not file:
+            return {"error": "No file uploaded"}, status.HTTP_400_BAD_REQUEST
+        
+        # Check file type
+        file_name = file.name.lower()
+        if not (file_name.endswith('.xlsx') or file_name.endswith('.xls')):
+            return {"error": "Invalid file format. Only Excel files (.xlsx or .xls) are supported."}, status.HTTP_400_BAD_REQUEST
+        
+        # Save and process the file
+        file_path = cls.save_upload(file)
+        
+        try:
+            # Load the workbook
+            wb = openpyxl.load_workbook(file_path)
+            sheet = wb.active
+            
+            # Get headers from first row
+            headers = [str(cell.value).lower() if cell.value else "" for cell in sheet[1]]
+            
+            # Validate required columns
+            missing_columns = []
+            for col in cls.REQUIRED_COLUMNS:
+                if col.lower() not in headers:
+                    missing_columns.append(col)
+            
+            if missing_columns:
+                return {
+                    "error": "Excel template format mismatch. Required columns are missing.",
+                    "missing_columns": missing_columns,
+                }, status.HTTP_400_BAD_REQUEST
+            
+            # Get ALL valid columns - including any additional headers defined in child classes
+            all_expected_columns = list(cls.FIELD_MAP.keys())
+            
+            # Add additional special headers from any class-specific header collections
+            special_header_attributes = [attr for attr in dir(cls) if attr.endswith('_HEADERS') and attr != 'REQUIRED_COLUMNS']
+            for attr in special_header_attributes:
+                if hasattr(cls, attr):
+                    additional_headers = getattr(cls, attr)
+                    if isinstance(additional_headers, list):
+                        all_expected_columns.extend(additional_headers)
+            
+            # Also allow address-related fields with billing_ or shipping_ prefixes
+            # Check for columns in Excel that are not in our expected list
+            unexpected_columns = []
+            for header in headers:
+                if header and header not in [col.lower() for col in all_expected_columns] and not header.startswith('billing_') and not header.startswith('shipping_'):
+                    unexpected_columns.append(header)
+            
+            # Check for expected columns that are missing from Excel (only from FIELD_MAP, not additional headers)
+            missing_expected_columns = []
+            for expected_col in cls.FIELD_MAP.keys():  # Only check main fields, not additional headers
+                if expected_col.lower() not in headers:
+                    missing_expected_columns.append(expected_col)
+            
+            if unexpected_columns or missing_expected_columns:
+                return {
+                    "error": "Excel template format mismatch.",
+                    "unexpected_columns": unexpected_columns,
+                    "missing_expected_columns": missing_expected_columns,
+                }, status.HTTP_400_BAD_REQUEST
+            
+            # Extract data rows
+            data_rows = []
+            for row in list(sheet.iter_rows(min_row=2, values_only=True)):
+                if any(cell is not None for cell in row):
+                    data_rows.append(row)
+            
+            # Check for missing required data
+            missing_data_rows = []
+            for idx, row in enumerate(data_rows, start=2):
+                row_data = dict(zip(headers, row))
+                missing_fields = []
+                
+                for field in cls.REQUIRED_COLUMNS:
+                    if field.lower() in headers and not row_data.get(field.lower()):
+                        missing_fields.append(field)
+                
+                if missing_fields:
+                    missing_data_rows.append({
+                        "row": idx,
+                        "missing_fields": missing_fields
+                    })
+            
+            if missing_data_rows:
+                return {
+                    "error": "Some rows are missing required data.",
+                    "missing_data_rows": missing_data_rows
+                }, status.HTTP_400_BAD_REQUEST
+            
+            # Process valid rows
+            results = cls.process_rows(headers, data_rows, create_record_func, get_or_create_funcs)
+            return results, status.HTTP_200_OK
+            
+        except Exception as e:
+            logger.error(f"Error processing Excel file: {str(e)}")
+            return {"error": f"Error processing Excel file: {str(e)}"}, status.HTTP_400_BAD_REQUEST
+    
+    @classmethod
+    def process_rows(cls, headers, data_rows, create_record_func, get_or_create_funcs=None):
+        """Process all rows from Excel file"""
+        success = 0
+        failed = []
+        
+        for idx, row in enumerate(data_rows, start=2):
+            row_data = dict(zip(headers, row))
+            
+            # Check all required fields
+            missing_fields = []
+            for field in cls.REQUIRED_COLUMNS:
+                if not row_data.get(field):
+                    missing_fields.append(field)
+            
+            if missing_fields:
+                failed.append({
+                    "row": idx, 
+                    "error": f"Missing required fields: {', '.join(missing_fields)}"
+                })
+                continue
+                
+            try:
+                with transaction.atomic():
+                    # Use the provided function to create the record
+                    create_record_func(row_data, cls.FIELD_MAP, cls.BOOLEAN_FIELDS, get_or_create_funcs)
+                    
+                success += 1
+                    
+            except Exception as e:
+                logger.error(f"Error processing row {idx}: {e}")
+                failed.append({"row": idx, "error": str(e)})
+                
+        return {
+            "message": f"{success} records imported successfully.",
+            "errors": failed
+        }
+    
+    @staticmethod
+    def parse_boolean(value):
+        """Convert various formats to boolean"""
+        if value is None:
+            return None
+            
+        value_str = str(value).strip().lower()
+        if value_str in ["yes", "true", "1"]:
+            return True
+        elif value_str in ["no", "false", "0"]:
+            return False
+            
+        return None
+        
+    @classmethod
+    def create_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
+        """
+        Creates a record from row data.
+        This method should be implemented by subclasses to handle specific model creation.
+        
+        Args:
+            row_data: Dictionary mapping column names to values
+            field_map: Dictionary mapping Excel column names to model fields
+            boolean_fields: List of fields that should be treated as boolean
+            get_or_create_funcs: Dictionary of functions to get or create related objects
+            
+        Returns:
+            Created model instance
+        """
+        raise NotImplementedError("Subclasses must implement create_record method")
+        
+    @classmethod
+    def get_or_create_fk(cls, model, value, field="name"):
+        """Get or create a foreign key reference"""
+        if not value:
+            return None
+            
+        value = str(value).strip()
+        obj = model.objects.filter(**{f"{field}__iexact": value}).first()
+        
+        if obj:
+            return obj
+            
+        logger.info(f"Creating {model.__name__} with {field}='{value}'")
+        
+        # Special case handling for models with required fields
+        if hasattr(cls, 'FK_REQUIRED_FIELDS') and model.__name__ in cls.FK_REQUIRED_FIELDS:
+            required_fields = cls.FK_REQUIRED_FIELDS[model.__name__]
+            create_data = {field: value}
+            
+            for req_field, default_provider in required_fields.items():
+                if callable(default_provider):
+                    create_data[req_field] = default_provider()
+                else:
+                    create_data[req_field] = default_provider
+                    
+            return model.objects.create(**create_data)
+        
+        # Standard case - just create with the name field
+        return model.objects.create(**{field: value})
+    
+    @classmethod
+    def generate_template(cls, extra_columns=None):
+        """
+        Generate an Excel template for the model
+        
+        Args:
+            extra_columns: Additional columns to include in the template
+            
+        Returns:
+            Openpyxl workbook object
+        """
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "ImportTemplate"
+        
+        # Get all fields from FIELD_MAP
+        headers = list(cls.FIELD_MAP.keys())
+        
+        # Add extra columns if provided
+        if extra_columns:
+            headers.extend(extra_columns)
+        
+        # Add headers to worksheet
+        ws.append(headers)
+        
+        # Style headers
+        header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        font_bold = Font(bold=True)
+        align_center = Alignment(horizontal="center")
+        
+        for col_num, column_title in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = font_bold
+            cell.alignment = align_center
+            
+            # Mark required fields
+            if column_title in cls.REQUIRED_COLUMNS:
+                cell.comment = Comment("This field is required", "System")
+            
+            # Set column width
+            ws.column_dimensions[get_column_letter(col_num)].width = len(str(column_title)) + 4
+        
+        return wb
+        
+    @classmethod
+    def get_template_response(cls, request, extra_columns=None):
+        """
+        Generates an Excel template with headers based on FIELD_MAP and extra_columns.
+        
+        Args:
+            request: HTTP request object
+            extra_columns: Additional columns to include in the template
+            
+        Returns:
+            HttpResponse with Excel file attachment
+        """
+        wb = cls.generate_template(extra_columns)
+        
+        # Create and return the response
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename={cls.TEMPLATE_FILENAME}'
+        wb.save(response)
+        return response
+
+    @classmethod
+    def upload_file(cls, request):
+        """
+        Handle file upload for Excel import.
+        
+        Args:
+            request: HTTP request object with file attachment
+            
+        Returns:
+            Tuple: (file_path, status_code) or (error_response, status_code)
+        """
+        file = request.FILES.get('file')
+        if not file:
+            return {"error": "No file uploaded"}, status.HTTP_400_BAD_REQUEST
+            
+        # Check file type
+        file_name = file.name.lower()
+        if not (file_name.endswith('.xlsx') or file_name.endswith('.xls')):
+            return {"error": "Invalid file format. Only Excel files (.xlsx or .xls) are supported."}, status.HTTP_400_BAD_REQUEST
+            
+        # Save and process the file
+        return cls.save_upload(file), status.HTTP_200_OK
+    
+
+    

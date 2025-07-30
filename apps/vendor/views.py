@@ -27,6 +27,28 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Get an instance of a logger
 logger = logging.getLogger(__name__)
+from django.db import transaction
+from rest_framework.views import APIView
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import status
+from config.utils_methods import BaseExcelImportExport, build_response
+from .models import (
+    Vendor, VendorAddress, VendorAttachment, VendorCategory, VendorPaymentTerms, VendorAgent
+)
+from apps.customer.models import LedgerAccounts
+from apps.masters.models import (
+    Country, State, City, FirmStatuses, Territory, 
+    GstCategories, PriceCategories, Transporters, LedgerGroups
+)
+import logging
+import openpyxl
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.comments import Comment
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 
@@ -780,3 +802,376 @@ class VendorViewSet(APIView):
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
 
+
+
+class VendorExcelImport(BaseExcelImportExport):
+    """
+    Vendor Excel import/export functionality
+    """
+    MODEL_CLASS = Vendor
+    SERIALIZER_CLASS = None  # Replace with your vendor serializer when available
+    REQUIRED_COLUMNS = ["name", "print_name", "vendor_category"]
+    TEMPLATE_FILENAME = "Vendor_Import_Template.xlsx"
+    
+    FIELD_MAP = {
+        "name": "name",
+        "print_name": "print_name",
+        "identification": "identification",
+        "code": "code",
+        "ledger_account": ("ledger_account_id", LedgerAccounts),
+        "ledger_group": "ledger_group",  # For creating LedgerAccounts with proper group
+        "vendor_common_for_sales_purchase": "vendor_common_for_sales_purchase",
+        "is_sub_vendor": "is_sub_vendor",
+        "firm_status": ("firm_status_id", FirmStatuses),
+        "territory": ("territory_id", Territory),
+        "vendor_category": ("vendor_category_id", VendorCategory),
+        "contact_person": "contact_person",
+        "gst": "gst_no",
+        "registration_date": "registration_date",
+        "cin": "cin",
+        "pan": "pan",
+        "gst_category": ("gst_category_id", GstCategories),
+        "gst_suspend": "gst_suspend",
+        "tax_type": "tax_type",
+        "distance": "distance",
+        "tds_on_gst_applicable": "tds_on_gst_applicable",
+        "tds_applicable": "tds_applicable",
+        "website": "website",
+        "facebook": "facebook",
+        "skype": "skype",
+        "twitter": "twitter",
+        "linked_in": "linked_in",
+        "payment_term": ("payment_term_id", VendorPaymentTerms),
+        "price_category": ("price_category_id", PriceCategories),
+        "vendor_agent": ("vendor_agent_id", VendorAgent),
+        "transporter": ("transporter_id", Transporters),
+        "credit_limit": "credit_limit",
+        "max_credit_days": "max_credit_days",
+        "interest_rate_yearly": "interest_rate_yearly",
+        "rtgs_ifsc_code": "rtgs_ifsc_code",
+        "accounts_number": "accounts_number",
+        "bank_name": "bank_name",
+        "branch": "branch",
+    }
+    
+    BOOLEAN_FIELDS = [
+        "vendor_common_for_sales_purchase", 
+        "is_sub_vendor", 
+        "gst_suspend", 
+        "tds_applicable", 
+        "tds_on_gst_applicable"
+    ]
+    
+    # Special handling for foreign keys that require additional fields
+    FK_REQUIRED_FIELDS = {
+        "LedgerAccounts": {
+            "ledger_group_id": lambda: LedgerGroups.objects.first()
+        }
+    }
+    
+    @classmethod
+    def create_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
+        """Create vendor record with addresses from Excel data"""
+        field_map = field_map or cls.FIELD_MAP
+        boolean_fields = boolean_fields or cls.BOOLEAN_FIELDS
+        
+        # First, convert numeric fields that should be strings to ensure they won't cause encoding issues
+        string_fields = ['rtgs_ifsc_code', 'accounts_number', 'gst', 'pan', 'cin', 
+                         'billing_pin_code', 'shipping_pin_code', 'billing_phone', 'shipping_phone']
+        
+        for field in string_fields:
+            if field in row_data and row_data[field] is not None:
+                row_data[field] = str(row_data[field])
+        
+        with transaction.atomic():
+            # 1. Process the vendor data
+            vendor_data = {}
+            
+            # Special handling for ledger account with group
+            ledger_account_name = row_data.get("ledger_account")
+            ledger_group_name = row_data.get("ledger_group")
+            
+            if ledger_account_name:
+                if ledger_group_name:
+                    # Get or create the ledger group first
+                    ledger_group = LedgerGroups.objects.filter(name__iexact=ledger_group_name).first()
+                    if not ledger_group:
+                        logger.info(f"Creating LedgerGroup with name='{ledger_group_name}'")
+                        ledger_group = LedgerGroups.objects.create(name=ledger_group_name)
+                        
+                    # Now get or create ledger account with the right group
+                    ledger_account = LedgerAccounts.objects.filter(name__iexact=ledger_account_name).first()
+                    if not ledger_account:
+                        logger.info(f"Creating LedgerAccount with name='{ledger_account_name}' and group='{ledger_group_name}'")
+                        ledger_account = LedgerAccounts.objects.create(
+                            name=ledger_account_name,
+                            ledger_group_id=ledger_group
+                        )
+                else:
+                    # If no group specified, use default group
+                    default_group = LedgerGroups.objects.first()
+                    ledger_account = LedgerAccounts.objects.filter(name__iexact=ledger_account_name).first()
+                    if not ledger_account:
+                        if not default_group:
+                            raise ValueError("Cannot create LedgerAccount without a LedgerGroup")
+                        logger.info(f"Creating LedgerAccount with name='{ledger_account_name}' and default group")
+                        ledger_account = LedgerAccounts.objects.create(
+                            name=ledger_account_name,
+                            ledger_group_id=default_group
+                        )
+                
+                vendor_data['ledger_account_id'] = ledger_account
+            
+            # Process other fields
+            for excel_col, mapping in field_map.items():
+                # Skip already processed fields
+                if excel_col in ['ledger_account', 'ledger_group']:
+                    continue
+                    
+                value = row_data.get(excel_col)
+                
+                # Skip empty values
+                if value is None or value == '':
+                    continue
+                
+                if isinstance(mapping, tuple):
+                    # Handle foreign key fields
+                    field_name, model = mapping
+                    vendor_data[field_name] = cls.get_or_create_fk(model, value)
+                else:
+                    # Handle regular fields
+                    if mapping in boolean_fields:
+                        vendor_data[mapping] = cls.parse_boolean(value)
+                    elif mapping == 'tax_type':
+                        # Special validation for tax_type to ensure it matches allowed choices
+                        valid_tax_types = ['Inclusive', 'Exclusive']
+                        if value not in valid_tax_types:
+                            raise ValueError(f"Invalid tax_type '{value}'. Must be one of: {', '.join(valid_tax_types)}")
+                        vendor_data[mapping] = value
+                    else:
+                        vendor_data[mapping] = value
+            
+            # Create the vendor record
+            vendor = Vendor.objects.create(**vendor_data)
+            
+            # 2. Create billing address
+            country = cls.get_or_create_country(row_data.get("billing_country"))
+            state = cls.get_or_create_state(row_data.get("billing_state"), country) if country else None
+            city = cls.get_or_create_city(row_data.get("billing_city"), state) if state else None
+            
+            VendorAddress.objects.create(
+                vendor_id=vendor,
+                address_type="Billing",
+                address=row_data.get("billing_address"),
+                city_id=city,
+                state_id=state,
+                country_id=country,
+                pin_code=str(row_data.get("billing_pin_code")) if row_data.get("billing_pin_code") is not None else None,
+                phone=str(row_data.get("billing_phone")) if row_data.get("billing_phone") is not None else None,
+                email=row_data.get("billing_email"),
+                longitude=row_data.get("billing_longitude"),
+                latitude=row_data.get("billing_latitude")
+            )
+            
+            # 3. Create shipping address only if explicitly provided
+            # No automatic copy from billing address, only create shipping if data is provided
+            if row_data.get("shipping_address"):
+                # Create new shipping address
+                s_country = cls.get_or_create_country(row_data.get("shipping_country"))
+                s_state = cls.get_or_create_state(row_data.get("shipping_state"), s_country) if s_country else None
+                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state) if s_state else None
+                
+                VendorAddress.objects.create(
+                    vendor_id=vendor,
+                    address_type="Shipping",
+                    address=row_data.get("shipping_address"),
+                    city_id=s_city,
+                    state_id=s_state,
+                    country_id=s_country,
+                    pin_code=row_data.get("shipping_pin_code"),
+                    phone=row_data.get("shipping_phone"),
+                    email=row_data.get("shipping_email"),
+                    longitude=row_data.get("shipping_longitude"),
+                    latitude=row_data.get("shipping_latitude")
+                )
+                
+            return vendor
+
+    @classmethod
+    def generate_template(cls, extra_columns=None):
+        """Generate Excel template with address fields"""
+        wb = super().generate_template(extra_columns)
+        ws = wb.active
+        
+        # Add hints for constrained fields like tax_type
+        if 'tax_type' in cls.FIELD_MAP:
+            tax_type_col = list(cls.FIELD_MAP.keys()).index('tax_type') + 1
+            # Add data validation for tax_type
+            dv = DataValidation(type="list", formula1='"Inclusive,Exclusive"', allow_blank=True)
+            dv.add(f"{get_column_letter(tax_type_col)}2:{get_column_letter(tax_type_col)}1000")
+            ws.add_data_validation(dv)
+            
+            # Add a comment explaining valid values
+            tax_type_cell = ws.cell(row=1, column=tax_type_col)
+            comment = Comment('Valid values: Inclusive, Exclusive', 'System')
+            tax_type_cell.comment = comment
+        
+        # Add address fields
+        address_headers = []
+        
+        # Billing address fields
+        billing_fields = [
+            "billing_address", "billing_country", "billing_state", 
+            "billing_city", "billing_pin_code", "billing_phone", 
+            "billing_email", "billing_longitude", "billing_latitude"
+        ]
+        address_headers.extend(billing_fields)
+        
+        # Shipping address fields
+        shipping_fields = [
+            "shipping_address", "shipping_country", "shipping_state", 
+            "shipping_city", "shipping_pin_code", "shipping_phone", 
+            "shipping_email", "shipping_longitude", "shipping_latitude"
+        ]
+        address_headers.extend(shipping_fields)
+        
+        # Get the last row and append the address headers
+        last_row = ws.max_row
+        for col_num, header in enumerate(address_headers, 1 + len(list(cls.FIELD_MAP.keys()))):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+            cell.font = Font(bold=True)
+            cell.alignment = Alignment(horizontal="center")
+            ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
+            
+        return wb
+    
+    @classmethod
+    def get_or_create_country(cls, name):
+        """Get or create a country"""
+        if not name:
+            return None
+            
+        country = Country.objects.filter(country_name__iexact=name).first()
+        if not country:
+            logger.info(f"Creating Country with name='{name}'")
+            country = Country.objects.create(
+                country_name=name,
+                country_code=name[:3].upper()
+            )
+        return country
+        
+    @classmethod
+    def get_or_create_state(cls, name, country):
+        """Get or create a state linked to country"""
+        if not name or not country:
+            return None
+            
+        state = State.objects.filter(state_name__iexact=name).first()
+        if not state:
+            logger.info(f"Creating State with state_name='{name}'")
+            state = State.objects.create(
+                state_name=name,
+                state_code=name[:3].upper(),
+                country_id=country
+            )
+        elif not state.country_id:
+            # Ensure state has country_id
+            state.country_id = country
+            state.save()
+        return state
+        
+    @classmethod
+    def get_or_create_city(cls, name, state):
+        """Get or create a city linked to state"""
+        if not name or not state:
+            return None
+            
+        city = City.objects.filter(city_name__iexact=name).first()
+        if not city:
+            logger.info(f"Creating City with city_name='{name}'")   
+            city = City.objects.create(
+                city_name=name,
+                city_code=name[:3].upper(),
+                state_id=state
+            )
+        elif not city.state_id:
+            # Ensure city has state_id
+            city.state_id = state
+            city.save()
+        return city
+    
+
+# API Views for Vendor Excel import/export
+class VendorTemplateAPIView(APIView):
+    """
+    API for downloading the vendor import template.
+    """
+    
+    def get(self, request, *args, **kwargs):
+        return VendorExcelImport.get_template_response(request)
+
+class VendorExcelUploadAPIView(APIView):
+    """
+    API for importing vendors from Excel files.
+    """
+    parser_classes = (MultiPartParser, FormParser)
+    
+    def post(self, request, *args, **kwargs):
+        try:
+            # Upload and validate file
+            file_path, status_code = VendorExcelImport.upload_file(request)
+            
+            # If there was an error with the file
+            if status_code != status.HTTP_200_OK:
+                return build_response(0, file_path.get("error", "Unknown error"), [], status_code)
+                
+            # Process the Excel file
+            result, status_code = VendorExcelImport.process_excel_file(
+                request.FILES.get('file'),
+                VendorExcelImport.create_record
+            )
+            
+            # Check for validation errors
+            if status_code != status.HTTP_200_OK:
+                error_msg = result.get("error", "Import failed")
+                error_details = {}
+                
+                # Add more detailed error information
+                if "missing_columns" in result:
+                    error_details["missing_columns"] = result["missing_columns"]
+                if "unexpected_columns" in result:
+                    error_details["unexpected_columns"] = result["unexpected_columns"]
+                if "missing_expected_columns" in result:
+                    error_details["missing_expected_columns"] = result["missing_expected_columns"]
+                if "missing_data_rows" in result:
+                    error_details["missing_data_rows"] = result["missing_data_rows"]
+                    
+                return build_response(0, error_msg, error_details, status_code)
+                
+            # Check for processing errors from row processing
+            success_count = result.get("success", 0)
+            errors = result.get("errors", [])
+            
+            if errors:
+                # Return the first error as the main message with all errors in the data field
+                first_error = errors[0]["error"] if errors else "Unknown error during import"
+                return build_response(
+                    0,
+                    f"Import failed: {first_error}",
+                    {"row_errors": errors},
+                    status.HTTP_400_BAD_REQUEST
+                )
+            else:
+                # Success response - only if there were no errors
+                return build_response(
+                    success_count,
+                    result.get("message", f"{success_count} vendors imported successfully."),
+                    [],
+                    status.HTTP_200_OK
+                )
+            
+        except Exception as e:
+            logger.error(f"Error in vendor Excel import: {str(e)}")
+            return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)    
