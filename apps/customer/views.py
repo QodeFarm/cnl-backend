@@ -457,46 +457,92 @@ class CustomerCreateViews(APIView):
             )
             return []
       
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale order and its related attachments and shipments.
+    #     """
+    #     try:
+    #         # Get the Customer instance
+    #         instance = Customer.objects.get(pk=pk)
+    #         update_field = {'custom_id': 'customer_id'}
+    #         # Delete related CustomerAttachments and CustomerAddresses
+    #         if not delete_multi_instance(pk, Customer, CustomerAttachments, main_model_field_name='customer_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, Customer, CustomerAddresses, main_model_field_name='customer_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, Customer, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete from mstcnl DB
+    #         try:
+    #             mst_customer = CustomersMstModel.objects.using('mstcnl').filter(customer_id=pk).first()
+    #             if mst_customer:
+    #                 mst_customer.delete(using='mstcnl')
+    #                 logger.info(f"Customer with ID {pk} deleted from mstcnl database.")
+    #             else:
+    #                 logger.warning(f"No mstcnl customer found with ID {pk}.")
+    #         except Exception as mstcnl_error:
+    #             logger.error(f"Error deleting mstcnl customer with ID {pk}: {str(mstcnl_error)}")
+    #             return build_response(0, "Error deleting record from mstcnl database", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    #         # Delete the main Customer instance
+    #         instance.delete()
+
+    #         logger.info(f"Customer with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except Customer.DoesNotExist:
+    #         logger.warning(f"Customer with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting Customer with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale order and its related attachments and shipments.
+        Soft-delete the Customer and cleanup related child objects.
         """
         try:
             # Get the Customer instance
             instance = Customer.objects.get(pk=pk)
-            update_field = {'custom_id': 'customer_id'}
-            # Delete related CustomerAttachments and CustomerAddresses
+
+            # Delete related CustomerAttachments, CustomerAddresses, etc.
             if not delete_multi_instance(pk, Customer, CustomerAttachments, main_model_field_name='customer_id'):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, Customer, CustomerAddresses, main_model_field_name='customer_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             if not delete_multi_instance(pk, Customer, CustomFieldValue, main_model_field_name='custom_id'):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return build_response(0, "Error deleting related custom fields", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Delete from mstcnl DB
+            # Delete from mstcnl DB (optional: you may soft delete here too)
             try:
                 mst_customer = CustomersMstModel.objects.using('mstcnl').filter(customer_id=pk).first()
                 if mst_customer:
-                    mst_customer.delete(using='mstcnl')
-                    logger.info(f"Customer with ID {pk} deleted from mstcnl database.")
+                    # 👉 Soft delete here too if needed:
+                    mst_customer.is_deleted = True
+                    mst_customer.save(using='mstcnl')
+                    logger.info(f"Customer with ID {pk} soft-deleted in mstcnl database.")
                 else:
                     logger.warning(f"No mstcnl customer found with ID {pk}.")
             except Exception as mstcnl_error:
                 logger.error(f"Error deleting mstcnl customer with ID {pk}: {str(mstcnl_error)}")
                 return build_response(0, "Error deleting record from mstcnl database", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            # Delete the main Customer instance
-            instance.delete()
 
-            logger.info(f"Customer with ID {pk} deleted successfully.")
+            # 🔑 👉 Instead of real delete:
+            instance.is_deleted = True
+            instance.save()
+
+            logger.info(f"Customer with ID {pk} marked as is_deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
         except Customer.DoesNotExist:
             logger.warning(f"Customer with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
             logger.error(f"Error deleting Customer with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):   #To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]

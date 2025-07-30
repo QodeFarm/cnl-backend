@@ -180,7 +180,7 @@ class TerritoryViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class CustomerCategoriesViews(viewsets.ModelViewSet):
-    queryset = CustomerCategories.objects.all().order_by('-created_at')	
+    queryset = CustomerCategories.objects.all().order_by('-created_at')	 #optional : CustomerCategories.objects.filter(is_deleted=False).order_by('-created_at')
     serializer_class = CustomerCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerCategoriesFilters
@@ -194,6 +194,12 @@ class CustomerCategoriesViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class GstCategoriesViews(viewsets.ModelViewSet):
     queryset = GstCategories.objects.all().order_by('-created_at')	

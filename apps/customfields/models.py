@@ -55,6 +55,7 @@ class CustomFieldValue(models.Model):
     # vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, db_column='vendor_id')  # Correct naming
     field_value = models.CharField(max_length=255)
     field_value_type = models.CharField(max_length=50, null=True)  # e.g., 'string', 'number', 'date'
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

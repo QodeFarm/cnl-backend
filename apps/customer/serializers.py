@@ -134,13 +134,15 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
 
         customer_addresses = {
             "billing_address": None,
-            "shipping_address": None
+            "shipping_address": None,
+            "custom_shipping_address": None
         }
         
         if billing_address:
             customer_addresses["billing_address"] = format_address(billing_address)
         if shipping_address:
             customer_addresses["shipping_address"] = format_address(shipping_address)
+            customer_addresses["custom_shipping_address"] = shipping_address.address or None
 
         
         # if billing_address:
