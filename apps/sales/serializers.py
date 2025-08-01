@@ -372,7 +372,7 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PaymentTransactions
-        fields = ['transaction_id', 'invoice_no','customer','customer_name','invoice_date', 'amount', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
+        fields = ['transaction_id', 'account_id' ,'invoice_no','customer_id','customer_name','invoice_date', 'amount', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
 
 class SalesByProductReportSerializer(serializers.ModelSerializer):
     product = serializers.CharField(source="product_id__name")  
@@ -481,3 +481,18 @@ class MstcnlCustomFieldValueSerializer(serializers.ModelSerializer):
     class Meta:
         model = MstcnlCustomFieldValue
         fields = '__all__'
+
+class PaymentTransactionUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentTransactions
+        fields = ['amount', 'outstanding_amount', 'payment_status']
+
+    def validate(self, data):
+        amount = data.get('amount')
+        outstanding = data.get('outstanding_amount')
+        adjusted = self.instance.adjusted_now
+
+        # Prevent mismatch in amounts
+        if round(amount + outstanding + adjusted, 2) != round(self.instance.total_amount, 2):
+            raise serializers.ValidationError("Amount mismatch: Check outstanding, adjusted, and total values.")
+        return data
