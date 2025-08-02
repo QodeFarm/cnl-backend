@@ -180,7 +180,7 @@ class TerritoryViews(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
     
 class CustomerCategoriesViews(viewsets.ModelViewSet):
-    queryset = CustomerCategories.objects.all().order_by('-created_at')	
+    queryset = CustomerCategories.objects.all().order_by('-created_at')	 #optional : CustomerCategories.objects.filter(is_deleted=False).order_by('-created_at')
     serializer_class = CustomerCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerCategoriesFilters
@@ -194,6 +194,12 @@ class CustomerCategoriesViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_deleted = True
+        instance.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class GstCategoriesViews(viewsets.ModelViewSet):
     queryset = GstCategories.objects.all().order_by('-created_at')	
@@ -514,33 +520,33 @@ class OrderTypesView(viewsets.ModelViewSet):
 
 
 #-------------------------------------pavan-start---------------------------------------------
-@api_view(['GET'])
-def generate_order_number_view(request):
-    """
-    API endpoint to fetch the next order number based on the given type.
-    The sequence is only incremented when a record is successfully created.
-    """
-    order_type_prefix = request.GET.get('type')
+# @api_view(['GET'])
+# def generate_order_number_view(request):
+#     """
+#     API endpoint to fetch the next order number based on the given type.
+#     The sequence is only incremented when a record is successfully created.
+#     """
+#     order_type_prefix = request.GET.get('type')
 
-    if not order_type_prefix:
-        return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
+#     if not order_type_prefix:
+#         return Response({"error": "Please pass the type param"}, status=status.HTTP_400_BAD_REQUEST)
 
-    order_type_prefix = order_type_prefix.upper()
-    valid_prefixes = ['SO', 'SOO', 'SO-INV', 'SOO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
+#     order_type_prefix = order_type_prefix.upper()
+#     valid_prefixes = ['SO', 'SOO', 'SO-INV', 'SOO-INV', 'SR', 'SHIP', 'PO', 'PO-INV', 'PR', 'PRD', 'CN', 'DN']
 
-    if order_type_prefix not in valid_prefixes:
-        return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)
+#     if order_type_prefix not in valid_prefixes:
+#         return Response({"error": "Invalid prefix"}, status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        # Get the next order number without incrementing
-        order_number = get_next_order_number(order_type_prefix)
-        response_data = {
-            'msg': 'Next available order number (reserved but not yet saved)',
-            'data': {'order_number': order_number}
-        }
-        return Response(response_data, status=status.HTTP_200_OK)
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#     try:
+#         # Get the next order number without incrementing
+#         order_number = get_next_order_number(order_type_prefix)
+#         response_data = {
+#             'msg': 'Next available order number (reserved but not yet saved)',
+#             'data': {'order_number': order_number}
+#         }
+#         return Response(response_data, status=status.HTTP_200_OK)
+#     except Exception as e:
+#         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #-------------------------------------pavan-end---------------------------------------------------
 

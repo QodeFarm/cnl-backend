@@ -496,3 +496,11 @@ class PaymentTransactionUpdateSerializer(serializers.ModelSerializer):
         if round(amount + outstanding + adjusted, 2) != round(self.instance.total_amount, 2):
             raise serializers.ValidationError("Amount mismatch: Check outstanding, adjusted, and total values.")
         return data
+        
+
+from .models import MstCnlPaymentTransactions
+
+class MstCnlPaymentTransactionsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MstCnlPaymentTransactions
+        fields = '__all__'
