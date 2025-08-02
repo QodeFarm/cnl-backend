@@ -1,26 +1,15 @@
-from datetime import timedelta
-import json
-import time
-from django.db.models import Q
-
-
-from django.forms import model_to_dict
-from apps.users.models import User
-from itertools import chain
-from config.utils_db_router import set_db
-from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
-from .models import *
 from apps.customfields.serializers import CustomFieldValueSerializer
-from apps.finance.serializers import JournalEntryLinesSerializer
+from django.db.models import F,Q, Sum, F, ExpressionWrapper,Value
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.products.models import Products, ProductVariation
 from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
-from apps.finance.models import JournalEntryLines
+from apps.finance.models import JournalEntryLines, PaymentTransaction
 from rest_framework.filters import OrderingFilter
 from apps.customer.models import CustomerBalance
 from django.shortcuts import get_object_or_404
@@ -28,23 +17,26 @@ from rest_framework.response import Response
 from rest_framework import viewsets, status
 from apps.masters.models import OrderTypes
 from decimal import Decimal, ROUND_HALF_UP
+from config.utils_db_router import set_db
 from rest_framework.views import APIView
+from django.forms import model_to_dict
 from django.utils import timezone
-from django.db import DEFAULT_DB_ALIAS, connections, transaction
+from django.db import transaction
 from rest_framework import status
 from django.db.models import Sum
 from django.http import Http404
-from django.db.models import F
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.apps import apps
+from itertools import chain
 from decimal import Decimal
 from .serializers import *
 from .filters import *
+from .models import *
 import traceback
 import logging
 import uuid
-from django.db.models import Sum, F, Count,ExpressionWrapper,Value
-
+import json
+import time
 
 
 workflow_progression_dict = {}
