@@ -1,5 +1,6 @@
 import decimal
 import logging
+import time
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.filters import OrderingFilter
@@ -764,11 +765,62 @@ class ProductExcelImport(BaseExcelImportExport):
             # 2. Create the product record
             try:
                 # The 'code' field will be auto-generated in the save() method
+                # Always check the database for the highest product number
+                # This ensures that after deleting all products, we start from 1 again
+                latest_product = Products.objects.filter(code__startswith='PRD-').order_by('-code').first()
+                
+                if latest_product and latest_product.code:
+                    try:
+                        last_num = int(latest_product.code.split('-')[1])
+                        cls._last_product_num = last_num
+                    except (ValueError, IndexError):
+                        cls._last_product_num = 0
+                else:
+                    # No products in database, start from 0
+                    cls._last_product_num = 0
+                
+                # Store the row index for ordered creation timestamps
+                if not hasattr(cls, '_row_index'):
+                    cls._row_index = 0
+                else:
+                    cls._row_index += 1
+                
+                # Increment the counter for each new product
+                cls._last_product_num += 1
+                
+                # Generate the new code with proper formatting
+                new_product_code = f"PRD-{cls._last_product_num:05d}"
+                logger.info(f"Generating product code: {new_product_code}")
+                
+                # Remove any code from Excel to use our generated one
                 if 'code' in product_data:
                     del product_data['code']
                     
-                product = Products.objects.create(**product_data)
-                logger.info(f"Created product: {product.name} (ID: {product.product_id})")
+                # Create product with a specific code
+                product = Products(**product_data)
+                product.code = new_product_code
+                product._skip_auto_code = True  # Add a flag to bypass auto-generation in save()
+                product.save()
+                
+                # Update the created_at timestamp to be unique and in reverse order
+                # This ensures the most recently imported products (last ones in Excel) appear first
+                import time
+                from django.utils import timezone
+                import datetime
+                
+                # Delay creation timestamps by milliseconds in reverse order
+                # Last rows in Excel get newer timestamps, appearing first in the list
+                delay_seconds = 0.01 * (1000 - cls._row_index)  # Last rows get newer timestamps
+                new_timestamp = timezone.now() - datetime.timedelta(seconds=delay_seconds)
+                
+                # Update the created_at field directly in the database
+                Products.objects.filter(product_id=product.product_id).update(created_at=new_timestamp)
+                
+                # Refresh from DB to get the updated timestamp
+                product.refresh_from_db()
+                
+                # Log the successful creation
+                logger.info(f"Created product: {product.name} (ID: {product.product_id}, Code: {product.code})")
             except Exception as e:
                 logger.error(f"Failed to create product: {str(e)}")
                 raise ValueError(f"Failed to create product record: {str(e)}")
