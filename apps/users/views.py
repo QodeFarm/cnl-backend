@@ -1,6 +1,6 @@
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles, License
-from config.utils_methods import IsAdminRoles, build_response, list_all_objects, create_instance, update_instance, validate_uuid
+from config.utils_methods import IsAdminRoles, build_response, list_all_objects, soft_delete, create_instance, update_instance, validate_uuid
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from .filters import RolePermissionsFilter, RolesFilter, UserFilter
@@ -69,6 +69,10 @@ class RoleViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 class ActionsViewSet(viewsets.ModelViewSet):
@@ -83,6 +87,10 @@ class ActionsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 class ModulesViewSet(viewsets.ModelViewSet):
@@ -105,6 +113,10 @@ class ModulesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 class ModuleSectionsViewSet(viewsets.ModelViewSet):
@@ -119,6 +131,10 @@ class ModuleSectionsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 class UserTimeRestrictionsViewSet(viewsets.ModelViewSet):

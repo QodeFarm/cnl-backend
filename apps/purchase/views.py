@@ -400,34 +400,68 @@ class PurchaseOrderViewSet(APIView):
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
             return []
 
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a purchase order and its related attachments and shipments.
+    #     """
+    #     try:
+    #         # Get the PurchaseOrders instance
+    #         instance = PurchaseOrders.objects.get(pk=pk)
+
+    #         # Delete related OrderAttachments and OrderShipments
+    #         if not delete_multi_instance(pk, PurchaseOrders, OrderAttachments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, PurchaseOrders, OrderShipments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, PurchaseOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete the main PurchaseOrders instance
+    #         instance.delete()
+
+    #         logger.info(f"PurchaseOrders with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except PurchaseOrders.DoesNotExist:
+    #         logger.warning(f"PurchaseOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting PurchaseOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a purchase order and its related attachments and shipments.
+        Handles the soft deletion of a purchase order and its related attachments and shipments.
         """
         try:
             # Get the PurchaseOrders instance
             instance = PurchaseOrders.objects.get(pk=pk)
 
-            # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, PurchaseOrders, OrderAttachments, main_model_field_name='order_id'):
+            # Soft delete related OrderAttachments, OrderShipments, CustomFieldValue
+            if not delete_multi_instance(pk, OrderAttachments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, PurchaseOrders, OrderShipments, main_model_field_name='order_id'):
+            
+            if not delete_multi_instance(pk, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, PurchaseOrders, CustomFieldValue, main_model_field_name='custom_id'):
+            
+            if not delete_multi_instance(pk, CustomFieldValue, main_model_field_name='custom_id'):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Delete the main PurchaseOrders instance
-            instance.delete()
+            # Soft delete the main PurchaseOrders instance
+            instance.is_deleted = True
+            instance.save()
 
-            logger.info(f"PurchaseOrders with ID {pk} deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            logger.info(f"PurchaseOrders with ID {pk} soft-deleted successfully.")
+            return build_response(1, "Record soft-deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
         except PurchaseOrders.DoesNotExist:
             logger.warning(f"PurchaseOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting PurchaseOrders with ID {pk}: {str(e)}")
+            logger.error(f"Error soft-deleting PurchaseOrders with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
@@ -775,30 +809,65 @@ class PurchaseInvoiceOrderViewSet(APIView):
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a Purchase Invoice Orders and its related attachments and shipments.
+        Soft delete PurchaseInvoiceOrders and its related models using shared delete_multi_instance utility.
         """
         try:
             # Get the PurchaseInvoiceOrders instance
-            instance = PurchaseInvoiceOrders.objects.get(pk=pk)
+            instance = PurchaseInvoiceOrders.objects.get(pk=pk, is_deleted=False)
+            instance.is_deleted = True
+            instance.save()
 
-            # Delete related OrderAttachments and OrderShipments
+            # Soft delete related OrderAttachments
             if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Soft delete related OrderShipments
             if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            # Soft delete related CustomFieldValue
             if not delete_multi_instance(pk, PurchaseInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            # Delete the main PurchaseInvoiceOrders instance
-            instance.delete()
 
-            logger.info(f"PurchaseInvoiceOrders with ID {pk} deleted successfully.")
+            logger.info(f"PurchaseInvoiceOrders with ID {pk} soft-deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
         except PurchaseInvoiceOrders.DoesNotExist:
-            logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist.")
+            logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist or is already deleted.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
             logger.error(f"Error deleting PurchaseInvoiceOrders with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a Purchase Invoice Orders and its related attachments and shipments.
+    #     """
+    #     try:
+    #         # Get the PurchaseInvoiceOrders instance
+    #         instance = PurchaseInvoiceOrders.objects.get(pk=pk)
+
+    #         # Delete related OrderAttachments and OrderShipments
+    #         if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, PurchaseInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         # Delete the main PurchaseInvoiceOrders instance
+    #         instance.delete()
+
+    #         logger.info(f"PurchaseInvoiceOrders with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except PurchaseInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting PurchaseInvoiceOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]

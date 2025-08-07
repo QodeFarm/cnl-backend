@@ -11,7 +11,7 @@ from rest_framework.filters import OrderingFilter
 from .models import NotificationFrequencies, NotificationMethods, ReminderTypes, Reminders, ReminderRecipients, ReminderSettings, ReminderLogs
 from .serializers import NotificationFrequenciesSerializer, NotificationMethodsSerializer, ReminderTypesSerializer, RemindersSerializer, ReminderRecipientsSerializer, ReminderSettingsSerializer, ReminderLogsSerializer
 from .filters import NotificationFrequenciesFilter, NotificationMethodsFilter, ReminderTypesFilter, RemindersFilter, ReminderRecipientsFilter, ReminderSettingsFilter, ReminderLogsFilter
-from config.utils_methods import generic_data_creation, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, update_multi_instances, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
+from config.utils_methods import generic_data_creation, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_input_pk, update_multi_instances, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -36,6 +36,10 @@ class NotificationFrequenciesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 		
 class NotificationMethodsViewSet(viewsets.ModelViewSet):
@@ -53,6 +57,10 @@ class NotificationMethodsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class ReminderTypesViewSet(viewsets.ModelViewSet):
     queryset = ReminderTypes.objects.all().order_by('-created_at')
@@ -69,6 +77,10 @@ class ReminderTypesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class RemindersViewSet(viewsets.ModelViewSet):
     queryset = Reminders.objects.all().order_by('-created_at')
@@ -85,6 +97,10 @@ class RemindersViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class ReminderRecipientsViewSet(viewsets.ModelViewSet):
     queryset = ReminderRecipients.objects.all().order_by('-created_at')

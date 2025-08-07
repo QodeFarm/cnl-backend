@@ -12,6 +12,7 @@ class VendorCategory(models.Model): #required fields are updated
     vendor_category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     code = models.CharField(max_length=50, null=True, default=None)
     name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -30,6 +31,7 @@ class VendorPaymentTerms(models.Model):
     no_of_fixed_days = models.IntegerField(null=True, default=None)
     payment_cycle = models.CharField(max_length=255, null=True, default=None)
     run_on = models.CharField(max_length=255, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -57,6 +59,7 @@ class VendorAgent(models.Model):
         ('Taxable', 'Taxable'),
     ]
     amount_type = models.CharField(max_length=20, choices=AMOUNT_TYPE_CHOICES, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -74,19 +77,19 @@ class Vendor(models.Model):
     print_name = models.CharField(max_length=255)
     identification = models.CharField(max_length=255, null=True, default=None)
     code = models.CharField(max_length=255,null=True)
-    ledger_account_id = models.ForeignKey(LedgerAccounts,null=True, on_delete=models.CASCADE, db_column='ledger_account_id')
+    ledger_account_id = models.ForeignKey(LedgerAccounts,null=True, on_delete=models.PROTECT, db_column='ledger_account_id')
     vendor_common_for_sales_purchase = models.BooleanField(null=True, default=None)
     is_sub_vendor = models.BooleanField(null=True, default=None)
-    firm_status_id = models.ForeignKey(FirmStatuses, on_delete=models.CASCADE, null=True, default=None, db_column='firm_status_id')
-    territory_id = models.ForeignKey(Territory,  on_delete=models.CASCADE,null=True, default=None, db_column='territory_id')
-    vendor_category_id = models.ForeignKey(VendorCategory, on_delete=models.CASCADE, null=True, default=None, db_column='vendor_category_id')
+    firm_status_id = models.ForeignKey(FirmStatuses, on_delete=models.PROTECT, null=True, default=None, db_column='firm_status_id')
+    territory_id = models.ForeignKey(Territory,  on_delete=models.PROTECT,null=True, default=None, db_column='territory_id')
+    vendor_category_id = models.ForeignKey(VendorCategory, on_delete=models.PROTECT, null=True, default=None, db_column='vendor_category_id')
     contact_person = models.CharField(max_length=255, null=True, default=None)
     picture = models.JSONField(null=True)
     gst = models.CharField(max_length=255, null=True, default=None)
     registration_date = models.DateField(null=True, default=None)
     cin = models.CharField(max_length=255, null=True, default=None)
     pan = models.CharField(max_length=255, null=True, default=None)
-    gst_category_id = models.ForeignKey(GstCategories, on_delete=models.CASCADE, null=True, default=None, db_column='gst_category_id')
+    gst_category_id = models.ForeignKey(GstCategories, on_delete=models.PROTECT, null=True, default=None, db_column='gst_category_id')
     gst_suspend = models.BooleanField(null=True, default=None)
     TAX_TYPE_CHOICES = [('Inclusive', 'Inclusive'),
                         ('Exclusive', 'Exclusive')
@@ -100,10 +103,10 @@ class Vendor(models.Model):
     skype = models.CharField(max_length=255, null=True, default=None)
     twitter = models.CharField(max_length=255, null=True, default=None)
     linked_in = models.CharField(max_length=255, null=True, default=None)
-    payment_term_id = models.ForeignKey(VendorPaymentTerms,on_delete=models.CASCADE, null=True, default=None, db_column='payment_term_id')
-    price_category_id = models.ForeignKey(PriceCategories, on_delete=models.CASCADE, null=True, default=None, db_column='price_category_id')
-    vendor_agent_id = models.ForeignKey(VendorAgent, on_delete=models.CASCADE, null=True, default=None, db_column='vendor_agent_id')
-    transporter_id = models.ForeignKey(Transporters, on_delete=models.CASCADE, null=True, default=None, db_column='transporter_id')
+    payment_term_id = models.ForeignKey(VendorPaymentTerms,on_delete=models.PROTECT, null=True, default=None, db_column='payment_term_id')
+    price_category_id = models.ForeignKey(PriceCategories, on_delete=models.PROTECT, null=True, default=None, db_column='price_category_id')
+    vendor_agent_id = models.ForeignKey(VendorAgent, on_delete=models.PROTECT, null=True, default=None, db_column='vendor_agent_id')
+    transporter_id = models.ForeignKey(Transporters, on_delete=models.PROTECT, null=True, default=None, db_column='transporter_id')
     credit_limit = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     max_credit_days = models.IntegerField(null=True, default=None)
     interest_rate_yearly = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
@@ -111,6 +114,7 @@ class Vendor(models.Model):
     accounts_number = EncryptedTextField(max_length=255, null=True, default=None)
     bank_name = models.CharField(max_length=255, null=True, default=None)
     branch = models.CharField(max_length=255, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -123,9 +127,10 @@ class Vendor(models.Model):
 
 class VendorAttachment(models.Model):
     attachment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id')
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, db_column='vendor_id')
     attachment_name = models.CharField(max_length=255)
     attachment_path = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -137,22 +142,23 @@ class VendorAttachment(models.Model):
     
 class VendorAddress(models.Model):
     vendor_address_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id')
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, db_column='vendor_id')
     ADDRESS_TYPE_CHOICES = [
         ('Billing', 'Billing'),
         ('Shipping', 'Shipping')
         ]
     address_type = models.CharField(max_length=10, choices=ADDRESS_TYPE_CHOICES, null=True, default=None)
     address = models.CharField(max_length=255, null=True, default=None)
-    city_id = models.ForeignKey('masters.City', on_delete=models.CASCADE, null=True, db_column = 'city_id')
-    state_id = models.ForeignKey('masters.State', on_delete=models.CASCADE, null=True,db_column = 'state_id')
-    country_id = models.ForeignKey('masters.Country', on_delete=models.CASCADE,null=True, default=None, db_column = 'country_id')
+    city_id = models.ForeignKey('masters.City', on_delete=models.PROTECT, null=True, db_column = 'city_id')
+    state_id = models.ForeignKey('masters.State', on_delete=models.PROTECT, null=True,db_column = 'state_id')
+    country_id = models.ForeignKey('masters.Country', on_delete=models.PROTECT,null=True, default=None, db_column = 'country_id')
     pin_code = models.CharField(max_length=50, null=True, default=None)
     phone = models.CharField(max_length=50, null=True, default=None)
     email = models.EmailField(max_length=255, null=True, default=None)
     longitude = models.DecimalField(max_digits=10, decimal_places=6, null=True, default=None)
     latitude = models.DecimalField(max_digits=10, decimal_places=6, null=True, default=None)
     route_map = models.CharField(max_length=255, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

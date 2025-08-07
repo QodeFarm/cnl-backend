@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework import viewsets
 from apps.assets.filters import AssetCategoriesFilter, AssetMaintenanceFilter, AssetStatusesFilter, AssetsFilter, LocationsFilter
 from config.utils_filter_methods import list_filtered_objects
-from config.utils_methods import list_all_objects,create_instance,update_instance
+from config.utils_methods import list_all_objects,create_instance,update_instance, soft_delete
 from apps.assets.serializers import AssetStatusesSerializers, AssetCategoriesSerializers, LocationsSerializers, AssetsSerializer, AssetMaintenanceSerializer
 from apps.assets.models import AssetStatuses, AssetCategories, Locations, Assets, AssetMaintenance
 from django_filters.rest_framework import DjangoFilterBackend 
@@ -24,6 +24,10 @@ class AssetStatusesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class AssetCategoriesViewSet(viewsets.ModelViewSet):
     queryset = AssetCategories.objects.all().order_by('-created_at')	
@@ -40,6 +44,10 @@ class AssetCategoriesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class LocationsViewSet(viewsets.ModelViewSet):
     queryset = Locations.objects.all().order_by('-created_at')	
@@ -56,6 +64,10 @@ class LocationsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class AssetsViewSet(viewsets.ModelViewSet):
     queryset = Assets.objects.all().order_by('-created_at')	
@@ -73,6 +85,10 @@ class AssetsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class AssetMaintenanceViewSet(viewsets.ModelViewSet):
     queryset = AssetMaintenance.objects.all().order_by('-created_at')	

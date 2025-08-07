@@ -1,7 +1,7 @@
 from rest_framework import viewsets
 from apps.customfields.filters import CustomFieldFilter, CustomFieldOptionsFilters, CustomFieldValuesFilters
 from config.utils_filter_methods import filter_response, list_filtered_objects
-from config.utils_methods import create_instance, list_all_objects, list_all_objects_1, update_instance
+from config.utils_methods import create_instance, list_all_objects, list_all_objects_1, update_instance, soft_delete
 from .models import CustomField, CustomFieldOption, CustomFieldValue
 from .serializers import  CustomFieldSerializer, CustomFieldOptionSerializer, CustomFieldValueSerializer
 from rest_framework.views import APIView
@@ -32,6 +32,10 @@ class CustomFieldViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class CustomFieldOptionViewSet(viewsets.ModelViewSet):
     queryset = CustomFieldOption.objects.all()

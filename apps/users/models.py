@@ -14,6 +14,7 @@ class Roles(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     description = models.TextField()
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         db_table = rolestable
@@ -28,6 +29,7 @@ class Actions(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     description = models.TextField()
+    is_deleted = models.BooleanField(default=False)
 
 
     class Meta:
@@ -45,6 +47,7 @@ class Modules(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     description = models.TextField()
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         db_table = modulestable
@@ -54,14 +57,15 @@ class Modules(models.Model):
 
 
 class ModuleSections(models.Model):
-    module_id = models.ForeignKey(Modules, on_delete=models.CASCADE, default=None, db_column = 'module_id')
+    module_id = models.ForeignKey(Modules, on_delete=models.PROTECT, default=None, db_column = 'module_id')
     section_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sec_icon = models.CharField(max_length=255, default=None, null=True)  
     sec_link = models.CharField(max_length=255, default=None, null=True) 
     created_at = models.DateTimeField(auto_now_add=True)
     section_name = models.CharField( max_length=255,)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
-
+    
     class Meta:
         db_table = modulesections
 
@@ -112,9 +116,10 @@ class User(AbstractBaseUser):
     first_name = models.CharField(max_length=255)
     company_created_user = models.BooleanField(default= False)
     last_login = models.DateTimeField(null=True, default=None)
-    branch_id  = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column='branch_id', null= True)
-    status_id  = models.ForeignKey(Statuses, on_delete=models.CASCADE, db_column='status_id')
-    role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
+    is_deleted = models.BooleanField(default=False)
+    branch_id  = models.ForeignKey(Branches, on_delete=models.PROTECT, db_column='branch_id', null= True)
+    status_id  = models.ForeignKey(Statuses, on_delete=models.PROTECT, db_column='status_id')
+    role_id    = models.ForeignKey(Roles, on_delete=models.PROTECT,  db_column = 'role_id')
 
     objects = UserManager()
     
@@ -149,7 +154,7 @@ class User(AbstractBaseUser):
     #     return self.role_id.role_name.lower() == "admin"
     
 class UserTimeRestrictions(models.Model):
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE,  db_column = 'user_id')
+    user_id = models.ForeignKey(User, on_delete=models.PROTECT,  db_column = 'user_id')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     start_time = models.TimeField(null=False, blank=False)
     end_time = models.TimeField(null=False, blank=False)
@@ -166,7 +171,7 @@ class UserTimeRestrictions(models.Model):
 class UserAllowedWeekdays(models.Model):
     WEEKDAYS = [('Monday', 'Monday'),('Tuesday', 'Tuesday'),('Wednesday', 'Wednesday'),('Thursday', 'Thursday'),('Friday', 'Friday'),('Saturday', 'Saturday'),('Sunday', 'Sunday'),]
     weekday = models.CharField(max_length=9, choices=WEEKDAYS, null=False, blank=False)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE,  db_column = 'user_id')
+    user_id = models.ForeignKey(User, on_delete=models.PROTECT,  db_column = 'user_id')
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -179,11 +184,11 @@ class UserAllowedWeekdays(models.Model):
     
 
 class RolePermissions(models.Model):
-    section_id = models.ForeignKey(ModuleSections, on_delete=models.CASCADE,  db_column = 'section_id')
-    module_id  = models.ForeignKey(Modules, on_delete=models.CASCADE,  db_column = 'module_id')
-    action_id  = models.ForeignKey(Actions, on_delete=models.CASCADE,  db_column = 'action_id')
+    section_id = models.ForeignKey(ModuleSections, on_delete=models.PROTECT,  db_column = 'section_id')
+    module_id  = models.ForeignKey(Modules, on_delete=models.PROTECT,  db_column = 'module_id')
+    action_id  = models.ForeignKey(Actions, on_delete=models.PROTECT,  db_column = 'action_id')
     role_permission_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    role_id    = models.ForeignKey(Roles, on_delete=models.CASCADE,  db_column = 'role_id')
+    role_id    = models.ForeignKey(Roles, on_delete=models.PROTECT,  db_column = 'role_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -195,8 +200,8 @@ class RolePermissions(models.Model):
     
 class UserRoles(models.Model):
     user_role_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user_id = models.ForeignKey(User, on_delete=models.CASCADE,  db_column = 'user_id')
-    role_id = models.ForeignKey(Roles, on_delete=models.CASCADE, db_column = 'role_id')
+    user_id = models.ForeignKey(User, on_delete=models.PROTECT,  db_column = 'user_id')
+    role_id = models.ForeignKey(Roles, on_delete=models.PROTECT, db_column = 'role_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

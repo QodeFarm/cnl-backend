@@ -111,7 +111,8 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
 
         vendor_addresses = {
             "billing_address": None,
-            "shipping_address": None
+            "shipping_address": None,
+            "custom_billing_address": None
         }
         
         def format_address(addr):
@@ -133,6 +134,7 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
         
         if billing_address:
             vendor_addresses["billing_address"] = format_address(billing_address)
+            vendor_addresses["custom_billing_address"] = billing_address.address or None
         if shipping_address:
             vendor_addresses["shipping_address"] = format_address(shipping_address)
 
