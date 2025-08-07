@@ -8,6 +8,7 @@ from config.utils_variables import assetstatusestable,assetcategoriestable,asset
 class AssetStatuses(models.Model):
     asset_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     status_name = models.CharField(max_length=50)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -20,6 +21,7 @@ class AssetStatuses(models.Model):
 class AssetCategories(models.Model):
     asset_category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     category_name = models.CharField(max_length=50)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -34,6 +36,7 @@ class Locations(models.Model):
     location_name = models.CharField(max_length=50)
     address = models.CharField(max_length=1024, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -45,12 +48,13 @@ class Locations(models.Model):
 class Assets(models.Model):
     asset_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
-    asset_category_id = models.ForeignKey(AssetCategories, on_delete=models.CASCADE, db_column='asset_category_id')
-    asset_status_id = models.ForeignKey(AssetStatuses, on_delete=models.CASCADE, db_column='asset_status_id')
-    location_id = models.ForeignKey(Locations, on_delete=models.CASCADE, db_column='location_id')
-    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, null=True, default=None, db_column = 'unit_options_id')
+    asset_category_id = models.ForeignKey(AssetCategories, on_delete=models.PROTECT, db_column='asset_category_id')
+    asset_status_id = models.ForeignKey(AssetStatuses, on_delete=models.PROTECT, db_column='asset_status_id')
+    location_id = models.ForeignKey(Locations, on_delete=models.PROTECT, db_column='location_id')
+    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, null=True, default=None, db_column = 'unit_options_id')
     purchase_date = models.DateField(null=True, default=None)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -62,7 +66,7 @@ class Assets(models.Model):
 
 class AssetMaintenance(models.Model):
     asset_maintenance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    asset_id = models.ForeignKey(Assets, on_delete=models.CASCADE, db_column='asset_id')
+    asset_id = models.ForeignKey(Assets, on_delete=models.PROTECT, db_column='asset_id')
     maintenance_date = models.DateField(null=True, default=None)
     maintenance_description = models.CharField(max_length=1024, null=True, default=None)
     cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)

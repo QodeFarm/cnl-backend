@@ -41,6 +41,10 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ProductCategoriesViewSet(viewsets.ModelViewSet):
     queryset = ProductCategories.objects.all().order_by('-created_at')	
@@ -57,6 +61,10 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ProductStockUnitsViewSet(viewsets.ModelViewSet):
     queryset = ProductStockUnits.objects.all().order_by('-created_at')	
@@ -73,6 +81,10 @@ class ProductStockUnitsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 	
 class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
     queryset = ProductGstClassifications.objects.all().order_by('-created_at')	
@@ -89,6 +101,10 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ProductSalesGlViewSet(viewsets.ModelViewSet):
     queryset = ProductSalesGl.objects.all().order_by('-created_at')	
@@ -105,6 +121,10 @@ class ProductSalesGlViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 	
 class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
     queryset = ProductPurchaseGl.objects.all().order_by('-created_at')	
@@ -121,6 +141,10 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class productsViewSet(viewsets.ModelViewSet):
     queryset = Products.objects.all().order_by('-created_at')
@@ -207,7 +231,11 @@ class SizeViewSet(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)    
+        return update_instance(self, request, *args, **kwargs)  
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)  
 
 class ColorViewSet(viewsets.ModelViewSet):
     queryset = Color.objects.all().order_by('-created_at')
@@ -223,7 +251,11 @@ class ColorViewSet(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)    
+        return update_instance(self, request, *args, **kwargs)  
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)  
 
 class ProductVariationViewSet(viewsets.ModelViewSet):
     queryset = ProductVariation.objects.all()
@@ -510,13 +542,16 @@ class ProductViewSet(APIView):
         try:
             # delete the main instance
             instance = Products.objects.get(pk=pk) # Get the Products instance
-            instance.delete() # Delete the main Products instance
+            instance.is_deleted = True
+            instance.save()
+            # instance.delete() # Delete the main Products instance
             logger.info(f"Products with ID {pk} deleted successfully.")
-
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        
         except Products.DoesNotExist:
             logger.warning(f"Products with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        
         except Exception as e:
             logger.error(f"Error deleting Leads with ID {pk}: {str(e)}")
             return build_response(0, f"Record deletion failed due to an error : {e}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)

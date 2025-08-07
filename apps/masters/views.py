@@ -3,7 +3,7 @@ from apps.products.models import Products
 from apps.purchase.models import PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
 from apps.sales.models import OrderShipments, PaymentTransactions, SaleCreditNotes, SaleDebitNotes, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
 from config.utils_filter_methods import list_filtered_objects
-from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate
+from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate, soft_delete
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
 from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data, sale_return_doc, sales_invoice_doc
 from apps.masters.template.table_defination import doc_heading, payment_receipt_amount_section, payment_receipt_voucher_table
@@ -81,6 +81,10 @@ class CountryViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class StateViewSet(viewsets.ModelViewSet):
     queryset = State.objects.all().order_by('-created_at')	
@@ -97,6 +101,10 @@ class StateViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class CityViewSet(viewsets.ModelViewSet):
     queryset = City.objects.all().order_by('-created_at')	
@@ -113,6 +121,10 @@ class CityViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 class StatusesViewset(viewsets.ModelViewSet):
@@ -130,6 +142,10 @@ class StatusesViewset(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class LedgerGroupsViews(viewsets.ModelViewSet):
     queryset = LedgerGroups.objects.all().order_by('-created_at')	
@@ -146,6 +162,10 @@ class LedgerGroupsViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class FirmStatusesViews(viewsets.ModelViewSet):
     queryset = FirmStatuses.objects.all().order_by('-created_at')	
@@ -163,6 +183,10 @@ class FirmStatusesViews(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class TerritoryViews(viewsets.ModelViewSet):
     queryset = Territory.objects.all().order_by('-created_at')	
     serializer_class = TerritorySerializers
@@ -178,6 +202,10 @@ class TerritoryViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
     
 class CustomerCategoriesViews(viewsets.ModelViewSet):
     queryset = CustomerCategories.objects.all().order_by('-created_at')	 #optional : CustomerCategories.objects.filter(is_deleted=False).order_by('-created_at')
@@ -197,9 +225,7 @@ class CustomerCategoriesViews(viewsets.ModelViewSet):
     
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        instance.is_deleted = True
-        instance.save()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        return soft_delete(instance)
 
 class GstCategoriesViews(viewsets.ModelViewSet):
     queryset = GstCategories.objects.all().order_by('-created_at')	
@@ -217,6 +243,9 @@ class GstCategoriesViews(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
   
 class CustomerPaymentTermsViews(viewsets.ModelViewSet):
     queryset = CustomerPaymentTerms.objects.all().order_by('-created_at')	
@@ -234,6 +263,9 @@ class CustomerPaymentTermsViews(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
  
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class PriceCategoriesViews(viewsets.ModelViewSet):
     queryset = PriceCategories.objects.all().order_by('-created_at')	
@@ -251,7 +283,10 @@ class PriceCategoriesViews(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
-
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class TransportersViews(viewsets.ModelViewSet):
     queryset = Transporters.objects.all().order_by('-created_at')	
     serializer_class = TransportersSerializers
@@ -268,6 +303,9 @@ class TransportersViews(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ProductTypesViewSet(viewsets.ModelViewSet):
     queryset = ProductTypes.objects.all().order_by('-created_at')	
@@ -284,7 +322,12 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-	
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+ 
+ 
 class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
     queryset = ProductUniqueQuantityCodes.objects.all().order_by('-created_at')	
     serializer_class = ProductUniqueQuantityCodesSerializer
@@ -300,6 +343,10 @@ class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 	
 class UnitOptionsViewSet(viewsets.ModelViewSet):
     queryset = UnitOptions.objects.all().order_by('-created_at')	
@@ -316,6 +363,10 @@ class UnitOptionsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ProductDrugTypesViewSet(viewsets.ModelViewSet):
     queryset = ProductDrugTypes.objects.all().order_by('-created_at')	
@@ -332,6 +383,10 @@ class ProductDrugTypesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ProductItemTypeViewSet(viewsets.ModelViewSet):
     queryset = ProductItemType.objects.all().order_by('-created_at')	
@@ -348,6 +403,10 @@ class ProductItemTypeViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 	
 class BrandSalesmanViewSet(viewsets.ModelViewSet):
     queryset = BrandSalesman.objects.all().order_by('-created_at')	
@@ -364,6 +423,10 @@ class BrandSalesmanViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 	
 class ProductBrandsViewSet(viewsets.ModelViewSet):
     queryset = ProductBrands.objects.all().order_by('-created_at')	
@@ -380,6 +443,10 @@ class ProductBrandsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class PurchaseTypesViewSet(viewsets.ModelViewSet):
     queryset = PurchaseTypes.objects.all().order_by('-created_at')	
@@ -396,6 +463,10 @@ class PurchaseTypesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ShippingCompaniesView(viewsets.ModelViewSet):
     queryset = ShippingCompanies.objects.all().order_by('-created_at')	
@@ -409,6 +480,10 @@ class ShippingCompaniesView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 class SaleTypesView(viewsets.ModelViewSet):
@@ -426,6 +501,10 @@ class SaleTypesView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class GstTypesView(viewsets.ModelViewSet):
     queryset = GstTypes.objects.all().order_by('-created_at')	
@@ -442,6 +521,10 @@ class GstTypesView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ShippingModesView(viewsets.ModelViewSet):
     queryset = ShippingModes.objects.all().order_by('-created_at')	
@@ -456,6 +539,10 @@ class ShippingModesView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class OrdersSalesmanView(viewsets.ModelViewSet):
     queryset = OrdersSalesman.objects.all().order_by('-created_at')	
     serializer_class = OrdersSalesmanSerializer
@@ -468,6 +555,10 @@ class OrdersSalesmanView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
     
 
 class PaymentLinkTypesView(viewsets.ModelViewSet):
@@ -486,6 +577,10 @@ class PaymentLinkTypesView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class OrderStatusesView(viewsets.ModelViewSet):
     queryset = OrderStatuses.objects.all().order_by('-created_at')	
     serializer_class = OrderStatusesSerializer
@@ -502,6 +597,10 @@ class OrderStatusesView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class OrderTypesView(viewsets.ModelViewSet):
     queryset = OrderTypes.objects.all().order_by('-created_at')	
     serializer_class = OrderTypesSerializer
@@ -517,6 +616,10 @@ class OrderTypesView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 #-------------------------------------pavan-start---------------------------------------------
@@ -631,6 +734,10 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 #===============================================PDF_creation================================
 class DocumentGeneratorView(APIView):
@@ -792,6 +899,10 @@ class ReturnOptionsViewset(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class FieldTypeViewSet(viewsets.ModelViewSet):
     queryset = FieldType.objects.all().order_by('-created_at')	
     serializer_class = FieldTypeSerializer
@@ -803,7 +914,11 @@ class FieldTypeViewSet(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)    
+        return update_instance(self, request, *args, **kwargs)  
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)  
     
 class EntitiesViewSet(viewsets.ModelViewSet):
     """
@@ -821,6 +936,10 @@ class EntitiesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class UserGroupsViewset(viewsets.ModelViewSet):
     queryset = UserGroups.objects.all().order_by('-created_at')	
     serializer_class = UserGroupsSerializer
@@ -836,6 +955,10 @@ class UserGroupsViewset(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
     
 class UserGroupMembersViewset(viewsets.ModelViewSet):
     queryset = UserGroupMembers.objects.all().order_by('-created_at')	
@@ -855,6 +978,10 @@ class UserGroupMembersViewset(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class PackageUnitViewSet(viewsets.ModelViewSet):
     queryset = PackageUnit.objects.all().order_by()
@@ -870,7 +997,11 @@ class PackageUnitViewSet(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)    
+        return update_instance(self, request, *args, **kwargs)  
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)  
 
 
 class GPackageUnitViewSet(viewsets.ModelViewSet):
@@ -888,6 +1019,10 @@ class GPackageUnitViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class FlowStatusViews(viewsets.ModelViewSet):
     queryset = FlowStatus.objects.all().order_by('-created_at')	
@@ -905,4 +1040,8 @@ class FlowStatusViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 

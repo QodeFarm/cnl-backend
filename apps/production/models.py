@@ -25,7 +25,7 @@ class RawMaterial(models.Model):
 class BOM(models.Model):
     bom_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     bom_name = models.CharField(max_length=100)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id', related_name='bom')
+    product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id', related_name='bom')
     notes = models.TextField(default=None, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -39,13 +39,14 @@ class BOM(models.Model):
 class BillOfMaterials(models.Model):
     material_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reference_id = models.CharField(max_length=36, null=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
-    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
-    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')
+    product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
+    size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, default=None, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, default=None, db_column='color_id')
     quantity = models.IntegerField(default=0)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     notes = models.TextField(default=None, null=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -59,6 +60,7 @@ class ProductionStatus(models.Model):
     status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     status_name = models.CharField(max_length=50, unique=True)
     description = models.TextField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -70,16 +72,17 @@ class ProductionStatus(models.Model):
 
 class WorkOrder(models.Model):
     work_order_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
-    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
-    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')    
+    product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
+    size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, default=None, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, default=None, db_column='color_id')    
     quantity =  models.IntegerField(default=0)
     completed_qty = models.IntegerField(null=True, default=0)
-    status_id = models.ForeignKey(ProductionStatus, on_delete=models.CASCADE, null=True, default=None, db_column='status_id')
+    status_id = models.ForeignKey(ProductionStatus, on_delete=models.PROTECT, null=True, default=None, db_column='status_id')
     start_date = models.DateField(null=True, default=None)
     end_date = models.DateField(null=True, default=None)
-    sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.CASCADE, db_column='sale_order_id', null=True, default=None)
+    sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.PROTECT, db_column='sale_order_id', null=True, default=None)
     sync_qty = models.BooleanField(null=False, default=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -127,7 +130,7 @@ class CompletedQuantity(models.Model):
     quantity_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     quantity = models.IntegerField(null=True)
     sync_time = models.DateTimeField(auto_now_add=True)
-    work_order = models.ForeignKey('WorkOrder', on_delete=models.CASCADE, related_name='completed_quantities')
+    work_order = models.ForeignKey('WorkOrder', on_delete=models.PROTECT, related_name='completed_quantities')
 
     class Meta:
         db_table = completedquantity
@@ -144,6 +147,7 @@ class Machine(models.Model):
         ('Out of Service', 'Out of Service'),
         ('Under Maintenance', 'Under Maintenance'),
     ], default='Operational')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -155,8 +159,8 @@ class Machine(models.Model):
 
 class DefaultMachinery(models.Model):
     default_machinery_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
-    machine_id = models.ForeignKey(Machine, on_delete=models.CASCADE, db_column='machine_id')
+    product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
+    machine_id = models.ForeignKey(Machine, on_delete=models.PROTECT, db_column='machine_id')
 
     class Meta:
         db_table = defaultmachinery
@@ -166,8 +170,8 @@ class DefaultMachinery(models.Model):
 
 class WorkOrderMachine(models.Model):
     work_order_machines_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    work_order_id = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, db_column='work_order_id')
-    machine_id = models.ForeignKey(Machine, on_delete=models.CASCADE, db_column='machine_id')
+    work_order_id = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, db_column='work_order_id')
+    machine_id = models.ForeignKey(Machine, on_delete=models.PROTECT, db_column='machine_id')
 
     class Meta:
         db_table = workordermachines
@@ -178,8 +182,8 @@ class WorkOrderMachine(models.Model):
 
 class ProductionWorker(models.Model):
     worker_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
-    work_order_id = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, db_column='work_order_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='employee_id')
+    work_order_id = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, db_column='work_order_id')
     hours_worked = models.DecimalField(max_digits=5, decimal_places=2, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -192,7 +196,7 @@ class ProductionWorker(models.Model):
 
 class WorkOrderStage(models.Model):
     work_stage_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    work_order_id = models.ForeignKey(WorkOrder, on_delete=models.CASCADE, db_column='work_order_id')
+    work_order_id = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, db_column='work_order_id')
     stage_name = models.CharField(max_length=255)
     stage_description = models.TextField(default=None, null=True)
     stage_start_date = models.DateField(default=None, null=True, blank=True)

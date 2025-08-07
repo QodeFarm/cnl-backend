@@ -26,6 +26,10 @@ class WarehousesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class WarehouseLocationsViewSet(viewsets.ModelViewSet):
     queryset = WarehouseLocations.objects.all().order_by('-created_at')	
@@ -42,6 +46,10 @@ class WarehouseLocationsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class InventoryBlockConfigViewSet(viewsets.ModelViewSet):
     queryset = InventoryBlockConfig.objects.all()

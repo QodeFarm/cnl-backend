@@ -3,7 +3,7 @@ from django.shortcuts import render
 from rest_framework import viewsets, status
 from .models import Companies, Branches, BranchBankDetails
 from .serializers import CompaniesSerializer, BranchesSerializer, BranchBankDetailsSerializer
-from config.utils_methods import build_response, list_all_objects, create_instance, update_instance
+from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, soft_delete
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_variables import *
 from django_filters.rest_framework import DjangoFilterBackend
@@ -57,6 +57,10 @@ class CompaniesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class BranchesViewSet(viewsets.ModelViewSet):
     queryset = Branches.objects.all()
     serializer_class = BranchesSerializer
@@ -103,6 +107,10 @@ class BranchesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
     
 class BranchBankDetailsViewSet(viewsets.ModelViewSet):
     queryset = BranchBankDetails.objects.all()

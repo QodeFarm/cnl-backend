@@ -8,7 +8,7 @@ from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.tasks.filters import TasksFilter
 from config.utils_filter_methods import filter_response
-from config.utils_methods import list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances, validate_put_method_data
+from config.utils_methods import list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances, validate_put_method_data
 from apps.tasks.serializers import TasksSerializer,TaskCommentsSerializer,TaskAttachmentsSerializer,TaskHistorySerializer
 from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
 import logging
@@ -39,6 +39,10 @@ class TasksViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class TaskCommentsViewSet(viewsets.ModelViewSet):
     queryset = TaskComments.objects.all()

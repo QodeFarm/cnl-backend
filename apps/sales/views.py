@@ -8,7 +8,7 @@ from django.forms import model_to_dict
 from apps.users.models import User
 from itertools import chain
 from config.utils_db_router import set_db
-from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import previous_product_instance_verification, product_stock_verification, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from .models import *
@@ -206,6 +206,10 @@ class QuickPacksView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 
 class QuickPacksItemsView(viewsets.ModelViewSet):
@@ -900,54 +904,83 @@ class SaleOrderViewSet(APIView):
         except Exception as e:
             logger.exception(f"Error retrieving related data for model {model.__name__} with filter {filter_field}={filter_value} from {using_db}: {str(e)}")
             return []
+        
+
 
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale order and its related attachments and shipments.
-        Based on the sale_order_id, it checks the appropriate database and deletes the records.
+        Safely marks the sale order and its related attachments and shipments as deleted.
         """
         db_to_use = None
-        # try:
-        #     # Check which database the SaleOrder belongs to
-        #     SaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
-        #     set_db('mstcnl')
-        #     db_to_use = 'mstcnl'
-        # except SaleOrder.DoesNotExist:
-        #     try:
-        #         SaleOrder.objects.using('default').get(sale_order_id=pk)
-        #         set_db('default')
-        #         db_to_use = 'default'
-        #     except SaleOrder.DoesNotExist:
-        #         logger.warning(f"SaleOrder with ID {pk} does not exist in any database.")
-        #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-
         try:
             # Get the SaleOrder instance from the appropriate database
             instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
 
-            # Delete related OrderAttachments, OrderShipments, and CustomFieldValues from the correct database
-            if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-            if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
-                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Soft delete related OrderAttachments
+            OrderAttachments.objects.using(db_to_use).filter(order_id=pk, is_deleted=False).update(
+                is_deleted=True, deleted_at=timezone.now()
+            )
 
-            # Delete the main SaleOrder instance from the correct database
-            instance.delete(using=db_to_use)
+            # Soft delete related OrderShipments
+            OrderShipments.objects.using(db_to_use).filter(order_id=pk, is_deleted=False).update(
+                is_deleted=True, deleted_at=timezone.now()
+            )
 
-            logger.info(f"SaleOrder with ID {pk} deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            # Soft delete related CustomFieldValue
+            CustomFieldValue.objects.using(db_to_use).filter(custom_id=pk, is_deleted=False).update(
+                is_deleted=True, deleted_at=timezone.now()
+            )
+
+            # Soft delete the main SaleOrder instance
+            instance.is_deleted = True
+            instance.deleted_at = timezone.now()
+            instance.save(using=db_to_use)
+
+            logger.info(f"SaleOrder with ID {pk} soft-deleted successfully.")
+            return build_response(1, "Record soft-deleted successfully", [], status.HTTP_200_OK)
 
         except SaleOrder.DoesNotExist:
             logger.warning(f"SaleOrder with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
+            logger.error(f"Error soft-deleting SaleOrder with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale order and its related attachments and shipments.
+    #     Based on the sale_order_id, it checks the appropriate database and deletes the records.
+    #     """
+    #     db_to_use = None
+    #     try:
+    #         # Get the SaleOrder instance from the appropriate database
+    #         instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
+
+    #         # Delete related OrderAttachments, OrderShipments, and CustomFieldValues from the correct database
+    #         if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    #         if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    #         if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete the main SaleOrder instance from the correct database
+    #         instance.delete(using=db_to_use)
+
+    #         logger.info(f"SaleOrder with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+    #     except SaleOrder.DoesNotExist:
+    #         logger.warning(f"SaleOrder with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     # Handling POST requests for creating
@@ -1790,19 +1823,19 @@ class SaleInvoiceOrdersViewSet(APIView):
             # Return success response for cancellation
             return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
             
-            # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, SaleInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
-                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # # Delete related OrderAttachments and OrderShipments
+            # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
+            #     return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
+            #     return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # if not delete_multi_instance(pk, SaleInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
+            #     return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Delete the main SaleInvoiceOrder instance from the correct database
-            instance.delete(using=db_to_use)
+            # # Delete the main SaleInvoiceOrder instance from the correct database
+            # instance.delete(using=db_to_use)
 
-            logger.info(f"SaleInvoiceOrders with ID {pk} deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            # logger.info(f"SaleInvoiceOrders with ID {pk} deleted successfully.")
+            # return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
         except SaleInvoiceOrders.DoesNotExist:
             logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
@@ -3138,7 +3171,14 @@ class WorkflowCreateViewSet(APIView):
         try:
             # Get the Workflow instance
             instance = Workflow.objects.get(pk=pk)
-            instance.delete()
+            
+            # Soft delete related WorkflowStages
+            WorkflowStage.objects.filter(workflow_id=pk).update(is_deleted=True)
+            # instance.delete()
+            
+            # Soft delete the Workflow
+            instance.is_deleted = True
+            instance.save()
 
             logger.info(f"Workflow with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
@@ -3297,6 +3337,10 @@ class WorkflowStageViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class SaleReceiptViewSet(viewsets.ModelViewSet):
     queryset = SaleReceipt.objects.all()

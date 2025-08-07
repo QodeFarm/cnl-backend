@@ -19,7 +19,7 @@ from .models import *
 from apps.products.models import Products, ProductVariation
 from apps.products.serializers import ProductVariationSerializer, productsSerializer
 from .serializers import *
-from config.utils_methods import normalize_value, build_response, delete_multi_instance, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import normalize_value, build_response, delete_multi_instance, soft_delete, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django.db.models.functions import Coalesce,NullIf,Cast,ExtractSecond
 from django.db.models import Avg
 
@@ -74,6 +74,10 @@ class ProductionStatusViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
     queryset = WorkOrder.objects.all().order_by('-created_at')
@@ -118,6 +122,10 @@ class MachineViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class DefaultMachineryViewSet(viewsets.ModelViewSet):
     queryset = DefaultMachinery.objects.all()
@@ -498,10 +506,13 @@ class WorkOrderAPIView(APIView):
             instance = WorkOrder.objects.get(pk=pk)
 
             # Delete related BillOfMaterials.
-            BillOfMaterials.objects.filter(reference_id=pk).delete()
+            BillOfMaterials.objects.filter(reference_id=pk).update(is_deleted=True)
 
             # Delete the main WorkOrder instance
-            instance.delete()
+            # instance.delete()
+            # Soft delete the main WorkOrder
+            instance.is_deleted = True
+            instance.save()
 
             logger.info(f"WorkOrder with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
@@ -912,10 +923,12 @@ class BOMView(APIView):
             instance = BOM.objects.get(pk=pk)
 
             # Delete the Child table instances from 'bill of materials'.
-            BillOfMaterials.objects.filter(reference_id=pk).delete()
+            BillOfMaterials.objects.filter(reference_id=pk).update(is_deleted=True)
 
             # Delete the main WorkOrder instance
-            instance.delete()
+            # Soft delete the main WorkOrder
+            instance.is_deleted = True
+            instance.save()
 
             logger.info(f"BOM with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)

@@ -64,6 +64,10 @@ class LedgerAccountsViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class CustomerViews(viewsets.ModelViewSet):
     queryset = Customer.objects.all().order_by('-created_at')	

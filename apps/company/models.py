@@ -26,9 +26,9 @@ class Companies(models.Model):
     num_employees = models.IntegerField(null=True, default =None)
     logo = models.JSONField()
     address = models.CharField(max_length=255, default=None, null=True)
-    city_id = models.ForeignKey('masters.City', on_delete=models.CASCADE, db_column = 'city_id')
-    state_id = models.ForeignKey('masters.State', on_delete=models.CASCADE, db_column = 'state_id')
-    country_id = models.ForeignKey('masters.Country', on_delete=models.CASCADE, null=True, default=None, db_column = 'country_id')
+    city_id = models.ForeignKey('masters.City', on_delete=models.PROTECT, db_column = 'city_id')
+    state_id = models.ForeignKey('masters.State', on_delete=models.PROTECT, db_column = 'state_id')
+    country_id = models.ForeignKey('masters.Country', on_delete=models.PROTECT, null=True, default=None, db_column = 'country_id')
     pin_code = models.CharField(max_length=20, null=True, default=None)
     phone_regex = RegexValidator(regex=r'^\+?1?\d{9,15}$', message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed.")
     phone = models.CharField(validators=[phone_regex], max_length=20, null=True, default=None)
@@ -107,12 +107,12 @@ def branches_picture(instance, filename):
 
 class Branches(models.Model):
     branch_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    company_id = models.ForeignKey(Companies, on_delete=models.CASCADE, db_column = 'company_id')
+    company_id = models.ForeignKey(Companies, on_delete=models.PROTECT, db_column = 'company_id')
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, default=None, null=True)
     party = models.CharField(max_length=255, default=None, null=True)  
     gst_no = models.CharField(max_length=50, default=None, null=True)
-    status_id = models.ForeignKey('masters.Statuses', on_delete=models.CASCADE, db_column = 'status_id')
+    status_id = models.ForeignKey('masters.Statuses', on_delete=models.PROTECT, db_column = 'status_id')
     allowed_warehouse = models.CharField(max_length=255, default=None, null=True)
     e_way_username = models.CharField(max_length=255, default=None, null=True)
     e_way_password = EncryptedTextField(max_length=255, default=None, null=True) 
@@ -122,15 +122,16 @@ class Branches(models.Model):
     other_license_2 = models.CharField(max_length=255, default=None, null=True)
     picture = models.JSONField()
     address = models.CharField(max_length=255, default=None, null=True)
-    city_id = models.ForeignKey('masters.City', on_delete=models.CASCADE, db_column = 'city_id')
-    state_id = models.ForeignKey('masters.State', on_delete=models.CASCADE, db_column = 'state_id')
-    country_id = models.ForeignKey('masters.Country', on_delete=models.CASCADE, null=True, default=None, db_column = 'country_id')
+    city_id = models.ForeignKey('masters.City', on_delete=models.PROTECT, db_column = 'city_id')
+    state_id = models.ForeignKey('masters.State', on_delete=models.PROTECT, db_column = 'state_id')
+    country_id = models.ForeignKey('masters.Country', on_delete=models.PROTECT, null=True, default=None, db_column = 'country_id')
     pin_code = models.CharField(max_length=20, default=None, null=True)
     phone_regex = RegexValidator(regex=r'^\+?1?\d{9,15}$', message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed.")
     phone = models.CharField(validators=[phone_regex], max_length=20, default=None, null=True)  # validators should be a list
     email = models.EmailField(max_length=255, default=None, null=True)
     longitude = models.DecimalField(max_digits=10, decimal_places=7, default=None, null=True)
     latitude = models.DecimalField(max_digits=10, decimal_places=7, default=None, null=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -142,7 +143,7 @@ class Branches(models.Model):
 
 class BranchBankDetails(models.Model):
     bank_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    branch_id = models.ForeignKey(Branches, on_delete=models.CASCADE, db_column = 'branch_id')
+    branch_id = models.ForeignKey(Branches, on_delete=models.PROTECT, db_column = 'branch_id')
     bank_name = models.CharField(max_length=255,default=None, null=True)
     account_number = EncryptedTextField(max_length=255, default=None, null=True)  # Using custom encrypted field
     branch_name = models.CharField(max_length=255, default=None, null=True)

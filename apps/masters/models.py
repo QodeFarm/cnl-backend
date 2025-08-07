@@ -13,6 +13,7 @@ class Country(models.Model):
     country_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     country_name = models.CharField(max_length=100)
     country_code = models.CharField(max_length=100, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -24,9 +25,10 @@ class Country(models.Model):
 
 class State(models.Model):
     state_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    country_id = models.ForeignKey(Country, on_delete=models.CASCADE, db_column = 'country_id')
+    country_id = models.ForeignKey(Country, on_delete=models.PROTECT, db_column = 'country_id')
     state_name = models.CharField(max_length=100)
     state_code = models.CharField(max_length=100)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -38,9 +40,10 @@ class State(models.Model):
 
 class City(models.Model):
     city_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    state_id = models.ForeignKey(State, on_delete=models.CASCADE, db_column = 'state_id')
+    state_id = models.ForeignKey(State, on_delete=models.PROTECT, db_column = 'state_id')
     city_name = models.CharField(max_length=100)
     city_code = models.CharField(max_length=100, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -54,6 +57,7 @@ class City(models.Model):
 class Statuses(models.Model):
     status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     status_name = models.CharField(max_length=50, unique=True, default='Pending')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True) 
 
     def __str__(self):
@@ -70,6 +74,7 @@ class LedgerGroups(models.Model):
     inactive = models.BooleanField(default=False, null=True)
     under_group = models.CharField(max_length=255, null=True, default=None)
     nature = models.CharField(max_length=255, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -82,6 +87,7 @@ class LedgerGroups(models.Model):
 class FirmStatuses(models.Model):
     firm_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -95,6 +101,7 @@ class Territory(models.Model):
     territory_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -121,6 +128,7 @@ class CustomerCategories(models.Model):
 class GstCategories(models.Model):
     gst_category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -138,6 +146,7 @@ class CustomerPaymentTerms(models.Model):
     no_of_fixed_days = models.PositiveIntegerField(null=True, default=None)
     payment_cycle = models.CharField(max_length=255, null=True, default=None)
     run_on = models.CharField(max_length=255, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -151,6 +160,7 @@ class PriceCategories(models.Model):
     price_category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -166,6 +176,7 @@ class Transporters(models.Model):
     code = models.CharField(max_length=50, null=True,default=None)
     gst_no = models.CharField(max_length=50, null=True,default=None)
     website_url = models.CharField(max_length=255, null=True,default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -178,6 +189,7 @@ class Transporters(models.Model):
 class ProductTypes(models.Model):
     type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     type_name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -190,6 +202,7 @@ class ProductTypes(models.Model):
 class ProductUniqueQuantityCodes(models.Model):
     quantity_code_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     quantity_code_name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -202,6 +215,7 @@ class ProductUniqueQuantityCodes(models.Model):
 class UnitOptions(models.Model):
     unit_options_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     unit_name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -214,6 +228,7 @@ class UnitOptions(models.Model):
 class ProductDrugTypes(models.Model):
     drug_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     drug_type_name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -226,6 +241,7 @@ class ProductDrugTypes(models.Model):
 class ProductItemType(models.Model):
     item_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     item_name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -246,6 +262,7 @@ class BrandSalesman(models.Model):
         ('Both','Both'),
     ]
     rate_on = models.CharField(max_length=10, choices=RATE_ON_CHOICES, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -273,7 +290,8 @@ class ProductBrands(models.Model):
     brand_name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, null=True, default=None)
     picture = models.ImageField(max_length=255, null=True, default=None, upload_to=product_brands_picture)
-    brand_salesman_id = models.ForeignKey(BrandSalesman, on_delete=models.CASCADE, null=True, default=None, db_column='brand_salesman_id')
+    brand_salesman_id = models.ForeignKey(BrandSalesman, on_delete=models.PROTECT, null=True, default=None, db_column='brand_salesman_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -297,6 +315,7 @@ class ProductBrands(models.Model):
 class PurchaseTypes(models.Model):
     purchase_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -312,6 +331,7 @@ class ShippingCompanies(models.Model):
     name = models.CharField(max_length=255,null=True,default=None)
     gst_no = models.CharField(max_length=255,null=True,default=None)
     website_url = models.CharField(max_length=255,null=True,default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -324,6 +344,7 @@ class ShippingCompanies(models.Model):
 class GstTypes(models.Model):
     gst_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255,null=True,default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -336,6 +357,7 @@ class GstTypes(models.Model):
 class SaleTypes(models.Model):
     sale_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255,null=True,default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -348,6 +370,7 @@ class SaleTypes(models.Model):
 class ShippingModes(models.Model):
     shipping_mode_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255,null=True,default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -369,6 +392,7 @@ class OrdersSalesman(models.Model):
     email = models.EmailField(max_length=255, null=True, default=None)
     phone_regex = RegexValidator(regex=r'^\+?1?\d{9,15}$', message="Phone number must be entered in the format: '+999999999'. Up to 15 digits allowed.")
     phone = models.CharField(validators=[phone_regex], max_length=20, default=None, null=True)  # validators should be a list
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -382,6 +406,7 @@ class PaymentLinkTypes(models.Model):
     payment_link_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     description = models.CharField(max_length=255, null=True,default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -395,6 +420,7 @@ class OrderStatuses(models.Model):
     order_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     status_name = models.CharField(max_length=100)
     description = models.CharField(max_length=255, null=True,default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -407,6 +433,7 @@ class OrderStatuses(models.Model):
 class OrderTypes(models.Model):
     order_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50, unique=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -419,6 +446,7 @@ class OrderTypes(models.Model):
 class TaskPriorities(models.Model):
     priority_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     priority_name = models.CharField(max_length=255)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -431,6 +459,7 @@ class TaskPriorities(models.Model):
 class ReturnOptions(models.Model):
     return_option_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -446,6 +475,7 @@ class FieldType(models.Model):
     """
     field_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     field_type_name = models.CharField(max_length=50, unique=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -462,6 +492,7 @@ class Entities(models.Model):
     """
     entity_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     entity_name = models.CharField(max_length=50, unique=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -476,6 +507,7 @@ class UserGroups(models.Model):
     group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     group_name = models.CharField(max_length=100,  unique=True)
     description = models.CharField(max_length=1024, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -488,8 +520,9 @@ class UserGroups(models.Model):
 
 class UserGroupMembers(models.Model):
     member_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    group_id = models.ForeignKey(UserGroups, on_delete=models.CASCADE, db_column='group_id')
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
+    group_id = models.ForeignKey(UserGroups, on_delete=models.PROTECT, db_column='group_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='employee_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -505,6 +538,7 @@ class UserGroupMembers(models.Model):
 class PackageUnit(models.Model):
     pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     unit_name = models.CharField(max_length=50)
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         db_table = packageunits
@@ -516,6 +550,7 @@ class PackageUnit(models.Model):
 class GPackageUnit(models.Model):
     g_pack_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     unit_name = models.CharField(max_length=50)
+    is_deleted = models.BooleanField(default=False)
 
     class Meta:
         db_table = gpackageunits
@@ -526,6 +561,7 @@ class GPackageUnit(models.Model):
 class FlowStatus(models.Model):
     flow_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     flow_status_name = models.CharField(max_length=255, unique=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

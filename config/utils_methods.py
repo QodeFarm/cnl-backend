@@ -191,6 +191,12 @@ def update_instance(self, request, *args, **kwargs):
 
 def perform_update(self, serializer):
     serializer.save()  # Add any custom logic for updating if needed
+    
+    
+def soft_delete(instance):
+    instance.is_deleted = True
+    instance.save()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 #=========================== Patterns /  Order number related =====================================================
 
