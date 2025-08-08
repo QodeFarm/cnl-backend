@@ -274,6 +274,12 @@ class TaskView(APIView):
             custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
         else:
             custom_error = []
+            
+        # Ensure mandatory data is present
+        if not task_data or not custom_fields_data:
+            logger.error(
+                "Task & CustomFields are mandatory but not provided.")
+            return build_response(0, "Task & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}  
         if custom_error:
@@ -410,9 +416,9 @@ class TaskView(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not task_data:
-            logger.error("Task data is mandatory but not provided.")
-            return build_response(0, "Task data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not task_data or not custom_field_values_data:
+            logger.error("Task data & CustomFields are mandatory but not provided.")
+            return build_response(0, "Task data & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if custom_field_values_error:

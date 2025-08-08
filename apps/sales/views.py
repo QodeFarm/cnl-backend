@@ -1188,10 +1188,12 @@ class SaleOrderViewSet(APIView):
 
         if custom_fields_data:
             custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
-
-        if not sale_order_data or not sale_order_items_data:
-            logger.error("Sale order and sale order items are mandatory but not provided.")
-            return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        else:
+            custom_error = []
+            
+        if not sale_order_data or not sale_order_items_data or not custom_fields_data:
+            logger.error("Sale order and sale order items and CustomFields are mandatory but not provided.")
+            return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if order_error: errors["sale_order"] = order_error
@@ -1286,7 +1288,7 @@ class SaleOrderViewSet(APIView):
         db_to_use = None
         try:
             # Check if sale_order_id exists in the mstcnl database
-            SaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
+            MstcnlSaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
             set_db('mstcnl')
             db_to_use = 'mstcnl'
         except ObjectDoesNotExist:
@@ -1355,9 +1357,9 @@ class SaleOrderViewSet(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not sale_order_data or not sale_order_items_data:
-            logger.error("Sale order and sale order items are mandatory but not provided.")
-            return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not sale_order_data or not sale_order_items_data or not custom_field_values_data:
+            logger.error("Sale order and sale order items & CustomFeilds are mandatory but not provided.")
+            return build_response(0, "Sale order and sale order items & CustomFeilds are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if order_error:
@@ -1443,7 +1445,7 @@ class SaleOrderViewSet(APIView):
         # Determine which DB the sale_order belongs to
         if SaleOrder.objects.using('default').filter(pk=pk).exists():
             db_alias = 'default'
-        elif SaleOrder.objects.using('mstcnl').filter(pk=pk).exists():
+        elif MstcnlSaleOrder.objects.using('mstcnl').filter(pk=pk).exists():
             db_alias = 'mstcnl'
         else:
             return build_response(0, f"sale_order_id {pk} not found in either DB", [], status.HTTP_400_BAD_REQUEST)
@@ -1685,7 +1687,7 @@ class SaleInvoiceOrdersViewSet(APIView):
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a sale invoice order and its related data (items, attachments, and shipments).
@@ -1698,32 +1700,45 @@ class SaleInvoiceOrdersViewSet(APIView):
 
             # Step 1: Try to fetch from mstcnl
             try:
-                sale_invoice_order = SaleInvoiceOrders.objects.using('mstcnl').get(pk=pk)
+                sale_invoice_order = MstcnlSaleInvoiceOrder.objects.using('mstcnl').get(pk=pk)
                 using_db = 'mstcnl'
                 logger.info(f"SaleInvoiceOrders found in 'mstcnl' database with pk: {pk}")
-            except SaleInvoiceOrders.DoesNotExist:
+
+                # Use mstcnl models
+                ItemsModel = MstcnlSaleInvoiceItem
+                AttachmentsModel = MstcnlOrderAttachment
+                ShipmentsModel = MstcnlOrderShipment
+                CustomFieldsModel = MstcnlCustomFieldValue
+
+            except MstcnlSaleInvoiceOrder.DoesNotExist:
                 # Step 2: If not found in mstcnl, try devcnl (default)
                 try:
                     sale_invoice_order = SaleInvoiceOrders.objects.using('default').get(pk=pk)
                     using_db = 'default'
                     logger.info(f"SaleInvoiceOrders found in 'devcnl' database with pk: {pk}")
+
+                    # Use default models
+                    ItemsModel = SaleInvoiceItems
+                    AttachmentsModel = OrderAttachments
+                    ShipmentsModel = OrderShipments
+                    CustomFieldsModel = CustomFieldValue
+
                 except SaleInvoiceOrders.DoesNotExist:
                     # Step 3: Not found anywhere
                     logger.error(f"SaleInvoiceOrders with pk {pk} does not exist in any database.")
                     return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
             # Retrieve the SaleInvoiceOrders instance
-            #sale_invoice_order = get_object_or_404(SaleInvoiceOrders, pk=pk)
             sale_invoice_order_serializer = SaleInvoiceOrdersSerializer(sale_invoice_order)
 
             # Retrieve related data
-            items_data = self.get_related_data(SaleInvoiceItems, SaleInvoiceItemsSerializer, 'sale_invoice_id', pk, using_db)
-            attachments_data = self.get_related_data(OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk, using_db)
-            shipments_data = self.get_related_data(OrderShipments, OrderShipmentsSerializer, 'order_id', pk, using_db)
-            shipments_data = shipments_data[0] if len(shipments_data)>0 else {}
-            
+            items_data = self.get_related_data(ItemsModel, SaleInvoiceItemsSerializer, 'sale_invoice_id', pk, using_db)
+            attachments_data = self.get_related_data(AttachmentsModel, OrderAttachmentsSerializer, 'order_id', pk, using_db)
+            shipments_data = self.get_related_data(ShipmentsModel, OrderShipmentsSerializer, 'order_id', pk, using_db)
+            shipments_data = shipments_data[0] if len(shipments_data) > 0 else {}
+
             # Retrieve custom field values
-            custom_field_values_data = self.get_related_data(CustomFieldValue, CustomFieldValueSerializer, 'custom_id', pk, using_db)
+            custom_field_values_data = self.get_related_data(CustomFieldsModel, CustomFieldValueSerializer, 'custom_id', pk, using_db)
 
             # Customizing the response data
             custom_data = {
@@ -1743,6 +1758,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             logger.exception(
                 "An error occurred while retrieving sale invoice order with pk %s: %s", pk, str(e))
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     def get_related_data(self, model, serializer_class, filter_field, filter_value, using_db='default'):
         """
@@ -1892,9 +1908,9 @@ class SaleInvoiceOrdersViewSet(APIView):
         if custom_fields_data:
             custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
 
-        if not sale_invoice_data or not sale_invoice_items_data:
-            logger.error("Sale invoice and items are mandatory but not provided.")
-            return build_response(0, "Sale invoice and items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not sale_invoice_data or not sale_invoice_items_data or not custom_fields_data:
+            logger.error("Sale invoice and items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Sale invoice and items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if invoice_error: errors["sale_invoice_order"] = invoice_error
@@ -2066,21 +2082,15 @@ class SaleInvoiceOrdersViewSet(APIView):
         db_to_use = None
         try:
             # Check if sale_invoice_id exists in the mstcnl database
-            SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
+            MstcnlSaleInvoiceOrder.objects.using('mstcnl').get(sale_invoice_id=pk)
             set_db('mstcnl')
             db_to_use = 'mstcnl'
-            #print("-----------db-name----------")
-            #print("db_to_use : ", db_to_use)
-            #print("-----------db-name----------")
         except ObjectDoesNotExist:
             try:
                 # Check if sale_invoice_id exists in the default (devcnl) database
                 SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
                 set_db('default')
                 db_to_use = 'default'
-                #print("-----------db-name----------")
-                #print("db_to_use : ", db_to_use)
-                #print("-----------db-name----------")
             except ObjectDoesNotExist:
                 logger.error(f"Sale Invoice Order with id {pk} not found in any database.")
                 return build_response(0, f"Sale Invoice order with id {pk} not found", [], status.HTTP_404_NOT_FOUND)
@@ -2130,9 +2140,9 @@ class SaleInvoiceOrdersViewSet(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not sale_invoice_order_data or not sale_invoice_items_data:
-            logger.error("Sale invoice order and sale invoice items are mandatory but not provided.")
-            return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not sale_invoice_order_data or not sale_invoice_items_data or not custom_field_values_data:
+            logger.error("Sale invoice order and sale invoice items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         # Collect all errors
         errors = {}
@@ -2443,10 +2453,10 @@ class SaleReturnOrdersViewSet(APIView):
             custom_error = []
 
         # Ensure mandatory data is present
-        if not sale_return_order_data or not sale_return_items_data:
+        if not sale_return_order_data or not sale_return_items_data or not custom_fields_data:
             logger.error(
-                "Sale return order and sale return items are mandatory but not provided.")
-            return build_response(0, "Sale return order and sale return items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+                "Sale return order and sale return items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Sale return order and sale return items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if order_error:
@@ -2584,10 +2594,10 @@ class SaleReturnOrdersViewSet(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not sale_return_order_data or not sale_return_items_data:
+        if not sale_return_order_data or not sale_return_items_data or not custom_field_values_data:
             logger.error(
-                "Sale return order and sale return items are mandatory but not provided.")
-            return build_response(0, "Sale return order and sale return items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+                "Sale return order and sale return items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Sale return order and sale return items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
         errors = {}
         if order_error:
