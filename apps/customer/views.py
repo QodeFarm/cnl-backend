@@ -701,7 +701,7 @@ class CustomerCreateViews(APIView):
             custom_fields_error = []
 
         # Check for mandatory fields
-        if not customer_data or not addresses_data:
+        if not customer_data or not addresses_data or not custom_fields_data:
             logger.error("Customers, Customer Addresses data are mandatory but not provided.")
             return build_response(0, "Customers, Customer Addresses data are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
