@@ -26,6 +26,7 @@ class ProductGroups(models.Model):
     group_name = models.CharField(max_length=255)
     description = models.TextField(null=True, default=None)
     picture = models.ImageField(max_length=255, null=True, default=None, upload_to=product_groups_picture)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -63,6 +64,7 @@ class ProductCategories(models.Model):
     category_name = models.CharField(max_length=255)
     picture = models.ImageField(max_length=255,  null=True, default=None, upload_to=product_categories_picture)
     code = models.CharField(max_length=50, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -87,7 +89,8 @@ class ProductStockUnits(models.Model):
     stock_unit_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     stock_unit_name = models.CharField(max_length=255)
     description = models.TextField(null=True, default=None)
-    quantity_code_id = models.ForeignKey(ProductUniqueQuantityCodes, on_delete=models.CASCADE, null=True, default=None, db_column = 'quantity_code_id')
+    quantity_code_id = models.ForeignKey(ProductUniqueQuantityCodes, on_delete=models.PROTECT, null=True, default=None, db_column = 'quantity_code_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -109,6 +112,7 @@ class ProductGstClassifications(models.Model):
     code = models.CharField(max_length=50, null=True, default=None)
     hsn_or_sac_code = models.CharField(max_length=50, null=True, default=None)
     hsn_description = models.TextField(null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -135,6 +139,7 @@ class ProductSalesGl(models.Model):
     address = models.CharField(max_length=255, null=True, default=None)
     pan = models.CharField(max_length=50, null=True, default=None)
     employee = models.BooleanField(null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -160,6 +165,7 @@ class ProductPurchaseGl(models.Model):
     address = models.CharField(max_length=255, null=True, default=None)
     pan = models.CharField(max_length=50, null=True, default=None)
     employee = models.BooleanField(null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -185,22 +191,22 @@ def products_picture(instance, filename):
 class Products(OrderNumberMixin):
     product_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    product_mode_id = models.ForeignKey(ItemMaster, on_delete=models.CASCADE, null=True, default=None, db_column='product_mode_id')
-    product_group_id = models.ForeignKey(ProductGroups, null=True,on_delete=models.CASCADE, db_column = 'product_group_id')
-    category_id = models.ForeignKey(ProductCategories, on_delete=models.CASCADE, null=True, default=None, db_column = 'category_id')
-    type_id = models.ForeignKey(ProductTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'type_id')
+    product_mode_id = models.ForeignKey(ItemMaster, on_delete=models.PROTECT, null=True, default=None, db_column='product_mode_id')
+    product_group_id = models.ForeignKey(ProductGroups, null=True,on_delete=models.PROTECT, db_column = 'product_group_id')
+    category_id = models.ForeignKey(ProductCategories, on_delete=models.PROTECT, null=True, default=None, db_column = 'category_id')
+    type_id = models.ForeignKey(ProductTypes, on_delete=models.PROTECT, null=True, default=None, db_column = 'type_id')
     code = models.CharField(max_length=50,null=True,)
     order_no_prefix = 'PRD'
     order_no_field = 'code'
     barcode = models.CharField(max_length=50, null=True, default=None)
-    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.CASCADE, null=True, default=None, db_column = 'unit_options_id')
+    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, null=True, default=None, db_column = 'unit_options_id')
     gst_input = models.IntegerField(null=True, default=None)
-    stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, null=True, db_column = 'stock_unit_id')
+    stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.PROTECT, null=True, db_column = 'stock_unit_id')
     print_barcode = models.BooleanField(null=True, default=None)
-    gst_classification_id = models.ForeignKey(ProductGstClassifications, on_delete=models.CASCADE, null=True, default=None, db_column = 'gst_classification_id')
+    gst_classification_id = models.ForeignKey(ProductGstClassifications, on_delete=models.PROTECT, null=True, default=None, db_column = 'gst_classification_id')
     picture = models.JSONField(null=True, default=None)
     sales_description = models.TextField(null=True, default=None)
-    sales_gl_id = models.ForeignKey(ProductSalesGl,null=True, on_delete=models.CASCADE, db_column = 'sales_gl_id')
+    sales_gl_id = models.ForeignKey(ProductSalesGl,null=True, on_delete=models.PROTECT, db_column = 'sales_gl_id')
     mrp = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     minimum_price = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     sales_rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
@@ -210,17 +216,17 @@ class Products(OrderNumberMixin):
     discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     dis_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     purchase_description = models.TextField(null=True, default=None)
-    purchase_gl_id = models.ForeignKey(ProductPurchaseGl, on_delete=models.CASCADE,null=True, db_column = 'purchase_gl_id')
+    purchase_gl_id = models.ForeignKey(ProductPurchaseGl, on_delete=models.PROTECT,null=True, db_column = 'purchase_gl_id')
     purchase_rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     purchase_rate_factor = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     purchase_discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    item_type_id = models.ForeignKey(ProductItemType, on_delete=models.CASCADE, null=True, default=None, db_column = 'item_type_id')
+    item_type_id = models.ForeignKey(ProductItemType, on_delete=models.PROTECT, null=True, default=None, db_column = 'item_type_id')
     minimum_level = models.IntegerField(null=True, default=None)
     maximum_level = models.IntegerField(null=True, default=None)
     salt_composition = models.TextField(null=True, default=None)
-    drug_type_id = models.ForeignKey(ProductDrugTypes, on_delete=models.CASCADE, null=True, default=None, db_column = 'drug_type_id')
+    drug_type_id = models.ForeignKey(ProductDrugTypes, on_delete=models.PROTECT, null=True, default=None, db_column = 'drug_type_id')
     weighscale_mapping_code = models.CharField(max_length=50, null=True, default=None)
-    brand_id = models.ForeignKey(ProductBrands, on_delete=models.CASCADE, null=True, default=None, db_column = 'brand_id')
+    brand_id = models.ForeignKey(ProductBrands, on_delete=models.PROTECT, null=True, default=None, db_column = 'brand_id')
     purchase_warranty_months = models.IntegerField(null=True, default=None)
     sales_warranty_months = models.IntegerField(null=True, default=None)
     STATUS_CHOICES = [
@@ -231,11 +237,12 @@ class Products(OrderNumberMixin):
     print_name = models.CharField(max_length=255)
     hsn_code= models.CharField(max_length=15, null=True, default=None)
     balance = models.IntegerField(default=0)
-    pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, null=True, default=None, db_column = 'pack_unit_id', related_name='pack_unit')
-    g_pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.CASCADE, null=True, default=None, db_column = 'g_pack_unit_id', related_name='g_pack_unit')
+    pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.PROTECT, null=True, default=None, db_column = 'pack_unit_id', related_name='pack_unit')
+    g_pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.PROTECT, null=True, default=None, db_column = 'g_pack_unit_id', related_name='g_pack_unit')
     pack_vs_stock = models.IntegerField(default=0)
     g_pack_vs_pack = models.IntegerField(default=0)
     packet_barcode = models.CharField(max_length=50, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -280,6 +287,7 @@ class Size(models.Model):
     width = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     size_unit = models.CharField(max_length=50, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -293,6 +301,7 @@ class Size(models.Model):
 class Color(models.Model):
     color_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     color_name = models.CharField(max_length=50, unique=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)    
 
@@ -304,9 +313,9 @@ class Color(models.Model):
 
 class ProductVariation(models.Model):
     product_variation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column = 'product_id', related_name='locations')
-    size_id = models.ForeignKey(Size, on_delete=models.CASCADE, null=True, default=None, db_column='size_id')
-    color_id = models.ForeignKey(Color, on_delete=models.CASCADE, null=True, default=None, db_column='color_id')
+    product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column = 'product_id', related_name='locations')
+    size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, default=None, db_column='size_id')
+    color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, default=None, db_column='color_id')
     sku = models.CharField(max_length=100, unique=True,null=True,)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True,)
     quantity = models.IntegerField(default=0,null=True,)
@@ -321,8 +330,8 @@ class ProductVariation(models.Model):
 
 class ProductItemBalance(models.Model):
     product_item_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    product_id = models.ForeignKey(Products, on_delete=models.CASCADE, db_column='product_id')
-    warehouse_location_id = models.ForeignKey(WarehouseLocations, null=True,on_delete=models.CASCADE, db_column='warehouse_location_id')
+    product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
+    warehouse_location_id = models.ForeignKey(WarehouseLocations, null=True,on_delete=models.PROTECT, db_column='warehouse_location_id')
     quantity = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

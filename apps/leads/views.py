@@ -8,7 +8,7 @@ from apps.leads.filters import InteractionTypesFilter, LeadStatusesFilter, Leads
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from .serializers import *
-from config.utils_methods import build_response, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data
+from config.utils_methods import build_response, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data
 from rest_framework.views import APIView
 from datetime import datetime
 from django_filters.rest_framework import DjangoFilterBackend 
@@ -35,6 +35,10 @@ class LeadStatusesView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class InteractionTypesView(viewsets.ModelViewSet):
     queryset = InteractionTypes.objects.all().order_by('-created_at')	
@@ -51,6 +55,10 @@ class InteractionTypesView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class LeadsView(viewsets.ModelViewSet):
     queryset = Leads.objects.all().order_by('-created_at')	
@@ -67,6 +75,10 @@ class LeadsView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class LeadInteractionsView(viewsets.ModelViewSet):
     queryset = LeadInteractions.objects.all().order_by('-created_at')	

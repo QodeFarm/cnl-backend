@@ -7,6 +7,7 @@ from django.utils.timezone import now
 class JobTypes(models.Model):
     job_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job_type_name = models.CharField(max_length=55)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)	
 
@@ -20,6 +21,7 @@ class Designations(models.Model):
     designation_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     designation_name = models.CharField(max_length=55)
     responsibilities = models.CharField(max_length=255, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -32,6 +34,7 @@ class Designations(models.Model):
 class JobCodes(models.Model):
     job_code_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job_code = models.CharField(max_length=55)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -44,6 +47,7 @@ class JobCodes(models.Model):
 class Departments(models.Model):
     department_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     department_name = models.CharField(max_length=55)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -58,6 +62,7 @@ class Shifts(models.Model):
     shift_name = models.CharField(max_length=55)
     start_time = models.DateTimeField()
     end_time = models.DateTimeField()
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -85,12 +90,13 @@ class Employees(models.Model):
     nationality = models.CharField(max_length=20, null=True, default=None)
     emergency_contact = models.CharField(max_length=20, null=True, default=None)
     emergency_contact_relationship = models.CharField(max_length=55, null=True, default=None)
-    job_type_id = models.ForeignKey(JobTypes, on_delete=models.CASCADE, null=True, db_column='job_type_id')
-    designation_id = models.ForeignKey(Designations, on_delete=models.CASCADE, db_column='designation_id', null=True, default=None)
-    job_code_id = models.ForeignKey(JobCodes, on_delete=models.CASCADE, db_column='job_code_id', null=True, default=None)
-    department_id = models.ForeignKey(Departments, on_delete=models.CASCADE, db_column='department_id', null=True, default=None)
-    shift_id = models.ForeignKey(Shifts, on_delete=models.CASCADE, db_column='shift_id', null=True, default=None)
-    manager_id = models.ForeignKey('self', on_delete=models.CASCADE, db_column='manager_id', null=True, default=None)
+    job_type_id = models.ForeignKey(JobTypes, on_delete=models.PROTECT, null=True, db_column='job_type_id')
+    designation_id = models.ForeignKey(Designations, on_delete=models.PROTECT, db_column='designation_id', null=True, default=None)
+    job_code_id = models.ForeignKey(JobCodes, on_delete=models.PROTECT, db_column='job_code_id', null=True, default=None)
+    department_id = models.ForeignKey(Departments, on_delete=models.PROTECT, db_column='department_id', null=True, default=None)
+    shift_id = models.ForeignKey(Shifts, on_delete=models.PROTECT, db_column='shift_id', null=True, default=None)
+    manager_id = models.ForeignKey('self', on_delete=models.PROTECT, db_column='manager_id', null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -111,7 +117,8 @@ class EmployeeSalary(models.Model):
     salary_currency = models.CharField(max_length=45)
     salary_start_date = models.DateField()
     salary_end_date = models.DateField()
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, null=True, default =None,db_column = 'employee_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, null=True, default =None,db_column = 'employee_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -124,6 +131,7 @@ class EmployeeSalary(models.Model):
 class SalaryComponents(models.Model):
     component_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     component_name = models.CharField(max_length=100)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -135,9 +143,9 @@ class SalaryComponents(models.Model):
         
 class EmployeeSalaryComponents(models.Model):
     employee_component_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    component_id = models.ForeignKey(SalaryComponents, on_delete=models.CASCADE, db_column = 'component_id')
+    component_id = models.ForeignKey(SalaryComponents, on_delete=models.PROTECT, db_column = 'component_id')
     component_amount = models.FloatField(null=True, default =None)
-    salary_id = models.ForeignKey(EmployeeSalary, on_delete=models.CASCADE, db_column ='salary_id')
+    salary_id = models.ForeignKey(EmployeeSalary, on_delete=models.PROTECT, db_column ='salary_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -155,6 +163,7 @@ class LeaveTypes(models.Model):
     leave_type_name = models.CharField(max_length=55)
     description = models.CharField(max_length=255)
     max_days_allowed = models.IntegerField()
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -169,8 +178,9 @@ class EmployeeLeaves(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     comments = models.CharField(max_length=255, null=True, blank=True)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
-    leave_type_id = models.ForeignKey(LeaveTypes, on_delete=models.CASCADE, db_column='leave_type_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='employee_id')
+    leave_type_id = models.ForeignKey(LeaveTypes, on_delete=models.PROTECT, db_column='leave_type_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -183,9 +193,9 @@ class EmployeeLeaves(models.Model):
 class LeaveApprovals(models.Model):
     approval_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     approval_date = models.DateField(null=True, default =None)
-    status_id = models.ForeignKey('masters.Statuses', on_delete=models.CASCADE, db_column='status_id')
-    leave_id = models.ForeignKey(EmployeeLeaves, on_delete=models.CASCADE, db_column='leave_id')
-    approver_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='approver_id')
+    status_id = models.ForeignKey('masters.Statuses', on_delete=models.PROTECT, db_column='status_id')
+    leave_id = models.ForeignKey(EmployeeLeaves, on_delete=models.PROTECT, db_column='leave_id')
+    approver_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='approver_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -200,8 +210,8 @@ def get_current_year():
 
 class EmployeeLeaveBalance(models.Model):
     balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='employee_id')
-    leave_type_id = models.ForeignKey(LeaveTypes, on_delete=models.CASCADE, db_column='leave_type_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='employee_id')
+    leave_type_id = models.ForeignKey(LeaveTypes, on_delete=models.PROTECT, db_column='leave_type_id')
     leave_balance = models.DecimalField(max_digits=10, decimal_places=2)
     year = models.CharField(max_length=45, default=get_current_year)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -218,7 +228,7 @@ class EmployeeLeaveBalance(models.Model):
 
 class EmployeeAttendance(models.Model):
     employee_attendance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE,db_column = 'employee_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT,db_column = 'employee_id')
     attendance_date = models.DateField()
     absent = models.BooleanField(null=True, default=None)
     LEAVE_DURATION_CHOICES = [
@@ -238,7 +248,7 @@ class EmployeeAttendance(models.Model):
         
 class Swipes(models.Model):
     swipe_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column = 'employee_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column = 'employee_id')
     swipe_time = models.DateTimeField(null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -252,7 +262,7 @@ class Swipes(models.Model):
         
 class Biometric(models.Model):
     biometric_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column = 'employee_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column = 'employee_id')
     biometric_entry_id = models.IntegerField(null=True, default=None)
     template_data = models.TextField()
     entry_stamp = models.DateTimeField(auto_now_add=True)

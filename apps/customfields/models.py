@@ -12,10 +12,11 @@ class CustomField(models.Model):
     """
     custom_field_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     field_name = models.CharField(max_length=255)
-    field_type_id = models.ForeignKey(FieldType, on_delete=models.CASCADE, db_column='field_type_id')
-    entity_id = models.ForeignKey(Entities, on_delete=models.CASCADE, db_column='entity_id')
+    field_type_id = models.ForeignKey(FieldType, on_delete=models.PROTECT, db_column='field_type_id')
+    entity_id = models.ForeignKey(Entities, on_delete=models.PROTECT, db_column='entity_id')
     is_required = models.BooleanField(default=False)
     validation_rules = models.JSONField(null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -34,7 +35,7 @@ class CustomFieldOption(models.Model):
     Stores the options for fields of type Select or MultiSelect.
     """
     option_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    custom_field_id = models.ForeignKey(CustomField, on_delete=models.CASCADE, db_column='custom_field_id')
+    custom_field_id = models.ForeignKey(CustomField, on_delete=models.PROTECT, db_column='custom_field_id')
     option_value = models.CharField(max_length=255, null=True)
 
     def __str__(self):
@@ -48,11 +49,9 @@ class CustomFieldValue(models.Model):
     Stores the values assigned to custom fields for various entities.
     """
     custom_field_value_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    custom_field_id = models.ForeignKey(CustomField, on_delete=models.CASCADE, db_column='custom_field_id')
+    custom_field_id = models.ForeignKey(CustomField, on_delete=models.PROTECT, db_column='custom_field_id')
     custom_id = models.CharField(max_length=255)
-    entity_id = models.ForeignKey(Entities, on_delete=models.CASCADE, db_column='entity_id')  # UUID of the entity (e.g., customer, vendor, etc.)
-    # entity_data_id = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, related_name="custom_field_values", db_column='entity_data_id')  # Correct naming
-    # vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, db_column='vendor_id')  # Correct naming
+    entity_id = models.ForeignKey(Entities, on_delete=models.PROTECT, db_column='entity_id')  # UUID of the entity (e.g., customer, vendor, etc.)
     field_value = models.CharField(max_length=255)
     field_value_type = models.CharField(max_length=50, null=True)  # e.g., 'string', 'number', 'date'
     is_deleted = models.BooleanField(default=False)

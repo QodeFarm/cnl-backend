@@ -11,7 +11,7 @@ from django.db import transaction
 from rest_framework import viewsets, status
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
-from config.utils_methods import build_response, generic_data_creation, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
+from config.utils_methods import build_response, generic_data_creation, list_all_objects, soft_delete, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
@@ -47,6 +47,10 @@ class BankAccountViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class ChartOfAccountsViewSet(viewsets.ModelViewSet):
     queryset = ChartOfAccounts.objects.all().order_by('-created_at')
     serializer_class = ChartOfAccountsSerializer
@@ -63,6 +67,10 @@ class ChartOfAccountsViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class JournalEntryViewSet(viewsets.ModelViewSet):
     queryset = JournalEntry.objects.all().order_by('-created_at')
     serializer_class = JournalEntrySerializer
@@ -78,7 +86,7 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-    
+
 class JournalEntryLinesViewSet(viewsets.ModelViewSet):
     queryset = JournalEntryLines.objects.all().order_by('-created_at')
     serializer_class = JournalEntryLinesSerializer
@@ -175,6 +183,10 @@ class TaxConfigurationViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class BudgetViewSet(viewsets.ModelViewSet):
     queryset = Budget.objects.all().order_by('-created_at')
@@ -191,6 +203,10 @@ class BudgetViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ExpenseClaimViewSet(viewsets.ModelViewSet):
     queryset = ExpenseClaim.objects.all().order_by('-created_at')
@@ -207,6 +223,10 @@ class ExpenseClaimViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
     
  
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
@@ -226,6 +246,10 @@ class ExpenseCategoryViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class ExpenseItemViewSet(viewsets.ModelViewSet):
     queryset = ExpenseItem.objects.all().order_by('-created_at')
@@ -812,6 +836,26 @@ class JournalListCreateAPIView(APIView):
             serializer.save()
             return build_response(1, "Records updated successfully", serializer.data, status.HTTP_201_CREATED)
         return build_response(1, "Records Not Created", serializer.errors, status.HTTP_400_BAD_REQUEST) 
+    
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Soft deletes a journal entry by setting is_deleted=True.
+        """
+        try:
+            instance = Journal.objects.get(pk=pk)
+            instance.is_deleted = True
+            instance.save()
+            logger.info(f"Journal with ID {pk} soft deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+        except Journal.DoesNotExist:
+            logger.warning(f"Journal with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error soft deleting Journal with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class JournalRetrieveUpdateDeleteAPIView(APIView):

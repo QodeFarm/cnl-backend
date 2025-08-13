@@ -21,6 +21,7 @@ class BankAccount(models.Model):
         null=False
     )
     balance = models.DecimalField(max_digits=15, decimal_places=2, null=False)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -41,7 +42,8 @@ class ChartOfAccounts(models.Model):
     )
     parent_account_id = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, default=None, related_name='sub_accounts', db_column='parent_account_id')
     is_active = models.BooleanField(default=True)
-    bank_account_id = models.ForeignKey(BankAccount, on_delete=models.SET_NULL, null=True, default=None, related_name='linked_accounts', db_column='bank_account_id')
+    bank_account_id = models.ForeignKey(BankAccount, on_delete=models.PROTECT, null=True, default=None, related_name='linked_accounts', db_column='bank_account_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -67,13 +69,13 @@ class JournalEntry(models.Model):
 
 class JournalEntryLines(models.Model):
     journal_entry_line_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, null=True, related_name='journal_entry_lines', db_column='account_id')
+    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.PROTECT, null=True, related_name='journal_entry_lines', db_column='account_id')
     voucher_no = models.CharField(max_length=20 ,default='')
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     description = models.CharField(max_length=1024, default=None, null=True)
-    customer_id  = models.ForeignKey(Customer, on_delete=models.CASCADE, null=True, db_column='customer_id')
-    vendor_id = models.ForeignKey(Vendor, on_delete=models.CASCADE, null=True, db_column='vendor_id')
+    customer_id  = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, db_column='customer_id')
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, db_column='vendor_id')
     balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -141,6 +143,7 @@ class TaxConfiguration(models.Model):
     ]
     tax_type = models.CharField(max_length=10, choices=TAX_TYPE_CHOICES, null=False)
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -152,10 +155,11 @@ class TaxConfiguration(models.Model):
 
 class Budget(models.Model):
     budget_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='budgets', db_column='account_id')
+    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.PROTECT, related_name='budgets', db_column='account_id')
     fiscal_year = models.PositiveIntegerField(null=False)
     allocated_amount = models.DecimalField(max_digits=15, decimal_places=2, null=False)
     spent_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -170,7 +174,7 @@ class Budget(models.Model):
 
 class ExpenseClaim(models.Model):
     expense_claim_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_id = models.ForeignKey(Employees, on_delete=models.CASCADE, related_name='expense_claims', db_column='employee_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, related_name='expense_claims', db_column='employee_id')
     claim_date = models.DateField(null=False)
     description = models.CharField(max_length=1024, default=None, null=True)
     total_amount = models.DecimalField(max_digits=15, decimal_places=2, null=False)
@@ -183,6 +187,7 @@ class ExpenseClaim(models.Model):
         (REJECTED, 'Rejected'),
     ]
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -223,6 +228,7 @@ class Journal(models.Model):
     description = models.CharField(max_length=255, blank=True, null=True)
     total_debit = models.DecimalField(max_digits=18, decimal_places=2)
     total_credit = models.DecimalField(max_digits=18, decimal_places=2)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -235,8 +241,8 @@ class JournalDetail(models.Model):
     journal_detail_id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     debit = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
     credit = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
-    journal_id = models.ForeignKey(Journal, related_name="journal_details", on_delete=models.CASCADE, db_column='journal_id')
-    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.CASCADE,  db_column='ledger_account_id')
+    journal_id = models.ForeignKey(Journal, related_name="journal_details", on_delete=models.PROTECT, db_column='journal_id')
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT,  db_column='ledger_account_id')
 
     class Meta:
         db_table = journaldetail
@@ -249,8 +255,9 @@ class ExpenseCategory(models.Model):
     category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     category_name = models.CharField(max_length=100, null=False)
     description = models.CharField(max_length=255, default=None, null=True)
-    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, related_name='expense_categories', db_column='account_id', null=True)
+    account_id = models.ForeignKey(ChartOfAccounts, on_delete=models.PROTECT, related_name='expense_categories', db_column='account_id', null=True)
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -268,19 +275,19 @@ class ExpenseItem(models.Model):
     receipt_image = models.ImageField(upload_to='expenses/receipts/', null=True, blank=True)
     
     # Link to category
-    category_id = models.ForeignKey(ExpenseCategory, on_delete=models.SET_NULL, related_name='expense_items', db_column='category_id', null=True)
+    category_id = models.ForeignKey(ExpenseCategory, on_delete=models.PROTECT, related_name='expense_items', db_column='category_id', null=True)
     
     # If expense is linked to a bank account
-    bank_account_id = models.ForeignKey(BankAccount, on_delete=models.SET_NULL, null=True, related_name='expenses', db_column='bank_account_id')
+    bank_account_id = models.ForeignKey(BankAccount, on_delete=models.PROTECT, null=True, related_name='expenses', db_column='bank_account_id')
     
     # If expense is linked to a vendor
-    vendor_id = models.ForeignKey(Vendor, on_delete=models.SET_NULL, null=True, db_column='vendor_id')
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, db_column='vendor_id')
     
     # If expense is made by an employee
-    employee_id = models.ForeignKey(Employees, on_delete=models.SET_NULL, null=True, db_column='employee_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, null=True, db_column='employee_id')
     
     # If expense is part of a claim
-    expense_claim_id = models.ForeignKey(ExpenseClaim, on_delete=models.SET_NULL, null=True, related_name='expense_items', db_column='expense_claim_id')
+    expense_claim_id = models.ForeignKey(ExpenseClaim, on_delete=models.PROTECT, null=True, related_name='expense_items', db_column='expense_claim_id')
     
     # Expense status
     PAID = 'Paid'
@@ -308,12 +315,12 @@ class ExpenseItem(models.Model):
     reference_number = models.CharField(max_length=100, default=None, null=True)
     
     # Budget tracking
-    budget_id = models.ForeignKey(Budget, on_delete=models.SET_NULL, null=True, db_column='budget_id')
+    budget_id = models.ForeignKey(Budget, on_delete=models.PROTECT, null=True, db_column='budget_id')
     
     # For tax calculations
     tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     is_taxable = models.BooleanField(default=True)
-    tax_id = models.ForeignKey(TaxConfiguration, on_delete=models.SET_NULL, null=True, db_column='tax_id')
+    tax_id = models.ForeignKey(TaxConfiguration, on_delete=models.PROTECT, null=True, db_column='tax_id')
     
     # Recurring expense
     is_recurring = models.BooleanField(default=False)

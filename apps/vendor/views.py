@@ -14,7 +14,7 @@ from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorF
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer
-from config.utils_methods import delete_multi_instance, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
+from config.utils_methods import delete_multi_instance, soft_delete, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
@@ -83,6 +83,10 @@ class VendorCategoryView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class VendorPaymentTermsView(viewsets.ModelViewSet):
     queryset = VendorPaymentTerms.objects.all().order_by('-created_at')	
@@ -98,7 +102,11 @@ class VendorPaymentTermsView(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)    
+        return update_instance(self, request, *args, **kwargs)  
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)  
 
 class VendorAgentView(viewsets.ModelViewSet):
     queryset = VendorAgent.objects.all().order_by('-created_at')	
@@ -115,6 +123,10 @@ class VendorAgentView(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)  
 
 class VendorAttachmentView(viewsets.ModelViewSet):
     queryset = VendorAttachment.objects.all()
@@ -615,7 +627,10 @@ class VendorViewSet(APIView):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main vendor instance
-            instance.delete()
+            # instance.delete()
+            # Soft delete the main Vendor
+            instance.is_deleted = True
+            instance.save()
 
             logger.info(f"Vendor with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)

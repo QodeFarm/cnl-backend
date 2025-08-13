@@ -6,7 +6,7 @@ from django.http import  Http404
 from django.shortcuts import get_object_or_404
 from .models import JobTypes, Designations, JobCodes, Departments, Shifts, Employees, EmployeeSalary, SalaryComponents, EmployeeSalaryComponents, LeaveTypes, EmployeeLeaves, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, Swipes, Biometric
 from .serializers import JobTypesSerializer, DesignationsSerializer, JobCodesSerializer, DepartmentsSerializer, ShiftsSerializer, EmployeesSerializer, EmployeeSalarySerializer, SalaryComponentsSerializer, EmployeeSalaryComponentsSerializer, LeavesTypesSerializer, EmployeeLeavesSerializer, LeaveApprovalsSerializer, EmployeeLeaveBalanceSerializer, EmployeeAttendanceSerializer, SwipesSerializer, BiometricSerializer
-from config.utils_methods import build_response, generic_data_creation, get_object_or_none, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
+from config.utils_methods import build_response, generic_data_creation, get_object_or_none, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, soft_delete, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
@@ -39,6 +39,11 @@ class JobTypesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+
 		
 class DesignationsViewSet(viewsets.ModelViewSet):
     queryset = Designations.objects.all().order_by('-created_at')
@@ -55,6 +60,10 @@ class DesignationsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class JobCodesViewSet(viewsets.ModelViewSet):
     queryset = JobCodes.objects.all().order_by('-created_at')
@@ -71,6 +80,10 @@ class JobCodesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs) 
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class DepartmentsViewSet(viewsets.ModelViewSet):
     queryset = Departments.objects.all().order_by('-created_at')
@@ -87,6 +100,10 @@ class DepartmentsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)  
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class ShiftsViewSet(viewsets.ModelViewSet):
     queryset = Shifts.objects.all().order_by('-created_at')
@@ -103,6 +120,10 @@ class ShiftsViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class EmployeesViewSet(viewsets.ModelViewSet):
     queryset = Employees.objects.all().order_by('-created_at')	
@@ -119,6 +140,10 @@ class EmployeesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 		
 class EmployeeSalaryViewSet(viewsets.ModelViewSet):
     queryset = EmployeeSalary.objects.all().order_by('-created_at')	
@@ -134,7 +159,11 @@ class EmployeeSalaryViewSet(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)		
+        return update_instance(self, request, *args, **kwargs)	
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)	
 
 class SalaryComponentsViewSet(viewsets.ModelViewSet):
     queryset = SalaryComponents.objects.all().order_by('-created_at')	
@@ -150,7 +179,11 @@ class SalaryComponentsViewSet(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)		
+        return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)		
 
 class EmployeeSalaryComponentsViewSet(viewsets.ModelViewSet):
     queryset = EmployeeSalaryComponents.objects.all().order_by('-created_at')	
@@ -186,6 +219,10 @@ class LeaveTypesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class EmployeeLeavesViewSet(viewsets.ModelViewSet):
     queryset = EmployeeLeaves.objects.all().order_by('-created_at')	
     serializer_class = EmployeeLeavesSerializer
@@ -201,6 +238,10 @@ class EmployeeLeavesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
     
 class LeaveApprovalsViewSet(viewsets.ModelViewSet):
     queryset = LeaveApprovals.objects.all().order_by('-created_at')	

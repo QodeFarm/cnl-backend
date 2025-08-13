@@ -7,6 +7,7 @@ from config.utils_variables import notificationfrequenciestable, notificationmet
 class NotificationFrequencies(models.Model):
     frequency_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     frequency_name = models.CharField(max_length=50, unique=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -20,6 +21,7 @@ class NotificationFrequencies(models.Model):
 class NotificationMethods(models.Model):
     method_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     method_name = models.CharField(max_length=50, unique=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -33,6 +35,7 @@ class NotificationMethods(models.Model):
 class ReminderTypes(models.Model):
     reminder_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     type_name = models.CharField(max_length=100)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -45,7 +48,7 @@ class ReminderTypes(models.Model):
 
 class Reminders(models.Model):
     reminder_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    reminder_type_id = models.ForeignKey('ReminderTypes', on_delete=models.CASCADE, db_column='reminder_type_id')
+    reminder_type_id = models.ForeignKey('ReminderTypes', on_delete=models.PROTECT, db_column='reminder_type_id')
     subject = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     reminder_date = models.DateTimeField()
@@ -57,6 +60,7 @@ class Reminders(models.Model):
         ('Yearly', 'Yearly'),
     ]
     recurring_frequency = models.CharField(max_length=7,choices=RECURRING_FREQUENCY_CHOICES,blank=True,null=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -69,10 +73,10 @@ class Reminders(models.Model):
 
 class ReminderRecipients(models.Model):
     recipient_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    reminder_id = models.ForeignKey('Reminders', on_delete=models.CASCADE, db_column='reminder_id')
-    recipient_user_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='recipient_user_id')
+    reminder_id = models.ForeignKey('Reminders', on_delete=models.PROTECT, db_column='reminder_id')
+    recipient_user_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='recipient_user_id')
     recipient_email = models.CharField(max_length=255, null=True, default=None)
-    notification_method_id = models.ForeignKey('NotificationMethods', on_delete=models.CASCADE, db_column='notification_method_id')
+    notification_method_id = models.ForeignKey('NotificationMethods', on_delete=models.PROTECT, db_column='notification_method_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -85,9 +89,9 @@ class ReminderRecipients(models.Model):
 
 class ReminderSettings(models.Model):
     setting_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user_id = models.ForeignKey(Employees, on_delete=models.CASCADE, db_column='user_id')
-    notification_frequency_id = models.ForeignKey('NotificationFrequencies', on_delete=models.CASCADE, db_column='notification_frequency_id')
-    notification_method_id = models.ForeignKey('NotificationMethods', on_delete=models.CASCADE, db_column='notification_method_id')
+    user_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='user_id')
+    notification_frequency_id = models.ForeignKey('NotificationFrequencies', on_delete=models.PROTECT, db_column='notification_frequency_id')
+    notification_method_id = models.ForeignKey('NotificationMethods', on_delete=models.PROTECT, db_column='notification_method_id')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -100,7 +104,7 @@ class ReminderSettings(models.Model):
 
 class ReminderLogs(models.Model):
     log_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    reminder_id = models.ForeignKey('Reminders', on_delete=models.CASCADE, db_column='reminder_id')
+    reminder_id = models.ForeignKey('Reminders', on_delete=models.PROTECT, db_column='reminder_id')
     log_date = models.DateTimeField(auto_now_add=True)
     LOG_ACTION_CHOICES = [
         ('Cancelled', 'Cancelled'),
