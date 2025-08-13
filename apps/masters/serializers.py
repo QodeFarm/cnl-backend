@@ -369,3 +369,8 @@ class FlowStatusSerializers(serializers.ModelSerializer):
     class Meta:
         model = FlowStatus
         fields = '__all__'
+
+class ModItemMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ItemMaster
+        fields =  '__all__'

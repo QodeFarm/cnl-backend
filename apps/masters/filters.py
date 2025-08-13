@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters, FilterSet, CharFilter
 
 from config.utils_filter_methods import filter_by_limit, filter_by_page, filter_by_search, filter_by_sort
-from .models import BrandSalesman,Country, CustomerPaymentTerms, FirmStatuses, FlowStatus, GPackageUnit, GstCategories, GstTypes, LedgerGroups, OrderStatuses, OrderTypes, PackageUnit, PaymentLinkTypes, PriceCategories, ProductBrands, ProductItemType, ProductTypes, ProductUniqueQuantityCodes, PurchaseTypes, SaleTypes, State, City, Statuses, TaskPriorities, Territory, Transporters, UnitOptions, UserGroupMembers, UserGroups
+from .models import BrandSalesman,Country, CustomerPaymentTerms, FirmStatuses, FlowStatus, GPackageUnit, GstCategories, GstTypes, ItemMaster, LedgerGroups, OrderStatuses, OrderTypes, PackageUnit, PaymentLinkTypes, PriceCategories, ProductBrands, ProductItemType, ProductTypes, ProductUniqueQuantityCodes, PurchaseTypes, SaleTypes, State, City, Statuses, TaskPriorities, Territory, Transporters, UnitOptions, UserGroupMembers, UserGroups
 import django_filters
 from config.utils_filter_methods import filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 
@@ -224,6 +224,7 @@ class TransportersFilters(filters.FilterSet):
 class ProductTypesFilter(FilterSet):
     type_id = filters.CharFilter(method='filter_uuid')
     type_name = filters.CharFilter(lookup_expr='icontains')
+    mode_type = filters.CharFilter(lookup_expr='exact')
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
@@ -659,3 +660,27 @@ class FlowStatusFilter(django_filters.FilterSet):
     class Meta:
         model = FlowStatus
         fields = ['flow_status_name', 'created_at']
+
+class ItemMasterFilter(django_filters.FilterSet):
+    mode_name = django_filters.CharFilter(lookup_expr='icontains')
+    s = django_filters.CharFilter(method='filter_by_search', label="Search")
+    sort = django_filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = django_filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = django_filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
+    
+    class Meta:
+        model = ItemMaster
+        fields = ['mode_name']        

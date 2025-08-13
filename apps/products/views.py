@@ -10,6 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import transaction
+from apps.masters.filters import ItemMasterFilter
 from apps.masters.models import City, Country, State
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from config.utils_variables import *
@@ -154,6 +155,21 @@ class productsViewSet(viewsets.ModelViewSet):
     filterset_class = ProductsFilter
     ordering_fields = ['name','code','barcode','category_id','product_group_id','type_id','gst_classification_id','created_at']
 
+    # def get_queryset(self):
+    #     """Override get_queryset to filter by inventory mode if needed"""
+    #     queryset = super().get_queryset()
+        
+    #     # Check if this is an inventory view request
+    #     if self.request and self.request.query_params.get('view', '') == 'inventory':
+    #         # Get the Inventory mode item master
+    #         inventory_mode = ItemMaster.objects.filter(mode_name='Inventory').first()
+    #         if inventory_mode:
+    #             queryset = queryset.filter(product_mode_id=inventory_mode)
+    #             logger.info("Filtering products to show only Inventory mode items")
+        
+    #     return queryset
+    
+
     def list(self, request, *args, **kwargs):
         summary = request.query_params.get('summary', 'false').lower() == 'true'
         if summary:
@@ -274,6 +290,21 @@ class ProductVariationViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
 
+class ItemMasterViewSet(viewsets.ModelViewSet):
+    queryset = ItemMaster.objects.all().order_by('-created_at')
+    serializer_class = ModItemMasterSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = ItemMasterFilter
+    ordering_fields = []
+    
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, ItemMaster, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 #--------------------P R O D U C T - A P I-----------------------#
 
 class ProductViewSet(APIView):
@@ -296,33 +327,101 @@ class ProductViewSet(APIView):
             logger.warning(f"Products with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
+    # def get(self, request, *args, **kwargs):
+    #     if "pk" in kwargs:
+    #         result = validate_input_pk(self, kwargs['pk'])
+    #         return result if result else self.retrieve(self, request, *args, **kwargs)
+    #     try:
+    #         summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
+    #         if summary:
+    #             product = Products.objects.all().order_by('-created_at')	
+    #             data = ProductOptionsSerializer.get_product_summary(product)
+    #             return build_response(len(data), "Success", data, status.HTTP_200_OK)
+    #         else:
+    #             logger.info("Retrieving all products")
+    #             queryset = Products.objects.all().order_by('-created_at')	
+
+    #             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+    #             limit = int(request.query_params.get('limit', 10)) 
+    #             total_count = Products.objects.count()
+
+    #             # Apply filters manuallys
+    #             if request.query_params:
+    #                 filterset = ProductsFilter(request.GET, queryset=queryset)
+    #                 if filterset.is_valid():
+    #                     queryset = filterset.qs 
+
+    #             serializer = ProductOptionsSerializer(queryset, many=True)
+    #             logger.info("product data retrieved successfully.")
+    #             # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+    #             return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    #     except Exception as e:
+    #         logger.error(f"An unexpected error occurred: {str(e)}")
+    #         return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
     def get(self, request, *args, **kwargs):
         if "pk" in kwargs:
             result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
             summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
+            
+            # # Check if this is for inventory view specifically
+            # is_inventory_view = request.query_params.get('view', '') == 'inventory'
+            
+            # # Start with all products
+            # queryset = Products.objects.all().order_by('-created_at')
+            
+            # # Filter by inventory mode if this is for inventory view
+            # if is_inventory_view:
+            #     # Get the Inventory mode item master
+            #     inventory_mode = ItemMaster.objects.filter(mode_name='Inventory').first()
+            #     if inventory_mode:
+            #         queryset = queryset.filter(product_mode_id=inventory_mode)
+            #         logger.info("Filtering products to show only Inventory mode items")
+
+            # Get view type from query params (inventory, non-inventory, service)
+            view_type = request.query_params.get('view', '')
+            
+            # Start with all products
+            queryset = Products.objects.all().order_by('-created_at')
+            
+            # Filter by product mode based on view type
+            if view_type:
+                # Get the corresponding ItemMaster record
+                if view_type == 'inventory':
+                    mode_name = 'Inventory'
+                elif view_type == 'non-inventory':
+                    mode_name = 'Non Inventory'
+                elif view_type == 'service':
+                    mode_name = 'Service'
+                else:
+                    mode_name = None
+
+                if mode_name:
+                    item_mode = ItemMaster.objects.filter(mode_name=mode_name).first()
+                    if item_mode:
+                        queryset = queryset.filter(product_mode_id=item_mode)
+                        logger.info(f"Filtering products to show only {mode_name} mode items")
+            
             if summary:
-                product = Products.objects.all().order_by('-created_at')	
-                data = ProductOptionsSerializer.get_product_summary(product)
+                data = ProductOptionsSerializer.get_product_summary(queryset)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             else:
-                logger.info("Retrieving all products")
-                queryset = Products.objects.all().order_by('-created_at')	
+                logger.info("Retrieving products")
 
                 page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
                 limit = int(request.query_params.get('limit', 10)) 
-                total_count = Products.objects.count()
-
-                # Apply filters manuallys
+                total_count = queryset.count()
+                # Apply filters manually
                 if request.query_params:
                     filterset = ProductsFilter(request.GET, queryset=queryset)
                     if filterset.is_valid():
                         queryset = filterset.qs 
 
-                serializer = ProductOptionsSerializer(queryset, many=True)
-                logger.info("product data retrieved successfully.")
-                # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                serializer = productsSerializer(queryset, many=True)
+                logger.info("Product data retrieved successfully.")
                 return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
