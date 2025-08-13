@@ -175,9 +175,29 @@ class Transporters(models.Model):
     class Meta:
         db_table = transportertable
 
+# class ProductTypes(models.Model):
+#     type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+#     type_name = models.CharField(max_length=255)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     class Meta:
+#         db_table = producttypestable
+
+#     def __str__(self):
+#         return f"{self.type_id} {self.type_name}"
+    
+
 class ProductTypes(models.Model):
     type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     type_name = models.CharField(max_length=255)
+    MODE_CHOICES = [
+        ('Inventory', 'Inventory'),
+        ('Non Inventory', 'Non Inventory'),
+        ('Service', 'Service'),
+        ('All', 'All')  # For types that apply to all modes
+    ]
+    mode_type = models.CharField(max_length=20, choices=MODE_CHOICES, default='All')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -534,3 +554,17 @@ class FlowStatus(models.Model):
     
     class Meta:
         db_table = 'flow_status'
+
+
+class ItemMaster(models.Model):
+    item_master_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    mode_name = models.CharField(max_length=255)
+    description = models.TextField(null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'item_master'
+
+    def __str__(self):
+        return self.mode_name        

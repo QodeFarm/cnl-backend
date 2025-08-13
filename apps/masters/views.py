@@ -277,7 +277,25 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at']
 
     def list(self, request, *args, **kwargs):
-        return list_filtered_objects(self, request, ProductTypes,*args, **kwargs)
+        # Check if there's a mode_type filter applied
+        mode_type = request.query_params.get('mode_type', None)
+        
+        # If mode_type is specified, filter queryset by it
+        if mode_type:
+            queryset = self.filter_queryset(
+                ProductTypes.objects.filter(
+                    models.Q(mode_type=mode_type) | models.Q(mode_type='All')
+                ).order_by('-created_at')
+            )
+            page = self.paginate_queryset(queryset)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        
+        # Otherwise use the default filtering
+        return list_filtered_objects(self, request, ProductTypes, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
         return create_instance(self, request, *args, **kwargs)
