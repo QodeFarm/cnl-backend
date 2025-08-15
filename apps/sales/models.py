@@ -97,6 +97,11 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         if not self.order_status_id:
             db = kwargs.get('using', 'default')
             self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
+            
+        # Set default order status if not provided
+        if not self.flow_status_id:
+            db = kwargs.get('using', 'default')
+            self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Pending')[0]
             # self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Assign default stage for new orders
@@ -109,11 +114,21 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
                     self.flow_status_id = self.get_stage_flow_status(1)  # Default stage for parent orders
         else:
             try:
-                ready_to_invoice_status = FlowStatus.objects.get(flow_status_name="Ready for Invoice")
-                self.flow_status_id = ready_to_invoice_status
-
+                # Only set default if new record or no existing flow_status_id
+                if is_new_record or not self.flow_status_id:
+                    ready_to_invoice_status = FlowStatus.objects.get(flow_status_name="Ready for Invoice")
+                    self.flow_status_id = ready_to_invoice_status
             except FlowStatus.DoesNotExist:
                 raise ValueError("FlowStatus 'Ready for Invoice' not found")
+
+        
+        # else:
+        #     try:
+        #         ready_to_invoice_status = FlowStatus.objects.get(flow_status_name="Ready for Invoice")
+        #         self.flow_status_id = ready_to_invoice_status
+
+        #     except FlowStatus.DoesNotExist:
+        #         raise ValueError("FlowStatus 'Ready for Invoice' not found")
 
         # Only generate and set the order number if this is a new record
         if is_new_record and not getattr(self, self.order_no_field):
