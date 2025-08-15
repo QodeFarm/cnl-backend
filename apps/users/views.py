@@ -1,3 +1,4 @@
+from apps.users.utils import send_activation_email
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles, License
 from config.utils_methods import IsAdminRoles, build_response, list_all_objects, soft_delete, create_instance, update_instance, validate_uuid
@@ -30,6 +31,10 @@ from django.utils import timezone
 import uuid
 import re
 from urllib.parse import urlparse
+from django.utils.encoding import smart_str, force_bytes, DjangoUnicodeDecodeError
+from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer, UserSerializer as DjoserUserSerializer
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.contrib.auth.tokens import default_token_generator
 
 
 import logging
@@ -375,7 +380,9 @@ class SendPasswordResetEmailView(APIView):
     renderer_classes = [UserRenderer]
 
     def post(self, request, format=None):
-        serializer = SendPasswordResetEmailSerializer(data=request.data)
+        serializer = SendPasswordResetEmailSerializer(
+                    data=request.data,
+                    context={'request': request})
         serializer.is_valid(raise_exception=True)
         return Response({'count': '1', 'msg': 'Password Reset Link Send. Please Check Your Email', 'data': []}, status=status.HTTP_200_OK)
 
@@ -392,6 +399,11 @@ class UserPasswordResetView(APIView):
 
 # ============================= #USER-CREATE   &    USER-UPDATE#==========================================================
 class CustomUserCreateViewSet(DjoserUserViewSet):
+    def perform_create(self, serializer):
+        user = serializer.save()
+        # Send custom activation email
+        send_activation_email(user, self.request)
+
     def create(self, request, *args, **kwargs):
         if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
             attachment_data_list = request.data['profile_picture_url']
@@ -423,6 +435,7 @@ class CustomUserCreateViewSet(DjoserUserViewSet):
        
         except ValidationError as e:
             return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
+        
 
  #=============================================================UPDATE USER BY ADMIN ONLY &&& UPDATE PROFILE=====================================================   
     ''' In the code below, we update the user's data using two methods:
@@ -604,25 +617,80 @@ class UserManageView(APIView):
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #====================================USER-ACTIVATION-VIEW=============================================================
+# @permission_classes([AllowAny])
+# class CustomUserActivationViewSet(DjoserUserViewSet):
+#     @action(["post"], detail=False)
+#     def activation(self, request, *args, **kwargs):
+#         try:
+#             response = super().activation(request, *args, **kwargs)
+#             custom_response_data = {
+#                 'count': '1',
+#                 'msg': 'Successfully activated the user!',
+#                 'data': []
+#             }
+#             return Response(custom_response_data, status=status.HTTP_200_OK)
+#         except ValidationError as e:
+#             error_response_data = {
+#                 'count': '1',
+#                 'msg': 'User activation failed due to validation errors.',
+#                 'data': [e.detail],
+#             }
+#             return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
+
 @permission_classes([AllowAny])
 class CustomUserActivationViewSet(DjoserUserViewSet):
     @action(["post"], detail=False)
     def activation(self, request, *args, **kwargs):
         try:
+            # Try to decode the uid to check if user exists
+            uid = kwargs.get('uid')
+            user_id = smart_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(user_id=user_id)
+            
+            # Check if user is already active
+            if user.is_active:
+                return Response({
+                    'count': '1',
+                    'msg': 'Account is already activated!',
+                    'data': {
+                        'redirect_url': '/login',
+                        'status': 'info',
+                        'isActive': True
+                    }
+                }, status=status.HTTP_200_OK)
+                
+            # If not active, proceed with activation
             response = super().activation(request, *args, **kwargs)
             custom_response_data = {
                 'count': '1',
                 'msg': 'Successfully activated the user!',
-                'data': []
+                'data': {
+                    'redirect_url': '/login',
+                    'status': 'success',
+                    'isActive': True
+                }
             }
             return Response(custom_response_data, status=status.HTTP_200_OK)
+            
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({
+                'count': '0',
+                'msg': 'Invalid activation link.',
+                'data': {
+                    'status': 'error',
+                    'isActive': False
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
         except ValidationError as e:
-            error_response_data = {
-                'count': '1',
-                'msg': 'User activation failed due to validation errors.',
-                'data': [e.detail],
-            }
-            return Response(error_response_data, status=status.HTTP_400_BAD_REQUEST)
+            return Response({
+                'count': '0',
+                'msg': 'Activation failed.',
+                'data': {
+                    'errors': e.detail,
+                    'status': 'error',
+                    'isActive': False
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
         
 #====================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
 class RolePermissionsCreateView(APIView):
