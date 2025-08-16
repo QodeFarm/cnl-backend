@@ -215,30 +215,73 @@ class UserChangePasswordSerializer(serializers.Serializer):
         return attrs
 
 #====================================USER-FORGET-PASSWD-SERIALIZER=============================================================
+# class SendPasswordResetEmailSerializer(serializers.Serializer):
+#     email = serializers.EmailField(max_length=255)
+#     class Meta:
+#         fields = ['email']
+#     def validate(self, attrs):
+#         email = attrs.get('email')
+#         if User.objects.filter(email=email).exists():
+#             #if exists get user object from DB
+#             user = User.objects.get(email=email)
+#             uid = urlsafe_base64_encode(force_bytes(user.user_id))
+#             token = CustomPasswordResetTokenGenerator().make_token(user)
+#             link = baseurl +'api/v1/users/reset_password/'+uid+'/'+token+'/'
+#             #Send Mail Code
+#             body='Click Following Link To Reset Your Password: ' + link
+#             data={
+#                 'subject':'Reset Your Password',
+#                 'body' : body,
+#                 'to_email': user.email
+#             }
+#             Utils.send_email(data)
+#             return attrs
+#         else:
+#             raise serializers.ValidationError('You are not a Registered User')
 class SendPasswordResetEmailSerializer(serializers.Serializer):
     email = serializers.EmailField(max_length=255)
-    class Meta:
-        fields = ['email']
+
     def validate(self, attrs):
         email = attrs.get('email')
+        request = self.context.get('request')
+
         if User.objects.filter(email=email).exists():
-            #if exists get user object from DB
             user = User.objects.get(email=email)
             uid = urlsafe_base64_encode(force_bytes(user.user_id))
             token = CustomPasswordResetTokenGenerator().make_token(user)
-            link = baseurl +'api/v1/users/reset_password/'+uid+'/'+token+'/'
-            #Send Mail Code
-            body='Click Following Link To Reset Your Password: ' + link
-            data={
-                'subject':'Reset Your Password',
-                'body' : body,
+
+            # Get current domain from request
+            backend_host = request.get_host()
+            
+            # Handle development environment
+            if '127.0.0.1' in backend_host or 'localhost' in backend_host:
+                frontend_domain = 'localhost:4200'
+                scheme = 'http'
+            else:
+                # Get client domain from header, fallback to host if not present
+                client_domain = request.headers.get("X-Client-Domain")
+                if client_domain:
+                    # Remove protocol and port if present
+                    frontend_domain = client_domain.replace("https://", "").replace("http://", "").split(":")[0]
+                else:
+                    # Fallback to backend host if X-Client-Domain not present
+                    frontend_domain = backend_host
+                scheme = 'https'
+
+            # Build reset URL for frontend
+            frontend_reset_url = f"{scheme}://{frontend_domain}/#/reset-password/{uid}/{token}"
+            
+            # Send email
+            body = f'Click Following Link To Reset Your Password: {frontend_reset_url}'
+            data = {
+                'subject': 'Reset Your Password',
+                'body': body,
                 'to_email': user.email
             }
             Utils.send_email(data)
             return attrs
         else:
             raise serializers.ValidationError('You are not a Registered User')
-            
 
 class UserPasswordResetSerializer(serializers.Serializer):
   password = serializers.CharField(max_length=255, style={'input_type':'password'}, write_only=True)
