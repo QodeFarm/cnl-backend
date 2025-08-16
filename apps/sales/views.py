@@ -2588,7 +2588,7 @@ class SaleReturnOrdersViewSet(APIView):
             custom_error = []
 
         # Ensure mandatory data is present
-        if not sale_return_order_data or not sale_return_items_data or not custom_fields_data:
+        if not sale_return_order_data or not sale_return_items_data:
             logger.error(
                 "Sale return order and sale return items & CustomFields are mandatory but not provided.")
             return build_response(0, "Sale return order and sale return items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
@@ -2729,7 +2729,7 @@ class SaleReturnOrdersViewSet(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not sale_return_order_data or not sale_return_items_data or not custom_field_values_data:
+        if not sale_return_order_data or not sale_return_items_data:
             logger.error(
                 "Sale return order and sale return items & CustomFields are mandatory but not provided.")
             return build_response(0, "Sale return order and sale return items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
