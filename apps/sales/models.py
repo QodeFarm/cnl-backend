@@ -97,21 +97,15 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         if not self.order_status_id:
             db = kwargs.get('using', 'default')
             self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
-            
-        # Set default order status if not provided
-        if not self.flow_status_id:
-            db = kwargs.get('using', 'default')
-            self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Pending')[0]
-            # self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
 
         # Assign default stage for new orders
         if self.use_workflow:
             if is_new_record or self.flow_status_id is None:
                 is_child = self.is_child_order(self.order_no)
                 if is_child:
-                    self.flow_status_id = self.get_stage_flow_status(2)  # Default stage for child orders
+                    self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Production')[0] #self.get_stage_flow_status(2)  # Default stage for child orders
                 else:
-                    self.flow_status_id = self.get_stage_flow_status(1)  # Default stage for parent orders
+                    self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Review Inventory')[0]
         else:
             try:
                 # Only set default if new record or no existing flow_status_id
@@ -120,15 +114,6 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
                     self.flow_status_id = ready_to_invoice_status
             except FlowStatus.DoesNotExist:
                 raise ValueError("FlowStatus 'Ready for Invoice' not found")
-
-        
-        # else:
-        #     try:
-        #         ready_to_invoice_status = FlowStatus.objects.get(flow_status_name="Ready for Invoice")
-        #         self.flow_status_id = ready_to_invoice_status
-
-        #     except FlowStatus.DoesNotExist:
-        #         raise ValueError("FlowStatus 'Ready for Invoice' not found")
 
         # Only generate and set the order number if this is a new record
         if is_new_record and not getattr(self, self.order_no_field):
@@ -150,28 +135,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             print("from create", self.pk)
             increment_order_number(self.order_no_prefix)
         else:
-            print("from edit", self.pk)
-        # if is_new_record:
-        #     # Increment the order number only for parent orders
-        #     if not self.is_child_order(self.order_no):  # Skip increment for child orders
-        #         # increment_order_number(self.order_no_prefix)
-        #         increment_order_number(self.get_order_prefix())
-                
-
-        # else:
-        #     print("from edit", self.pk)
-        # # super().save(*args, **kwargs)  # Save the order
-        
-        # # Handle transitions for existing records
-        # if not is_new_record:
-        #     if self.is_child_order(self.order_no):
-        #         # Handle child order transition
-        #         self.handle_child_order_transition()
-        #     else:
-        #         # Force parent order status update
-        #         self.force_parent_status_update()  
-        #         # Save the record
-        # super().save(*args, **kwargs)          
+            print("from edit", self.pk)         
 
     def force_parent_status_update(self):
         """

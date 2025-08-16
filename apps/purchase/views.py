@@ -516,9 +516,9 @@ class PurchaseOrderViewSet(APIView):
             custom_error = []
 
         # Ensure mandatory data is present
-        if not purchase_order_data or not purchase_order_items_data:
-            logger.error("Purchase order and Purchase order items are mandatory but not provided.")
-            return build_response(0, "Purchase order and Purchase order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not purchase_order_data or not purchase_order_items_data or not custom_fields_data:
+            logger.error("Purchase order & Purchase order items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Purchase order & Purchase order items & CustomFields  are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if order_error:
@@ -647,9 +647,9 @@ class PurchaseOrderViewSet(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not purchase_order_data or not purchase_order_items_data:
-            logger.error("Purchase order and Purchase order items are mandatory but not provided.")
-            return build_response(0, "Purchase order and Purchase order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not purchase_order_data or not purchase_order_items_data or not custom_field_values_data:
+            logger.error("Purchase order and Purchase order items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Purchase order and Purchase order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if order_error:
@@ -922,9 +922,9 @@ class PurchaseInvoiceOrderViewSet(APIView):
             custom_error = []
 
         # Ensure mandatory data is present
-        if not purchase_invoice_orders_data or not purchase_invoice_items_data:
-            logger.error("Purchase invoice order and Purchase invoice items are mandatory but not provided.")
-            return build_response(0, "Purchase invoice order and Purchase invoice items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not purchase_invoice_orders_data or not purchase_invoice_items_data or not custom_fields_data:
+            logger.error("Purchase invoice order and Purchase invoice items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Purchase invoice order and Purchase invoice items & & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if invoice_order_error:
@@ -1061,9 +1061,9 @@ class PurchaseInvoiceOrderViewSet(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not purchase_invoice_orders_data or not purchase_invoice_items_data:
-            logger.error("Purchase invoice order and Purchase invoice items are mandatory but not provided.")
-            return build_response(0, "Purchase invoice order and Purchase invoice items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not purchase_invoice_orders_data or not purchase_invoice_items_data or not custom_field_values_data:
+            logger.error("Purchase invoice order and Purchase invoice items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Purchase invoice order and Purchase invoice items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if invoice_order_error:
@@ -1300,9 +1300,9 @@ class PurchaseReturnOrderViewSet(APIView):
             custom_error = []
 
         # Ensure mandatory data is present
-        if not purchase_return_orders_data or not purchase_return_items_data:
-            logger.error("Purchase return order and Purchase return items are mandatory but not provided.")
-            return build_response(0, "Purchase return order and Purchase return items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not purchase_return_orders_data or not purchase_return_items_data or not custom_fields_data:
+            logger.error("Purchase return order and Purchase return items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Purchase return order and Purchase return items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if return_order_error:
@@ -1442,9 +1442,9 @@ class PurchaseReturnOrderViewSet(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not purchase_return_orders_data or not purchase_return_items_data:
-            logger.error("Purchase return order and Purchase return items are mandatory but not provided.")
-            return build_response(0, "Purchase return order and Purchase return items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        if not purchase_return_orders_data or not purchase_return_items_data or not custom_field_values_data:
+            logger.error("Purchase return order and Purchase return items & CustomFields are mandatory but not provided.")
+            return build_response(0, "Purchase return order and Purchase return items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
         
         errors = {}
         if return_order_error:
