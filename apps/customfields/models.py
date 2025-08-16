@@ -21,7 +21,7 @@ class CustomField(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # unique_together = ('field_name', 'entity_id')  # Prevents duplicate field names for the same entity
+        unique_together = ('field_name', 'entity_id')  # Prevents duplicate field names for the same entity
         db_table = customfields
 
     def __str__(self):
