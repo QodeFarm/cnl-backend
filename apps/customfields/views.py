@@ -304,7 +304,8 @@ class CustomFieldCreateViewSet(APIView):
                 return build_response(0, "Error deleting related custom field options", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Delete the main CustomField instance
-            instance.delete()
+            instance.is_deleted = True
+            instance.save()
 
             logger.info(f"CustomField with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
