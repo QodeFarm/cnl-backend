@@ -20,6 +20,7 @@ from apps.inventory.models import WarehouseLocations
 from .serializers import *
 from .models import *
 from .filters import ColorFilter, ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter, SizeFilter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -656,7 +657,24 @@ class ProductViewSet(APIView):
             logger.error(f"Error deleting Leads with ID {pk}: {str(e)}")
             return build_response(0, f"Record deletion failed due to an error : {e}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-from openpyxl.worksheet.datavalidation import DataValidation
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Partially update product fields.
+        Only the fields provided in request.data will be updated.
+        """
+        try:
+            product = Products.objects.filter(pk=pk).first()
+            if not product:
+                return build_response(0, "Product not found", [], status.HTTP_404_NOT_FOUND)
+            serializer = productsSerializer(product, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return build_response(1, "Product updated successfully", serializer.data, status.HTTP_200_OK)
+            return build_response(0, "Validation error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"PATCH error: {str(e)}")
+            return build_response(0, f"Error updating product: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+    
 
 
 
