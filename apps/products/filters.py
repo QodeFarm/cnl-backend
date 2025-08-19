@@ -223,6 +223,15 @@ class ProductsFilter(FilterSet):
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     updated_at = filters.DateFromToRangeFilter()
     created_at = filters.DateFromToRangeFilter()
+    
+    warehouse_name = filters.CharFilter(
+        field_name='productitembalance__warehouse_location_id__warehouse_id__name',
+        lookup_expr='icontains'
+    )
+    location_name = filters.CharFilter(
+        field_name='productitembalance__warehouse_location_id__location_name',
+        lookup_expr='icontains'
+    )
 
 
 
@@ -244,7 +253,7 @@ class ProductsFilter(FilterSet):
     class Meta:
         model = Products
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','category','stock_unit','wholesale_rate','dealer_rate','purchase_rate','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'updated_at','created_at','period_name','s','sort','page','limit']
+        fields =['name','code','category','stock_unit','wholesale_rate','dealer_rate','purchase_rate','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'warehouse_name', 'location_name', 'updated_at','created_at','period_name','s','sort','page','limit']
 
 
 class ProductItemBalanceFilter(FilterSet):

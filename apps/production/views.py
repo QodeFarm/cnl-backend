@@ -192,7 +192,36 @@ class ProductionWorkerViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs) 
 
-
+@transaction.atomic
+def update_product_stock_with_bom(work_order_id, completed_qty, using='default'):
+    """
+    Update product stock based on completed quantity and BOM calculations
+    """
+    try:
+        # Get the work order
+        work_order = WorkOrder.objects.using(using).get(work_order_id=work_order_id)
+        product_id = work_order.product_id
+        
+        # Get all BOM items for this work order
+        bom_items = BillOfMaterials.objects.using(using).filter(reference_id=work_order_id)
+        
+        # Update main product stock (add completed quantity)
+        main_product = Products.objects.using(using).get(product_id=product_id)
+        main_product.balance += completed_qty
+        main_product.save(using=using)
+        logger.info(f'Updated main product stock for Product ID: {product_id}, added: {completed_qty}')
+        
+        # Update each BOM component stock (subtract calculated quantity)
+        for bom_item in bom_items:
+            component_qty = completed_qty * bom_item.quantity
+            component_product = Products.objects.using(using).get(product_id=bom_item.product_id)
+            component_product.balance -= component_qty
+            component_product.save(using=using)
+            logger.info(f'Updated component stock for Product ID: {bom_item.product_id}, subtracted: {component_qty}')
+            
+    except Exception as e:
+        logger.error(f'Error updating stock with BOM: {str(e)}')
+        raise
 class WorkOrderAPIView(APIView):
     """
     API ViewSet for handling Purchase Return Order creation and related data.
@@ -642,7 +671,7 @@ class WorkOrderAPIView(APIView):
             "workers":workers_data,
             "work_order_stages":stages_data
         }
-
+        
         # Update Product Stock
         update_product_stock(Products, ProductVariation, bom_data, 'subtract')
         logger.info('Stock Updated Successfully.')
@@ -773,6 +802,7 @@ class WorkOrderAPIView(APIView):
             copy_data["quantity"] = completed_qty# Take completed quantity to update further
             logger.info('completed QTY : %s ', completed_qty)
             update_product_stock(Products, ProductVariation, [copy_data], 'add')
+            # update_product_stock(Products, ProductVariation, [copy_data], 'substract')
             logger.info('Stock Updated Successfully.')
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)

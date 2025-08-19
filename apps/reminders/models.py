@@ -1,6 +1,7 @@
 from django.db import models
 import uuid
 from apps.hrms.models import Employees
+from apps.users.models import User
 from config.utils_variables import notificationfrequenciestable, notificationmethodstable, remindertypestable, reminderstable, reminderrecipientstable, remindersettingstable, reminderlogstable
 
 # Create your models here.
@@ -52,7 +53,7 @@ class Reminders(models.Model):
     subject = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     reminder_date = models.DateTimeField()
-    is_recurring = models.BooleanField(default=False)
+    is_recurring = models.BooleanField(default=False, null=True)
     RECURRING_FREQUENCY_CHOICES = [
         ('Daily', 'Daily'),
         ('Monthly', 'Monthly'),
@@ -74,7 +75,10 @@ class Reminders(models.Model):
 class ReminderRecipients(models.Model):
     recipient_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     reminder_id = models.ForeignKey('Reminders', on_delete=models.PROTECT, db_column='reminder_id')
-    recipient_user_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='recipient_user_id')
+    # recipient_user_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='recipient_user_id')
+    recipient_user_id = models.ForeignKey(
+        User, on_delete=models.PROTECT, db_column='recipient_user_id'
+    )
     recipient_email = models.CharField(max_length=255, null=True, default=None)
     notification_method_id = models.ForeignKey('NotificationMethods', on_delete=models.PROTECT, db_column='notification_method_id')
     created_at = models.DateTimeField(auto_now_add=True)
