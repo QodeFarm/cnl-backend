@@ -1,5 +1,4 @@
-from apps.users.utils import send_activation_email
-from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, UserAccessModuleSerializer
+from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles, License
 from config.utils_methods import IsAdminRoles, build_response, list_all_objects, soft_delete, create_instance, update_instance, validate_uuid
 from config.utils_filter_methods import filter_response, list_filtered_objects
@@ -9,10 +8,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.decorators import permission_classes
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
-from django.utils.decorators import method_decorator
-from django_ratelimit.decorators import ratelimit
+from django.utils.http import urlsafe_base64_decode
+from apps.users.utils import send_activation_email
 from rest_framework.filters import OrderingFilter
 from rest_framework.permissions import AllowAny
 from django.shortcuts import get_object_or_404
@@ -20,6 +18,7 @@ from django.db import connection, transaction
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from django.utils.encoding import smart_str
 from apps.company.models import Companies
 from rest_framework.views import APIView
 from .renderers import UserRenderer
@@ -28,16 +27,10 @@ from collections import defaultdict
 from .backends import MstcnlBackend
 from rest_framework import status
 from django.utils import timezone
-import uuid
-import re
 from urllib.parse import urlparse
-from django.utils.encoding import smart_str, force_bytes, DjangoUnicodeDecodeError
-from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer, UserSerializer as DjoserUserSerializer
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
-from django.contrib.auth.tokens import default_token_generator
-
-
+import uuid
 import logging
+
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -705,11 +698,11 @@ class RolePermissionsCreateView(APIView):
   
 
     def create_list_data(self, data):
-        role_id = data[0].get('role_id')
+        if data and isinstance(data, list) and len(data) > 0:
+            role_id = data[0].get('role_id')
+        else:
+            return  build_response(0, "Assign At Least One Permission",  [], status.HTTP_400_BAD_REQUEST)
         deleted_count, _ = RolePermissions.objects.filter(role_id=role_id).delete()
-        #Check if deletion was successful
-        if deleted_count == 0:
-            return build_response(0, "No records found for the given role_id",  [], status.HTTP_404_NOT_FOUND)
         
         created_records = []
         for item in data:
@@ -797,8 +790,8 @@ class RolePermissionsCreateView(APIView):
         )
 
         # Check if permissions exist for the given role_id
-        if not permissions:
-            return build_response(0, "No permissions found for the specified role_id.",  [], status.HTTP_404_NOT_FOUND)
+        # if not permissions:
+        #     return build_response(0, "No permissions found for the specified role_id.",  [], status.HTTP_400_BAD_REQUEST)
 
          # Convert QuerySet to a list of dictionaries
         permissions_list = list(permissions)
