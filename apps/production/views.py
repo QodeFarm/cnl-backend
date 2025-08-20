@@ -192,7 +192,36 @@ class ProductionWorkerViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs) 
 
-
+@transaction.atomic
+def update_product_stock_with_bom(work_order_id, completed_qty, using='default'):
+    """
+    Update product stock based on completed quantity and BOM calculations
+    """
+    try:
+        # Get the work order
+        work_order = WorkOrder.objects.using(using).get(work_order_id=work_order_id)
+        product_id = work_order.product_id
+        
+        # Get all BOM items for this work order
+        bom_items = BillOfMaterials.objects.using(using).filter(reference_id=work_order_id)
+        
+        # Update main product stock (add completed quantity)
+        main_product = Products.objects.using(using).get(product_id=product_id)
+        main_product.balance += completed_qty
+        main_product.save(using=using)
+        logger.info(f'Updated main product stock for Product ID: {product_id}, added: {completed_qty}')
+        
+        # Update each BOM component stock (subtract calculated quantity)
+        for bom_item in bom_items:
+            component_qty = completed_qty * bom_item.quantity
+            component_product = Products.objects.using(using).get(product_id=bom_item.product_id)
+            component_product.balance -= component_qty
+            component_product.save(using=using)
+            logger.info(f'Updated component stock for Product ID: {bom_item.product_id}, subtracted: {component_qty}')
+            
+    except Exception as e:
+        logger.error(f'Error updating stock with BOM: {str(e)}')
+        raise
 class WorkOrderAPIView(APIView):
     """
     API ViewSet for handling Purchase Return Order creation and related data.
@@ -642,7 +671,7 @@ class WorkOrderAPIView(APIView):
             "workers":workers_data,
             "work_order_stages":stages_data
         }
-
+        
         # Update Product Stock
         update_product_stock(Products, ProductVariation, bom_data, 'subtract')
         logger.info('Stock Updated Successfully.')
@@ -652,6 +681,7 @@ class WorkOrderAPIView(APIView):
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
 
+# ---------------------working --------------------------------------
     @transaction.atomic
     def update(self, request, pk, *args, **kwargs):
 
@@ -742,38 +772,34 @@ class WorkOrderAPIView(APIView):
             "work_order_stages" : stages_data if stages_data else []
         }
 
-        """This code searches 'closed' in production status. if matched it updates Inventory with unsynced quantity.
-           And deletes the record in 'CompletedQuantity' """
+        # Get the work order instance after save
+        work_order_instance = WorkOrder.objects.get(work_order_id=pk)
         
-        # Get 'sync_qty' status from WorkOrder
-        sync_qty = work_order_data.get('sync_qty', None)
-
+        # Get current values from request data
+        current_sync_qty = work_order_data.get('sync_qty', None)
+        current_completed_qty = int(work_order_data.get('completed_qty', 0) or 0)
+        
+        """Handle closed status"""
         pattern = r"(?i)\bclosed\b"
         order_status = work_order_data.get('status_id', None)
-        name = ProductionStatus.objects.get(status_id=order_status)
-        if re.search(pattern, name.status_name):
-            # Update Product Stock
-            try:
-                unsync_qty = CompletedQuantity.objects.get(work_order_id=pk).quantity
-            except CompletedQuantity.DoesNotExist:
-                unsync_qty = 0
-            copy_data = work_order_data.copy()
-            copy_data["quantity"] = unsync_qty
-            update_product_stock(Products, ProductVariation, [copy_data], 'add')
-            logger.info('Stock Updated Successfully.')            
-            # Delete the record.
-            try:
-                CompletedQuantity.objects.get(work_order_id=pk).delete()
-            except CompletedQuantity.DoesNotExist:pass
-            sync_qty = True
+        if order_status:
+            name = ProductionStatus.objects.get(status_id=order_status)
+            if re.search(pattern, name.status_name):
+                # Update inventory with completed_qty only (temp_quantity is already moved to completed_qty in save method)
+                copy_data = work_order_data.copy()
+                copy_data["quantity"] = work_order_instance.completed_qty or 0
+                update_product_stock(Products, ProductVariation, [copy_data], 'add')
+                logger.info('Stock Updated with completed quantity: %s', work_order_instance.completed_qty)
+                
+                return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
-        if sync_qty:
+        # Handle inventory updates only when sync_qty is True
+        if current_sync_qty:
+            # Update inventory with the current completed_qty value
             copy_data = work_order_data.copy()
-            completed_qty = copy_data.pop('completed_qty')
-            copy_data["quantity"] = completed_qty# Take completed quantity to update further
-            logger.info('completed QTY : %s ', completed_qty)
+            copy_data["quantity"] = work_order_instance.completed_qty or 0
             update_product_stock(Products, ProductVariation, [copy_data], 'add')
-            logger.info('Stock Updated Successfully.')
+            logger.info('Stock Updated with completed quantity: %s', work_order_instance.completed_qty)
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 

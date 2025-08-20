@@ -1062,38 +1062,80 @@ def previous_product_instance_verification(model_name, data): # In case of Produ
 #         except Exception:
 #             logger.info('Direct Product stock is updated.')
 
+# @transaction.atomic
+# def update_product_stock(parent_model, child_model, data, operation, using='default'):
+#     for item in data:
+#         product = item.get('product_id', None)
+#         return_qty = float(item.get('quantity', None))
+#         size = item.get('size_id', None)
+#         color = item.get('color_id', None)
+
+#         # Update each product stock (Subtract the order QTY from stock)
+#         product_instance = parent_model.objects.using(using).get(product_id=product)
+#         if operation == 'add':
+#             product_instance.balance += return_qty
+#         elif operation == 'subtract':
+#             product_instance.balance -= return_qty
+#         product_instance.save(using=using)  #  respect DB
+
+#         try:
+#             # Update each product variation stock (Subtract/Add the order QTY from stock)
+#             product_variation_instance = child_model.objects.using(using).get(
+#                 product_id=product,
+#                 size_id=size,
+#                 color_id=color
+#             )
+#             if operation == 'add':
+#                 product_variation_instance.quantity += return_qty
+#             elif operation == 'subtract':
+#                 product_variation_instance.quantity -= return_qty
+#             product_variation_instance.save(using=using)  #  respect DB
+#             logger.info(f'Updated stock for Product ID : {product}')
+#         except Exception:
+#             logger.info('Direct Product stock is updated.')
+
 @transaction.atomic
 def update_product_stock(parent_model, child_model, data, operation, using='default'):
     for item in data:
-        product = item.get('product_id', None)
-        return_qty = float(item.get('quantity', None))
-        size = item.get('size_id', None)
-        color = item.get('color_id', None)
-
-        # Update each product stock (Subtract the order QTY from stock)
-        product_instance = parent_model.objects.using(using).get(product_id=product)
-        if operation == 'add':
-            product_instance.balance += return_qty
-        elif operation == 'subtract':
-            product_instance.balance -= return_qty
-        product_instance.save(using=using)  #  respect DB
+        product_id = item.get('product_id')
+        return_qty = float(item.get('quantity', 0))
+        size_id = item.get('size_id')
+        color_id = item.get('color_id')
 
         try:
-            # Update each product variation stock (Subtract/Add the order QTY from stock)
-            product_variation_instance = child_model.objects.using(using).get(
-                product_id=product,
-                size_id=size,
-                color_id=color
-            )
-            if operation == 'add':
-                product_variation_instance.quantity += return_qty
-            elif operation == 'subtract':
-                product_variation_instance.quantity -= return_qty
-            product_variation_instance.save(using=using)  #  respect DB
-            logger.info(f'Updated stock for Product ID : {product}')
-        except Exception:
-            logger.info('Direct Product stock is updated.')
+            with transaction.atomic(using=using):
+                # Update parent product
+                product_instance = parent_model.objects.using(using).select_for_update().get(product_id=product_id)
+                
+                if operation == 'add':
+                    product_instance.balance += return_qty
+                elif operation == 'subtract':
+                    product_instance.balance -= return_qty
+                product_instance.save(using=using)
 
+                # Update or create variation if size/color provided
+                if size_id and color_id:
+                    variation, created = child_model.objects.using(using).get_or_create(
+                        product_id=product_id,
+                        size_id=size_id,
+                        color_id=color_id,
+                        defaults={'quantity': return_qty if operation == 'add' else -return_qty}
+                    )
+                    
+                    if not created:
+                        if operation == 'add':
+                            variation.quantity += return_qty
+                        elif operation == 'subtract':
+                            variation.quantity -= return_qty
+                        variation.save(using=using)
+                        
+                    logger.info(f'{"Created" if created else "Updated"} variation for Product ID: {product_id}')
+                
+        except parent_model.DoesNotExist:
+            logger.error(f'Product with ID {product_id} does not exist')
+        except Exception as e:
+            logger.error(f'Error updating stock for Product ID {product_id}: {e}')
+            raise  # Re-raise to maintain transaction integrity
 
 #=========================== COMMUNICATION / REPORTS / OTHER SPECIAL FUNCTIONS (CHETAN) ============================
 

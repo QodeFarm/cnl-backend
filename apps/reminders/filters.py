@@ -119,7 +119,7 @@ class RemindersFilter(filters.FilterSet):
 class ReminderRecipientsFilter(filters.FilterSet):
     recipient_id = filters.CharFilter(method=filter_uuid)
     reminder_id = filters.CharFilter(field_name='reminder_id__subject', lookup_expr='icontains')
-    recipient_user_id = filters.CharFilter(field_name='employee_id__name', lookup_expr='icontains')
+    recipient_name = filters.CharFilter(field_name='recipient_user__first_name', lookup_expr='icontains')
     recipient_email = filters.CharFilter(lookup_expr='icontains')
     notification_method_id = filters.CharFilter(field_name='notification_method_id__method_name', lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()

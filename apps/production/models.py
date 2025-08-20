@@ -43,6 +43,7 @@ class BillOfMaterials(models.Model):
     size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, default=None, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, default=None, db_column='color_id')
     quantity = models.IntegerField(default=0)
+    original_quantity = models.IntegerField(default=0)
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     notes = models.TextField(default=None, null=True)
@@ -52,6 +53,12 @@ class BillOfMaterials(models.Model):
 
     class Meta:
         db_table = billofmaterials
+        
+    def save(self, *args, **kwargs):
+        # If original_quantity is not set and this is a new BOM entry, set it
+        if not self.original_quantity and self.quantity > 0:
+            self.original_quantity = self.quantity
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.material_id}"
@@ -77,6 +84,7 @@ class WorkOrder(models.Model):
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, default=None, db_column='color_id')    
     quantity =  models.IntegerField(default=0)
     completed_qty = models.IntegerField(null=True, default=0)
+    temp_quantity = models.IntegerField(null=True, default=0)
     status_id = models.ForeignKey(ProductionStatus, on_delete=models.PROTECT, null=True, default=None, db_column='status_id')
     start_date = models.DateField(null=True, default=None)
     end_date = models.DateField(null=True, default=None)
@@ -85,40 +93,95 @@ class WorkOrder(models.Model):
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    
     def save(self, *args, **kwargs):
-        previous_completed_qty = 0
-
         if self.pk:  # Check if the object already exists
-            status_name = self.status_id.status_name.lower()  # Avoid extra query
-            is_closed = "closed" in status_name
-
             try:
                 previous_instance = type(self).objects.get(pk=self.pk)
+                previous_sync_qty = previous_instance.sync_qty
                 previous_completed_qty = previous_instance.completed_qty or 0
+                previous_temp_qty = previous_instance.temp_quantity or 0
             except type(self).DoesNotExist:
-                pass  # New object, no previous data exists
-
-            if not is_closed:  # Status other than 'closed'
-                if self.sync_qty:
-                    self.completed_qty = previous_completed_qty + (self.completed_qty or 0)
+                previous_sync_qty = True
+                previous_completed_qty = 0
+                previous_temp_qty = 0
+            
+            # Get the new completed_qty value from the form
+            new_completed_qty = self.completed_qty or 0
+            
+            if self.sync_qty:
+                if not previous_sync_qty:
+                    # Changing from False to True: Add temp_quantity + new completed_qty
+                    self.completed_qty = previous_completed_qty + previous_temp_qty + new_completed_qty
+                    self.temp_quantity = 0
                 else:
-                    with transaction.atomic():
-                        completed_quantity = CompletedQuantity.objects.filter(work_order_id=self.work_order_id).first()
-                        if completed_quantity:
-                            completed_quantity.quantity += self.completed_qty or 0
-                            completed_quantity.save()
-                        else:
-                            CompletedQuantity.objects.create(
-                                quantity=self.completed_qty or 0,
-                                work_order_id=self.pk
-                            )
-                        self.completed_qty = previous_completed_qty + (self.completed_qty or 0)
-            else:  # If status is 'closed'
-                self.completed_qty = previous_completed_qty + (self.completed_qty or 0)
-        self.sync_qty = True # Reset the sync to True after updates.
+                    # Already True: Use the new completed_qty value directly
+                    self.completed_qty = new_completed_qty
+                    self.temp_quantity = 0
+            else:
+                # sync_qty is False: Store new value in temp_quantity, keep completed_qty unchanged
+                self.temp_quantity = previous_temp_qty + new_completed_qty
+                self.completed_qty = previous_completed_qty
 
         super().save(*args, **kwargs)
+
+        # if self.pk:  # Check if the object already exists
+        #     status_name = self.status_id.status_name.lower() if self.status_id else ""
+        #     is_closed = "closed" in status_name
+
+        #     try:
+        #         previous_instance = type(self).objects.get(pk=self.pk)
+        #         previous_completed_qty = previous_instance.completed_qty or 0
+        #         previous_sync_qty = previous_instance.sync_qty
+        #     except type(self).DoesNotExist:
+        #         pass  # New object, no previous data exists
+
+        #     if not is_closed:  # Status other than 'closed'
+        #         if self.sync_qty:
+        #             # If changing from sync_qty=False to sync_qty=True, include unsynced quantities
+        #             if not previous_sync_qty and self.sync_qty:
+        #                 # Get all unsynced quantities from CompletedQuantity
+        #                 try:
+        #                     completed_quantity = CompletedQuantity.objects.get(work_order_id=self.work_order_id)
+        #                     unsynced_qty = completed_quantity.quantity
+        #                     # Add unsynced quantity to current completed_qty
+        #                     self.completed_qty = (self.completed_qty or 0) + unsynced_qty
+        #                     # Clear the unsynced quantity record
+        #                     completed_quantity.delete()
+        #                 except CompletedQuantity.DoesNotExist:
+        #                     # No unsynced quantities, proceed normally
+        #                     self.completed_qty = previous_completed_qty + (self.completed_qty or 0)
+        #             else:
+        #                 # Normal sync operation
+        #                 self.completed_qty = previous_completed_qty + (self.completed_qty or 0)
+        #         else:
+        #             # sync_qty is False, store in CompletedQuantity
+        #             with transaction.atomic():
+        #                 completed_quantity, created = CompletedQuantity.objects.get_or_create(
+        #                     work_order_id=self.work_order_id,
+        #                     defaults={'quantity': self.completed_qty or 0}
+        #                 )
+        #                 if not created:
+        #                     completed_quantity.quantity += self.completed_qty or 0
+        #                     completed_quantity.save()
+        #                 # Keep completed_qty as previous value since we're not syncing
+        #                 self.completed_qty = previous_completed_qty
+        #     else:  # If status is 'closed'
+        #         # When closing, include any unsynced quantities
+        #         try:
+        #             completed_quantity = CompletedQuantity.objects.get(work_order_id=self.work_order_id)
+        #             unsynced_qty = completed_quantity.quantity
+        #             self.completed_qty = previous_completed_qty + (self.completed_qty or 0) + unsynced_qty
+        #             completed_quantity.delete()  # Remove the unsynced record
+        #         except CompletedQuantity.DoesNotExist:
+        #             self.completed_qty = previous_completed_qty + (self.completed_qty or 0)
+        
+        # # Reset sync_qty to True only if it's currently True
+        # # Don't reset if user explicitly set it to False
+        # if self.sync_qty:
+        #     self.sync_qty = True
+
+        # super().save(*args, **kwargs)
 
     class Meta:
         db_table = workorders
