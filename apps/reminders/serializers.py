@@ -1,3 +1,4 @@
+from requests import Response
 from rest_framework import serializers
 from apps.hrms.serializers import ModEmployeesSerializer
 from apps.reminders.models import NotificationFrequencies, NotificationMethods, ReminderTypes, Reminders, ReminderRecipients, ReminderSettings, ReminderLogs
@@ -42,6 +43,16 @@ class RemindersSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reminders
         fields = '__all__'
+        
+    def list(self, request):
+        user_id = request.user.user_id
+        reminders = Reminders.objects.filter(
+            reminderrecipients__recipient_user_id=user_id,
+            is_deleted=False
+        ).distinct()
+
+        serializer = RemindersSerializer(reminders, many=True)
+        return Response({"data": serializer.data})
 		
 
 class ModReminderRecipientsSerializer(serializers.ModelSerializer):

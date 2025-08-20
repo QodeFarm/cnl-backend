@@ -131,7 +131,7 @@ class ModproductsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
     class Meta:
         model = Products
-        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'mrp', 'discount', 'gst_input', 'wholesale_rate', 'dealer_rate']
+        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'mrp', 'discount', 'gst_input', 'wholesale_rate', 'dealer_rate', 'balance']
 
 class ModStockJournalProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -172,10 +172,29 @@ class productsSerializer(serializers.ModelSerializer):
     pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)
     g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True)
     product_mode = ModItemMasterSerializer(source='product_mode_id', read_only=True)
+    
+    warehouse_locations = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
         fields = '__all__'
+        
+    def get_warehouse_locations(self, obj):
+        """
+        Get all warehouse locations related to this product
+        through variations / stock balances.
+        """
+        # if you have variations linked:
+        # variations = ProductVariation.objects.all()  # or whatever related_name you used
+        location_ids = (
+            ProductItemBalance.objects
+            .filter(product_id=obj.product_id)
+            .values_list('warehouse_location_id', flat=True)
+            .distinct()
+        )
+        # from warehouse.serializers import ModWarehouseLocationsSerializer
+        locations = WarehouseLocations.objects.filter(location_id__in=location_ids)
+        return ModWarehouseLocationsSerializer(locations, many=True).data
 
 class ProductItemBalanceSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id',read_only=True)
@@ -186,10 +205,11 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
 
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
-
+    stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id',read_only=True)
+    
     class Meta:
         model = Products
-        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'wholesale_rate', 'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'hsn_code', 'gst_input', 'created_at']
+        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'hsn_code', 'gst_input', 'created_at', 'stock_unit',  'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  'g_pack_vs_pack' ]
 
 class SizeSerializer(serializers.ModelSerializer):
     class Meta:

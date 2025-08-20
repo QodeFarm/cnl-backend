@@ -49,7 +49,7 @@ class ModBillOfMaterialsSerializer(serializers.ModelSerializer):
     color = ModColorSerializer(source='color_id',read_only=True)
     class Meta:
         model = BillOfMaterials
-        fields = ['material_id','product','size','color','quantity']
+        fields = ['material_id','product','size','color','quantity', 'original_quantity']
 
 class ProductionStatusSerializer(serializers.ModelSerializer):
     class Meta:

@@ -720,7 +720,7 @@ class QuickPacks(models.Model):
     name = models.CharField(max_length=255)
     description = models.CharField(max_length=512, null=True, default=None)
     active = models.CharField(max_length=1, choices=[('N', 'No'),('Y', 'Yes')], null=True, default='Y')
-    lot_qty = models.IntegerField(default=1, null=True)
+    lot_qty = models.IntegerField(null=True, blank=True)
     customer_id = models.ForeignKey(Customer,on_delete=models.PROTECT, db_column='customer_id', null=True, default=None)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
