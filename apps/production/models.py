@@ -223,7 +223,7 @@ class Machine(models.Model):
 class DefaultMachinery(models.Model):
     default_machinery_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
-    machine_id = models.ForeignKey(Machine, on_delete=models.PROTECT, db_column='machine_id')
+    machine_id = models.ForeignKey(Machine, on_delete=models.PROTECT, null=True, db_column='machine_id')
 
     class Meta:
         db_table = defaultmachinery
@@ -234,7 +234,7 @@ class DefaultMachinery(models.Model):
 class WorkOrderMachine(models.Model):
     work_order_machines_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     work_order_id = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, db_column='work_order_id')
-    machine_id = models.ForeignKey(Machine, on_delete=models.PROTECT, db_column='machine_id')
+    machine_id = models.ForeignKey(Machine, on_delete=models.PROTECT, null=True,db_column='machine_id')
 
     class Meta:
         db_table = workordermachines
@@ -245,7 +245,7 @@ class WorkOrderMachine(models.Model):
 
 class ProductionWorker(models.Model):
     worker_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column='employee_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT,null=True, db_column='employee_id')
     work_order_id = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, db_column='work_order_id')
     hours_worked = models.DecimalField(max_digits=5, decimal_places=2, null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -260,7 +260,7 @@ class ProductionWorker(models.Model):
 class WorkOrderStage(models.Model):
     work_stage_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     work_order_id = models.ForeignKey(WorkOrder, on_delete=models.PROTECT, db_column='work_order_id')
-    stage_name = models.CharField(max_length=255)
+    stage_name = models.CharField(max_length=255, null=True)
     stage_description = models.TextField(default=None, null=True)
     stage_start_date = models.DateField(default=None, null=True, blank=True)
     stage_end_date = models.DateField(default=None, null=True, blank=True) 
