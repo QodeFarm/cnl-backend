@@ -448,7 +448,7 @@ class ProductViewSet(APIView):
 
             if summary:
                 # ✅ If summary, return compact serializer
-                serializer = ProductOptionsSerializer(queryset, many=True)
+                serializer = productsSerializer(queryset, many=True)
                 return build_response(len(serializer.data), "Success", serializer.data, status.HTTP_200_OK)
             else:
                 logger.info("Retrieving products with pagination")
