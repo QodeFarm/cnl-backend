@@ -36,6 +36,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
+
+from config.utils_filter_methods import filter_response
 logger = logging.getLogger(__name__)
 
 
@@ -124,48 +126,149 @@ def list_all_objects_1(self, request, *args, **kwargs):
 
 from itertools import chain
 
+# def list_all_objects(self, request, *args, **kwargs):
+#     try:
+#         filters = request.query_params.dict()
+#         sale_order_id = filters.get('sale_order_id')
+#         records_all = request.query_params.get("records_all", "false").lower() == "true"
+
+#         # Default queryset (from default DB)
+#         queryset = self.filter_queryset(self.get_queryset().order_by('-created_at'))
+
+#         #  Special logic: only if sale_order_id is provided
+#         if sale_order_id:
+#             default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id)
+#             mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id)
+
+#             if default_qs.exists():
+#                 queryset = self.filter_queryset(default_qs.order_by('-created_at'))
+#             elif mstcnl_qs.exists():
+#                 queryset = self.filter_queryset(mstcnl_qs.order_by('-created_at'))
+#             else:
+#                 queryset = []  # not found in either DB
+
+#         #  records_all logic (combine both DBs)
+#         elif records_all:
+#             default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
+#             mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
+#             queryset = list(chain(default_qs, mstcnl_qs))
+
+#         #  All other cases = default logic is already active
+
+#         serializer = self.get_serializer(queryset, many=True)
+#         message = "NO RECORDS INSERTED" if not serializer.data else None
+
+#         return build_response(
+#             len(queryset),
+#             message,
+#             serializer.data,
+#             status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
+#         )
+
+#     except Exception as e:
+#         logger.error(f"Error in list_all_objects: {str(e)}")
+#         return build_response(0, "Error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+from django.utils.functional import cached_property
+
 def list_all_objects(self, request, *args, **kwargs):
     try:
+        # --- read params ---
         filters = request.query_params.dict()
         sale_order_id = filters.get('sale_order_id')
         records_all = request.query_params.get("records_all", "false").lower() == "true"
+        page = int(request.query_params.get('page', 1) or 1)
+        limit = int(request.query_params.get('limit', 10) or 10)
+        start = (page - 1) * limit
+        end = start + limit
 
-        # Default queryset (from default DB)
-        queryset = self.filter_queryset(self.get_queryset().order_by('-created_at'))
+        # --- helpers ---
+        def qs_count(obj):
+            try:
+                return obj.count()
+            except Exception:
+                return len(obj)
 
-        #  Special logic: only if sale_order_id is provided
+        def slice_any(obj, s, e):
+            # Works for QuerySet and list
+            return obj[s:e]
+
+        # --- default queryset (already filtered & ordered) ---
+        base_qs = self.filter_queryset(self.get_queryset().order_by('-created_at'))
+
+        total_count = 0
+        page_items = []
+
+        # --- special: sale_order_id (pick ONLY one DB if present there) ---
         if sale_order_id:
-            default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id)
-            mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id)
+            default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id).order_by('-created_at')
+            default_qs = self.filter_queryset(default_qs)
+
+            mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id).order_by('-created_at')
+            mstcnl_qs = self.filter_queryset(mstcnl_qs)
 
             if default_qs.exists():
-                queryset = self.filter_queryset(default_qs.order_by('-created_at'))
+                total_count = qs_count(default_qs)
+                page_items = list(slice_any(default_qs, start, end))
             elif mstcnl_qs.exists():
-                queryset = self.filter_queryset(mstcnl_qs.order_by('-created_at'))
+                total_count = qs_count(mstcnl_qs)
+                page_items = list(slice_any(mstcnl_qs, start, end))
             else:
-                queryset = []  # not found in either DB
+                total_count = 0
+                page_items = []
 
-        #  records_all logic (combine both DBs)
+        # --- records_all=true: combine BOTH DBs (default first, then mstcnl) ---
         elif records_all:
             default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
             mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
-            queryset = list(chain(default_qs, mstcnl_qs))
 
-        #  All other cases = default logic is already active
+            default_count = qs_count(default_qs)
+            mstcnl_count = qs_count(mstcnl_qs)
+            total_count = default_count + mstcnl_count
 
-        serializer = self.get_serializer(queryset, many=True)
+            # Efficient cross-DB pagination without materializing full lists
+            # Keep the original order: all default first, then mstcnl (same as your previous functionality)
+            page_items = []
+
+            # Portion from default DB
+            if start < default_count:
+                d_start = start
+                d_end = min(end, default_count)
+                page_items.extend(list(slice_any(default_qs, d_start, d_end)))
+
+            # Portion from mstcnl DB
+            if end > default_count:
+                m_start = max(0, start - default_count)
+                m_end = end - default_count
+                if m_start < mstcnl_count:
+                    page_items.extend(list(slice_any(mstcnl_qs, m_start, min(m_end, mstcnl_count))))
+
+        # --- default path (single DB as you already had) ---
+        else:
+            total_count = qs_count(base_qs)
+            page_items = list(slice_any(base_qs, start, end))
+
+        serializer = self.get_serializer(page_items, many=True)
         message = "NO RECORDS INSERTED" if not serializer.data else None
 
-        return build_response(
-            len(queryset),
+        # Preserve your previous status behavior:
+        status_code = status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
+
+        # Return paginated response with correct totalCount
+        return filter_response(
+            len(serializer.data),   # current page count
             message,
             serializer.data,
-            status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
+            page,
+            limit,
+            total_count,            # IMPORTANT: real total
+            status_code
         )
 
     except Exception as e:
         logger.error(f"Error in list_all_objects: {str(e)}")
         return build_response(0, "Error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 def create_instance(self, request, *args, **kwargs):
@@ -1114,22 +1217,29 @@ def update_product_stock(parent_model, child_model, data, operation, using='defa
                 product_instance.save(using=using)
 
                 # Update or create variation if size/color provided
-                if size_id and color_id:
-                    variation, created = child_model.objects.using(using).get_or_create(
-                        product_id=product_id,
-                        size_id=size_id,
-                        color_id=color_id,
-                        defaults={'quantity': return_qty if operation == 'add' else -return_qty}
-                    )
+                # if size_id and color_id:
+                #     variation, created = child_model.objects.using(using).get_or_create(
+                #         product_id=product_id,
+                #         size_id=size_id,
+                #         color_id=color_id,
+                #         defaults={'quantity': return_qty if operation == 'add' else -return_qty}
+                #     )
+                # --- Always update variation stock (even if size/color are None) ---
+                variation, created = child_model.objects.using(using).get_or_create(
+                    product_id=product_id,
+                    size_id=size_id,     # may be None
+                    color_id=color_id,   # may be None
+                    defaults={'quantity': return_qty if operation == 'add' else -return_qty}
+                )
                     
-                    if not created:
-                        if operation == 'add':
-                            variation.quantity += return_qty
-                        elif operation == 'subtract':
-                            variation.quantity -= return_qty
-                        variation.save(using=using)
-                        
-                    logger.info(f'{"Created" if created else "Updated"} variation for Product ID: {product_id}')
+                if not created:
+                    if operation == 'add':
+                        variation.quantity += return_qty
+                    elif operation == 'subtract':
+                        variation.quantity -= return_qty
+                    variation.save(using=using)
+                    
+                logger.info(f'{"Created" if created else "Updated"} variation for Product ID: {product_id}')
                 
         except parent_model.DoesNotExist:
             logger.error(f'Product with ID {product_id} does not exist')

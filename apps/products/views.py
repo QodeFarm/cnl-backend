@@ -415,18 +415,71 @@ class ProductViewSet(APIView):
     #         logger.error(f"An unexpected error occurred: {str(e)}")
     #         return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+    # def get(self, request, *args, **kwargs):
+    #     try:
+    #         if "pk" in kwargs:
+    #             result = validate_input_pk(self, kwargs['pk'])
+    #             return result if result else self.retrieve(self, request, *args, **kwargs)
+
+    #         summary = request.query_params.get('summary', 'false').lower() == 'true'
+    #         view_type = request.query_params.get('view', '')
+
+    #         # Start with all products
+    #         queryset = Products.objects.all().order_by('-created_at')
+
+    #         # Filter by product mode
+    #         if view_type:
+    #             mode_map = {
+    #                 "inventory": "Inventory",
+    #                 "non-inventory": "Non Inventory",
+    #                 "service": "Service",
+    #             }
+    #             mode_name = mode_map.get(view_type)
+    #             if mode_name:
+    #                 item_mode = ItemMaster.objects.filter(mode_name=mode_name).first()
+    #                 if item_mode:
+    #                     queryset = queryset.filter(product_mode_id=item_mode)
+    #                     logger.info(f"Filtering products to show only {mode_name} mode items")
+
+    #         # Apply filters first (before counting)
+    #         filterset = ProductsFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #         if summary:
+    #             # ✅ If summary, return compact serializer
+    #             serializer = ProductOptionsSerializer(queryset, many=True)
+    #             return build_response(len(serializer.data), "Success", serializer.data, status.HTTP_200_OK)
+    #         else:
+    #             logger.info("Retrieving products with pagination")
+
+    #             # Pagination
+    #             page = int(request.query_params.get('page', 1))
+    #             limit = int(request.query_params.get('limit', 10))
+    #             total_count = queryset.count()
+
+    #             start = (page - 1) * limit
+    #             end = start + limit
+    #             queryset = queryset[start:end]
+
+    #             serializer = productsSerializer(queryset, many=True)
+    #             return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    #     except Exception as e:
+    #         logger.error(f"An unexpected error occurred: {str(e)}")
+    #         return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
+        # Filter by product mode if view_type is provided
         try:
-            if "pk" in kwargs:
-                result = validate_input_pk(self, kwargs['pk'])
-                return result if result else self.retrieve(self, request, *args, **kwargs)
-
-            summary = request.query_params.get('summary', 'false').lower() == 'true'
+            summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
             view_type = request.query_params.get('view', '')
-
-            # Start with all products
+            
             queryset = Products.objects.all().order_by('-created_at')
-
+            
             # Filter by product mode
             if view_type:
                 mode_map = {
@@ -441,34 +494,32 @@ class ProductViewSet(APIView):
                         queryset = queryset.filter(product_mode_id=item_mode)
                         logger.info(f"Filtering products to show only {mode_name} mode items")
 
-            # Apply filters first (before counting)
-            filterset = ProductsFilter(request.GET, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
-
             if summary:
-                # ✅ If summary, return compact serializer
-                serializer = ProductOptionsSerializer(queryset, many=True)
-                return build_response(len(serializer.data), "Success", serializer.data, status.HTTP_200_OK)
+                product = Products.objects.all().order_by('-created_at')	
+                data = ProductOptionsSerializer.get_product_summary(product)
+                return build_response(len(data), "Success", data, status.HTTP_200_OK)
             else:
-                logger.info("Retrieving products with pagination")
+                logger.info("Retrieving all products")
+                queryset = Products.objects.all().order_by('-created_at')	
 
-                # Pagination
-                page = int(request.query_params.get('page', 1))
-                limit = int(request.query_params.get('limit', 10))
-                total_count = queryset.count()
+                page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+                limit = int(request.query_params.get('limit', 10)) 
+                total_count = Products.objects.count()
 
-                start = (page - 1) * limit
-                end = start + limit
-                queryset = queryset[start:end]
+                # Apply filters manuallys
+                if request.query_params:
+                    filterset = ProductsFilter(request.GET, queryset=queryset)
+                    if filterset.is_valid():
+                        queryset = filterset.qs 
 
-                serializer = productsSerializer(queryset, many=True)
-                return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+                serializer = ProductOptionsSerializer(queryset, many=True)
+                logger.info("product data retrieved successfully.")
+                # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+                return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
     def retrieve(self, request, *args, **kwargs):
             """
