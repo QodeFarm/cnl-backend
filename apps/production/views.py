@@ -250,7 +250,7 @@ class WorkOrderAPIView(APIView):
             if request.query_params.get("work_order_status_report", "false").lower() == "true":
                 return self.get_work_order_status_report(request)
 
-            if request.query_params.get("summary", "false").lower() == "true":
+            if request.query_params.get("summary", "false").lower() == "true" + "&":
                 return self.get_work_order_summary(request)
             
             # if request.query_params.get("work_order_status_report", "false").lower() == "true":
@@ -297,9 +297,44 @@ class WorkOrderAPIView(APIView):
         if filterset.is_valid():
             queryset = filterset.qs
 
-        total_count = queryset.count()
+        total_count = WorkOrder.objects.count() #queryset.count()
+        # Apply pagination manually (if filter_response does not handle it)
+        start = (page - 1) * limit
+        end = start + limit
+        page_queryset = queryset[start:end]
+        
         serializer = WorkOrderSerializer(queryset, many=True)
         return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+    # def get_work_orders(self, request):
+    #     logger.info(f'We are in the method')
+    #     queryset = WorkOrder.objects.annotate(pending_qty=F("quantity") - F("completed_qty"))
+        
+    #     # Apply filters
+    #     filterset = WorkOrderFilter(request.GET, queryset=queryset)
+    #     if filterset.is_valid():
+    #         queryset = filterset.qs
+            
+    #     page, limit = self.get_pagination_params(request)
+    #     total_count = WorkOrder.objects.count()  # <-- total number of matching records
+    #     logger.info(f'We are in the method: {total_count}')
+    #     # Apply pagination
+    #     start = (page - 1) * limit
+    #     end = start + limit
+    #     page_queryset = queryset[start:end]
+
+    #     serializer = WorkOrderSerializer(page_queryset, many=True)
+
+    #     # Send correct totalCount
+    #     return filter_response(
+    #         len(serializer.data),            # total matching records
+    #         "Success",
+    #         serializer.data,
+    #         page,
+    #         limit,
+    #         total_count,
+    #         status.HTTP_200_OK
+    #     )
+
 
     def get_work_order_summary(self, request):
         """Fetches summarized Work Order data."""
@@ -627,14 +662,25 @@ class WorkOrderAPIView(APIView):
         if stages_error:
                 errors['work_order_stages'] = stages_error
         if errors:
-            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "ValidationError: {errors}", errors, status.HTTP_400_BAD_REQUEST)
 
         # Stock Verification
         if bom_data:
             stock_error = product_stock_verification(Products, ProductVariation, bom_data)
             if stock_error:
-                return build_response(0, f"ValidationError :", stock_error, status.HTTP_400_BAD_REQUEST)                
+                # Pick the first user-friendly error message
+                # error_message = list(stock_error.values())[0] 
+                # Build user-friendly messages including product name
+                error_messages = [
+                    f"{product}: {msg}" for product, msg in stock_error.items()
+                ] 
 
+                return build_response(
+                    0,
+                    error_messages[0],   # <-- directly show message like: "Insufficient stock..."
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
         #---------------------- D A T A   C R E A T I O N ----------------------------#
         """
         After the data is validated, this validated data is created as new instances.
@@ -708,24 +754,40 @@ class WorkOrderAPIView(APIView):
             bom_error = []
 
         exclude_fields = ['work_order_id']
+        # # Validated WorkOrderMachine Data
+        # work_order_machines_data = given_data.pop('work_order_machines', None)
+        # if work_order_machines_data:
+        #     machinery_error = validate_put_method_data(self, work_order_machines_data, WorkOrderMachineSerializer, exclude_fields, WorkOrderMachine, current_model_pk_field='work_order_machines_id')
+        # else:
+        #     machinery_error = [] # Since 'default_machinery' is optional, so making an error is empty list
         # Validated WorkOrderMachine Data
-        work_order_machines_data = given_data.pop('work_order_machines', None)
+        work_order_machines_data = normalize_value(given_data.pop('work_order_machines', None))
         if work_order_machines_data:
-            machinery_error = validate_put_method_data(self, work_order_machines_data, WorkOrderMachineSerializer, exclude_fields, WorkOrderMachine, current_model_pk_field='work_order_machines_id')
+            work_order_machines_data = [d for d in work_order_machines_data if d.get("machine_id")]
+            machinery_error = validate_multiple_data(self, work_order_machines_data, WorkOrderMachineSerializer, exclude_fields, using_db='default')
         else:
-            machinery_error = [] # Since 'default_machinery' is optional, so making an error is empty list
-
+            machinery_error = []
+            
+        # # Validated ProductionWorker Data
+        # workers_data = given_data.pop('workers', None)
+        # if workers_data:
+        #     workers_error = validate_put_method_data(self, workers_data, ProductionWorkerSerializer, exclude_fields, ProductionWorker, current_model_pk_field='worker_id')
+        # else:
+        #     workers_error = []
+        
         # Validated ProductionWorker Data
-        workers_data = given_data.pop('workers', None)
+        workers_data = normalize_value(given_data.pop('workers', None))
         if workers_data:
-            workers_error = validate_put_method_data(self, workers_data, ProductionWorkerSerializer, exclude_fields, ProductionWorker, current_model_pk_field='worker_id')
+            workers_data = [d for d in workers_data if d.get("employee_id")]
+            workers_error = validate_multiple_data(self, workers_data , ProductionWorkerSerializer,['work_order_id'], using_db='default')
         else:
             workers_error = []
 
         # Validated WorkOrderStage Data
-        stages_data = given_data.pop('work_order_stages', None)
+        stages_data = normalize_value(given_data.pop('work_order_stages', None))
         if stages_data:
-            stages_error = validate_put_method_data(self, stages_data, WorkOrderStageSerializer, exclude_fields, ProductionWorker, current_model_pk_field='work_stage_id')
+            stages_data = [d for d in stages_data if d.get("stage_id")]
+            stages_error = validate_multiple_data(self, stages_data , WorkOrderStageSerializer,['work_order_id'], using_db='default')
         else:
             stages_error = []
         

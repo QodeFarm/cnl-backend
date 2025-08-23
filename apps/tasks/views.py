@@ -276,7 +276,7 @@ class TaskView(APIView):
             custom_error = []
             
         # Ensure mandatory data is present
-        if not task_data or not custom_fields_data:
+        if not task_data:
             logger.error(
                 "Task & CustomFields are mandatory but not provided.")
             return build_response(0, "Task & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
@@ -416,7 +416,7 @@ class TaskView(APIView):
             custom_field_values_error = []
 
         # Ensure mandatory data is present
-        if not task_data or not custom_field_values_data:
+        if not task_data:
             logger.error("Task data & CustomFields are mandatory but not provided.")
             return build_response(0, "Task data & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 

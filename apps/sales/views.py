@@ -1686,12 +1686,148 @@ class SaleInvoiceOrdersViewSet(APIView):
             logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
+    # def get(self, request, *args, **kwargs):
+    #     if "pk" in kwargs:
+    #         result =  validate_input_pk(self,kwargs['pk'])
+    #         return result if result else self.retrieve(self, request, *args, **kwargs) 
+    #     try:
+    #         # Check if the 'records_all' filter is set in the query params
+    #         records_all = request.query_params.get("records_all", "false").lower() == "true"
+    #         records_mstcnl = request.query_params.get("records_mstcnl", "false").lower() == "true"
+            
+    #         logger.info(f"Fetching records_all: {records_all}")
+            
+    #         summary = request.query_params.get("summary", "false").lower() == "true"
+    #         if summary:
+    #             logger.info("Retrieving sale invoice order summary")
+    #             saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('-created_at')
+    #             data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
+    #             return build_response(len(data), "Success", data, status.HTTP_200_OK)
+             
+    #         logger.info("Retrieving all sale invoice orders")
+
+    #         page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+    #         limit = int(request.query_params.get('limit', 10)) 
+
+    #         queryset = SaleInvoiceOrders.objects.all().order_by('-created_at')
+
+    #         if records_all:
+    #             logger.info("Fetching sale order summary from both mstcnl and default databases")
+
+    #             # DB: mstcnl
+    #             base_queryset_mstcnl = MstcnlSaleInvoiceOrder.objects.using('mstcnl').all().order_by('-created_at')
+    #             filterset_mstcnl = MstcnlSaleInvoiceFilter(request.GET, queryset=base_queryset_mstcnl)
+    #             if filterset_mstcnl.is_valid():
+    #                 saleorders_mstcnl = filterset_mstcnl.qs
+    #             else:
+    #                 saleorders_mstcnl = base_queryset_mstcnl
+
+    #             # DB: default
+    #             base_queryset_devcnl = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
+    #             filterset_devcnl = SaleInvoiceOrdersFilter(request.GET, queryset=base_queryset_devcnl)
+    #             if filterset_devcnl.is_valid():
+    #                 saleorders_devcnl = filterset_devcnl.qs
+    #             else:
+    #                 saleorders_devcnl = base_queryset_devcnl
+
+    #             # Combine both
+    #             combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
+    #             total_count = len(combined_queryset)
+
+    #             # Manual pagination on combined list
+    #             start_index = (page - 1) * limit
+    #             end_index = start_index + limit
+    #             paginated_results = combined_queryset[start_index:end_index]
+
+    #             # Separate the paginated slice into two: mstcnl & devcnl
+    #             paginated_mstcnl = [obj for obj in paginated_results if isinstance(obj, MstcnlSaleInvoiceOrder)]
+    #             paginated_devcnl = [obj for obj in paginated_results if isinstance(obj, SaleInvoiceOrders)]
+
+    #             # Serialize each with its correct serializer
+    #             serializer_mstcnl = MstcnlSaleInvoiceSerializer(paginated_mstcnl, many=True)
+    #             serializer_devcnl = SaleInvoiceOrdersSerializer(paginated_devcnl, many=True)
+
+    #             # Combine results
+    #             final_results = serializer_mstcnl.data + serializer_devcnl.data
+
+    #             return filter_response(
+    #                 total_count,
+    #                 "Success",
+    #                 final_results,
+    #                 page,
+    #                 limit,
+    #                 total_count,
+    #                 status.HTTP_200_OK
+    #             )
+    #         elif records_mstcnl:
+    #             logger.info("Fetching sale orders only from mstcnl database")
+
+    #             base_queryset_mstcnl = MstcnlSaleInvoiceOrder.objects.using('mstcnl').all().order_by('-created_at')
+
+    #             filterset_mstcnl = MstcnlSaleInvoiceFilter(request.GET, queryset=base_queryset_mstcnl)
+    #             if filterset_mstcnl.is_valid():
+    #                 saleorders_mstcnl = filterset_mstcnl.qs
+    #             else:
+    #                 saleorders_mstcnl = base_queryset_mstcnl
+
+    #             total_count = saleorders_mstcnl.count()
+    #             start_index = (page - 1) * limit
+    #             end_index = start_index + limit
+    #             paginated_results = saleorders_mstcnl[start_index:end_index]
+
+    #             serializer_mstcnl = MstcnlSaleInvoiceSerializer(paginated_results, many=True)
+
+    #             return filter_response(
+    #                 total_count,
+    #                 "Success",
+    #                 serializer_mstcnl.data,
+    #                 page,
+    #                 limit,
+    #                 total_count,
+    #                 status.HTTP_200_OK
+    #             )
+
+    #         else:
+    #             logger.info("Fetching sale orders only from devcnl")
+    #             # Only query from the 'devcnl' database
+    #             # queryset = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
+                
+    #             # Get cancelled status IDs
+    #             canceled_status_ids = list(OrderStatuses.objects.filter(
+    #             status_name__in=['Cancelled']
+    #             ).values_list('order_status_id', flat=True))
+            
+    #             # queryset = SaleInvoiceOrders.objects.all().order_by('-invoice_date')
+    #             queryset = SaleInvoiceOrders.objects.exclude(
+    #             order_status_id__in=canceled_status_ids
+    #                                ).order_by('-created_at')
+        
+    #             total_count = SaleInvoiceOrders.objects.count()
+    #             # Apply filters manually
+    #             if request.query_params:
+    #                 filterset = SaleInvoiceOrdersFilter(request.GET, queryset=queryset)
+    #                 if filterset.is_valid():
+    #                     queryset = filterset.qs 
+                        
+    #             total_count = queryset.count()
+    #             paginated_results = queryset[(page - 1) * limit: page * limit]
+
+    #         # total_count = SaleInvoiceOrders.objects.count()
+
+    #         serializer = SaleInvoiceOrderOptionsSerializer(paginated_results, many=True)
+    #         logger.info("sale order invoice data retrieved successfully.")
+    #         # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+    #         return filter_response(total_count,"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+
+    #     except Exception as e:
+    #         logger.error(f"An unexpected error occurred: {str(e)}")
+    #         return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     def get(self, request, *args, **kwargs):
         if "pk" in kwargs:
             result =  validate_input_pk(self,kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            # Check if the 'records_all' filter is set in the query params
             records_all = request.query_params.get("records_all", "false").lower() == "true"
             records_mstcnl = request.query_params.get("records_mstcnl", "false").lower() == "true"
             
@@ -1699,18 +1835,27 @@ class SaleInvoiceOrdersViewSet(APIView):
             
             summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
-                logger.info("Retrieving sale invoice order summary")
                 saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('-created_at')
                 data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
-             
-            logger.info("Retrieving all sale invoice orders")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+                total_count = len(data)  # total after summary processing
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
 
-            queryset = SaleInvoiceOrders.objects.all().order_by('-created_at')
+                # manual pagination on summary data
+                start_index = (page - 1) * limit
+                end_index = start_index + limit
+                paginated_data = data[start_index:end_index]
 
+                return filter_response(
+                    total_count,
+                    "Success",
+                    paginated_data,
+                    page,
+                    limit,
+                    total_count,
+                    status.HTTP_200_OK
+                )
             if records_all:
                 logger.info("Fetching sale order summary from both mstcnl and default databases")
 
@@ -1732,7 +1877,9 @@ class SaleInvoiceOrdersViewSet(APIView):
 
                 # Combine both
                 combined_queryset = list(chain(saleorders_mstcnl, saleorders_devcnl))
-                total_count = len(combined_queryset)
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
+                total_count = len(combined_queryset)  # ✅ Correct: filtered combined count
 
                 # Manual pagination on combined list
                 start_index = (page - 1) * limit
@@ -1759,18 +1906,18 @@ class SaleInvoiceOrdersViewSet(APIView):
                     total_count,
                     status.HTTP_200_OK
                 )
+
             elif records_mstcnl:
                 logger.info("Fetching sale orders only from mstcnl database")
 
                 base_queryset_mstcnl = MstcnlSaleInvoiceOrder.objects.using('mstcnl').all().order_by('-created_at')
-
                 filterset_mstcnl = MstcnlSaleInvoiceFilter(request.GET, queryset=base_queryset_mstcnl)
                 if filterset_mstcnl.is_valid():
                     saleorders_mstcnl = filterset_mstcnl.qs
                 else:
                     saleorders_mstcnl = base_queryset_mstcnl
 
-                total_count = saleorders_mstcnl.count()
+                total_count = saleorders_mstcnl.count()  # ✅ Correct: filtered count
                 start_index = (page - 1) * limit
                 end_index = start_index + limit
                 paginated_results = saleorders_mstcnl[start_index:end_index]
@@ -1789,39 +1936,35 @@ class SaleInvoiceOrdersViewSet(APIView):
 
             else:
                 logger.info("Fetching sale orders only from devcnl")
-                # Only query from the 'devcnl' database
-                # queryset = SaleInvoiceOrders.objects.using('default').all().order_by('-created_at')
-                
-                # Get cancelled status IDs
+
                 canceled_status_ids = list(OrderStatuses.objects.filter(
-                status_name__in=['Cancelled']
+                    status_name__in=['Cancelled']
                 ).values_list('order_status_id', flat=True))
-            
-                # queryset = SaleInvoiceOrders.objects.all().order_by('-invoice_date')
+
                 queryset = SaleInvoiceOrders.objects.exclude(
-                order_status_id__in=canceled_status_ids
-                                   ).order_by('-created_at')
-        
-                total_count = SaleInvoiceOrders.objects.count()
+                    order_status_id__in=canceled_status_ids
+                ).order_by('-created_at')
+
                 # Apply filters manually
                 if request.query_params:
                     filterset = SaleInvoiceOrdersFilter(request.GET, queryset=queryset)
                     if filterset.is_valid():
                         queryset = filterset.qs 
-                        
-                total_count = queryset.count()
+
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
+                total_count = queryset.count()  # ✅ Correct: filtered count
                 paginated_results = queryset[(page - 1) * limit: page * limit]
 
-            # total_count = SaleInvoiceOrders.objects.count()
+                serializer = SaleInvoiceOrderOptionsSerializer(paginated_results, many=True)
+                logger.info("sale order invoice data retrieved successfully.")
 
-            serializer = SaleInvoiceOrderOptionsSerializer(paginated_results, many=True)
-            logger.info("sale order invoice data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(total_count,"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+                return filter_response(total_count,"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     
     def retrieve(self, request, *args, **kwargs):
         """
@@ -4582,18 +4725,28 @@ class PaymentTransactionAPIView(APIView):
                 return build_response(len(payment_transactions_created), "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
             else:
                 return build_response(0, "No Invoices", [], status.HTTP_204_NO_CONTENT)
-
+            
     def get(self, request, customer_id=None):
         records_all = request.query_params.get('records_all', 'false').lower() == 'true'
 
-        if customer_id:
-            payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).order_by('-created_at')
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
 
+        if customer_id:
+            # default db
+            payment_transactions = PaymentTransactions.objects.filter(
+                customer_id=customer_id
+            ).order_by('-created_at')
+
+            # secondary db (only if records_all=true)
             mstcnl_payment_transactions = []
             if records_all:
-                mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(customer_id=customer_id).order_by('-created_at')
+                mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(
+                    customer_id=customer_id
+                ).order_by('-created_at')
 
             combined = []
+
             if payment_transactions.exists():
                 serializer_default = PaymentTransactionSerializer(payment_transactions, many=True)
                 combined.extend(serializer_default.data)
@@ -4602,12 +4755,15 @@ class PaymentTransactionAPIView(APIView):
                 serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_payment_transactions, many=True)
                 combined.extend(serializer_mstcnl.data)
 
-            if not combined:
-                return build_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND)
+            total_count = len(combined)
 
-            return build_response(len(combined), "Payment Transactions", combined, status.HTTP_200_OK)
+            if not combined:
+                return filter_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND)
+
+            return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 
         else:
+            # default db
             transactions = PaymentTransactions.objects.all()
 
             if request.query_params:
@@ -4615,11 +4771,13 @@ class PaymentTransactionAPIView(APIView):
                 if filterset.is_valid():
                     transactions = filterset.qs
 
+            # secondary db (only if records_all=true)
             mstcnl_transactions = []
             if records_all:
                 mstcnl_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').all()
 
             combined = []
+
             if transactions.exists():
                 serializer_default = PaymentTransactionSerializer(transactions, many=True)
                 combined.extend(serializer_default.data)
@@ -4628,7 +4786,69 @@ class PaymentTransactionAPIView(APIView):
                 serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_transactions, many=True)
                 combined.extend(serializer_mstcnl.data)
 
-            return build_response(len(combined), "Payment Transactions", combined, status.HTTP_200_OK)
+            # ✅ total_count should reflect both DBs when records_all=true
+            if records_all:
+                total_count = PaymentTransactions.objects.count() + MstCnlPaymentTransactions.objects.using('mstcnl').count()
+            else:
+                total_count = PaymentTransactions.objects.count()
+
+            return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
+
+
+    # def get(self, request, customer_id=None):
+    #     records_all = request.query_params.get('records_all', 'false').lower() == 'true'
+
+    #     if customer_id:
+    #         payment_transactions = PaymentTransactions.objects.filter(customer_id=customer_id).order_by('-created_at')
+
+    #         mstcnl_payment_transactions = []
+    #         if records_all:
+    #             mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(customer_id=customer_id).order_by('-created_at')
+
+    #         combined = []
+    #         if payment_transactions.exists():
+    #             serializer_default = PaymentTransactionSerializer(payment_transactions, many=True)
+    #             combined.extend(serializer_default.data)
+
+    #         if mstcnl_payment_transactions:
+    #             serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_payment_transactions, many=True)
+    #             combined.extend(serializer_mstcnl.data)
+                
+    #         page = int(request.query_params.get('page', 1))
+    #         limit = int(request.query_params.get('limit', 10))
+    #         total_count = len(combined)
+
+    #         if not combined:
+    #             return filter_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND)
+
+    #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count,  status.HTTP_200_OK)
+
+    #     else:
+    #         transactions = PaymentTransactions.objects.all()
+
+    #         if request.query_params:
+    #             filterset = PaymentTransactionsReportFilter(request.GET, queryset=transactions)
+    #             if filterset.is_valid():
+    #                 transactions = filterset.qs
+
+    #         mstcnl_transactions = []
+    #         if records_all:
+    #             mstcnl_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').all()
+
+    #         combined = []
+    #         if transactions.exists():
+    #             serializer_default = PaymentTransactionSerializer(transactions, many=True)
+    #             combined.extend(serializer_default.data)
+
+    #         if mstcnl_transactions:
+    #             serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_transactions, many=True)
+    #             combined.extend(serializer_mstcnl.data)
+                
+    #         page = int(request.query_params.get('page', 1))
+    #         limit = int(request.query_params.get('limit', 10))
+    #         total_count = PaymentTransactions.objects.count()
+
+    #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 
 
     # def get(self, request, customer_id = None):
