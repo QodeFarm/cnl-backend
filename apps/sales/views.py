@@ -227,6 +227,10 @@ class QuickPacksItemsView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class SaleCreditNoteViews(viewsets.ModelViewSet):
     queryset = SaleCreditNotes.objects.all()
     serializer_class = SaleCreditNoteSerializers
@@ -1190,11 +1194,12 @@ class SaleOrderViewSet(APIView):
                 shipments_error = []
 
         if custom_fields_data:
-            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
-        else:
-            custom_error = []
+            if len(custom_fields_data) > 1:
+                custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
+            else:
+                custom_error = []
             
-        if not sale_order_data or not sale_order_items_data:
+        if not sale_order_data or not sale_order_items_data or not custom_fields_data:
             logger.error("Sale order and sale order items and CustomFields are mandatory but not provided.")
             return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 

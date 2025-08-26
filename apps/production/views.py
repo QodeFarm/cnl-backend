@@ -804,6 +804,24 @@ class WorkOrderAPIView(APIView):
                 errors['work_order_stages'] = stages_error
         if errors:
             return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
+        
+        # Stock Verification
+        if bom_data:
+            stock_error = product_stock_verification(Products, ProductVariation, bom_data)
+            if stock_error:
+                # Pick the first user-friendly error message
+                # error_message = list(stock_error.values())[0] 
+                # Build user-friendly messages including product name
+                error_messages = [
+                    f"{product}: {msg}" for product, msg in stock_error.items()
+                ] 
+
+                return build_response(
+                    0,
+                    error_messages[0],   # <-- directly show message like: "Insufficient stock..."
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
       
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
         # update WorkOrder

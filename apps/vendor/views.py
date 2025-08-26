@@ -680,7 +680,7 @@ class VendorViewSet(APIView):
             custom_error = []
 
         # Ensure mandatory data is present
-        if not vendors_data or not vendor_addresses_data or not custom_fields_data:
+        if not vendors_data or not vendor_addresses_data:
             logger.error("Vendor data, vendor addresses data mandatory but not provided.")
             return build_response(0, "Vendor, vendor addresses mandatory", [], status.HTTP_400_BAD_REQUEST)
         
