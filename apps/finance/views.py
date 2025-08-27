@@ -167,6 +167,10 @@ class PaymentTransactionViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
       
 class TaxConfigurationViewSet(viewsets.ModelViewSet):
     queryset = TaxConfiguration.objects.all().order_by('-created_at')
@@ -266,7 +270,11 @@ class ExpenseItemViewSet(viewsets.ModelViewSet):
         return create_instance(self, request, *args, **kwargs)
 
     def update(self, request, *args, **kwargs):
-        return update_instance(self, request, *args, **kwargs)    
+        return update_instance(self, request, *args, **kwargs)  
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)  
     
 
 class FinancialReportViewSet(viewsets.ModelViewSet):
@@ -671,7 +679,8 @@ class JournalEntryView(APIView):
             '''
             All related instances will be deleted when parent record is deleted. all child models have foreignkey relation with parent table
             '''
-            instance.delete()
+            instance.is_deleted=True
+            instance.save()
 
             logger.info(f"JournalEntry with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
@@ -681,6 +690,31 @@ class JournalEntryView(APIView):
         except Exception as e:
             logger.error(f"Error deleting JournalEntry with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted JournalEntry record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = JournalEntry.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"JournalEntry with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"JournalEntry with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except JournalEntry.DoesNotExist:
+            logger.warning(f"JournalEntry with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring JournalEntry with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]

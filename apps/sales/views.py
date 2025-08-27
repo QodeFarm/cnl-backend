@@ -227,6 +227,10 @@ class QuickPacksItemsView(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+    
 class SaleCreditNoteViews(viewsets.ModelViewSet):
     queryset = SaleCreditNotes.objects.all()
     serializer_class = SaleCreditNoteSerializers
@@ -1190,11 +1194,12 @@ class SaleOrderViewSet(APIView):
                 shipments_error = []
 
         if custom_fields_data:
-            custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
-        else:
-            custom_error = []
+            if len(custom_fields_data) > 1:
+                custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
+            else:
+                custom_error = []
             
-        if not sale_order_data or not sale_order_items_data:
+        if not sale_order_data or not sale_order_items_data or not custom_fields_data:
             logger.error("Sale order and sale order items and CustomFields are mandatory but not provided.")
             return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
@@ -3035,7 +3040,9 @@ class QuickPackCreateViewSet(APIView):
             '''
             All related instances will be deleted when parent record is deleted. all child models have foreignkey relation with parent table
             '''
-            instance.delete()
+            # instance.delete()
+            instance.is_deleted = True
+            instance.save()
 
             logger.info(f"QuickPacks with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
@@ -3045,6 +3052,31 @@ class QuickPackCreateViewSet(APIView):
         except Exception as e:
             logger.error(f"Error deleting QuickPacks with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted QuickPacks record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = QuickPacks.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"QuickPacks with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"QuickPacks with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except QuickPacks.DoesNotExist:
+            logger.warning(f"QuickPacks with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring QuickPacks with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
@@ -3814,7 +3846,8 @@ class SaleCreditNoteViewset(APIView):
             '''
             All related instances will be deleted when parent record is deleted. all child models have foreignkey relation with parent table
             '''
-            instance.delete()
+            instance.is_deleted=True 
+            instance.save()
 
             logger.info(f"SaleCreditNotes with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
@@ -4093,7 +4126,8 @@ class SaleDebitNoteViewset(APIView):
             '''
             All related instances will be deleted when parent record is deleted. all child models have foreignkey relation with parent table
             '''
-            instance.delete()
+            instance.is_deleted=True 
+            instance.save()
 
             logger.info(f"SaleDebitNotes with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
