@@ -253,7 +253,8 @@ class PurchaseReturnOrders(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.PROTECT, null=True, default=None, db_column = 'order_status_id')
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
-    billing_address = models.CharField(max_length=1024, null=True, default=None)   
+    billing_address = models.CharField(max_length=1024, null=True, default=None) 
+    is_deleted = models.BooleanField(default=False)  
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -439,13 +439,13 @@ class PurchaseOrderViewSet(APIView):
             instance = PurchaseOrders.objects.get(pk=pk)
 
             # Soft delete related OrderAttachments, OrderShipments, CustomFieldValue
-            if not delete_multi_instance(pk, OrderAttachments, main_model_field_name='order_id'):
+            if not delete_multi_instance(pk,PurchaseOrders, OrderAttachments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            if not delete_multi_instance(pk, OrderShipments, main_model_field_name='order_id'):
+            if not delete_multi_instance(pk, PurchaseOrders, OrderShipments, main_model_field_name='order_id'):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            if not delete_multi_instance(pk, CustomFieldValue, main_model_field_name='custom_id'):
+            if not delete_multi_instance(pk, PurchaseOrders, CustomFieldValue, main_model_field_name='custom_id'):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             # Soft delete the main PurchaseOrders instance
@@ -462,6 +462,30 @@ class PurchaseOrderViewSet(APIView):
             logger.error(f"Error soft-deleting PurchaseOrders with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted PurchaseOrders record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = PurchaseOrders.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"PurchaseOrders with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"PurchaseOrders with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except PurchaseOrders.DoesNotExist:
+            logger.warning(f"PurchaseOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring PurchaseOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
@@ -869,6 +893,32 @@ class PurchaseInvoiceOrderViewSet(APIView):
     #         logger.error(f"Error deleting PurchaseInvoiceOrders with ID {pk}: {str(e)}")
     #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted PurchaseInvoiceOrders record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = PurchaseInvoiceOrders.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"PurchaseInvoiceOrders with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"PurchaseInvoiceOrders with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except PurchaseInvoiceOrders.DoesNotExist:
+            logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring PurchaseInvoiceOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
     def post(self, request, *args, **kwargs):
@@ -1236,7 +1286,8 @@ class PurchaseReturnOrderViewSet(APIView):
             if not delete_multi_instance(pk, PurchaseReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
             # Delete the main PurchaseReturnOrders instance
-            instance.delete()
+            instance.is_deleted=True
+            instance.save()
 
             logger.info(f"PurchaseReturnOrders with ID {pk} deleted successfully.")
             return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
@@ -1246,6 +1297,32 @@ class PurchaseReturnOrderViewSet(APIView):
         except Exception as e:
             logger.error(f"Error deleting PurchaseReturnOrders with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted PurchaseReturnOrders record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = PurchaseReturnOrders.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"PurchaseReturnOrders with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"PurchaseReturnOrders with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except PurchaseReturnOrders.DoesNotExist:
+            logger.warning(f"PurchaseReturnOrders with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring PurchaseReturnOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]

@@ -742,6 +742,7 @@ class QuickPackItems(models.Model):
     product_id = models.ForeignKey(Products,on_delete=models.PROTECT, db_column='product_id')
     size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, db_column='color_id')
+    is_deleted = models.BooleanField(default=False)
      
     class Meta:
         db_table = quickpackitems
@@ -809,6 +810,7 @@ class SaleCreditNotes(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.PROTECT, null=True, default=None, db_column='order_status_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -856,6 +858,7 @@ class SaleCreditNoteItems(models.Model):
     quantity = models.IntegerField(default=None)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
         
@@ -878,6 +881,7 @@ class SaleDebitNotes(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.PROTECT, null=True, default=None, db_column='order_status_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -932,6 +936,7 @@ class SaleDebitNoteItems(models.Model):
     quantity = models.IntegerField(default=None)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
         

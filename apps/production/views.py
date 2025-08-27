@@ -587,6 +587,31 @@ class WorkOrderAPIView(APIView):
             logger.error(f"Error deleting WorkOrder with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted WorkOrder record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = WorkOrder.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"WorkOrder with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"WorkOrder with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except WorkOrder.DoesNotExist:
+            logger.warning(f"WorkOrder with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring WorkOrder with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
@@ -1044,6 +1069,32 @@ class BOMView(APIView):
         except Exception as e:
             logger.error(f"Error deleting BOM with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted BOM record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = BOM.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"BOM with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"BOM with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except BOM.DoesNotExist:
+            logger.warning(f"BOM with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring BOM with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):

@@ -29,6 +29,7 @@ class TaskComments(models.Model):
     task_id = models.ForeignKey(Tasks, on_delete=models.PROTECT, db_column='task_id')
     user_id = models.ForeignKey(User, on_delete=models.PROTECT, db_column='user_id')
     comment_text = models.CharField(max_length=1024)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -44,6 +45,7 @@ class TaskAttachments(models.Model):
     attachment_name = models.CharField(max_length=255)
     attachment_path = models.CharField(max_length=255)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -60,6 +62,7 @@ class TaskHistory(models.Model):
     changed_at = models.DateTimeField(auto_now_add=True)
     user_id = models.ForeignKey(User, on_delete=models.PROTECT, null=True, default=None, db_column='user_id')
     group_id = models.ForeignKey(UserGroups, on_delete=models.PROTECT, null=True, default=None, db_column='group_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
