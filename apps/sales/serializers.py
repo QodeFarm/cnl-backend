@@ -158,7 +158,7 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleOrder
-        fields = ['sale_order_id', 'order_no', 'order_date', 'sale_estimate', 'tax', 'tax_amount', 'total_amount', 'amount', 'advance_amount', 'customer', 'products', 'sale_type', 'order_status', 'flow_status', 'remarks', 'invoice_no', 'created_at', 'updated_at']
+        fields = ['sale_order_id', 'order_no', 'order_date', 'sale_estimate', 'tax', 'tax_amount', 'total_amount', 'amount', 'advance_amount', 'customer', 'products', 'sale_type', 'order_status', 'flow_status', 'remarks', 'invoice_no', 'created_at', 'updated_at', 'is_deleted']
 
     def get_sale_order_details(self, obj):
         sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
@@ -238,7 +238,7 @@ class SaleReturnOrdersOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleReturnOrders
-        fields = ['sale_return_id', 'return_no', 'return_date', 'tax', 'return_reason', 'total_amount', 'due_date', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['sale_return_id', 'return_no', 'return_date', 'tax', 'return_reason', 'total_amount', 'due_date', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at', 'is_deleted']
 
     def get_sale_return_orders_summary(sale_return_order):
         serializer = SaleReturnOrdersOptionsSerializer(sale_return_order, many=True)

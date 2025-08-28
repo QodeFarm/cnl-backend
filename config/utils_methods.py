@@ -436,14 +436,39 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
     last_number = 0
 
     if model_class and field_name:
+        # filter_kwargs = {f"{field_name}__startswith": prefix}
+        # filter_kwargs = {
+        #     f"{field_name}__startswith": prefix,
+        #     f"{field_name}__regex": r'^[A-Z]+-\d{4}-\d{5}$'
+        # }
+        # if model_class and field_name:
         filter_kwargs = {f"{field_name}__startswith": prefix}
-        last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
+
+        # First, try to get only parent orders (ignoring children)
+        parent_qs = model_class.objects.filter(
+            **filter_kwargs,
+            **{f"{field_name}__regex": r'^[A-Z]+-\d{4}-\d{5}$'}
+        ).order_by(f"-{field_name}")
+
+        last_record = parent_qs.first()
+
+        # Fallback: if no parent found, allow normal lookup (no regex restriction)
+        if not last_record:
+            last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
 
         if last_record:
             try:
                 last_number = int(getattr(last_record, field_name).split('-')[-1])
             except Exception:
                 last_number = 0
+
+        # last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
+
+        # if last_record:
+        #     try:
+        #         last_number = int(getattr(last_record, field_name).split('-')[-1])
+        #     except Exception:
+        #         last_number = 0
 
     return f"{prefix}-{last_number + 1:05d}"
 

@@ -226,7 +226,7 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
             'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 
             'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
             'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  
-            'g_pack_vs_pack', 'type'
+            'g_pack_vs_pack', 'type', 'is_deleted'
         ]
 
     def to_representation(self, instance):
