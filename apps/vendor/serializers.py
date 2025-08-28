@@ -86,7 +86,7 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vendor
-        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category', 'ledger_account', 'created_at','vendor_addresses', 'updated_at'] 
+        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category', 'ledger_account', 'created_at','vendor_addresses', 'updated_at', 'is_deleted'] 
 
     def get_vendor_address_details(self, obj):
         addresses = VendorAddress.objects.filter(vendor_id=obj.vendor_id)
