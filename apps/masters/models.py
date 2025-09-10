@@ -604,4 +604,21 @@ class ItemMaster(models.Model):
         db_table = 'item_master'
 
     def __str__(self):
-        return self.mode_name        
+        return self.mode_name    
+
+
+
+class ProductionFloor(models.Model):
+    production_floor_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=10, unique=True)
+    name = models.CharField(max_length=255)
+    description = models.CharField(max_length=512, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'production_floors'
+
+    def __str__(self):
+        return self.name    

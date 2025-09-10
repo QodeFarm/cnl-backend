@@ -1,4 +1,5 @@
 from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
+from apps.production.models import MaterialIssue, MaterialReceived
 from apps.products.models import Products
 from apps.purchase.models import PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
 from apps.sales.models import OrderShipments, PaymentTransactions, SaleCreditNotes, SaleDebitNotes, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
@@ -65,6 +66,27 @@ class FileUploadView(APIView):
                 return Response({'count': len(files), 'msg': 'Files Uploaded Successfully', 'data': uploaded_files}, status=status.HTTP_201_CREATED)
             else:
                 return Response({'count':len(files), 'msg':'No Files uploaded', 'data':[]}, status=status.HTTP_400_BAD_REQUEST) 
+
+
+class ProductionFloorViewSet(viewsets.ModelViewSet):
+    queryset = ProductionFloor.objects.all().order_by('-created_at')	
+    serializer_class = ProductionFloorSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    filterset_class = ProductionFloorFilter
+    ordering_fields = ['created_at']
+
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, ProductionFloor,*args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
 
 class CountryViewSet(viewsets.ModelViewSet):
     queryset = Country.objects.all().order_by('-created_at')	
@@ -685,6 +707,8 @@ ORDER_MODEL_MAPPING = {
     'SHIP': (OrderShipments, 'shipping_tracking_no'),
     'PRD': (Products, 'code'),
     'PTR': (PaymentTransactions, 'payment_receipt_no'),
+    'MI' :(MaterialIssue, 'issue_no'),
+    'MR' :(MaterialReceived, 'receipt_no'),
     # Add others as needed
 }
 

@@ -374,3 +374,25 @@ class ModItemMasterSerializer(serializers.ModelSerializer):
     class Meta:
         model = ItemMaster
         fields =  '__all__'
+
+
+# class ItemMasterSerializer(serializers.ModelSerializer):
+#     product_brand = ModProductBrandsSerializer(source='brand_id', read_only=True)
+#     product_type = ProductTypesSerializer(source='product_type_id', read_only=True)
+#     product_item_type = ProductItemTypeSerializer(source='product_item_type_id', read_only=True)
+#     product_drug_type = ProductDrugTypesSerializer(source='product_drug_type_id', read_only=True)
+#     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+
+#     class Meta:
+#         model = ItemMaster
+#         fields = '__all__'
+
+class ModProductionFloorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductionFloor
+        fields = ['production_floor_id', 'code', 'name']
+
+class ProductionFloorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductionFloor
+        fields = '__all__'
