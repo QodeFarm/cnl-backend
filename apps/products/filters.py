@@ -8,6 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ProductGroupsFilter(FilterSet):
+    product_group_id = filters.CharFilter(method=filter_uuid)
     group_name = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
     s = filters.CharFilter(method='filter_by_search', label="Search")
@@ -30,7 +31,7 @@ class ProductGroupsFilter(FilterSet):
     
     class Meta:
         model = ProductGroups 
-        fields = ['group_name','description','created_at','s', 'sort','page','limit']
+        fields = ['product_group_id','group_name','description','created_at','s', 'sort','page','limit']
 
 class ProductCategoriesFilter(FilterSet):
     category_id = filters.CharFilter(method='filter_uuid')
@@ -56,7 +57,7 @@ class ProductCategoriesFilter(FilterSet):
     
     class Meta:
         model = ProductCategories 
-        fields = ['category_name','code','created_at','s', 'sort','page','limit']
+        fields = ['category_id','category_name', 'code','created_at','s', 'sort','page','limit']
 
 class ProductStockUnitsFilter(FilterSet):
     stock_unit_id = filters.CharFilter(method='filter_uuid')
@@ -224,16 +225,25 @@ class ProductsFilter(FilterSet):
     updated_at = filters.DateFromToRangeFilter()
     created_at = filters.DateFromToRangeFilter()
     
+    # warehouse_name = filters.CharFilter(
+    #     field_name='productitembalance__warehouse_location_id__warehouse_id__name',
+    #     lookup_expr='icontains'
+    # )
+    # location_name = filters.CharFilter(
+    #     field_name='productitembalance__warehouse_location_id__location_name',
+    #     lookup_expr='icontains'
+    # )
+
+    warehouse_id = filters.UUIDFilter(field_name="productitembalance__warehouse_location_id__warehouse_id",lookup_expr="exact")
     warehouse_name = filters.CharFilter(
-        field_name='productitembalance__warehouse_location_id__warehouse_id__name',
+        field_name='productitembalance__warehouse_location_id__warehouse_id__name', 
         lookup_expr='icontains'
     )
+    loction_id = filters.UUIDFilter(field_name="productitembalance__warehouse_location_id",lookup_expr="exact")
     location_name = filters.CharFilter(
         field_name='productitembalance__warehouse_location_id__location_name',
         lookup_expr='icontains'
-    )
-
-
+    ) 
 
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
@@ -253,7 +263,7 @@ class ProductsFilter(FilterSet):
     class Meta:
         model = Products
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','category','stock_unit','wholesale_rate','dealer_rate','purchase_rate','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'warehouse_name', 'location_name', 'updated_at','created_at','period_name','s','sort','page','limit']
+        fields =['name','code','product_group_id','group_name','category_id','category','type_id','type_name','warehouse_id','location_name','warehouse_name','loction_id','category','stock_unit','wholesale_rate','dealer_rate','purchase_rate','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'updated_at','created_at','period_name','s','sort','page','limit']
 
 
 class ProductItemBalanceFilter(FilterSet):

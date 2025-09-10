@@ -28,6 +28,7 @@ class BOM(models.Model):
     bom_name = models.CharField(max_length=100)
     product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id', related_name='bom')
     notes = models.TextField(default=None, null=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -716,7 +716,7 @@ class CustomerCreateViews(APIView):
         if custom_fields_error:
             errors['custom_field_values'] = custom_fields_error
         if errors:
-            return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "ValidationError: {errors}", errors, status.HTTP_400_BAD_REQUEST)
 
         # Step 1: Create Customer Data in devcnl
         new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer, using=set_db('default'))

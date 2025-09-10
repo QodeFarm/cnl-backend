@@ -58,6 +58,7 @@ class JournalEntry(models.Model):
     entry_date = models.DateField(null=False)
     reference = models.CharField(max_length=100, default=None, null=True)
     description = models.TextField(default=None, null=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -77,6 +78,7 @@ class JournalEntryLines(models.Model):
     customer_id  = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, db_column='customer_id')
     vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, db_column='vendor_id')
     balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     # journal_entry_id = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name='entry_lines', db_column='journal_entry_id')
@@ -122,6 +124,7 @@ class PaymentTransaction(models.Model): # Enhance Later
     notes = models.CharField(max_length=512, default=None, null=True)
     currency = models.CharField(max_length=10, default=None, null=True)
     transaction_type = models.CharField(max_length=10, choices=[('Credit', 'Credit'), ('Debit', 'Debit')], default='Credit',null=False)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -324,6 +327,7 @@ class ExpenseItem(models.Model):
     
     # Recurring expense
     is_recurring = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
     recurring_frequency = models.CharField(
         max_length=10,
         choices=[

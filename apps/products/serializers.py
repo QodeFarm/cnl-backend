@@ -129,9 +129,10 @@ class ProductPurchaseGlSerializer(serializers.ModelSerializer):
 
 class ModproductsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
+    type = ProductTypesSerializer(source='type_id',read_only=True)
     class Meta:
         model = Products
-        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'mrp', 'discount', 'gst_input', 'wholesale_rate', 'dealer_rate', 'balance']
+        fields = ['product_id','name', 'code', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'mrp', 'discount', 'gst_input', 'wholesale_rate', 'dealer_rate', 'balance', 'type']
 
 class ModStockJournalProductSerializer(serializers.ModelSerializer):
     class Meta:
@@ -203,13 +204,55 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
         model = ProductItemBalance
         fields = '__all__'
 
-class ProductOptionsSerializer(serializers.ModelSerializer):
-    unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
-    stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id',read_only=True)
+# class ProductOptionsSerializer(serializers.ModelSerializer):
+#     unit_options = ModUnitOptionsSerializer(source = 'unit_options_id', read_only = True)
+#     stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id',read_only=True)
+#     type = ProductTypesSerializer(source='type_id',read_only=True)
     
+#     class Meta:
+#         model = Products
+#         fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'hsn_code', 'gst_input', 'created_at', 'stock_unit',  'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  'g_pack_vs_pack', 'type' ]
+
+class ProductOptionsSerializer(serializers.ModelSerializer):
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id', read_only=True)
+    type = ProductTypesSerializer(source='type_id', read_only=True)
+
     class Meta:
         model = Products
-        fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'hsn_code', 'gst_input', 'created_at', 'stock_unit',  'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  'g_pack_vs_pack' ]
+        fields = [
+            'product_id', 'code', 'name', 'barcode', 'print_name', 
+            'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 
+            'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 
+            'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
+            'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  
+            'g_pack_vs_pack', 'type', 'is_deleted'
+        ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        # fields you want to clean decimals for
+        float_fields = [
+            'sales_rate', 'purchase_rate', 'wholesale_rate', 
+            'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance'
+        ]
+
+        for field in float_fields:
+            value = data.get(field)
+            if value is not None:
+                try:
+                    value = float(value)
+                    # if whole number, make it int
+                    if value.is_integer():
+                        data[field] = int(value)
+                    else:
+                        data[field] = float(f"{value:.10g}")  # keeps significant decimals only
+                except (ValueError, TypeError):
+                    pass
+
+        return data
+
 
 class SizeSerializer(serializers.ModelSerializer):
     class Meta:

@@ -250,6 +250,7 @@ class Swipes(models.Model):
     swipe_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, db_column = 'employee_id')
     swipe_time = models.DateTimeField(null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

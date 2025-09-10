@@ -78,24 +78,128 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
                 return 'SOO'
         return self.order_no_prefix
         
-    def save(self, *args, **kwargs):            
-        from apps.masters.views import increment_order_number
+    # def save(self, *args, **kwargs):            
+    #     from apps.masters.views import increment_order_number
         
+    #     is_new_record = self._state.adding
+    #     is_other_sale = False
+        
+    #     #Check if this is an "Other" sale type order
+    #     if hasattr(self, 'sale_type_id') and self.sale_type_id:
+    #         print("-"*20)
+    #         print("self.sale_type_id.name : ", self.sale_type_id.name)
+    #         print("-"*20)
+    #         if self.sale_type_id.name.lower() == 'Other':
+    #             is_other_sale = True
+    #             kwargs['using'] = 'mstcnl'  # Use alternate database
+        
+    #     # Set default order status if not provided
+    #     if not self.order_status_id:
+    #         db = kwargs.get('using', 'default')
+    #         self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
+
+    #     # Assign default stage for new orders
+    #     if self.use_workflow:
+    #         if is_new_record or self.flow_status_id is None:
+    #             is_child = self.is_child_order(self.order_no)
+    #             if is_child:
+    #                 self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Production')[0] #self.get_stage_flow_status(2)  # Default stage for child orders
+    #             else:
+    #                 self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Review Inventory')[0]
+    #     else:
+    #         try:
+    #             # Only set default if new record or no existing flow_status_id
+    #             if is_new_record or not self.flow_status_id:
+    #                 ready_to_invoice_status = FlowStatus.objects.get(flow_status_name="Ready for Invoice")
+    #                 self.flow_status_id = ready_to_invoice_status
+    #         except FlowStatus.DoesNotExist:
+    #             raise ValueError("FlowStatus 'Ready for Invoice' not found")
+
+    #     # Only generate and set the order number if this is a new record
+    #     if is_new_record and not getattr(self, self.order_no_field):
+    #         prefix = 'SOO' if self.sale_type_id and self.sale_type_id.name.lower() == 'other' else self.order_no_prefix
+
+    #         order_number = generate_order_number(
+    #             self.order_no_prefix,
+    #             model_class=SaleOrder,
+    #             field_name='order_no',
+    #             override_prefix=prefix
+    #         )
+    #         setattr(self, self.order_no_field, order_number)
+
+    #     # Save the record
+    #     super().save(*args, **kwargs)
+
+    #     # After the record is saved, increment the order number sequence only for new records
+    #     if is_new_record:
+    #         print("from create", self.pk)
+    #         increment_order_number(self.order_no_prefix)
+    #     else:
+    #         print("from edit", self.pk)         
+
+    # def force_parent_status_update(self):
+    #     """
+    #     Force a parent status update to handle skipped stages for parent orders.
+    #     """
+    #     try:
+    #         print(f"Triggering parent order update for {self.order_no}...")
+    #         self.update_parent_status()
+    #     except Exception as e:
+    #         print(f"Error during forced parent status update for {self.order_no}: {e}")
+
+    # def is_child_order(self, order_no):
+    #     """
+    #     Determine if the order is a child sale order based on the number of hyphens in the order_no.
+    #     """
+    #     print(f"Checking if {order_no} is a child order...")
+    #     return order_no.count('-') >= 3
+
+    # def handle_child_order_transition(self):
+    #     """
+    #     Ensure child orders skip the 'last before stage' and directly move to 'Completed'.
+    #     After transitioning, check the parent order's status.
+    #     """
+    #     print(f"Checking child order {self.order_no} for stage transition...")
+
+    #     # Retrieve the "last before stage" and "Completed" statuses
+    #     last_before_status = self.get_last_before_stage_status()
+    #     completed_status = self.get_stage_flow_status_by_name("Completed")
+
+    #     # If the current stage is the "last before stage," move directly to "Completed"
+    #     if self.flow_status_id == last_before_status:
+    #         self.flow_status_id = completed_status
+    #         self.save()  # Save the updated status
+    #         print(f"Child order {self.order_no} skipped 'Last Before Stage' and moved to 'Completed'.")
+    #         # Check the parent order and update its status if required
+    #         self.update_parent_status()
+    #     elif self.flow_status_id != completed_status:
+    #         print(f"Child order {self.order_no} remains in normal workflow at stage: {self.flow_status_id.flow_status_name}.")
+    #     else:
+    #         print(f"Child order {self.order_no} is already in 'Completed' stage.")
+    
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+
         is_new_record = self._state.adding
         is_other_sale = False
-        
-        #Check if this is an "Other" sale type order
+
+        # ✅ Always establish db first (default from kwargs)
+        db = kwargs.get('using', 'default')
+
+        # Check if this is an "Other" sale type order
         if hasattr(self, 'sale_type_id') and self.sale_type_id:
-            print("-"*20)
+            print("-" * 20)
             print("self.sale_type_id.name : ", self.sale_type_id.name)
-            print("-"*20)
-            if self.sale_type_id.name.lower() == 'Other':
+            print("-" * 20)
+            # ✅ compare to 'other' because we already used .lower()
+            if self.sale_type_id.name.lower() == 'other':
                 is_other_sale = True
-                kwargs['using'] = 'mstcnl'  # Use alternate database
-        
+                kwargs['using'] = 'mstcnl'   # Use alternate database
+                db = 'mstcnl'                # ✅ keep db consistent everywhere below
+
         # Set default order status if not provided
         if not self.order_status_id:
-            db = kwargs.get('using', 'default')
+            # ✅ use the db we set above
             self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
 
         # Assign default stage for new orders
@@ -103,9 +207,13 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             if is_new_record or self.flow_status_id is None:
                 is_child = self.is_child_order(self.order_no)
                 if is_child:
-                    self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Production')[0] #self.get_stage_flow_status(2)  # Default stage for child orders
+                    self.flow_status_id = FlowStatus.objects.using(db).get_or_create(
+                        flow_status_name='Production'
+                    )[0]  # self.get_stage_flow_status(2)
                 else:
-                    self.flow_status_id = FlowStatus.objects.using(db).get_or_create(flow_status_name='Review Inventory')[0]
+                    self.flow_status_id = FlowStatus.objects.using(db).get_or_create(
+                        flow_status_name='Review Inventory'
+                    )[0]
         else:
             try:
                 # Only set default if new record or no existing flow_status_id
@@ -117,7 +225,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
 
         # Only generate and set the order number if this is a new record
         if is_new_record and not getattr(self, self.order_no_field):
-            prefix = 'SOO' if self.sale_type_id and self.sale_type_id.name.lower() == 'other' else self.order_no_prefix
+            prefix = 'SOO' if (self.sale_type_id and self.sale_type_id.name.lower() == 'other') else self.order_no_prefix
 
             order_number = generate_order_number(
                 self.order_no_prefix,
@@ -135,7 +243,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
             print("from create", self.pk)
             increment_order_number(self.order_no_prefix)
         else:
-            print("from edit", self.pk)         
+            print("from edit", self.pk)
 
     def force_parent_status_update(self):
         """
@@ -161,21 +269,21 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
         """
         print(f"Checking child order {self.order_no} for stage transition...")
 
-        # Retrieve the "last before stage" and "Completed" statuses
         last_before_status = self.get_last_before_stage_status()
         completed_status = self.get_stage_flow_status_by_name("Completed")
 
-        # If the current stage is the "last before stage," move directly to "Completed"
         if self.flow_status_id == last_before_status:
             self.flow_status_id = completed_status
-            self.save()  # Save the updated status
+            # ⚠️ This save() will call the overridden save() again. If you ever see
+            # repeated loops here, guard with a flag or update via queryset to avoid recursion.
+            self.save()
             print(f"Child order {self.order_no} skipped 'Last Before Stage' and moved to 'Completed'.")
-            # Check the parent order and update its status if required
             self.update_parent_status()
         elif self.flow_status_id != completed_status:
             print(f"Child order {self.order_no} remains in normal workflow at stage: {self.flow_status_id.flow_status_name}.")
         else:
             print(f"Child order {self.order_no} is already in 'Completed' stage.")
+
 
     def update_parent_status(self):
         """
@@ -572,6 +680,7 @@ class SaleReturnOrders(OrderNumberMixin):
     order_status_id = models.ForeignKey('masters.OrderStatuses', on_delete=models.PROTECT, db_column='order_status_id', null=True, default=None)
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None)   
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -634,6 +743,7 @@ class SaleReturnItems(models.Model):
     cgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
     sgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
     igst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -742,6 +852,7 @@ class QuickPackItems(models.Model):
     product_id = models.ForeignKey(Products,on_delete=models.PROTECT, db_column='product_id')
     size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, db_column='color_id')
+    is_deleted = models.BooleanField(default=False)
      
     class Meta:
         db_table = quickpackitems
@@ -809,6 +920,7 @@ class SaleCreditNotes(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.PROTECT, null=True, default=None, db_column='order_status_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -856,6 +968,7 @@ class SaleCreditNoteItems(models.Model):
     quantity = models.IntegerField(default=None)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
         
@@ -878,6 +991,7 @@ class SaleDebitNotes(OrderNumberMixin):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     reason = models.CharField(max_length=1024, null=True, default=None)
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.PROTECT, null=True, default=None, db_column='order_status_id')
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -932,6 +1046,7 @@ class SaleDebitNoteItems(models.Model):
     quantity = models.IntegerField(default=None)
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=None)
     total_price = models.DecimalField(max_digits=10, decimal_places=2, default=None)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
         
