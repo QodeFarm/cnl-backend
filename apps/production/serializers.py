@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.masters.serializers import ModOrderStatusesSerializer
+from apps.masters.serializers import ModOrderStatusesSerializer, ModProductionFloorSerializer, ModUnitOptionsSerializer
 from .models import *
 from apps.products.serializers import ColorSerializer, ModColorSerializer, ModStockJournalProductSerializer, ModproductsSerializer, ModSizeSerializer
 from apps.hrms.serializers import ModEmployeesSerializer
@@ -277,4 +277,117 @@ class BOMReportSerializer(serializers.ModelSerializer):
         fields = ['bom_id','bom_name','product','notes','created_at','items']
 
 
+class MaterialIssueSerializer(serializers.ModelSerializer):
+    production_floor = ModProductionFloorSerializer(source='production_floor_id', read_only=True)
+    flow_status = ModFlowstatusSerializer(source='flow_status_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
 
+    # production_floor_id = serializers.UUIDField(required=True)
+    class Meta:
+        model = MaterialIssue
+        fields = '__all__'
+
+    def validate_issue_no(self, value):
+            # Get the pk from instance or from initial data
+            material_issue_id = None
+            if self.instance and hasattr(self.instance, 'material_issue_id'):
+                material_issue_id = self.instance.material_issue_id
+            elif 'material_issue_id' in self.initial_data:
+                material_issue_id = self.initial_data['material_issue_id']
+            qs = MaterialIssue.objects.filter(issue_no=value)
+            if material_issue_id:
+                qs = qs.exclude(material_issue_id=material_issue_id)
+            if qs.exists():
+                raise serializers.ValidationError("material issue with this issue no already exists.")
+            return value
+
+
+class MaterialIssueItemSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    class Meta:
+        model = MaterialIssueItem
+        fields = '__all__'
+
+
+class MaterialIssueAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaterialIssueAttachment
+        fields = '__all__'
+
+
+
+class MaterialReceivedSerializer(serializers.ModelSerializer):
+    production_floor = ModProductionFloorSerializer(source='production_floor_id', read_only=True)
+   
+    class Meta:
+        model = MaterialReceived
+        fields = '__all__'
+
+class MaterialReceivedItemSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    no_of_boxes = serializers.IntegerField(required=False, allow_null=True)
+
+
+    class Meta:
+        model = MaterialReceivedItem
+        fields = '__all__'
+
+class MaterialReceivedAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaterialReceivedAttachment
+        fields = '__all__'        
+
+
+
+class StockJournalsSerializer(serializers.ModelSerializer):
+    product = ModStockJournalProductSerializer(source='product_id', read_only=True)
+    quantity = serializers.SerializerMethodField()
+
+
+    def get_quantity(self, obj):
+        return int(obj.quantity) if obj.quantity is not None else 0
+
+    class Meta:
+        model = StockJournal
+        fields = [
+            'journal_id',
+            'product',
+            'transaction_type',
+            'quantity',
+            'reference_id',
+            'remarks',
+            'is_deleted',
+            'created_at',
+            'updated_at',
+        ]
+             
+
+# Add after the existing StockRegisterSerializer class
+
+class StockSummarySerializer(serializers.ModelSerializer):
+    product = ModStockJournalProductSerializer(source='product_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    group_name = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+    hsn_code = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = StockSummary
+        fields = '__all__'
+    
+    def get_group_name(self, obj):
+        if obj.product_id and obj.product_id.product_group_id:
+            return obj.product_id.product_group_id.group_name
+        return None
+    
+    def get_category_name(self, obj):
+        if obj.product_id and obj.product_id.category_id:
+            return obj.product_id.category_id.category_name
+        return None
+        
+    def get_hsn_code(self, obj):
+        if obj.product_id:
+            return obj.product_id.hsn_code
+        return None

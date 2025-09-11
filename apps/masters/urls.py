@@ -45,6 +45,7 @@ router.register(r'user_groups', UserGroupsViewset)
 router.register(r'user_group_members', UserGroupMembersViewset)
 
 router.register(r'flow_status', FlowStatusViews)
+router.register(r'production_floors',ProductionFloorViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
