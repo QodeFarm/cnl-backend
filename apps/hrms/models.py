@@ -161,7 +161,7 @@ class EmployeeSalaryComponents(models.Model):
 class LeaveTypes(models.Model):
     leave_type_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     leave_type_name = models.CharField(max_length=55)
-    description = models.CharField(max_length=255)
+    description = models.CharField(null=True,max_length=255)
     max_days_allowed = models.IntegerField()
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

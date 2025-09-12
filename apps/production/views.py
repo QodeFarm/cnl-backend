@@ -1,9 +1,11 @@
 from decimal import Decimal
 import logging
 import re
+import datetime
 from django.forms import FloatField
 from django.http import Http404
 from django.db import transaction
+from django.utils import timezone
 from django.db.models import Q,Sum,F,Count,ExpressionWrapper,DecimalField,Value,IntegerField,OuterRef, Subquery, Max
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -12,7 +14,7 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Prefetch
 from rest_framework.filters import OrderingFilter
-from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, ProductionStatusFilter, StockJournalFilter, WorkOrderFilter,BOMReportFilter, BillOfMaterialsFilter, MachineFilter, MachineUtilizationReportFilter, MaterialFilter, ProductionCostReportFilter, ProductionStatusFilter, ProductionSummaryReportFilter, RawMaterialConsumptionReportFilter, WorkOrderFilter
+from apps.production.filters import BOMFilter, MachineFilter, MaterialFilter, MaterialIssueFilter, MaterialReceivedFilter, ProductionStatusFilter, StockJournalFilter, StockSummaryFilter, WorkOrderFilter,BOMReportFilter, BillOfMaterialsFilter, MachineFilter, MachineUtilizationReportFilter, MaterialFilter, ProductionCostReportFilter, ProductionStatusFilter, ProductionSummaryReportFilter, RawMaterialConsumptionReportFilter, WorkOrderFilter
 from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
@@ -22,12 +24,55 @@ from .serializers import *
 from config.utils_methods import normalize_value, build_response, delete_multi_instance, soft_delete, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django.db.models.functions import Coalesce,NullIf,Cast,ExtractSecond
 from django.db.models import Avg
+from rest_framework.views import APIView
+from rest_framework import status
+from django.db import transaction
+from django.http import Http404
+from django.shortcuts import get_object_or_404
+from .models import MaterialIssue, MaterialIssueItem, MaterialIssueAttachment
+from .serializers import MaterialIssueSerializer, MaterialIssueItemSerializer, MaterialIssueAttachmentSerializer
+from config.utils_methods import build_response, generic_data_creation, get_related_data, update_multi_instances, soft_delete, validate_input_pk, validate_payload_data
+
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Create a logger object
 logger = logging.getLogger(__name__)
+
+class StockJournalViewSet(viewsets.ModelViewSet):
+    queryset = StockJournal.objects.filter(is_deleted=False).order_by('-created_at')
+    serializer_class = StockJournalsSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = StockJournalFilter
+    
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+
+# class StockSummaryViewSet(viewsets.ModelViewSet):
+#     queryset = StockSummary.objects.filter(is_deleted=False).order_by('-period_end')
+#     serializer_class = StockSummarySerializer
+#     filter_backends = [DjangoFilterBackend, OrderingFilter]
+#     filterset_class = StockSummaryFilter
+#     ordering_fields = ['product_id__name', 'period_start', 'period_end', 'closing_quantity']
+    
+#     def list(self, request, *args, **kwargs):
+#         return list_all_objects(self, request, *args, **kwargs)
+
+#     def create(self, request, *args, **kwargs):
+#         return create_instance(self, request, *args, **kwargs)
+
+#     def update(self, request, *args, **kwargs):
+#         return update_instance(self, request, *args, **kwargs)
+
+
 
 class BOMViewSet(viewsets.ModelViewSet):
     queryset = BOM.objects.all().order_by('is_deleted', '-created_at')
@@ -768,6 +813,7 @@ class WorkOrderAPIView(APIView):
 
         # Validated WorkOrder Data
         work_order_data = given_data.pop('work_order', None) # parent_data
+        work_order_error = None
         if work_order_data:
             work_order_error = validate_multiple_data(self, work_order_data , WorkOrderSerializer,[])
         
@@ -1205,3 +1251,625 @@ class BOMView(APIView):
             "bill_of_material" : new_material_data
         }
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+
+
+
+class MaterialIssueView(APIView):
+    """
+    API View for handling Material Issue creation and related data.
+    """
+
+    def get_object(self, pk):
+        try:
+            return MaterialIssue.objects.get(pk=pk)
+        except MaterialIssue.DoesNotExist:
+            return None
+        # return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        if pk:
+            result = validate_input_pk(self, pk)
+            if result:
+                return result
+            return self.retrieve(request, pk)
+        
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
+
+        queryset = MaterialIssue.objects.filter(is_deleted=False).order_by('-created_at')
+        # Apply filters using RawMaterialConsumptionReportFilter
+        if request.query_params:
+            filterset = MaterialIssueFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        serializer = MaterialIssueSerializer(queryset, many=True)
+        # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+        return filter_response( queryset.count(), "Success", serializer.data, page, limit, queryset.count(), status.HTTP_200_OK)
+
+    def retrieve(self, request, pk):
+        try:
+            material_issue = get_object_or_404(MaterialIssue, pk=pk)
+            serializer = MaterialIssueSerializer(material_issue)
+            # Get related items and attachments
+            items = get_related_data(MaterialIssueItem, MaterialIssueItemSerializer, 'material_issue_id', pk)
+            attachments = get_related_data(MaterialIssueAttachment, MaterialIssueAttachmentSerializer, 'material_issue_id', pk)
+            custom_data = {
+                "material_issue": serializer.data,
+                "items": items if items else [],
+                "attachments": attachments if attachments else [],
+            }
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+        except Http404:
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        given_data = request.data
+        errors = {}
+
+        # Validate MaterialIssue Data
+        material_issue_data = given_data.pop('material_issue', None)
+        if not material_issue_data:
+            return build_response(0, "material_issue data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+        issue_error = validate_payload_data(self, material_issue_data, MaterialIssueSerializer)
+        if issue_error:
+            errors["material_issue"] = issue_error
+
+        # Validate items
+        items_data = given_data.pop('items', [])
+        items_error = validate_multiple_data(self, items_data, MaterialIssueItemSerializer, ['material_issue_id']) if items_data else None
+        if items_error:
+            errors["items"] = items_error
+
+        # Validate attachments
+        attachments_data = given_data.pop('attachments', [])
+        attachments_error = validate_multiple_data(self, attachments_data, MaterialIssueAttachmentSerializer, ['material_issue_id']) if attachments_data else None
+        if attachments_error:
+            errors["attachments"] = attachments_error
+        # ...existing code...    
+
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Create MaterialIssue
+        new_issue = generic_data_creation(self, [material_issue_data], MaterialIssueSerializer)[0]
+        issue_id = new_issue.get("material_issue_id", None)
+
+        # Create items
+        new_items = []
+        if items_data:
+            new_items = generic_data_creation(self, items_data, MaterialIssueItemSerializer, {'material_issue_id': issue_id})
+
+             
+        for item in new_items:
+            product_id = item.get('product_id')
+            qty = Decimal(item.get('quantity', 0))
+            try:
+                product = Products.objects.get(product_id=product_id)
+                # Reduce stock
+                product.balance = product.balance - qty
+                product.save()
+                # --- Stock Journal Entry---
+                StockJournal.objects.create(
+                    product_id=product,
+                    transaction_type='Issue',
+                    quantity=qty,
+                    reference_id=issue_id,
+                    remarks='Material Issue to Production Floor'
+                )
+            except Products.DoesNotExist:
+                logger.warning(f"Product {product_id} not found for inventory update.")
+
+        # Create attachments
+        new_attachments = []
+        if attachments_data:
+            new_attachments = generic_data_creation(self, attachments_data, MaterialIssueAttachmentSerializer, {'material_issue_id': issue_id})
+
+        custom_data = {
+            "material_issue": new_issue,
+            "items": new_items,
+            "attachments": new_attachments,
+        }
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
+    @transaction.atomic
+    def put(self, request, pk, *args, **kwargs):
+        return self.update(request, pk, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+        given_data = request.data
+        errors = {}
+
+        # Validate MaterialIssue Data
+        # material_issue_data = given_data.pop('material_issue', None)
+        # if material_issue_data:
+        #     material_issue_data['material_issue_id'] = pk
+        #     issue_error = validate_multiple_data(self, material_issue_data, MaterialIssueSerializer, [])
+        #     if issue_error:
+        #         errors["material_issue"] = issue_error
+
+        material_issue_data = given_data.pop('material_issue', None)
+        if material_issue_data:
+            material_issue_data['material_issue_id'] = pk
+            instance = MaterialIssue.objects.get(pk=pk)
+            serializer = MaterialIssueSerializer(instance, data=material_issue_data, partial=False)
+            if not serializer.is_valid():
+                errors["material_issue"] = serializer.errors
+            else:
+                updated_issue = serializer.save()
+        else:
+            updated_issue = None
+        # Validate items
+        items_data = given_data.pop('items', [])
+        items_error = validate_multiple_data(self, items_data, MaterialIssueItemSerializer, []) if items_data else None
+        if items_error:
+            errors["items"] = items_error
+
+        # Validate attachments
+        attachments_data = given_data.pop('attachments', [])
+        attachments_error = validate_multiple_data(self, attachments_data, MaterialIssueAttachmentSerializer, []) if attachments_data else None
+        if attachments_error:
+            errors["attachments"] = attachments_error
+
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Update MaterialIssue
+        updated_issue = update_multi_instances(self, pk, [material_issue_data], MaterialIssue, MaterialIssueSerializer, [], main_model_related_field='material_issue_id', current_model_pk_field='material_issue_id')[0]
+
+        # Inventory update BEFORE updating items
+        for item_data in items_data:
+            item_id = item_data.get('material_issue_item_id')
+            print(23, item_id)
+            new_qty = Decimal(item_data.get('quantity', 0))
+            try:
+                item_instance = MaterialIssueItem.objects.get(pk=item_id)
+                old_qty = Decimal(item_instance.quantity)
+                product = item_instance.product_id
+
+                qty_diff = new_qty - old_qty
+                if qty_diff != 0:
+                    product.balance -= qty_diff
+                    product.save()
+                    # Instead of creating a new StockJournal entry, update the existing one:
+                journal_entry = StockJournal.objects.filter(
+                    reference_id=pk,
+                    product_id=product,
+                    transaction_type__in=['Issue', 'Receive']  # or match your types
+                ).first()
+
+                if journal_entry:
+                    journal_entry.quantity = new_qty  # or the latest value
+                    journal_entry.remarks = f'Material Issue quantity edited ({"Reduced" if qty_diff > 0 else "Returned"})'
+                    journal_entry.save()
+                else:
+                    # If not found, create new (for legacy data)
+                    StockJournal.objects.create(
+                        product_id=product,
+                        transaction_type='Issue',
+                        quantity=new_qty,
+                        reference_id=pk,
+                        remarks='Material Issue to Production Floor'
+                    )
+            except MaterialIssueItem.DoesNotExist:
+                continue
+
+
+        # Update items
+        updated_items = []
+        if items_data:
+            updated_items = update_multi_instances(self, pk, items_data, MaterialIssueItem, MaterialIssueItemSerializer, {'material_issue_id': pk}, main_model_related_field='material_issue_id', current_model_pk_field='material_issue_item_id')
+            
+
+        # Update attachments
+        updated_attachments = []
+        if attachments_data:
+            updated_attachments = update_multi_instances(self, pk, attachments_data, MaterialIssueAttachment, MaterialIssueAttachmentSerializer, {'material_issue_id': pk}, main_model_related_field='material_issue_id', current_model_pk_field='attachment_id')
+
+        custom_data = {
+            "material_issue": updated_issue,
+            "items": updated_items,
+            "attachments": updated_attachments,
+        }
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+    # @transaction.atomic
+    # def patch(self, request, pk, *args, **kwargs):
+    #     try:
+    #         material_issue = MaterialIssue.objects.filter(pk=pk).first()
+    #         if not material_issue:
+    #             return build_response(0, "Material Issue not found", [], status.HTTP_404_NOT_FOUND)
+    #         serializer = MaterialIssueSerializer(material_issue, data=request.data, partial=True)
+    #         if serializer.is_valid():
+    #             serializer.save()
+    #             return build_response(1, "Material Issue updated successfully", serializer.data, status.HTTP_200_OK)
+    #         return build_response(0, "Validation error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+    #     except Exception as e:
+    #         return build_response(0, f"Error updating Material Issue: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        try:
+            instance = MaterialIssue.objects.get(pk=pk)
+            instance.is_deleted = True
+            instance.save()
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except MaterialIssue.DoesNotExist:
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return build_response(0, f"Record deletion failed due to an error: {e}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class MaterialReceivedView(APIView):
+    """
+    API View for handling Material Received creation and related data.
+    """
+
+    def get_object(self, pk):
+        try:
+            return MaterialReceived.objects.get(pk=pk)
+        except MaterialReceived.DoesNotExist:
+            return None
+
+    def get(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        if pk:
+            result = validate_input_pk(self, pk)
+            if result:
+                return result
+            return self.retrieve(request, pk)
+        
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
+
+        queryset = MaterialReceived.objects.filter(is_deleted=False).order_by('-created_at')
+         # Apply filters using RawMaterialConsumptionReportFilter
+        if request.query_params:
+            filterset = MaterialReceivedFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
+
+        serializer = MaterialReceivedSerializer(queryset, many=True)
+        return filter_response( queryset.count(), "Success", serializer.data, page, limit, queryset.count(), status.HTTP_200_OK)
+
+    def retrieve(self, request, pk):
+        try:
+            material_received = get_object_or_404(MaterialReceived, pk=pk)
+            serializer = MaterialReceivedSerializer(material_received)
+            # Get related items and attachments
+            items = get_related_data(MaterialReceivedItem, MaterialReceivedItemSerializer, 'material_received_id', pk)
+            attachments = get_related_data(MaterialReceivedAttachment, MaterialReceivedAttachmentSerializer, 'material_received_id', pk)
+            custom_data = {
+                "material_received": serializer.data,
+                "items": items if items else [],
+                "attachments": attachments if attachments else [],
+            }
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+        except Http404:
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        given_data = request.data
+        errors = {}
+
+        # Validate MaterialReceived Data
+        material_received_data = given_data.pop('material_received', None)
+        if not material_received_data:
+            return build_response(0, "material_received data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+        received_error = validate_payload_data(self, material_received_data, MaterialReceivedSerializer)
+        if received_error:
+            errors["material_received"] = received_error
+
+        # Validate items
+        items_data = given_data.pop('items', [])
+        items_error = validate_multiple_data(self, items_data, MaterialReceivedItemSerializer, ['material_received_id']) if items_data else None
+        if items_error:
+            errors["items"] = items_error
+
+        # Validate attachments
+        attachments_data = given_data.pop('attachments', [])
+        attachments_error = validate_multiple_data(self, attachments_data, MaterialReceivedAttachmentSerializer, ['material_received_id']) if attachments_data else None
+        if attachments_error:
+            errors["attachments"] = attachments_error
+
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Create MaterialReceived
+        new_received = generic_data_creation(self, [material_received_data], MaterialReceivedSerializer)[0]
+        received_id = new_received.get("material_received_id", None)
+
+        # Create items
+        new_items = []
+        if items_data:
+            new_items = generic_data_creation(self, items_data, MaterialReceivedItemSerializer, {'material_received_id': received_id})
+
+        # --- Inventory Update Logic ---
+        for item in new_items:
+            product_id = item.get('product_id')
+            qty = Decimal(item.get('quantity', 0))
+            try:
+                product = Products.objects.get(product_id=product_id)
+                # Increase stock
+                product.balance = product.balance + qty
+                product.save()
+                # --- Stock Journal Entry (optional) ---
+                StockJournal.objects.create(
+                    product_id=product,
+                    transaction_type='Receive',
+                    quantity=qty,
+                    reference_id=received_id,
+                    remarks='Material Received from Production Floor'
+                )
+            except Products.DoesNotExist:
+                logger.warning(f"Product {product_id} not found for inventory update.")
+    
+
+       
+        # Create attachments
+        new_attachments = []
+        if attachments_data:
+            new_attachments = generic_data_creation(self, attachments_data, MaterialReceivedAttachmentSerializer, {'material_received_id': received_id})
+
+        custom_data = {
+            "material_received": new_received,
+            "items": new_items,
+            "attachments": new_attachments,
+        }
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
+    @transaction.atomic
+    def put(self, request, pk, *args, **kwargs):
+        return self.update(request, pk, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+        given_data = request.data
+        errors = {}
+
+        # Validate MaterialReceived Data
+        material_received_data = given_data.pop('material_received', None)
+        if material_received_data:
+            material_received_data['material_received_id'] = pk
+            instance = MaterialReceived.objects.get(pk=pk)
+            serializer = MaterialReceivedSerializer(instance, data=material_received_data, partial=False)
+            if not serializer.is_valid():
+                errors["material_received"] = serializer.errors
+            else:
+                updated_received = serializer.save()
+        else:
+            updated_received = None
+
+        # Validate items
+        items_data = given_data.pop('items', [])
+        items_error = validate_multiple_data(self, items_data, MaterialReceivedItemSerializer, []) if items_data else None
+        if items_error:
+            errors["items"] = items_error
+
+        # Validate attachments
+        attachments_data = given_data.pop('attachments', [])
+        attachments_error = validate_multiple_data(self, attachments_data, MaterialReceivedAttachmentSerializer, []) if attachments_data else None
+        if attachments_error:
+            errors["attachments"] = attachments_error
+
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Update MaterialReceived
+        updated_received = update_multi_instances(self, pk, [material_received_data], MaterialReceived, MaterialReceivedSerializer, [], main_model_related_field='material_received_id', current_model_pk_field='material_received_id')[0]
+
+        # In MaterialReceivedView.update (inside the inventory update loop)
+        for item_data in items_data:
+            item_id = item_data.get('material_received_item_id')
+            new_qty = Decimal(item_data.get('quantity', 0))
+            try:
+                item_instance = MaterialReceivedItem.objects.get(pk=item_id)
+                old_qty = Decimal(item_instance.quantity)
+                product = item_instance.product_id
+
+                qty_diff = new_qty - old_qty
+                if qty_diff != 0:
+                    product.balance += qty_diff  # Add received difference to stock
+                    product.save()
+                    # Update existing StockJournal entry instead of creating a new one
+                    journal_entry = StockJournal.objects.filter(
+                        reference_id=pk,
+                        product_id=product,
+                        transaction_type__in=['Receive', 'Receive-Edit']
+                    ).first()
+                    if journal_entry:
+                        journal_entry.quantity = new_qty
+                        journal_entry.remarks = f'Material Received quantity edited ({"Increased" if qty_diff > 0 else "Reduced"})'
+                        journal_entry.save()
+                    else:
+                        StockJournal.objects.create(
+                            product_id=product,
+                            transaction_type='Receive',
+                            quantity=new_qty,
+                            reference_id=pk,
+                            remarks='Material Received from Production Floor'
+                        )
+            except MaterialReceivedItem.DoesNotExist:
+                continue
+
+        # Update items
+        updated_items = []
+        if items_data:
+            updated_items = update_multi_instances(self, pk, items_data, MaterialReceivedItem, MaterialReceivedItemSerializer, {'material_received_id': pk}, main_model_related_field='material_received_id', current_model_pk_field='material_received_item_id')
+          
+        # Update attachments
+        updated_attachments = []
+        if attachments_data:
+            updated_attachments = update_multi_instances(self, pk, attachments_data, MaterialReceivedAttachment, MaterialReceivedAttachmentSerializer, {'material_received_id': pk}, main_model_related_field='material_received_id', current_model_pk_field='material_received_attachment_id')
+
+        custom_data = {
+            "material_received": updated_received,
+            "items": updated_items,
+            "attachments": updated_attachments,
+        }
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+    # @transaction.atomic
+    # def patch(self, request, pk, *args, **kwargs):
+    #     try:
+    #         material_received = MaterialReceived.objects.filter(pk=pk).first()
+    #         if not material_received:
+    #             return build_response(0, "Material Received not found", [], status.HTTP_404_NOT_FOUND)
+    #         serializer = MaterialReceivedSerializer(material_received, data=request.data, partial=True)
+    #         if serializer.is_valid():
+    #             serializer.save()
+    #             return build_response(1, "Material Received updated successfully", serializer.data, status.HTTP_200_OK)
+    #         return build_response(0, "Validation error", serializer.errors, status.HTTP_400_BAD_REQUEST)
+    #     except Exception as e:
+    #         return build_response(0, f"Error updating Material Received: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        try:
+            instance = MaterialReceived.objects.get(pk=pk)
+            instance.is_deleted = True
+            instance.save()
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except MaterialReceived.DoesNotExist:
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return build_response(0, f"Record deletion failed due to an error: {e}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)    
+
+
+
+
+# Add this class for a more flexible API approach
+class StockSummaryAPIView(APIView):
+    """
+    API for generating and retrieving stock summary reports
+    """
+    
+    def get_pagination_params(self, request):
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
+        return page, limit
+    
+    def get(self, request, *args, **kwargs):
+        try:
+            # Extract date range parameters
+            from_date = request.query_params.get('from_date')
+            to_date = request.query_params.get('to_date')
+            
+            if not from_date or not to_date:
+                # Default to today only (for daily view)
+                today = timezone.now().date()
+                from_date = today.isoformat()
+                to_date = today.isoformat()
+            
+            # Convert to datetime objects
+            start_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
+            end_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
+            
+            # Get or generate stock summary for the period
+            self.generate_stock_summary(start_date, end_date)
+            
+            page, limit = self.get_pagination_params(request)
+            
+            # Query the stock summary
+            queryset = StockSummary.objects.filter(
+                period_start=start_date,
+                period_end=end_date,
+                is_deleted=False
+            ).order_by('product_id__product_group_id__group_name', 'product_id__name')
+            
+            # Apply filters if any
+            if request.query_params:
+                filterset = StockSummaryFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+            
+            total_count = queryset.count()
+            serializer = StockSummarySerializer(queryset, many=True)
+            
+            return filter_response(
+                queryset.count(), 
+                "Success", 
+                serializer.data, 
+                page, 
+                limit, 
+                total_count, 
+                status.HTTP_200_OK
+            )
+            
+        except Exception as e:
+            logger.error(f"Error retrieving stock summary: {str(e)}")
+            return build_response(
+                0, 
+                f"An error occurred: {str(e)}", 
+                [], 
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def generate_stock_summary(self, start_date, end_date):
+        """
+        Generates stock summary for all products for the given period
+        """
+        with transaction.atomic():
+            # Get all products
+            products = Products.objects.filter(is_deleted=False)
+            
+            for product in products:
+                # Find existing summary or create new
+                summary, created = StockSummary.objects.get_or_create(
+                    product_id=product,
+                    period_start=start_date,
+                    period_end=end_date,
+                    defaults={
+                        'unit_options_id': product.unit_options_id,
+                        'mrp': product.mrp or 0,
+                        'sales_rate': product.sales_rate or 0,
+                        'purchase_rate': product.purchase_rate or 0,
+                    }
+                )
+                
+                # Calculate transactions within this period
+                stock_movements = StockJournal.objects.filter(
+                    product_id=product,
+                    created_at__date__gte=start_date,
+                    created_at__date__lte=end_date,
+                    is_deleted=False
+                )
+                
+                received_qty = stock_movements.filter(
+                    transaction_type__in=['Receive', 'receive', 'RECEIVE', 'receive-edit']
+                ).aggregate(Sum('quantity'))['quantity__sum'] or 0
+                
+                issued_qty = stock_movements.filter(
+                    transaction_type__in=['Issue', 'issue', 'ISSUE', 'issue-edit']
+                ).aggregate(Sum('quantity'))['quantity__sum'] or 0
+                
+                # IMPORTANT: Calculate opening balance by REMOVING the effect of current period transactions
+                # Current balance minus (received minus issued) during period
+                current_balance = product.balance
+                opening_qty = current_balance - (received_qty - issued_qty)
+                
+                # Calculate closing stock (current balance)
+                closing_qty = current_balance
+                
+                # Update the summary
+                summary.opening_quantity = opening_qty
+                summary.closing_quantity = closing_qty
+                summary.received_quantity = received_qty
+                summary.issued_quantity = issued_qty
+                summary.save()
