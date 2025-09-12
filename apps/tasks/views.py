@@ -101,7 +101,7 @@ class TaskView(APIView):
            result =  validate_input_pk(self,kwargs['pk'])
            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            instance = Tasks.objects.all().order_by('-created_at')	
+            instance = Tasks.objects.all().order_by('is_deleted', '-created_at')	
 
 
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
@@ -110,7 +110,7 @@ class TaskView(APIView):
 
             # Apply filters manually
             if request.query_params:
-                queryset = Tasks.objects.all().order_by('-created_at')	
+                queryset = Tasks.objects.all().order_by('is_deleted', '-created_at')	
                 filterset = TasksFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs

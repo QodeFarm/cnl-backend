@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 class BOMViewSet(viewsets.ModelViewSet):
-    queryset = BOM.objects.all().order_by('-created_at')
+    queryset = BOM.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = BOMSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = BOMFilter
@@ -45,7 +45,7 @@ class BOMViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class BillOfMaterialsViewSet(viewsets.ModelViewSet):
-    queryset = BillOfMaterials.objects.all().order_by('-created_at')
+    queryset = BillOfMaterials.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = BillOfMaterialsSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = MaterialFilter
@@ -60,7 +60,7 @@ class BillOfMaterialsViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
         
 class ProductionStatusViewSet(viewsets.ModelViewSet):
-    queryset = ProductionStatus.objects.all().order_by('-created_at')
+    queryset = ProductionStatus.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ProductionStatusSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductionStatusFilter
@@ -80,7 +80,7 @@ class ProductionStatusViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class WorkOrderViewSet(viewsets.ModelViewSet):
-    queryset = WorkOrder.objects.all().order_by('-created_at')
+    queryset = WorkOrder.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = WorkOrderSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = WorkOrderFilter
@@ -108,7 +108,7 @@ class CompletedQuantityViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
         
 class MachineViewSet(viewsets.ModelViewSet):
-    queryset = Machine.objects.all().order_by('-created_at')
+    queryset = Machine.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = MachineSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = MachineFilter

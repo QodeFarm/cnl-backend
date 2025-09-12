@@ -1151,6 +1151,7 @@ class MstcnlSaleOrder(models.Model):
     flow_status_id = models.CharField(max_length=36, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     use_workflow = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -1224,6 +1225,7 @@ class MstcnlSaleInvoiceOrder(models.Model):
     paid_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     balance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     pending_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 

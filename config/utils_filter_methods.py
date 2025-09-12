@@ -248,11 +248,60 @@ def filter_response(count, message, data,page, limit,total_count,status_code):
 #     total_count = queryset.count()
 #     return filter_response(count=len(serializer.data),message=message,data=serializer.data,page=1,limit=len(serializer.data),total_count=total_count,status_code=status_code)
 
+# def list_filtered_objects(viewset, request, model_name, *args, **kwargs):
+#     """
+#     Handles filtered listing of objects with pagination for ModelViewSet.
+#     """
+#     # queryset = viewset.filter_queryset(viewset.get_queryset())
+    
+#     # # ✅ Apply ordering only if field exists in model
+#     # field_names = [f.name for f in model_name._meta.get_fields()]
+#     # if "is_deleted" in field_names:
+#     #     queryset = queryset.order_by("is_deleted", "-created_at")
+#     queryset = viewset.get_queryset()
+
+#     # ✅ Apply custom ordering first (before pagination / slicing)
+#     field_names = [f.name for f in model_name._meta.get_fields()]
+#     if "is_deleted" in field_names:
+#         queryset = queryset.order_by("is_deleted", "-created_at")
+
+#     # ✅ Now apply filters (safe after ordering)
+#     queryset = viewset.filter_queryset(queryset)
+
+
+#     # Pagination handling
+#     paginator = viewset.paginator
+#     if paginator:
+#         paginated_queryset = paginator.paginate_queryset(queryset, request, view=viewset)
+#         serializer = viewset.get_serializer(paginated_queryset, many=True)
+#         return paginator.get_paginated_response(serializer.data)
+
+#     # Fallback if no pagination is configured
+#     serializer = viewset.get_serializer(queryset, many=True)
+#     message = "NO RECORDS INSERTED" if not serializer.data else None
+#     status_code = status.HTTP_201_CREATED if not serializer.data else status.HTTP_200_OK
+    
+#     # ✅ Total count from full model, not queryset
+#     total_count = model_name.objects.count()
+
+#     return filter_response(
+#         count=len(serializer.data),
+#         message=message,
+#         data=serializer.data,
+#         page=1,
+#         limit=len(serializer.data),
+#         total_count=total_count,
+#         status_code=status_code
+#     )
+
 def list_filtered_objects(viewset, request, model_name, *args, **kwargs):
     """
     Handles filtered listing of objects with pagination for ModelViewSet.
     """
-    queryset = viewset.filter_queryset(viewset.get_queryset())
+    # ✅ force ordering by is_deleted first, then created_at desc
+    queryset = viewset.filter_queryset(
+        viewset.get_queryset()
+    )
 
     # Pagination handling
     paginator = viewset.paginator

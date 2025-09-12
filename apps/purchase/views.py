@@ -198,7 +198,7 @@ class PurchaseOrderViewSet(APIView):
         logger.info("Retrieving all purchase orders")
         page, limit = self.get_pagination_params(request)
         
-        queryset = PurchaseOrders.objects.all().order_by('-created_at')
+        queryset = PurchaseOrders.objects.all().order_by('is_deleted', '-created_at')
 
         # Apply filters
         if request.query_params:
@@ -215,7 +215,7 @@ class PurchaseOrderViewSet(APIView):
         logger.info("Retrieving Purchase order summary")
 
         page, limit = self.get_pagination_params(request)
-        queryset = PurchaseOrders.objects.all().order_by('-created_at')
+        queryset = PurchaseOrders.objects.all().order_by('is_deleted', '-created_at')
 
         # Apply filters
         if request.query_params:
@@ -748,7 +748,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase Invoice orders summary")
-                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all().order_by('-created_at')
+                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
                 data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
@@ -760,7 +760,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
 
             # Apply filters manually
             if request.query_params:
-                queryset = PurchaseInvoiceOrders.objects.all().order_by('-created_at')
+                queryset = PurchaseInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
                 filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
@@ -1187,7 +1187,7 @@ class PurchaseReturnOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
             if summary:
                 logger.info("Retrieving Purchase return orders summary")
-                purchasereturnorders = PurchaseReturnOrders.objects.all().order_by('-created_at')
+                purchasereturnorders = PurchaseReturnOrders.objects.all().order_by('is_deleted', '-created_at')
                 data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(purchasereturnorders)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             
@@ -1199,7 +1199,7 @@ class PurchaseReturnOrderViewSet(APIView):
             
             # Apply filters manually
             if request.query_params:
-                queryset = PurchaseReturnOrders.objects.all().order_by('-created_at')
+                queryset = PurchaseReturnOrders.objects.all().order_by('is_deleted', '-created_at')
                 filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs

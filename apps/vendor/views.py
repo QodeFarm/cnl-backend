@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 
 class VendorsView(viewsets.ModelViewSet):
-    queryset = Vendor.objects.all().order_by('-created_at')	
+    queryset = Vendor.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = VendorSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorFilter
@@ -69,7 +69,7 @@ class VendorsView(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class VendorCategoryView(viewsets.ModelViewSet):
-    queryset = VendorCategory.objects.all().order_by('-created_at')	
+    queryset = VendorCategory.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = VendorCategorySerializer 
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorCategoryFilter
@@ -89,7 +89,7 @@ class VendorCategoryView(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class VendorPaymentTermsView(viewsets.ModelViewSet):
-    queryset = VendorPaymentTerms.objects.all().order_by('-created_at')	
+    queryset = VendorPaymentTerms.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = VendorPaymentTermsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorPaymentTermsFilter
@@ -109,7 +109,7 @@ class VendorPaymentTermsView(viewsets.ModelViewSet):
         return soft_delete(instance)  
 
 class VendorAgentView(viewsets.ModelViewSet):
-    queryset = VendorAgent.objects.all().order_by('-created_at')	
+    queryset = VendorAgent.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = VendorAgentSerializer   
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorAgentFilter
@@ -215,7 +215,7 @@ class VendorViewSet(APIView):
         logger.info("Retrieving vendor summary")
 
         page, limit = self.get_pagination_params(request)
-        queryset = Vendor.objects.all().order_by('-created_at')
+        queryset = Vendor.objects.all().order_by('is_deleted', '-created_at')
         queryset, total_count = self.apply_filters(request, queryset, VendorFilter, Vendor)
 
         serializer = VendorsOptionsSerializer(queryset, many=True)
@@ -226,7 +226,7 @@ class VendorViewSet(APIView):
         logger.info("Retrieving all vendors")
 
         page, limit = self.get_pagination_params(request)
-        queryset = Vendor.objects.all().order_by('-created_at')
+        queryset = Vendor.objects.all().order_by('is_deleted', '-created_at')
         queryset, total_count = self.apply_filters(request, queryset, VendorFilter, Vendor)
 
         serializer = VendorSerializer(queryset, many=True)
