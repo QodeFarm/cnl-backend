@@ -1457,7 +1457,7 @@ class SaleOrderViewSet(APIView):
             else:
                 custom_error = []
             
-        if not sale_order_data or not sale_order_items_data or not custom_fields_data:
+        if not sale_order_data or not sale_order_items_data:
             logger.error("Sale order and sale order items and CustomFields are mandatory but not provided.")
             return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
