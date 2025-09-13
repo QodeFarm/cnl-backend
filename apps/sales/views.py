@@ -5259,7 +5259,7 @@ class PaymentTransactionAPIView(APIView):
                         total_paid = getattr(sale_invoice, 'total_paid', Decimal('0.0000')) or Decimal('0.0000')
 
                         # Check if invoice exists in PaymentTransactions and fetch outstanding_amount
-                        payment_transaction = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).order_by('is_deleted', '-created_at').first()
+                        payment_transaction = PaymentTransactions.objects.filter(sale_invoice_id=sale_invoice.sale_invoice_id).order_by('-created_at').first()
                         if payment_transaction:
                             # If invoice is in PaymentTransactions, directly use the last outstanding amount
                             current_outstanding = max(payment_transaction.outstanding_amount, Decimal('0.0000'))
