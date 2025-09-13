@@ -211,9 +211,29 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
             return None
 
         
+    # @staticmethod
+    # def get_sale_order_summary(sale_order):
+    #     serializer = SaleOrderOptionsSerializer(sale_order, many=True)
+    #     return {
+    #         "count": len(serializer.data),
+    #         "msg": "SUCCESS",
+    #         "data": serializer.data
+    #     }
     @staticmethod
-    def get_sale_order_summary(sale_order):
-        serializer = SaleOrderOptionsSerializer(sale_order, many=True)
+    def get_sale_order_summary(sale_order_queryset, exclude_other_completed=True):
+        # Pre-filter at queryset level if possible
+        if exclude_other_completed:
+            # Try to filter at database level first
+            other_sale_type_id = SaleTypes.objects.filter(name="Other").values_list("sale_type_id", flat=True).first()
+            completed_flow_status_id = FlowStatus.objects.filter(flow_status_name="Completed").values_list("flow_status_id", flat=True).first()
+            
+            if other_sale_type_id and completed_flow_status_id:
+                sale_order_queryset = sale_order_queryset.exclude(
+                    sale_type_id=other_sale_type_id,
+                    flow_status_id=completed_flow_status_id
+                )
+        
+        serializer = SaleOrderOptionsSerializer(sale_order_queryset, many=True)
         return {
             "count": len(serializer.data),
             "msg": "SUCCESS",
