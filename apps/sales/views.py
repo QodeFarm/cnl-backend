@@ -304,7 +304,7 @@ class SaleOrderViewSet(APIView):
                 result = validate_input_pk(self, kwargs['pk'])
                 return result if result else self.retrieve(self, request, *args, **kwargs)
 
-            if request.query_params.get("summary", "false").lower() == "true" + "&" :
+            if request.query_params.get("summary", "false").lower() == "true" :
                 return self.get_summary_data(request)
             
             if request.query_params.get("records_all", "false").lower() == "true" :
@@ -631,45 +631,99 @@ class SaleOrderViewSet(APIView):
                 total_count,  # Total items
                 status.HTTP_200_OK
             )
-
+            
         else:
             logger.info("Fetching sale order summary only from default database")
+            
+            # Start with all records
             queryset = SaleOrder.objects.all().order_by('is_deleted', '-created_at')
 
-            # Dynamically fetch the IDs
+            # Apply filters from request FIRST (before any slicing)
+            if request.query_params:
+                # Create a copy of GET params to avoid modifying the original request
+                filter_params = request.GET.copy()
+                
+                # Remove pagination parameters to avoid conflicts with filtering
+                if 'page' in filter_params:
+                    del filter_params['page']
+                if 'limit' in filter_params:
+                    del filter_params['limit']
+                    
+                filterset = SaleOrderFilter(filter_params, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+
+            # Now apply the exclusion for "Other" and "Completed"
             other_sale_type_id = SaleTypes.objects.filter(name="Other").values_list("sale_type_id", flat=True).first()
             completed_flow_status_id = FlowStatus.objects.filter(flow_status_name="Completed").values_list("flow_status_id", flat=True).first()
 
-            # ✅ Exclude if both IDs are present
             if other_sale_type_id and completed_flow_status_id:
                 queryset = queryset.exclude(
                     sale_type_id=other_sale_type_id,
                     flow_status_id=completed_flow_status_id
                 )
-            
-            if request.query_params:
-                filterset = SaleOrderFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-                    
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10))
+
+            # Get total count AFTER all filtering and exclusions
             total_count = queryset.count()
             
-            # ✅ Apply pagination
-            paginated_results = queryset[(page - 1) * limit: page * limit]
-            current_page_count = len(paginated_results)  # Count of items on current page
+            # Get pagination parameters
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 10))
 
+            # Apply pagination LAST (after all filtering)
+            paginated_results = queryset[(page - 1) * limit: page * limit]
+            
+            # Use your existing serializer
             serializer = SaleOrderOptionsSerializer(paginated_results, many=True)
+
             return filter_response(
-                current_page_count,  # Items on current page
+                total_count,        # Total count of all matching records
                 "Success", 
                 serializer.data, 
                 page, 
                 limit, 
-                total_count,  # Total items
+                total_count,        # Same total count
                 status.HTTP_200_OK
             )
+
+        # else:
+        #     logger.info("Fetching sale order summary only from default database")
+        #     queryset = SaleOrder.objects.all().order_by('is_deleted', '-created_at')
+
+        #     # Dynamically fetch the IDs
+        #     other_sale_type_id = SaleTypes.objects.filter(name="Other").values_list("sale_type_id", flat=True).first()
+        #     completed_flow_status_id = FlowStatus.objects.filter(flow_status_name="Completed").values_list("flow_status_id", flat=True).first()
+
+        #     # ✅ Exclude if both IDs are present
+        #     if other_sale_type_id and completed_flow_status_id:
+        #         queryset = queryset.exclude(
+        #             sale_type_id=other_sale_type_id,
+        #             flow_status_id=completed_flow_status_id
+        #         )
+            
+        #     if request.query_params:
+        #         filterset = SaleOrderFilter(request.GET, queryset=queryset)
+        #         if filterset.is_valid():
+        #             queryset = filterset.qs
+                    
+        #     page = int(request.query_params.get('page', 1))
+        #     limit = int(request.query_params.get('limit', 10))
+        #     total_count = queryset.count()
+            
+        #     # ✅ Apply pagination
+        #     paginated_results = queryset[(page - 1) * limit: page * limit]
+        #     current_page_count = len(paginated_results)  # Count of items on current page
+
+        #     serializer = SaleOrderOptionsSerializer(paginated_results, many=True)
+        #     return filter_response(
+        #         current_page_count,  # Items on current page
+        #         "Success", 
+        #         serializer.data, 
+        #         page, 
+        #         limit, 
+        #         total_count,  # Total items
+        #         status.HTTP_200_OK
+        #     )
 
     # def get_sales_order_report(self, request):
     #     """Fetches sales order details with required fields."""
@@ -1662,7 +1716,7 @@ class SaleOrderViewSet(APIView):
             MstcnlSaleOrder.objects.using('mstcnl').get(sale_order_id=pk)
             return build_response(
                 0,
-                "This record is from the mstcnl DB, not allowed to update.",
+                "Update is not allowed, please contact Product team.",
                 errors,
                 status.HTTP_400_BAD_REQUEST
             )
@@ -2884,7 +2938,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             # Instead of update, return custom response
             return build_response(
                 0,
-                "This record is from the mstcnl DB, not allowed to update.",
+                "Update is not allowed, please contact Product team.",
                 errors,
                 status.HTTP_400_BAD_REQUEST
             )
