@@ -27,7 +27,7 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
         # Step 2: Calculating total pending (balance_amount) for that customer
         # total_pending = SaleInvoiceOrders.objects.filter(customer_id=instance.customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
         existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
-                                                                            .order_by('-created_at')                   # most recent entry first
+                                                                            .order_by('is_deleted', '-created_at')                   # most recent entry first
                                                                             .values_list('balance', flat=True)         # get only the balance field
                                                                             .first()) or Decimal('0.00')               # grab the first result
         new_balance =  Decimal(instance.total_amount) + Decimal(existing_balance)
@@ -81,7 +81,7 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
             existing_balance = (
                 JournalEntryLines.objects
                 .filter(customer_id=instance.customer_id)       # filter by your customer
-                .order_by('-created_at')                   # most recent entry first
+                .order_by('is_deleted', '-created_at')                   # most recent entry first
                 .values_list('balance', flat=True)         # get only the balance field
                 .first()                                   # grab the first result
             )or Decimal('0.00')
@@ -114,7 +114,7 @@ def update_balance_after_return(sender, instance, created, **kwargs):
        if instance.return_option_id and instance.return_option_id.name.lower() != 'credit note': 
             try:
                 existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
-                                                                                .order_by('-created_at')                   # most recent entry first
+                                                                                .order_by('is_deleted', '-created_at')                   # most recent entry first
                                                                                 .values_list('balance', flat=True)         # get only the balance field
                                                                                 .first() ) or Decimal('0.00')          
                 bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)

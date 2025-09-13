@@ -226,7 +226,7 @@ class SaleInvoiceOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleInvoiceOrders
-        fields = ['sale_invoice_id', 'invoice_no',  'invoice_date', 'tax', 'advance_amount', 'total_amount', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['sale_invoice_id', 'invoice_no',  'invoice_date', 'tax', 'advance_amount', 'bill_type', 'item_value', 'total_amount', 'dis_amt', 'due_date', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at']
 
     def get_sale_invoice_order_summary(sale_invoice_order):
         serializer = SaleInvoiceOrderOptionsSerializer(sale_invoice_order, many=True)
@@ -372,7 +372,7 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = PaymentTransactions
-        fields = ['transaction_id', 'account_id' ,'invoice_no','customer_id','customer_name','invoice_date', 'amount', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
+        fields = ['transaction_id', 'account_id' ,'invoice_no','customer_id','customer_name','invoice_date', 'amount', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'payment_status', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
 
 class SalesByProductReportSerializer(serializers.ModelSerializer):
     product = serializers.CharField(source="product_id__name")  
@@ -447,25 +447,172 @@ class AgingReportSerializer(serializers.ModelSerializer):
         model = SaleInvoiceOrders
         fields = ['invoice_no', 'due_date', 'pending_amount', 'days_overdue', 'aging_category']       
         
+#===========================mstcnl-tables==================================
 class MstcnlSaleOrderSerializer(serializers.ModelSerializer):
+    gst_type = serializers.SerializerMethodField()
+    customer = serializers.SerializerMethodField()
+    customer_address = serializers.SerializerMethodField()
+    payment_term = serializers.SerializerMethodField()
+    sale_type = serializers.SerializerMethodField()
+    ledger_account = serializers.SerializerMethodField()
+    order_status = serializers.SerializerMethodField()
+    sale_return = serializers.SerializerMethodField()
+    flow_status = serializers.SerializerMethodField()
+
     class Meta:
         model = MstcnlSaleOrder
         fields = '__all__'
+
+    def get_gst_type(self, obj):
+        return {"gst_type_id": obj.gst_type_id, "name": obj.gst_type_id} if obj.gst_type_id else None
+
+    def get_customer(self, obj):
+        return {"customer_id": obj.customer_id, "name": obj.customer_id} if obj.customer_id else None
+
+    def get_customer_address(self, obj):
+        return {"customer_address_id": obj.customer_address_id, "address": obj.customer_address_id} if obj.customer_address_id else None
+
+    def get_payment_term(self, obj):
+        return {"payment_term_id": obj.payment_term_id, "name": obj.payment_term_id} if obj.payment_term_id else None
+
+    def get_sale_type(self, obj):
+        return {"sale_type_id": obj.sale_type_id, "name": obj.sale_type_id} if obj.sale_type_id else None
+
+    def get_ledger_account(self, obj):
+        return {"ledger_account_id": obj.ledger_account_id, "name": obj.ledger_account_id} if obj.ledger_account_id else None
+
+    def get_order_status(self, obj):
+        return {"order_status_id": obj.order_status_id, "status_name": obj.order_status_id} if obj.order_status_id else None
+
+    def get_sale_return(self, obj):
+        return {"sale_return_id": obj.sale_return_id, "invoice_no": obj.sale_return_id} if obj.sale_return_id else None
+
+    def get_flow_status(self, obj):
+        return {"flow_status_id": obj.flow_status_id, "status_name": obj.flow_status_id} if obj.flow_status_id else None
+
         
+# class MstcnlSaleInvoiceSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = MstcnlSaleInvoiceOrder
+#         fields = '__all__'
+
 class MstcnlSaleInvoiceSerializer(serializers.ModelSerializer):
+    gst_type = serializers.SerializerMethodField()
+    customer = serializers.SerializerMethodField()
+    customer_address = serializers.SerializerMethodField()
+    payment_term = serializers.SerializerMethodField()
+    orders_salesman = serializers.SerializerMethodField()
+    payment_link_type = serializers.SerializerMethodField()
+    ledger_account = serializers.SerializerMethodField()
+    order_status = serializers.SerializerMethodField()
+    sale_order = serializers.SerializerMethodField()
+
     class Meta:
         model = MstcnlSaleInvoiceOrder
         fields = '__all__'
+
+    def get_gst_type(self, obj):
+        return {"gst_type_id": obj.gst_type_id, "name": obj.gst_type_id} if obj.gst_type_id else None
+
+    def get_customer(self, obj):
+        return {"customer_id": obj.customer_id, "name": obj.customer_id} if obj.customer_id else None
+
+    def get_customer_address(self, obj):
+        return {"customer_address_id": obj.customer_address_id, "address": obj.customer_address_id} if obj.customer_address_id else None
+
+    def get_payment_term(self, obj):
+        return {"payment_term_id": obj.payment_term_id, "name": obj.payment_term_id} if obj.payment_term_id else None
+
+    def get_orders_salesman(self, obj):
+        return {"order_salesman_id": obj.order_salesman_id, "name": obj.order_salesman_id} if obj.order_salesman_id else None
+
+    def get_payment_link_type(self, obj):
+        return {"payment_link_type_id": obj.payment_link_type_id, "name": obj.payment_link_type_id} if obj.payment_link_type_id else None
+
+    def get_ledger_account(self, obj):
+        return {"ledger_account_id": obj.ledger_account_id, "name": obj.ledger_account_id} if obj.ledger_account_id else None
+
+    def get_order_status(self, obj):
+        return {"order_status_id": obj.order_status_id, "status_name": obj.order_status_id} if obj.order_status_id else None
+
+    def get_sale_order(self, obj):
+        return {"sale_order_id": obj.sale_order_id, "invoice_no": obj.sale_order_id} if obj.sale_order_id else None
         
 class MstcnlSaleOrderItemsSerializer(serializers.ModelSerializer):
+    sale_order = serializers.SerializerMethodField()
+    product = serializers.SerializerMethodField()
+    unit_options = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
+    color = serializers.SerializerMethodField()
+
     class Meta:
         model = MstcnlSaleOrderItem
         fields = '__all__'
+
+    def get_sale_order(self, obj):
+        return {"sale_order_id": obj.sale_order_id, "invoice_no": obj.sale_order_id} if obj.sale_order_id else None
+
+    def get_product(self, obj):
+        return {"product_id": obj.product_id, "name": obj.product_id} if obj.product_id else None
+
+    def get_unit_options(self, obj):
+        return {"unit_options_id": obj.unit_options_id, "unit_name": obj.unit_options_id} if obj.unit_options_id else None
+
+    def get_size(self, obj):
+        return {"size_id": obj.size_id, "size_name": obj.size_id} if obj.size_id else None
+
+    def get_color(self, obj):
+        return {"color_id": obj.color_id, "color_name": obj.color_id} if obj.color_id else None
+
         
-class MstcnlSaleInvoiceItemsSerializer(serializers.ModelSerializer):
+# class MstcnlSaleInvoiceItemsSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = MstcnlSaleInvoiceItem
+#         fields = '__all__'
+
+class MstcnlSaleInvoiceItemSerializer(serializers.ModelSerializer):
+    product = serializers.SerializerMethodField()
+    unit_options = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
+    color = serializers.SerializerMethodField()
+
     class Meta:
         model = MstcnlSaleInvoiceItem
         fields = '__all__'
+
+    def get_product(self, obj):
+        if obj.product_id:
+            return {
+                "product_id": obj.product_id,
+                "name": obj.product_id
+            }
+        return None
+
+    def get_unit_options(self, obj):
+        if obj.unit_options_id:
+            return {
+                "unit_options_id": obj.unit_options_id,
+                "unit_name": obj.unit_options_id
+            }
+        return None
+
+    def get_size(self, obj):
+        if obj.size_id:
+            return {
+                "size_id": obj.size_id,
+                "size_name": obj.size_id
+            }
+        return None
+
+    def get_color(self, obj):
+        if obj.color_id:
+            return {
+                "color_id": obj.color_id,
+                "color_name": obj.color_id
+            }
+        return None
+
+
 
 class MstcnlOrderAttachmentsSerializer(serializers.ModelSerializer):
     class Meta:

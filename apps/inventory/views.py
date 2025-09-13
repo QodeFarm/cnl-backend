@@ -12,7 +12,7 @@ from rest_framework.filters import OrderingFilter
 
 # Create your views here.
 class WarehousesViewSet(viewsets.ModelViewSet):
-    queryset = Warehouses.objects.all().order_by('-created_at')	
+    queryset = Warehouses.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = WarehousesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = WarehousesFilter
@@ -32,7 +32,7 @@ class WarehousesViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class WarehouseLocationsViewSet(viewsets.ModelViewSet):
-    queryset = WarehouseLocations.objects.all().order_by('-created_at')	
+    queryset = WarehouseLocations.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = WarehouseLocationsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = WarehouseLocationsFilter

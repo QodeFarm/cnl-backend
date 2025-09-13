@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Create your views here.
 
 class LedgerAccountsViews(viewsets.ModelViewSet):
-    queryset = LedgerAccounts.objects.all().order_by('-created_at')
+    queryset = LedgerAccounts.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = LedgerAccountsSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LedgerAccountsFilters
@@ -70,7 +70,7 @@ class LedgerAccountsViews(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class CustomerViews(viewsets.ModelViewSet):
-    queryset = Customer.objects.all().order_by('-created_at')	
+    queryset = Customer.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = CustomerSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerFilters
@@ -185,12 +185,15 @@ class CustomerCreateViews(APIView):
         page, limit = self.get_pagination_params(request)
         using_db = self.resolve_db_from_request(request)
 
-        queryset = Customer.objects.using(using_db).all().order_by('-created_at')
+        queryset = Customer.objects.using(using_db).all().order_by('is_deleted', '-created_at')
 
         if request.query_params:
             filterset = CustomerFilters(request.GET, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
+                
+        # ✅ Enforce ordering again after filters
+        queryset = queryset.order_by('is_deleted', '-created_at')
 
         total_count = Customer.objects.using(using_db).count()
         serializer = CustomerSerializer(queryset, many=True)
@@ -205,10 +208,10 @@ class CustomerCreateViews(APIView):
         page, limit = self.get_pagination_params(request)
         # using_db = self.resolve_db_from_request(request)
 
-        queryset = Customer.objects.all().order_by('-created_at')
+        queryset = Customer.objects.all().order_by('is_deleted', '-created_at')
 
         if request.query_params:
-            filterset = CustomerFilters(request.GET, queryset=queryset)
+            filterset = CustomerFilters(request.GET, queryset=queryset.order_by('is_deleted', '-created_at'))
             if filterset.is_valid():
                 queryset = filterset.qs
 
