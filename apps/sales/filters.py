@@ -33,7 +33,10 @@ class SaleOrderFilter(filters.FilterSet):
     advance_amount = filters.RangeFilter()
     tax = filters.ChoiceFilter(field_name='tax', choices=SaleOrder.TAX_CHOICES)
     amount = filters.RangeFilter(field_name='item_value', lookup_expr='icontains')
-    flow_status_name = filters.CharFilter(method='filter_by_flow_status_name')
+    flow_status_name = filters.CharFilter(
+            field_name='flow_status_id__flow_status_name',
+            lookup_expr='icontains'
+        )
     status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
