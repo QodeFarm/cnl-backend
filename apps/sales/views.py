@@ -2103,6 +2103,49 @@ class SaleInvoiceOrdersViewSet(APIView):
             
             summary = request.query_params.get("summary", "false").lower() == "true"
 
+            # if summary:
+            #     saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
+
+            #     # ✅ Dynamically fetch the IDs
+            #     canceled_status_ids = list(OrderStatuses.objects.filter(
+            #         status_name__in=['Cancelled']
+            #     ).values_list('order_status_id', flat=True))
+
+            #     completed_status_id = OrderStatuses.objects.filter(
+            #         status_name="Completed"
+            #     ).values_list("order_status_id", flat=True).first()
+
+            #     # ✅ Exclude either Cancelled OR (bill_type=Others AND status=Completed)
+            #     if completed_status_id:
+            #         exclude_q = Q(order_status_id__in=canceled_status_ids) | (
+            #             Q(bill_type__iexact="Others") & Q(order_status_id=completed_status_id)
+            #         )
+            #     else:
+            #         exclude_q = Q(order_status_id__in=canceled_status_ids)
+
+            #     saleinvoiceorder = saleinvoiceorder.exclude(exclude_q)
+
+            #     data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
+
+            #     total_count = len(data)  # total after summary processing
+            #     page = int(request.query_params.get('page', 1))
+            #     limit = int(request.query_params.get('limit', 10))
+
+            #     # manual pagination on summary data
+            #     start_index = (page - 1) * limit
+            #     end_index = start_index + limit
+            #     paginated_data = data[start_index:end_index]
+
+            #     return filter_response(
+            #         total_count,
+            #         "Success",
+            #         paginated_data,
+            #         page,
+            #         limit,
+            #         total_count,
+            #         status.HTTP_200_OK
+            #     )
+            
             if summary:
                 saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
 
@@ -2125,6 +2168,12 @@ class SaleInvoiceOrdersViewSet(APIView):
 
                 saleinvoiceorder = saleinvoiceorder.exclude(exclude_q)
 
+                # 🔹 APPLY SEARCH HERE BEFORE SERIALIZATION
+                search_value = request.query_params.get('s')
+                if search_value:
+                    filter_set = SaleInvoiceOrdersFilter(data={'s': search_value})
+                    saleinvoiceorder = filter_by_search(saleinvoiceorder, filter_set, search_value)
+
                 data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
 
                 total_count = len(data)  # total after summary processing
@@ -2146,7 +2195,10 @@ class SaleInvoiceOrdersViewSet(APIView):
                     status.HTTP_200_OK
                 )
 
-            # if records_all:
+            
+            # from django_filters.rest_framework import DjangoFilterBackend
+
+                        # if records_all:
             #     logger.info("Fetching sale order summary from both mstcnl and default databases")
 
             #     # DB: mstcnl
