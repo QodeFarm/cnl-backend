@@ -315,8 +315,8 @@ class UserLoginView(APIView):
         password = serializer.validated_data.get('password')
         # subdomain = request.get_host().split('.')[0]
         client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
-        subdomain =  client_domain.split('.')[0]
-        # subdomain = '127'
+        # subdomain =  client_domain.split('.')[0]
+        subdomain = '127'
 
         try:
             # Check if user exists in the default DB
