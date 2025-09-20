@@ -80,8 +80,8 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
 
             existing_balance = (
                 JournalEntryLines.objects
-                .filter(customer_id=instance.customer_id)       # filter by your customer
-                .order_by('is_deleted', '-created_at')                   # most recent entry first
+                .filter(customer_id=instance.customer_id)  # filter by your customer
+                .order_by('is_deleted', '-created_at')     # most recent entry first
                 .values_list('balance', flat=True)         # get only the balance field
                 .first()                                   # grab the first result
             )or Decimal('0.00')
@@ -96,9 +96,9 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
             account_id=sale_account,  
-            debit=instance.total_amount,
+            debit=0.00,
             voucher_no = instance.credit_note_number,
-            credit=0.00,
+            credit=instance.total_amount,
             description=f"Credit note gives to {instance.customer_id.name} ( {instance.reason} )",
             customer_id=instance.customer_id,
             balance=bal_amt
