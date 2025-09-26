@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.masters.serializers import ModOrderStatusesSerializer, ModProductionFloorSerializer, ModUnitOptionsSerializer
 from .models import *
-from apps.products.serializers import ColorSerializer, ModColorSerializer, ModStockJournalProductSerializer, ModproductsSerializer, ModSizeSerializer
+from apps.products.serializers import ColorSerializer, ModColorSerializer, ModProductGroupsSerializer, ModStockJournalProductSerializer, ModproductsSerializer, ModSizeSerializer
 from apps.hrms.serializers import ModEmployeesSerializer
 from apps.sales.serializers import ModFlowstatusSerializer, UdfSaleOrderSerializer
 
@@ -369,18 +369,50 @@ class StockJournalsSerializer(serializers.ModelSerializer):
 class StockSummarySerializer(serializers.ModelSerializer):
     product = ModStockJournalProductSerializer(source='product_id', read_only=True)
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
-    group_name = serializers.SerializerMethodField()
+    group_name = ModProductGroupsSerializer(source='product_id.product_group_id', read_only=True)
     category_name = serializers.SerializerMethodField()
     hsn_code = serializers.SerializerMethodField()
+    last_transaction_date = serializers.SerializerMethodField()
+    last_transaction_type = serializers.SerializerMethodField()
     
     class Meta:
         model = StockSummary
         fields = '__all__'
-    
-    def get_group_name(self, obj):
-        if obj.product_id and obj.product_id.product_group_id:
-            return obj.product_id.product_group_id.group_name
+        
+    def get_last_transaction_date(self, obj):
+        """
+        Get the date of the latest transaction for this product
+        This provides an extra field showing when the stock was last modified
+        """
+        from django.db.models import Max
+        from apps.production.models import StockJournal
+        
+        latest_date = StockJournal.objects.filter(
+            product_id=obj.product_id, 
+            is_deleted=False
+        ).aggregate(latest=Max('created_at')).get('latest')
+        
+        return latest_date
+        
+    def get_last_transaction_type(self, obj):
+        """
+        Get the type of the latest transaction (Issue/Receive) for this product
+        """
+        from apps.production.models import StockJournal
+        
+        latest_transaction = StockJournal.objects.filter(
+            product_id=obj.product_id,
+            is_deleted=False
+        ).order_by('-created_at').first()
+        
+        if latest_transaction:
+            return latest_transaction.transaction_type
         return None
+    
+    # def get_group_name(self, obj):
+    #     if obj.product_id and obj.product_id.product_group_id:
+    #         return obj.product_id.product_group_id.group_name
+    #     return None
     
     def get_category_name(self, obj):
         if obj.product_id and obj.product_id.category_id:

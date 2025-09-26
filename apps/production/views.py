@@ -1767,29 +1767,13 @@ class StockSummaryAPIView(APIView):
     
     def get(self, request, *args, **kwargs):
         try:
-            # Extract date range parameters
-            from_date = request.query_params.get('from_date')
-            to_date = request.query_params.get('to_date')
-            
-            if not from_date or not to_date:
-                # Default to today only (for daily view)
-                today = timezone.now().date()
-                from_date = today.isoformat()
-                to_date = today.isoformat()
-            
-            # Convert to datetime objects
-            start_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
-            end_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
-            
             # Get or generate stock summary for the period
-            self.generate_stock_summary(start_date, end_date)
+            self.generate_stock_summary()
             
             page, limit = self.get_pagination_params(request)
             
             # Query the stock summary
             queryset = StockSummary.objects.filter(
-                period_start=start_date,
-                period_end=end_date,
                 is_deleted=False
             ).order_by('product_id__product_group_id__group_name', 'product_id__name')
             
@@ -1821,7 +1805,7 @@ class StockSummaryAPIView(APIView):
                 status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    def generate_stock_summary(self, start_date, end_date):
+    def generate_stock_summary(self):
         """
         Generates stock summary for all products for the given period
         """
@@ -1833,8 +1817,7 @@ class StockSummaryAPIView(APIView):
                 # Find existing summary or create new
                 summary, created = StockSummary.objects.get_or_create(
                     product_id=product,
-                    period_start=start_date,
-                    period_end=end_date,
+                    
                     defaults={
                         'unit_options_id': product.unit_options_id,
                         'mrp': product.mrp or 0,
@@ -1846,8 +1829,6 @@ class StockSummaryAPIView(APIView):
                 # Calculate transactions within this period
                 stock_movements = StockJournal.objects.filter(
                     product_id=product,
-                    created_at__date__gte=start_date,
-                    created_at__date__lte=end_date,
                     is_deleted=False
                 )
                 
