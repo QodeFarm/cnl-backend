@@ -452,7 +452,6 @@ class StockSummary(models.Model):
 
     class Meta:
         db_table = 'stock_summary'
-        unique_together = ('product_id', 'period_start', 'period_end')
+        
 
-    def __str__(self):
-        return f"{self.product_id.name} - {self.period_start} to {self.period_end}"
+   
