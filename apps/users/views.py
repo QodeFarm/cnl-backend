@@ -316,6 +316,7 @@ class UserLoginView(APIView):
         # subdomain = request.get_host().split('.')[0]
         client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
         subdomain =  client_domain.split('.')[0]
+        # subdomain = '127'
 
         try:
             # Check if user exists in the default DB
@@ -575,7 +576,7 @@ class UserManageView(APIView):
                 limit = int(request.query_params.get('limit', 10))  # Default limit 10
 
                 # Initial queryset
-                queryset = User.objects.all().order_by('-created_at')
+                queryset = User.objects.all().order_by('is_deleted', '-created_at')
 
                 # Add exclusion filter for current user
                 exclude_id = request.query_params.get('exclude_id')

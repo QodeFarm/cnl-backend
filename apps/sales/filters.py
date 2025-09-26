@@ -33,7 +33,13 @@ class SaleOrderFilter(filters.FilterSet):
     advance_amount = filters.RangeFilter()
     tax = filters.ChoiceFilter(field_name='tax', choices=SaleOrder.TAX_CHOICES)
     amount = filters.RangeFilter(field_name='item_value', lookup_expr='icontains')
-    flow_status_name = filters.CharFilter(method='filter_by_flow_status_name')
+    # flow_status_name = filters.CharFilter(method='filter_by_flow_status_name')
+    flow_status_name = filters.CharFilter(
+        field_name='flow_status_id__flow_status_name',
+        lookup_expr='icontains',
+        method='filter_by_flow_status_name'
+    )
+
     status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
@@ -55,12 +61,22 @@ class SaleOrderFilter(filters.FilterSet):
         return queryset
 
     
+    # def filter_by_flow_status_name(self, queryset, name, value):
+    #     values = [v.strip() for v in value.split(',')]
+    #     q_filter = Q()
+    #     for val in values:
+    #         q_filter |= Q(flow_status_id__flow_status_name__iexact=val)
+    #     return queryset.filter(q_filter)
     def filter_by_flow_status_name(self, queryset, name, value):
-        values = [v.strip() for v in value.split(',')]
-        q_filter = Q()
-        for val in values:
-            q_filter |= Q(flow_status_id__flow_status_name__iexact=val)
-        return queryset.filter(q_filter)
+        if not value:
+            return queryset  # nothing to filter
+        
+        values = [v.strip() for v in value.split(',') if v.strip()]
+        if not values:
+            return queryset
+
+        return queryset.filter(flow_status_id__flow_status_name__in=values)
+
     
     def filter_child_orders(self, queryset, name, value):
         """

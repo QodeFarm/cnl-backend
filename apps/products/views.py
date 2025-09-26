@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Create your views here.
 class ProductGroupsViewSet(viewsets.ModelViewSet):
-    queryset = ProductGroups.objects.all().order_by('-created_at')	
+    queryset = ProductGroups.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = ProductGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGroupsFilter
@@ -50,7 +50,7 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ProductCategoriesViewSet(viewsets.ModelViewSet):
-    queryset = ProductCategories.objects.all().order_by('-created_at')	
+    queryset = ProductCategories.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = ProductCategoriesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductCategoriesFilter
@@ -70,7 +70,7 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ProductStockUnitsViewSet(viewsets.ModelViewSet):
-    queryset = ProductStockUnits.objects.all().order_by('-created_at')	
+    queryset = ProductStockUnits.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = ProductStockUnitsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductStockUnitsFilter
@@ -90,7 +90,7 @@ class ProductStockUnitsViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 	
 class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
-    queryset = ProductGstClassifications.objects.all().order_by('-created_at')	
+    queryset = ProductGstClassifications.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = ProductGstClassificationsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGstClassificationsFilter
@@ -110,7 +110,7 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ProductSalesGlViewSet(viewsets.ModelViewSet):
-    queryset = ProductSalesGl.objects.all().order_by('-created_at')	
+    queryset = ProductSalesGl.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = ProductSalesGlSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductSalesGlFilter
@@ -130,7 +130,7 @@ class ProductSalesGlViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 	
 class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
-    queryset = ProductPurchaseGl.objects.all().order_by('-created_at')	
+    queryset = ProductPurchaseGl.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = ProductPurchaseGlSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductPurchaseGlFilter
@@ -236,7 +236,7 @@ class ProductItemBalanceViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class SizeViewSet(viewsets.ModelViewSet):
-    queryset = Size.objects.all().order_by('-created_at')	
+    queryset = Size.objects.all().order_by('is_deleted', '-created_at')	
     serializer_class = SizeSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = SizeFilter
@@ -256,7 +256,7 @@ class SizeViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)  
 
 class ColorViewSet(viewsets.ModelViewSet):
-    queryset = Color.objects.all().order_by('-created_at')
+    queryset = Color.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ColorSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ColorFilter
@@ -292,7 +292,7 @@ class ProductVariationViewSet(viewsets.ModelViewSet):
         return update_instance(self, request, *args, **kwargs)
 
 class ItemMasterViewSet(viewsets.ModelViewSet):
-    queryset = ItemMaster.objects.all().order_by('-created_at')
+    queryset = ItemMaster.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ModItemMasterSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = ItemMasterFilter
@@ -478,7 +478,7 @@ class ProductViewSet(APIView):
             summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
             view_type = request.query_params.get('view', '')
             
-            queryset = Products.objects.all().order_by('-created_at')
+            queryset = Products.objects.all().order_by('is_deleted', '-created_at')
             
             # Filter by product mode
             if view_type:
@@ -495,12 +495,12 @@ class ProductViewSet(APIView):
                         logger.info(f"Filtering products to show only {mode_name} mode items")
 
             if summary:
-                product = Products.objects.all().order_by('-created_at')	
+                product = Products.objects.all().order_by('is_deleted', '-created_at')	
                 data = ProductOptionsSerializer.get_product_summary(product)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             else:
                 logger.info("Retrieving all products")
-                queryset = Products.objects.all().order_by('-created_at')	
+                queryset = Products.objects.all().order_by('is_deleted', '-created_at')	
 
                 page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
                 limit = int(request.query_params.get('limit', 10)) 

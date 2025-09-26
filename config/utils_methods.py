@@ -133,7 +133,7 @@ from itertools import chain
 #         records_all = request.query_params.get("records_all", "false").lower() == "true"
 
 #         # Default queryset (from default DB)
-#         queryset = self.filter_queryset(self.get_queryset().order_by('-created_at'))
+#         queryset = self.filter_queryset(self.get_queryset().order_by('is_deleted', '-created_at'))
 
 #         #  Special logic: only if sale_order_id is provided
 #         if sale_order_id:
@@ -141,16 +141,16 @@ from itertools import chain
 #             mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id)
 
 #             if default_qs.exists():
-#                 queryset = self.filter_queryset(default_qs.order_by('-created_at'))
+#                 queryset = self.filter_queryset(default_qs.order_by('is_deleted', '-created_at'))
 #             elif mstcnl_qs.exists():
-#                 queryset = self.filter_queryset(mstcnl_qs.order_by('-created_at'))
+#                 queryset = self.filter_queryset(mstcnl_qs.order_by('is_deleted', '-created_at'))
 #             else:
 #                 queryset = []  # not found in either DB
 
 #         #  records_all logic (combine both DBs)
 #         elif records_all:
-#             default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
-#             mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
+#             default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('is_deleted', '-created_at'))
+#             mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('is_deleted', '-created_at'))
 #             queryset = list(chain(default_qs, mstcnl_qs))
 
 #         #  All other cases = default logic is already active
@@ -194,17 +194,17 @@ def list_all_objects(self, request, *args, **kwargs):
             return obj[s:e]
 
         # --- default queryset (already filtered & ordered) ---
-        base_qs = self.filter_queryset(self.get_queryset().order_by('-created_at'))
+        base_qs = self.filter_queryset(self.get_queryset().order_by('is_deleted', '-created_at'))
 
         total_count = 0
         page_items = []
 
         # --- special: sale_order_id (pick ONLY one DB if present there) ---
         if sale_order_id:
-            default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id).order_by('-created_at')
+            default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id).order_by('is_deleted', '-created_at')
             default_qs = self.filter_queryset(default_qs)
 
-            mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id).order_by('-created_at')
+            mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id).order_by('is_deleted', '-created_at')
             mstcnl_qs = self.filter_queryset(mstcnl_qs)
 
             if default_qs.exists():
@@ -219,8 +219,8 @@ def list_all_objects(self, request, *args, **kwargs):
 
         # --- records_all=true: combine BOTH DBs (default first, then mstcnl) ---
         elif records_all:
-            default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
-            mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
+            default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('is_deleted', '-created_at'))
+            mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('is_deleted', '-created_at'))
 
             default_count = qs_count(default_qs)
             mstcnl_count = qs_count(mstcnl_qs)

@@ -89,7 +89,7 @@ class ProductionFloorViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class CountryViewSet(viewsets.ModelViewSet):
-    queryset = Country.objects.all().order_by('-created_at')	
+    queryset = Country.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = CountrySerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CountryFilters
@@ -109,7 +109,7 @@ class CountryViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class StateViewSet(viewsets.ModelViewSet):
-    queryset = State.objects.all().order_by('-created_at')	
+    queryset = State.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = StateSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = StateFilters
@@ -129,7 +129,7 @@ class StateViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class CityViewSet(viewsets.ModelViewSet):
-    queryset = City.objects.all().order_by('-created_at')	
+    queryset = City.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = CitySerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CityFilters
@@ -150,7 +150,7 @@ class CityViewSet(viewsets.ModelViewSet):
 
 
 class StatusesViewset(viewsets.ModelViewSet):
-    queryset = Statuses.objects.all().order_by('-created_at')	
+    queryset = Statuses.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = StatusesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = StatusesFilter
@@ -170,7 +170,7 @@ class StatusesViewset(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class LedgerGroupsViews(viewsets.ModelViewSet):
-    queryset = LedgerGroups.objects.all().order_by('-created_at')	
+    queryset = LedgerGroups.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = LedgerGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LedgerGroupsFilters
@@ -190,7 +190,7 @@ class LedgerGroupsViews(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class FirmStatusesViews(viewsets.ModelViewSet):
-    queryset = FirmStatuses.objects.all().order_by('-created_at')	
+    queryset = FirmStatuses.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = FirmStatusesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FirmStatusesFilters
@@ -210,7 +210,7 @@ class FirmStatusesViews(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class TerritoryViews(viewsets.ModelViewSet):
-    queryset = Territory.objects.all().order_by('-created_at')	
+    queryset = Territory.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = TerritorySerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TerritoryFilters
@@ -230,7 +230,7 @@ class TerritoryViews(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class CustomerCategoriesViews(viewsets.ModelViewSet):
-    queryset = CustomerCategories.objects.all().order_by('-created_at')	 #optional : CustomerCategories.objects.filter(is_deleted=False).order_by('-created_at')
+    queryset = CustomerCategories.objects.all().order_by('is_deleted', '-created_at')	 #optional : CustomerCategories.objects.filter(is_deleted=False).order_by('is_deleted', '-created_at')
     serializer_class = CustomerCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerCategoriesFilters
@@ -250,7 +250,7 @@ class CustomerCategoriesViews(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class GstCategoriesViews(viewsets.ModelViewSet):
-    queryset = GstCategories.objects.all().order_by('-created_at')	
+    queryset = GstCategories.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = GstCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GstCategoriesFilters
@@ -270,7 +270,7 @@ class GstCategoriesViews(viewsets.ModelViewSet):
         return soft_delete(instance)
   
 class CustomerPaymentTermsViews(viewsets.ModelViewSet):
-    queryset = CustomerPaymentTerms.objects.all().order_by('-created_at')	
+    queryset = CustomerPaymentTerms.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = CustomerPaymentTermsSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerPaymentTermsFilters
@@ -290,7 +290,7 @@ class CustomerPaymentTermsViews(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class PriceCategoriesViews(viewsets.ModelViewSet):
-    queryset = PriceCategories.objects.all().order_by('-created_at')	
+    queryset = PriceCategories.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = PriceCategoriesSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PriceCategoriesFilters
@@ -310,7 +310,7 @@ class PriceCategoriesViews(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class TransportersViews(viewsets.ModelViewSet):
-    queryset = Transporters.objects.all().order_by('-created_at')	
+    queryset = Transporters.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = TransportersSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TransportersFilters
@@ -330,7 +330,7 @@ class TransportersViews(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ProductTypesViewSet(viewsets.ModelViewSet):
-    queryset = ProductTypes.objects.all().order_by('-created_at')	
+    queryset = ProductTypes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ProductTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductTypesFilter
@@ -345,7 +345,7 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
             queryset = self.filter_queryset(
                 ProductTypes.objects.filter(
                     models.Q(mode_type=mode_type) | models.Q(mode_type='All')
-                ).order_by('-created_at')
+                ).order_by('is_deleted', '-created_at')
             )
             page = self.paginate_queryset(queryset)
             if page is not None:
@@ -369,7 +369,7 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
  
  
 class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
-    queryset = ProductUniqueQuantityCodes.objects.all().order_by('-created_at')	
+    queryset = ProductUniqueQuantityCodes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ProductUniqueQuantityCodesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductUniqueQuantityCodesFilter
@@ -389,7 +389,7 @@ class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 	
 class UnitOptionsViewSet(viewsets.ModelViewSet):
-    queryset = UnitOptions.objects.all().order_by('-created_at')	
+    queryset = UnitOptions.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = UnitOptionsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UnitOptionsFilter
@@ -409,7 +409,7 @@ class UnitOptionsViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ProductDrugTypesViewSet(viewsets.ModelViewSet):
-    queryset = ProductDrugTypes.objects.all().order_by('-created_at')	
+    queryset = ProductDrugTypes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ProductDrugTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductDrugTypesFilter
@@ -429,7 +429,7 @@ class ProductDrugTypesViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ProductItemTypeViewSet(viewsets.ModelViewSet):
-    queryset = ProductItemType.objects.all().order_by('-created_at')	
+    queryset = ProductItemType.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ProductItemTypeSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductItemTypeFilter
@@ -449,7 +449,7 @@ class ProductItemTypeViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 	
 class BrandSalesmanViewSet(viewsets.ModelViewSet):
-    queryset = BrandSalesman.objects.all().order_by('-created_at')	
+    queryset = BrandSalesman.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = BrandSalesmanSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BrandSalesmanFilter
@@ -469,7 +469,7 @@ class BrandSalesmanViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 	
 class ProductBrandsViewSet(viewsets.ModelViewSet):
-    queryset = ProductBrands.objects.all().order_by('-created_at')	
+    queryset = ProductBrands.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ProductBrandsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductBrandsFilter
@@ -489,7 +489,7 @@ class ProductBrandsViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class PurchaseTypesViewSet(viewsets.ModelViewSet):
-    queryset = PurchaseTypes.objects.all().order_by('-created_at')	
+    queryset = PurchaseTypes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = PurchaseTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PurchaseTypesFilter
@@ -509,7 +509,7 @@ class PurchaseTypesViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ShippingCompaniesView(viewsets.ModelViewSet):
-    queryset = ShippingCompanies.objects.all().order_by('-created_at')	
+    queryset = ShippingCompanies.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ShippingCompaniesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -527,7 +527,7 @@ class ShippingCompaniesView(viewsets.ModelViewSet):
 
 
 class SaleTypesView(viewsets.ModelViewSet):
-    queryset = SaleTypes.objects.all().order_by('-created_at')	
+    queryset = SaleTypes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = SaleTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = SaleTypesFilter
@@ -547,7 +547,7 @@ class SaleTypesView(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class GstTypesView(viewsets.ModelViewSet):
-    queryset = GstTypes.objects.all().order_by('-created_at')	
+    queryset = GstTypes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = GstTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GstTypesFilter
@@ -567,7 +567,7 @@ class GstTypesView(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class ShippingModesView(viewsets.ModelViewSet):
-    queryset = ShippingModes.objects.all().order_by('-created_at')	
+    queryset = ShippingModes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ShippingModesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -584,7 +584,7 @@ class ShippingModesView(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class OrdersSalesmanView(viewsets.ModelViewSet):
-    queryset = OrdersSalesman.objects.all().order_by('-created_at')	
+    queryset = OrdersSalesman.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = OrdersSalesmanSerializer
 
     def list(self, request, *args, **kwargs):
@@ -602,7 +602,7 @@ class OrdersSalesmanView(viewsets.ModelViewSet):
     
 
 class PaymentLinkTypesView(viewsets.ModelViewSet):
-    queryset = PaymentLinkTypes.objects.all().order_by('-created_at')	
+    queryset = PaymentLinkTypes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = PaymentLinkTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PaymentLinkTypesFilter
@@ -622,7 +622,7 @@ class PaymentLinkTypesView(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class OrderStatusesView(viewsets.ModelViewSet):
-    queryset = OrderStatuses.objects.all().order_by('-created_at')	
+    queryset = OrderStatuses.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = OrderStatusesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = OrderStatusesFilter
@@ -642,7 +642,7 @@ class OrderStatusesView(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class OrderTypesView(viewsets.ModelViewSet):
-    queryset = OrderTypes.objects.all().order_by('-created_at')	
+    queryset = OrderTypes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = OrderTypesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = OrderTypesFilter
@@ -762,7 +762,7 @@ def get_next_order_number(order_type_prefix):
 
     
 class TaskPrioritiesViewSet(viewsets.ModelViewSet):
-    queryset = TaskPriorities.objects.all().order_by('-created_at')	
+    queryset = TaskPriorities.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = TaskPrioritiesSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TaskPrioritiesFilter
@@ -929,7 +929,7 @@ class DocumentGeneratorView(APIView):
         return build_response(1, pdf_send_response , [], status.HTTP_200_OK)
 
 class ReturnOptionsViewset(viewsets.ModelViewSet):
-    queryset = ReturnOptions.objects.exclude(name__iexact='Sale order').order_by('-created_at')
+    queryset = ReturnOptions.objects.exclude(name__iexact='Sale order').order_by('is_deleted', '-created_at')
     serializer_class = ReturnOptionsSerializers
 
     def list(self, request, *args, **kwargs):
@@ -946,7 +946,7 @@ class ReturnOptionsViewset(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class FieldTypeViewSet(viewsets.ModelViewSet):
-    queryset = FieldType.objects.all().order_by('-created_at')	
+    queryset = FieldType.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = FieldTypeSerializer
 
     def list(self, request, *args, **kwargs):
@@ -966,7 +966,7 @@ class EntitiesViewSet(viewsets.ModelViewSet):
     """
     ViewSet for CRUD operations on Entity model.
     """
-    queryset = Entities.objects.all().order_by('-created_at')	
+    queryset = Entities.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = EntitiesSerializer
 
     def list(self, request, *args, **kwargs):
@@ -983,7 +983,7 @@ class EntitiesViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class UserGroupsViewset(viewsets.ModelViewSet):
-    queryset = UserGroups.objects.all().order_by('-created_at')	
+    queryset = UserGroups.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = UserGroupsSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UserGroupsFilter
@@ -1003,7 +1003,7 @@ class UserGroupsViewset(viewsets.ModelViewSet):
         return soft_delete(instance)
     
 class UserGroupMembersViewset(viewsets.ModelViewSet):
-    queryset = UserGroupMembers.objects.all().order_by('-created_at')	
+    queryset = UserGroupMembers.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = UserGroupMembersSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UserGroupMembersFilter
@@ -1026,7 +1026,7 @@ class UserGroupMembersViewset(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class PackageUnitViewSet(viewsets.ModelViewSet):
-    queryset = PackageUnit.objects.all().order_by()
+    queryset = PackageUnit.objects.all().order_by('is_deleted')
     serializer_class = PackageUnitSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PackageUnitFilter
@@ -1047,7 +1047,7 @@ class PackageUnitViewSet(viewsets.ModelViewSet):
 
 
 class GPackageUnitViewSet(viewsets.ModelViewSet):
-    queryset = GPackageUnit.objects.all().order_by()
+    queryset = GPackageUnit.objects.all().order_by('is_deleted')
     serializer_class = GPackageUnitSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GPackageUnitFilter
@@ -1067,7 +1067,7 @@ class GPackageUnitViewSet(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class FlowStatusViews(viewsets.ModelViewSet):
-    queryset = FlowStatus.objects.all().order_by('-created_at')	
+    queryset = FlowStatus.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = FlowStatusSerializers
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FlowStatusFilter

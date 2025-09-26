@@ -182,25 +182,25 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
 
         is_new_record = self._state.adding
         is_other_sale = False
-
+        
         # ✅ Always establish db first (default from kwargs)
         db = kwargs.get('using', 'default')
-
-        # Check if this is an "Other" sale type order
-        if hasattr(self, 'sale_type_id') and self.sale_type_id:
-            print("-" * 20)
-            print("self.sale_type_id.name : ", self.sale_type_id.name)
-            print("-" * 20)
-            # ✅ compare to 'other' because we already used .lower()
-            if self.sale_type_id.name.lower() == 'other':
-                is_other_sale = True
-                kwargs['using'] = 'mstcnl'   # Use alternate database
-                db = 'mstcnl'                # ✅ keep db consistent everywhere below
-
+        
         # Set default order status if not provided
         if not self.order_status_id:
             # ✅ use the db we set above
             self.order_status_id = OrderStatuses.objects.using(db).get_or_create(status_name='Pending')[0]
+
+        # Check if this is an "Other" sale type order
+        # if hasattr(self, 'sale_type_id') and self.sale_type_id:
+        #     print("-" * 20)
+        #     print("self.sale_type_id.name : ", self.sale_type_id.name)
+        #     print("-" * 20)
+        #     # ✅ compare to 'other' because we already used .lower()
+        #     if self.sale_type_id.name.lower() == 'other':
+        #         is_other_sale = True
+        #         kwargs['using'] = 'mstcnl'   # Use alternate database
+        #         db = 'mstcnl'                # ✅ keep db consistent everywhere below
 
         # Assign default stage for new orders
         if self.use_workflow:
@@ -1151,6 +1151,7 @@ class MstcnlSaleOrder(models.Model):
     flow_status_id = models.CharField(max_length=36, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     use_workflow = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
@@ -1224,6 +1225,7 @@ class MstcnlSaleInvoiceOrder(models.Model):
     paid_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     balance_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
     pending_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField()
     updated_at = models.DateTimeField()
 
