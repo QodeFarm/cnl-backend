@@ -216,12 +216,14 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id', read_only=True)
+    product_group = ModProductGroupsSerializer(source='product_group_id', read_only=True)
+    category = ModProductCategoriesSerializer(source='category_id', read_only=True)
     type = ProductTypesSerializer(source='type_id', read_only=True)
 
     class Meta:
         model = Products
         fields = [
-            'product_id', 'code', 'name', 'barcode', 'print_name', 
+            'product_id', 'code', 'name', 'barcode', 'print_name', 'product_group', 'category',
             'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 
             'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 
             'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
