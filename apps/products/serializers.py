@@ -217,6 +217,8 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id', read_only=True)
     type = ProductTypesSerializer(source='type_id', read_only=True)
+    pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)
+    g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True)
 
     class Meta:
         model = Products
@@ -225,7 +227,7 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
             'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 
             'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 
             'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
-            'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  
+            'pack_unit', 'pack_vs_stock', 'g_pack_unit',  
             'g_pack_vs_pack', 'type', 'is_deleted'
         ]
 
