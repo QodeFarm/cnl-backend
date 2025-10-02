@@ -5531,7 +5531,6 @@ class PaymentTransactionAPIView(APIView):
 
     def put(self, request, transaction_id):
         try:
-            # Already fetched earlier (line 2)
             pending_status = OrderStatuses.objects.get(status_name="Pending")
             completed_status = OrderStatuses.objects.get(status_name="Completed")
         except ObjectDoesNotExist:
@@ -5554,7 +5553,6 @@ class PaymentTransactionAPIView(APIView):
         
         max_allowed = invoice.total_amount - total_of_amount
         if new_amount <= max_allowed:
-            print("IN IF BLOCK")
             # Step 3: Calculate delta
             delta = new_amount - old_amount
 
@@ -5594,7 +5592,6 @@ class PaymentTransactionAPIView(APIView):
             # print(payment_res)
             return build_response(1, response_data, None, status.HTTP_200_OK)    
         else:
-            print(f"Overpayment detected. Max allowed: ₹{max_allowed}")
             return build_response(1, f"Overpayment detected. Max allowed: ₹{max_allowed}", None, status.HTTP_422_UNPROCESSABLE_ENTITY)    
  
     # def get(self, request, customer_id = None):
