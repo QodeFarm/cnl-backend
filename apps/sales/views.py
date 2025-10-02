@@ -5531,7 +5531,6 @@ class PaymentTransactionAPIView(APIView):
 
     def put(self, request, transaction_id):
         try:
-            # Already fetched earlier (line 2)
             pending_status = OrderStatuses.objects.get(status_name="Pending")
             completed_status = OrderStatuses.objects.get(status_name="Completed")
         except ObjectDoesNotExist:
@@ -5546,46 +5545,55 @@ class PaymentTransactionAPIView(APIView):
         # Step 2: Get related invoice (Model object, not dict)
         invoice = SaleInvoiceOrders.objects.get(invoice_no=transaction.invoice_no)
         all_txns = PaymentTransactions.objects.filter(invoice_no=invoice.invoice_no)
+        total_of_amount = (PaymentTransactions.objects
+                            .filter(invoice_no=invoice.invoice_no)
+                            .exclude(payment_receipt_no=request.data.get('payment_receipt_no'))
+                            .aggregate(total_amount=Sum('amount'))
+                            .get('total_amount') or Decimal('0.00')  )
+        
+        max_allowed = invoice.total_amount - total_of_amount
+        if new_amount <= max_allowed:
+            # Step 3: Calculate delta
+            delta = new_amount - old_amount
 
+            # Step 4: Update transaction
+            transaction.amount = new_amount
+            transaction.payment_status = request.data.get('payment_status', transaction.payment_status)
+            transaction.save()
 
-        # Step 3: Calculate delta
-        delta = new_amount - old_amount
+            # Step 5: Update sale invoice amounts
+            paid = all_txns.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            invoice.paid_amount = paid
+            invoice.pending_amount = invoice.total_amount - paid
 
-        # Step 4: Update transaction
-        transaction.amount = new_amount
-        transaction.payment_status = request.data.get('payment_status', transaction.payment_status)
-        transaction.save()
+            # Step 6: Update latest transaction's outstanding
+            latest_txn = all_txns.latest('payment_date')
+            latest_txn.outstanding_amount = invoice.pending_amount
+            latest_txn.save()
 
-        # Step 5: Update sale invoice amounts
-        paid = all_txns.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        invoice.paid_amount = paid
-        invoice.pending_amount = invoice.total_amount - paid
+            # Step 7: Update order_status_id from sale_invoice_orders table
+            # Step 7: Assign actual model instance
+            invoice.order_status_id = completed_status if invoice.pending_amount == 0 else pending_status
+            invoice.save()
+            
+            # journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, total_pending, transaction.payment_receipt_no)
 
-        # Step 6: Update order_status
-        # Step 6: Assign actual model instance
-        invoice.order_status = completed_status if invoice.pending_amount <= 0 else pending_status
-        invoice.save()
-
-        # Step 7: Update latest transaction's outstanding
-        latest_txn = all_txns.latest('payment_date')
-        latest_txn.outstanding_amount = invoice.pending_amount
-        latest_txn.save()
-
-        print("request.data :", request.data)
-        # journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, total_pending, transaction.payment_receipt_no)
-
-        # Step 8: Return updated data
-        response_data = {
-            **request.data,
-            "payment_receipt_no": transaction.payment_receipt_no,
-            "invoice_no": invoice.invoice_no,
-            "paid_amount": invoice.paid_amount,
-            "pending_amount": invoice.pending_amount,
-            "outstanding_amount": latest_txn.outstanding_amount
-        }
-
-        return Response(response_data, status=status.HTTP_200_OK)
-    
+            # Step 8: Return updated data
+            response_data = {
+                **request.data,
+                "payment_receipt_no": transaction.payment_receipt_no,
+                "invoice_no": invoice.invoice_no,
+                "paid_amount": invoice.paid_amount,
+                "pending_amount": invoice.pending_amount,
+                "outstanding_amount": latest_txn.outstanding_amount
+            }
+            # #Updating ACCOUNT LEDGER entry
+            # payment_res = JournalEntryLines.objects.filter(voucher_no = transaction.payment_receipt_no)
+            # print(payment_res)
+            return build_response(1, response_data, None, status.HTTP_200_OK)    
+        else:
+            return build_response(1, f"Overpayment detected. Max allowed: ₹{max_allowed}", None, status.HTTP_422_UNPROCESSABLE_ENTITY)    
+ 
     # def get(self, request, customer_id = None):
     #     if customer_id:
     #         '''Fetch All Payment Transactions for a Customer'''
