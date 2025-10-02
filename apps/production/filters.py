@@ -477,6 +477,8 @@ class StockJournalFilter(filters.FilterSet):
 class StockSummaryFilter(filters.FilterSet):
     product = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
     unit = filters.CharFilter(field_name='unit_options_id__unit_name', lookup_expr='icontains')
+    group_name = filters.CharFilter(field_name='product_id__product_group_id__group_name', lookup_expr='exact')
+    product_group_id = filters.CharFilter(method=filter_uuid, field_name='product_id__product_group_id')
     opening_quantity = filters.RangeFilter()
     received_quantity = filters.RangeFilter()
     issued_quantity = filters.RangeFilter()
@@ -484,15 +486,11 @@ class StockSummaryFilter(filters.FilterSet):
     sales_rate = filters.RangeFilter()
     mrp = filters.RangeFilter()
     purchase_rate = filters.RangeFilter()
-    period_start = filters.DateFromToRangeFilter()
-    period_end = filters.DateFromToRangeFilter()
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     created_at = filters.DateFromToRangeFilter()
-
-
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
 
@@ -509,6 +507,6 @@ class StockSummaryFilter(filters.FilterSet):
         model = StockSummary
         fields = [
             'product', 'unit', 'opening_quantity', 'received_quantity', 'issued_quantity',
-            'closing_quantity', 'sales_rate', 'mrp', 'purchase_rate',
-            'period_start', 'period_end','created_at', 's', 'sort', 'page', 'limit'
+            'closing_quantity', 'sales_rate', 'mrp', 'purchase_rate', 'group_name', 'product_group_id',
+            'created_at', 's', 'sort', 'page', 'limit'
         ]      

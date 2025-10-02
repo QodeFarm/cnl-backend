@@ -471,12 +471,12 @@ class AgingReportSerializer(serializers.ModelSerializer):
 class MstcnlSaleOrderSerializer(serializers.ModelSerializer):
     gst_type = serializers.SerializerMethodField()
     customer = serializers.SerializerMethodField()
-    customer_address = serializers.SerializerMethodField()
+    # customer_address = serializers.SerializerMethodField()
     payment_term = serializers.SerializerMethodField()
     sale_type = serializers.SerializerMethodField()
     ledger_account = serializers.SerializerMethodField()
     order_status = serializers.SerializerMethodField()
-    sale_return = serializers.SerializerMethodField()
+    # sale_return = serializers.SerializerMethodField()
     flow_status = serializers.SerializerMethodField()
 
     class Meta:
@@ -489,8 +489,8 @@ class MstcnlSaleOrderSerializer(serializers.ModelSerializer):
     def get_customer(self, obj):
         return {"customer_id": obj.customer_id, "name": obj.customer_id} if obj.customer_id else None
 
-    def get_customer_address(self, obj):
-        return {"customer_address_id": obj.customer_address_id, "address": obj.customer_address_id} if obj.customer_address_id else None
+    # def get_customer_address(self, obj):
+    #     return {"customer_address_id": obj.customer_address_id, "address": obj.customer_address_id} if obj.customer_address_id else None
 
     def get_payment_term(self, obj):
         return {"payment_term_id": obj.payment_term_id, "name": obj.payment_term_id} if obj.payment_term_id else None
@@ -504,11 +504,11 @@ class MstcnlSaleOrderSerializer(serializers.ModelSerializer):
     def get_order_status(self, obj):
         return {"order_status_id": obj.order_status_id, "status_name": obj.order_status_id} if obj.order_status_id else None
 
-    def get_sale_return(self, obj):
-        return {"sale_return_id": obj.sale_return_id, "invoice_no": obj.sale_return_id} if obj.sale_return_id else None
+    # def get_sale_return(self, obj):
+    #     return {"sale_return_id": obj.sale_return_id, "invoice_no": obj.sale_return_id} if obj.sale_return_id else None
 
     def get_flow_status(self, obj):
-        return {"flow_status_id": obj.flow_status_id, "status_name": obj.flow_status_id} if obj.flow_status_id else None
+        return {"flow_status_id": obj.flow_status_id, "flow_status_name": obj.flow_status_id} if obj.flow_status_id else None
 
         
 # class MstcnlSaleInvoiceSerializer(serializers.ModelSerializer):

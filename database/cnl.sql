@@ -2737,3 +2737,203 @@ CREATE TABLE IF NOT EXISTS expense_items (
     FOREIGN KEY (budget_id) REFERENCES budgets(budget_id) ON DELETE SET NULL,
     FOREIGN KEY (tax_id) REFERENCES tax_configurations(tax_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+
+use devcnl;
+CREATE TABLE `stock_journal` (
+  `journal_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `product_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `transaction_type` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `quantity` decimal(18,3) NOT NULL,
+  `reference_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `remarks` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `is_deleted` tinyint(1) DEFAULT '0',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`journal_id`),
+  KEY `product_id` (`product_id`),
+  KEY `reference_id` (`reference_id`),
+  CONSTRAINT `fk_stock_journal_product_id` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `stock_summary` (
+  `summary_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `product_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `opening_quantity` decimal(18,3) NOT NULL DEFAULT '0.000',
+  `closing_quantity` decimal(18,3) NOT NULL DEFAULT '0.000',
+  `received_quantity` decimal(18,3) NOT NULL DEFAULT '0.000',
+  `issued_quantity` decimal(18,3) NOT NULL DEFAULT '0.000',
+  `unit_options_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `mrp` decimal(18,2) DEFAULT '0.00',
+  `sales_rate` decimal(18,2) DEFAULT '0.00',
+  `purchase_rate` decimal(18,2) DEFAULT '0.00',
+  `is_deleted` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`summary_id`),
+  UNIQUE KEY `product_period` (`product_id`,`period_start`,`period_end`),
+  KEY `unit_options_id` (`unit_options_id`),
+  CONSTRAINT `stock_summary_ibfk_1` FOREIGN KEY (`product_id`) REFERENCES `products` (`product_id`),
+  CONSTRAINT `stock_summary_ibfk_2` FOREIGN KEY (`unit_options_id`) REFERENCES `unit_options` (`unit_options_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `production_floors` (
+  `production_floor_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `code` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,
+  `name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `description` varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `is_deleted` tinyint(1) DEFAULT '0',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`production_floor_id`),
+  UNIQUE KEY `code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+
+CREATE TABLE `material_issues` (
+  `material_issue_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `production_floor_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `issue_no` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `issue_date` date NOT NULL,
+  `reference_no` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `reference_date` date DEFAULT NULL,
+  `remarks` text COLLATE utf8mb4_general_ci,
+  `flow_status_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `order_status_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `is_deleted` tinyint(1) DEFAULT '0',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`material_issue_id`),
+  UNIQUE KEY `issue_no` (`issue_no`),
+  KEY `production_floor_id` (`production_floor_id`),
+  KEY `flow_status_id` (`flow_status_id`),
+  KEY `order_status_id` (`order_status_id`),
+  CONSTRAINT `fk_material_issues_production_floor_id` FOREIGN KEY (`production_floor_id`) REFERENCES `production_floors` (`production_floor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+CREATE TABLE `material_issue_items` (
+  `material_issue_item_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `material_issue_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `product_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `attribute` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `widget` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `item_barcode` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `unit_options_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `no_of_boxes` int DEFAULT NULL,
+  `quantity` decimal(18,3) DEFAULT NULL,
+  `rate` decimal(18,2) DEFAULT NULL,
+  `remark` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `amount` decimal(18,2) DEFAULT NULL,
+  `mrp` decimal(18,2) DEFAULT NULL,
+  `net_rate` decimal(18,2) DEFAULT NULL,
+  `print_description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `item_balance` int DEFAULT '0',
+  `hsn_code` varchar(15) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `brand` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `gp_vno` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `gp_ref_no` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `gp_ref_date` date DEFAULT NULL,
+  `gp_vdate` date DEFAULT NULL,
+  `pfr_vno` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pfr_ref_no` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `pfr_ref_date` date DEFAULT NULL,
+  `pfr_vdate` date DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`material_issue_item_id`),
+  KEY `material_issue_id` (`material_issue_id`),
+  KEY `product_id` (`product_id`),
+  KEY `unit_options_id` (`unit_options_id`),
+  CONSTRAINT `fk_material_issue_items_material_issue_id` FOREIGN KEY (`material_issue_id`) REFERENCES `material_issues` (`material_issue_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+CREATE TABLE `material_issue_attachments` (
+  `attachment_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `material_issue_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `attachment_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `attachment_path` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`attachment_id`),
+  KEY `material_issue_id` (`material_issue_id`),
+  CONSTRAINT `fk_material_issue_attachments_material_issue_id` FOREIGN KEY (`material_issue_id`) REFERENCES `material_issues` (`material_issue_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `material_received` (
+  `material_received_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `production_floor_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `receipt_no` varchar(20) COLLATE utf8mb4_general_ci NOT NULL,
+  `receipt_date` date NOT NULL,
+  `reference_no` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `reference_date` date DEFAULT NULL,
+  `flow_status_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `order_status_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `remarks` text COLLATE utf8mb4_general_ci,
+  `is_deleted` tinyint(1) DEFAULT '0',
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`material_received_id`),
+  UNIQUE KEY `receipt_no` (`receipt_no`),
+  KEY `production_floor_id` (`production_floor_id`),
+  CONSTRAINT `fk_material_received_production_floor_id` FOREIGN KEY (`production_floor_id`) REFERENCES `production_floors` (`production_floor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+CREATE TABLE `material_received_items` (
+  `material_received_item_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `material_received_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `product_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `attribute` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `widget` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `item_barcode` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `unit_options_id` char(36) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `no_of_boxes` int DEFAULT NULL,
+  `quantity` decimal(18,3) DEFAULT NULL,
+  `rate` decimal(18,2) DEFAULT NULL,
+  `remark` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `amount` decimal(18,2) DEFAULT NULL,
+  `mrp` decimal(18,2) DEFAULT NULL,
+  `net_rate` decimal(18,2) DEFAULT NULL,
+  `print_description` varchar(255) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `mipf_vno` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `mipf_ref_no` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `mipf_ref_date` date DEFAULT NULL,
+  `mipf_vdate` date DEFAULT NULL,
+  `item_balance` int DEFAULT '0',
+  `hsn_code` varchar(15) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `brand` varchar(100) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `gp_vno` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `gp_ref_no` varchar(50) COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `gp_ref_date` date DEFAULT NULL,
+  `gp_vdate` date DEFAULT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`material_received_item_id`),
+  KEY `material_received_id` (`material_received_id`),
+  KEY `product_id` (`product_id`),
+  KEY `unit_options_id` (`unit_options_id`),
+  CONSTRAINT `fk_material_received_items_material_received_id` FOREIGN KEY (`material_received_id`) REFERENCES `material_received` (`material_received_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+CREATE TABLE `material_received_attachments` (
+  `material_received_attachment_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `material_received_id` char(36) COLLATE utf8mb4_general_ci NOT NULL,
+  `file_name` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `file_path` varchar(255) COLLATE utf8mb4_general_ci NOT NULL,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`material_received_attachment_id`),
+  KEY `material_received_id` (`material_received_id`),
+  CONSTRAINT `fk_material_received_attachments_material_received_id` FOREIGN KEY (`material_received_id`) REFERENCES `material_received` (`material_received_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+
+
