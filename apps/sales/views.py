@@ -1211,31 +1211,49 @@ class SaleOrderViewSet(APIView):
     #         logger.error(f"Error soft-deleting SaleOrder with ID {pk}: {str(e)}")
     #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale order and its related attachments and shipments.
-        Based on the sale_order_id, it checks the appropriate database and deletes the records.
+        Handles the deletion of a sale order and its related data.
+        Before deleting, checks if the sale order is linked to any transactional data
+        such as sale invoices or sale returns.
         """
         db_to_use = None
         try:
-            # Get the SaleOrder instance from the appropriate database
+            # Get the SaleOrder instance
             instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
 
-            # Delete related OrderAttachments, OrderShipments, and CustomFieldValues from the correct database
+            # --------------------------------------------
+            # 1️⃣  Check for linked transactional data
+            # --------------------------------------------
+            linked_invoice_exists = SaleInvoiceOrders.objects.filter(sale_order_id=pk, is_deleted=False).exists()
+            # linked_return_exists = SaleReturnOrders.objects.filter(sale_order_id=pk, is_deleted=False).exists()
+
+            if linked_invoice_exists:
+                # If the sale order is linked to invoices or returns, do not delete
+                logger.warning(f"SaleOrder with ID {pk} cannot be deleted as it has transactional data.")
+                return build_response(
+                    0,
+                    "Sale order cannot be deleted as it has transactional data",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+            # --------------------------------------------
+            # 2️⃣  Delete related child data
+            # --------------------------------------------
             if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
             if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
             if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Delete the main SaleOrder instance from the correct database
-            # instance.delete(using=db_to_use)
-            # Delete the main CustomField instance
+            # --------------------------------------------
+            # 3️⃣  Mark main SaleOrder as deleted
+            # --------------------------------------------
             instance.is_deleted = True
             instance.save(using=db_to_use)
 
@@ -1245,9 +1263,48 @@ class SaleOrderViewSet(APIView):
         except SaleOrder.DoesNotExist:
             logger.warning(f"SaleOrder with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
             logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale order and its related attachments and shipments.
+    #     Based on the sale_order_id, it checks the appropriate database and deletes the records.
+    #     """
+    #     db_to_use = None
+    #     try:
+    #         # Get the SaleOrder instance from the appropriate database
+    #         instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
+
+    #         # Delete related OrderAttachments, OrderShipments, and CustomFieldValues from the correct database
+    #         if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    #         if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    #         if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete the main SaleOrder instance from the correct database
+    #         # instance.delete(using=db_to_use)
+    #         # Delete the main CustomField instance
+    #         instance.is_deleted = True
+    #         instance.save(using=db_to_use)
+
+    #         logger.info(f"SaleOrder with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+    #     except SaleOrder.DoesNotExist:
+    #         logger.warning(f"SaleOrder with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     # Handling POST requests for creating
@@ -2522,94 +2579,183 @@ class SaleInvoiceOrdersViewSet(APIView):
         except Exception as e:
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
             return []
-
+        
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale invoice order and its related attachments and shipments.
+        Handles the cancellation of a sale invoice order:
+        - Marks it as 'Cancelled' instead of deleting
+        - Reverts products back to inventory
+        - Creates reversing ledger entry
         """
         db_to_use = None
         try:
-            # Check which database the SaleInvoiceOrders belongs to
-            SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
-            set_db('mstcnl')
-            db_to_use = 'mstcnl'
-        except SaleInvoiceOrders.DoesNotExist:
+            # Determine which database to use
             try:
+                SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
+                set_db('mstcnl')
+                db_to_use = 'mstcnl'
+            except SaleInvoiceOrders.DoesNotExist:
                 SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
                 set_db('default')
                 db_to_use = 'default'
-            except SaleInvoiceOrders.DoesNotExist:
-                logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
-                return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except SaleInvoiceOrders.DoesNotExist:
+            logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
         try:
             # Get the SaleInvoiceOrders instance
             instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
-            
-             # Get or create "Canceled" order status
-            canceled_status = None
+
+            # Get the "Cancelled" status
             try:
                 canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
             except OrderStatuses.DoesNotExist:
-                logger.error("'Cancelled' status found in OrderStatuses table")
+                logger.error("'Cancelled' status not found in OrderStatuses table")
                 return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
-            
-            # Store the invoice amount before marking as canceled
-            # invoice_amount = instance.total_amount
-            customer_id = instance.customer_id
-            invoice_no = instance.invoice_no
-            
-            # Update the invoice status to "Cancelled" instead of deleting
+
+            # --- STEP 1: Update invoice status to "Cancelled"
             instance.order_status_id = canceled_status
             instance.save(using=db_to_use)
-            existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
-                                                                            .order_by('is_deleted', '-created_at')                   # most recent entry first
-                                                                            .values_list('balance', flat=True)         # get only the balance field
-                                                                            .first()) or Decimal('0.00')               # grab the first result
-            # new_balance =  Decimal(instance.total_amount) - Decimal(existing_balance)
+            invoice_no = instance.invoice_no
+            customer_id = instance.customer_id
+
+            # --- STEP 2: Revert products back to inventory
+            try:
+                invoice_items = SaleInvoiceItems.objects.using(db_to_use).filter(sale_invoice_id=instance.sale_invoice_id)
+
+                for item in invoice_items:
+                    product = item.product_id  # ForeignKey to Product
+                    # Safely increase the available quantity
+                    product.balance = F('balance') + item.quantity
+                    product.save(using=db_to_use)
+
+                logger.info(f"Reverted {len(invoice_items)} products to inventory for cancelled invoice {invoice_no}")
+
+            except Exception as e:
+                logger.error(f"Error reverting products to inventory for invoice {invoice_no}: {str(e)}")
+
+            # --- STEP 3: Create offsetting ledger entry
+            existing_balance = (
+                JournalEntryLines.objects.filter(customer_id=customer_id)
+                .order_by('is_deleted', '-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+
             latest_balance = existing_balance - Decimal(instance.total_amount)
 
-            
-            # Create offsetting credit entry in the finance system
             try:
-                # Here we would typically call your finance module to create a credit entry
-                # This is a placeholder - implement according to your actual finance module
                 journal_entry = JournalEntryLines.objects.using(db_to_use).create(
                     description=f"Cancellation of invoice {invoice_no}",
                     credit=instance.total_amount,
                     debit=0,
                     voucher_no=invoice_no,
                     customer_id=customer_id,
-                    balance=latest_balance  
+                    balance=latest_balance
                 )
-                logger.info(f"Created offsetting credit entry of {instance.total_amount} for canceled invoice {invoice_no}")
-
-                
+                logger.info(f"Created offsetting credit entry of {instance.total_amount} for cancelled invoice {invoice_no}")
             except Exception as e:
                 logger.error(f"Error creating offsetting credit entry: {str(e)}")
-            
-            # Return success response for cancellation
+
+            # --- STEP 4: Return success response
             return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
-            
-            # # Delete related OrderAttachments and OrderShipments
-            # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
-            #     return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
-            #     return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            # if not delete_multi_instance(pk, SaleInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
-            #     return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # # Delete the main SaleInvoiceOrder instance from the correct database
-            # instance.delete(using=db_to_use)
-
-            # logger.info(f"SaleInvoiceOrders with ID {pk} deleted successfully.")
-            # return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
         except SaleInvoiceOrders.DoesNotExist:
             logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting SaleInvoiceOrders with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error cancelling SaleInvoiceOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Invoice cancellation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale invoice order and its related attachments and shipments.
+    #     """
+    #     db_to_use = None
+    #     try:
+    #         # Check which database the SaleInvoiceOrders belongs to
+    #         SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
+    #         set_db('mstcnl')
+    #         db_to_use = 'mstcnl'
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         try:
+    #             SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
+    #             set_db('default')
+    #             db_to_use = 'default'
+    #         except SaleInvoiceOrders.DoesNotExist:
+    #             logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
+    #             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     try:
+    #         # Get the SaleInvoiceOrders instance
+    #         instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
+            
+    #          # Get or create "Canceled" order status
+    #         canceled_status = None
+    #         try:
+    #             canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
+    #         except OrderStatuses.DoesNotExist:
+    #             logger.error("'Cancelled' status found in OrderStatuses table")
+    #             return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
+            
+    #         # Store the invoice amount before marking as canceled
+    #         # invoice_amount = instance.total_amount
+    #         customer_id = instance.customer_id
+    #         invoice_no = instance.invoice_no
+            
+    #         # Update the invoice status to "Cancelled" instead of deleting
+    #         instance.order_status_id = canceled_status
+    #         instance.save(using=db_to_use)
+    #         existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
+    #                                                                         .order_by('is_deleted', '-created_at')                   # most recent entry first
+    #                                                                         .values_list('balance', flat=True)         # get only the balance field
+    #                                                                         .first()) or Decimal('0.00')               # grab the first result
+    #         # new_balance =  Decimal(instance.total_amount) - Decimal(existing_balance)
+    #         latest_balance = existing_balance - Decimal(instance.total_amount)
+
+            
+    #         # Create offsetting credit entry in the finance system
+    #         try:
+    #             # Here we would typically call your finance module to create a credit entry
+    #             # This is a placeholder - implement according to your actual finance module
+    #             journal_entry = JournalEntryLines.objects.using(db_to_use).create(
+    #                 description=f"Cancellation of invoice {invoice_no}",
+    #                 credit=instance.total_amount,
+    #                 debit=0,
+    #                 voucher_no=invoice_no,
+    #                 customer_id=customer_id,
+    #                 balance=latest_balance  
+    #             )
+    #             logger.info(f"Created offsetting credit entry of {instance.total_amount} for canceled invoice {invoice_no}")
+
+                
+    #         except Exception as e:
+    #             logger.error(f"Error creating offsetting credit entry: {str(e)}")
+            
+    #         # Return success response for cancellation
+    #         return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
+            
+    #         # # Delete related OrderAttachments and OrderShipments
+    #         # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
+    #         #     return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
+    #         #     return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         # if not delete_multi_instance(pk, SaleInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #         #     return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # # Delete the main SaleInvoiceOrder instance from the correct database
+    #         # instance.delete(using=db_to_use)
+
+    #         # logger.info(f"SaleInvoiceOrders with ID {pk} deleted successfully.")
+    #         # return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleInvoiceOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
@@ -3267,35 +3413,120 @@ class SaleReturnOrdersViewSet(APIView):
                              model.__name__, filter_field, filter_value, str(e))
             return []
 
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale return order and its related attachments and shipments.
+    #     """
+    #     try:
+    #         # Get the SaleReturnOrders instance
+    #         instance = SaleReturnOrders.objects.get(pk=pk)
+
+    #         # Delete related OrderAttachments and OrderShipments
+    #         if not delete_multi_instance(pk, SaleReturnOrders, OrderAttachments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, SaleReturnOrders, OrderShipments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, SaleReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete the main SaleOrder instance
+    #         instance.is_deleted=True 
+    #         instance.save()
+
+    #         logger.info(f"SaleReturnOrders with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except SaleReturnOrders.DoesNotExist:
+    #         logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleReturnOrder with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale return order and its related attachments and shipments.
+        Handles the cancellation of a Sale Return order:
+        - Marks it as 'Cancelled' instead of deleting
+        - If Damaged: no inventory update, no ledger entry
+        - If Wrong Product: revert inventory + create reversal ledger entry
         """
         try:
-            # Get the SaleReturnOrders instance
+            # --- Step 1: Get the SaleReturnOrders instance
             instance = SaleReturnOrders.objects.get(pk=pk)
 
-            # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, SaleReturnOrders, OrderAttachments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleReturnOrders, OrderShipments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
-                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # --- Step 2: Get or verify the 'Cancelled' status
+            try:
+                canceled_status = OrderStatuses.objects.get(status_name='Cancelled')
+            except OrderStatuses.DoesNotExist:
+                logger.error("'Cancelled' status not found in OrderStatuses table")
+                return build_response(0, "Cannot cancel sale return - required status not found", [], status.HTTP_400_BAD_REQUEST)
 
-            # Delete the main SaleOrder instance
-            instance.is_deleted=True 
+            # --- Step 3: Mark the return as Cancelled
+            instance.order_status_id = canceled_status
             instance.save()
 
-            logger.info(f"SaleReturnOrders with ID {pk} deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            return_reason = getattr(instance, 'return_reason', None)
+            invoice_no = getattr(instance, 'return_no', None)
+            customer_id = instance.customer_id
+
+            logger.info(f"Sale Return {invoice_no} marked as Cancelled (Reason: {return_reason})")
+
+            # --- Step 4: Handle based on reason
+            if return_reason and return_reason.lower() == 'damaged':
+                # Skip inventory update & ledger action
+                logger.info(f"Skipping inventory and ledger actions for damaged return {invoice_no}")
+
+            elif return_reason and return_reason.lower() == 'wrong product':
+                # --- Step 4a: Revert products back to inventory
+                try:
+                    return_items = SaleReturnItems.objects.filter(sale_return_id=instance.sale_return_id)
+                    for item in return_items:
+                        product = item.product_id  # FK to Product
+                        product.balance = F('balance') + item.quantity
+                        product.save()
+
+                    logger.info(f"Reverted {len(return_items)} products to inventory for cancelled return {invoice_no}")
+                except Exception as e:
+                    logger.error(f"Error reverting products to inventory for return {invoice_no}: {str(e)}")
+
+                # --- Step 4b: Create reversing ledger entry
+                try:
+                    existing_balance = (
+                        JournalEntryLines.objects.filter(customer_id=customer_id)
+                        .order_by('is_deleted', '-created_at')
+                        .values_list('balance', flat=True)
+                        .first()
+                    ) or Decimal('0.00')
+
+                    latest_balance = existing_balance - Decimal(instance.total_amount)
+
+                    JournalEntryLines.objects.create(
+                        description=f"Cancellation of sale return {invoice_no}",
+                        credit=instance.total_amount,
+                        debit=0,
+                        voucher_no=invoice_no,
+                        customer_id=customer_id,
+                        balance=latest_balance
+                    )
+
+                    logger.info(f"Created reversal ledger entry for cancelled sale return {invoice_no}")
+                except Exception as e:
+                    logger.error(f"Error creating ledger reversal entry for return {invoice_no}: {str(e)}")
+
+            else:
+                logger.warning(f"Unknown or missing return reason for sale return {invoice_no}. No additional actions taken.")
+
+            # --- Step 5: Success response
+            return build_response(1, "Sale Return cancelled successfully", [], status.HTTP_200_OK)
+
         except SaleReturnOrders.DoesNotExist:
             logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting SaleReturnOrder with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error cancelling SaleReturnOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Sale return cancellation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @transaction.atomic
     def patch(self, request, pk, *args, **kwargs):

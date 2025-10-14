@@ -1,3 +1,4 @@
+from decimal import Decimal
 from django.db import models
 from config.utils_variables import *
 from apps.masters.models import PurchaseTypes,State,ProductBrands, GstTypes, OrderStatuses, UnitOptions
@@ -146,6 +147,8 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
     order_status_id = models.ForeignKey(OrderStatuses, on_delete=models.PROTECT, null=True, default=None, db_column = 'order_status_id')
     shipping_address = models.CharField(max_length=1024, null=True, default=None)
     billing_address = models.CharField(max_length=1024, null=True, default=None) 
+    paid_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.0)
+    pending_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -190,6 +193,23 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
             increment_order_number(self.order_no_prefix)
         else:
             print("from edit", self.pk)
+            
+    def update_paid_amount_balance_amount_after_purchase_payment_transactions(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
+        """
+        Update the paid_amount and pending_amount when a payment is made.
+        """
+        # Ensure paid_amount is initialized
+        if self.paid_amount is None:
+            self.paid_amount = Decimal('0.00')
+
+        if adjusted_now_amount > 00.00:
+            self.paid_amount += Decimal(adjusted_now_amount)
+            self.pending_amount = Decimal(outstanding_amount)
+        else:
+            self.paid_amount += Decimal(payment_amount)
+            self.pending_amount = Decimal(outstanding_amount)
+        self.save()
+        print(f"Updated PurchaseInvoiceOrders for Invoice {self.invoice_no} with a Total Amount of {self.total_amount}, Paid Amount of {self.paid_amount}, and Pending Amount of {self.pending_amount}.")
     
 
 class PurchaseInvoiceItem(models.Model):
