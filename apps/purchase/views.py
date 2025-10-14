@@ -1,9 +1,11 @@
+from decimal import Decimal
 import logging
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
+from apps.finance.models import JournalEntryLines
 from apps.purchase.filters import PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
 from apps.purchase.filters import OutstandingPurchaseFilter, PurchaseInvoiceOrdersFilter, PurchaseOrderItemsFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter, PurchasesByVendorReportFilter, PurchasesbyVendorReportFilter, StockReplenishmentReportFilter
 from config.utils_filter_methods import filter_response
@@ -830,40 +832,111 @@ class PurchaseInvoiceOrderViewSet(APIView):
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
             return []
 
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Soft delete PurchaseInvoiceOrders and its related models using shared delete_multi_instance utility.
+    #     """
+    #     try:
+    #         # Get the PurchaseInvoiceOrders instance
+    #         instance = PurchaseInvoiceOrders.objects.get(pk=pk, is_deleted=False)
+    #         instance.is_deleted = True
+    #         instance.save()
+
+    #         # Soft delete related OrderAttachments
+    #         if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Soft delete related OrderShipments
+    #         if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Soft delete related CustomFieldValue
+    #         if not delete_multi_instance(pk, PurchaseInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         logger.info(f"PurchaseInvoiceOrders with ID {pk} soft-deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+    #     except PurchaseInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist or is already deleted.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    #     except Exception as e:
+    #         logger.error(f"Error deleting PurchaseInvoiceOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Soft delete PurchaseInvoiceOrders and its related models using shared delete_multi_instance utility.
+        Handles the cancellation of a purchase invoice:
+        - Marks it as 'Cancelled' instead of deleting
+        - Reverts products back to inventory
+        - Creates reversing ledger entry
         """
         try:
             # Get the PurchaseInvoiceOrders instance
-            instance = PurchaseInvoiceOrders.objects.get(pk=pk, is_deleted=False)
-            instance.is_deleted = True
+            instance = PurchaseInvoiceOrders.objects.get(pk=pk)
+
+            # Get the "Cancelled" status
+            try:
+                canceled_status = OrderStatuses.objects.get(status_name='Cancelled')
+            except OrderStatuses.DoesNotExist:
+                logger.error("'Cancelled' status not found in OrderStatuses table")
+                return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
+
+            # --- STEP 1: Update invoice status to "Cancelled"
+            instance.order_status_id = canceled_status
             instance.save()
+            invoice_no = instance.invoice_no
+            supplier_id = instance.vendor_id
 
-            # Soft delete related OrderAttachments
-            if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # --- STEP 2: Revert products back to inventory
+            try:
+                invoice_items = PurchaseInvoiceItem.objects.filter(purchase_invoice_id=instance.purchase_invoice_id)
 
-            # Soft delete related OrderShipments
-            if not delete_multi_instance(pk, PurchaseInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+                for item in invoice_items:
+                    product = item.product_id  # ForeignKey to Product
+                    product.balance = F('balance') + item.quantity
+                    product.save()
 
-            # Soft delete related CustomFieldValue
-            if not delete_multi_instance(pk, PurchaseInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
-                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+                logger.info(f"Reverted {len(invoice_items)} products to inventory for cancelled purchase invoice {invoice_no}")
 
-            logger.info(f"PurchaseInvoiceOrders with ID {pk} soft-deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            except Exception as e:
+                logger.error(f"Error reverting products to inventory for purchase invoice {invoice_no}: {str(e)}")
+
+            # --- STEP 3: Create offsetting ledger entry
+            existing_balance = (
+                JournalEntryLines.objects.filter(vendor_id=supplier_id)
+                .order_by('is_deleted', '-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+
+            latest_balance = existing_balance - Decimal(instance.total_amount)
+
+            try:
+                JournalEntryLines.objects.create(
+                    description=f"Cancellation of purchase invoice {invoice_no}",
+                    debit=instance.total_amount,
+                    credit=0,
+                    voucher_no=invoice_no,
+                    vendor_id=supplier_id,
+                    balance=latest_balance
+                )
+                logger.info(f"Created offsetting debit entry of {instance.total_amount} for cancelled purchase invoice {invoice_no}")
+            except Exception as e:
+                logger.error(f"Error creating offsetting debit entry: {str(e)}")
+
+            # --- STEP 4: Return success response
+            return build_response(1, "Purchase invoice cancelled successfully", [], status.HTTP_200_OK)
 
         except PurchaseInvoiceOrders.DoesNotExist:
-            logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist or is already deleted.")
+            logger.warning(f"PurchaseInvoiceOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-
         except Exception as e:
-            logger.error(f"Error deleting PurchaseInvoiceOrders with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            logger.error(f"Error cancelling PurchaseInvoiceOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Purchase invoice cancellation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # @transaction.atomic
     # def delete(self, request, pk, *args, **kwargs):
@@ -1269,34 +1342,113 @@ class PurchaseReturnOrderViewSet(APIView):
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
             return []
         
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a Purchase Return Orders and its related attachments and shipments.
+    #     """
+    #     try:
+    #         # Get the PurchaseReturnOrders instance
+    #         instance = PurchaseReturnOrders.objects.get(pk=pk)
+
+    #         # Delete related OrderAttachments and OrderShipments
+    #         if not delete_multi_instance(pk, PurchaseReturnOrders, OrderAttachments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, PurchaseReturnOrders, OrderShipments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, PurchaseReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         # Delete the main PurchaseReturnOrders instance
+    #         instance.is_deleted=True
+    #         instance.save()
+
+    #         logger.info(f"PurchaseReturnOrders with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except PurchaseReturnOrders.DoesNotExist:
+    #         logger.warning(f"PurchaseReturnOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting PurchaseReturnOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a Purchase Return Orders and its related attachments and shipments.
+        Cancels a Purchase Return:
+        - Marks it as 'Cancelled'
+        - If Damaged: skip inventory & ledger
+        - If Wrong Product: revert inventory + ledger reversal (debit vendor)
         """
         try:
-            # Get the PurchaseReturnOrders instance
             instance = PurchaseReturnOrders.objects.get(pk=pk)
 
-            # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, PurchaseReturnOrders, OrderAttachments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, PurchaseReturnOrders, OrderShipments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, PurchaseReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
-                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            # Delete the main PurchaseReturnOrders instance
-            instance.is_deleted=True
+            # Get 'Cancelled' status
+            try:
+                canceled_status = OrderStatuses.objects.get(status_name='Cancelled')
+            except OrderStatuses.DoesNotExist:
+                logger.error("'Cancelled' status not found")
+                return build_response(0, "Cannot cancel purchase return - required status not found", [], status.HTTP_400_BAD_REQUEST)
+
+            # Update status
+            instance.order_status_id = canceled_status
             instance.save()
 
-            logger.info(f"PurchaseReturnOrders with ID {pk} deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            return_reason = getattr(instance, 'return_reason', None)
+            return_no = getattr(instance, 'return_no', None)
+            vendor_id = instance.vendor_id
+
+            logger.info(f"Purchase Return {return_no} marked as Cancelled (Reason: {return_reason})")
+
+            if return_reason and return_reason.lower() == 'damaged':
+                logger.info(f"Skipping inventory & ledger for damaged return {return_no}")
+
+            elif return_reason and return_reason.lower() == 'wrong product':
+                # Revert inventory
+                try:
+                    return_items = PurchaseReturnItems.objects.filter(purchase_return_id=instance.purchase_return_id)
+                    for item in return_items:
+                        product = item.product_id
+                        product.balance = F('balance') + item.quantity
+                        product.save()
+                    logger.info(f"Reverted {len(return_items)} products for return {return_no}")
+                except Exception as e:
+                    logger.error(f"Error reverting products: {str(e)}")
+
+                # Ledger reversal (debit vendor)
+                try:
+                    existing_balance = (
+                        JournalEntryLines.objects.filter(vendor_id=vendor_id)
+                        .order_by('is_deleted', '-created_at')
+                        .values_list('balance', flat=True)
+                        .first()
+                    ) or Decimal('0.00')
+
+                    latest_balance = existing_balance - Decimal(instance.total_amount)
+
+                    JournalEntryLines.objects.create(
+                        description=f"Cancellation of purchase return {return_no}",
+                        debit=instance.total_amount,
+                        credit=0,
+                        voucher_no=return_no,
+                        vendor_id=vendor_id,
+                        balance=latest_balance
+                    )
+                    logger.info(f"Created reversal ledger entry for return {return_no}")
+                except Exception as e:
+                    logger.error(f"Error creating ledger entry: {str(e)}")
+
+            else:
+                logger.warning(f"Unknown return reason for {return_no}, no additional action")
+
+            return build_response(1, "Purchase return cancelled successfully", [], status.HTTP_200_OK)
+
         except PurchaseReturnOrders.DoesNotExist:
-            logger.warning(f"PurchaseReturnOrders with ID {pk} does not exist.")
+            logger.warning(f"Return ID {pk} not found")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting PurchaseReturnOrders with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error cancelling return {pk}: {str(e)}")
+            return build_response(0, "Purchase return cancellation failed", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @transaction.atomic
     def patch(self, request, pk, *args, **kwargs):
