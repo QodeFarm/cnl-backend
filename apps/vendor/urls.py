@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import VendorExcelUploadAPIView, VendorTemplateAPIView, VendorsView, VendorCategoryView, VendorPaymentTermsView, VendorAgentView, VendorAttachmentView, VendorAddressView, VendorViewSet
+from .views import VendorBalanceView, VendorExcelUploadAPIView, VendorTemplateAPIView, VendorsView, VendorCategoryView, VendorPaymentTermsView, VendorAgentView, VendorAttachmentView, VendorAddressView, VendorViewSet
 from rest_framework.routers import DefaultRouter
 
 #add your urls 
@@ -16,6 +16,11 @@ urlpatterns = [
     path('',include(router.urls)),
     path('vendors/', VendorViewSet.as_view(), name='vendor_list_create'),
     path('vendors/<str:pk>/', VendorViewSet.as_view(), name='vendor_detail_update_delete'),
+    # === Vendor Balance ===
+    path('vendor_balance/', VendorBalanceView.as_view(), name='vendor_balance_list'),
+    path('vendor_balance/<uuid:vendor_id>/<str:remaining_payment>/', VendorBalanceView.as_view(), name='vendor_balance_update'),
+    path('vendor_balance/<uuid:pk>/', VendorBalanceView.as_view(), name='vendor_balance_detail'),
+    
     path('download-template/', VendorTemplateAPIView.as_view(), name='vendor-download-template'),
     path('upload-excel/', VendorExcelUploadAPIView.as_view(), name='vendor-upload-excel'),
 

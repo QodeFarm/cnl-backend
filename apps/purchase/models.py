@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django.db import models
+from apps.finance.models import ChartOfAccounts
 from config.utils_variables import *
 from apps.masters.models import PurchaseTypes,State,ProductBrands, GstTypes, OrderStatuses, UnitOptions
 from apps.customer.models import LedgerAccounts,CustomerCategories
@@ -183,6 +184,15 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
                 field_name='invoice_no'
             )
             setattr(self, self.order_no_field, order_number)
+            
+        # # ✅ Set pending amount by default = total_amount if new record
+        # if is_new_record:
+        #     if self.total_amount and (self.pending_amount is None or self.pending_amount == 0):
+        #         self.pending_amount = self.total_amount
+
+        # # ✅ Ensure pending_amount doesn’t go below 0
+        # if self.pending_amount and self.pending_amount < 0:
+        #     self.pending_amount = 0
 
         # Save the record
         super().save(*args, **kwargs)
@@ -194,22 +204,28 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
         else:
             print("from edit", self.pk)
             
-    def update_paid_amount_balance_amount_after_purchase_payment_transactions(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
+    def update_paid_amount_and_pending_amount_after_bill_payment(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
         """
-        Update the paid_amount and pending_amount when a payment is made.
+        Update the paid_amount and pending_amount in PurchaseInvoiceOrders
+        whenever a Bill Payment Transaction is created.
         """
-        # Ensure paid_amount is initialized
         if self.paid_amount is None:
             self.paid_amount = Decimal('0.00')
 
-        if adjusted_now_amount > 00.00:
+        # Update paid and pending amounts based on AdjustNow or normal payment
+        if adjusted_now_amount > Decimal("0.00"):
             self.paid_amount += Decimal(adjusted_now_amount)
             self.pending_amount = Decimal(outstanding_amount)
         else:
             self.paid_amount += Decimal(payment_amount)
             self.pending_amount = Decimal(outstanding_amount)
+
         self.save()
-        print(f"Updated PurchaseInvoiceOrders for Invoice {self.invoice_no} with a Total Amount of {self.total_amount}, Paid Amount of {self.paid_amount}, and Pending Amount of {self.pending_amount}.")
+        print(
+            f"Updated PurchaseInvoiceOrders for Invoice {self.invoice_no} with Total Amount {self.total_amount}, "
+            f"Paid Amount {self.paid_amount}, Pending Amount {self.pending_amount}."
+        )
+
     
 
 class PurchaseInvoiceItem(models.Model):
@@ -361,3 +377,64 @@ class PurchasePriceList(models.Model):
 
     def __str__(self):
         return f"{self.purchase_price_list_id}"
+    
+#------------------- Bill Payments ----------------------------------
+
+class BillPaymentTransactions(OrderNumberMixin):
+    transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    payment_receipt_no = models.CharField(max_length=50, unique=True, default='')
+    order_no_prefix = 'BPR'  # Payment Receipt prefix
+    order_no_field = 'payment_receipt_no'  # Field to store the order number
+    payment_date = models.DateTimeField(auto_now_add=True)
+    payment_method = models.CharField(max_length=100, null=True, blank=True)
+    cheque_no = models.CharField(max_length=50, null=True, blank=True)
+    amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    outstanding_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    adjusted_now = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
+    payment_status = models.CharField(max_length=20, choices=[
+        ('Pending', 'Pending'),
+        ('Completed', 'Completed'),
+        ('Failed', 'Failed')
+    ], default='Pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    purchase_invoice = models.ForeignKey("PurchaseInvoiceOrders", on_delete=models.CASCADE, db_column='purchase_invoice_id')
+    vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id')
+    bill_no = models.CharField(max_length=20, null=True, default=None)
+    total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    account = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, null=True, db_column='account_id')
+
+    class Meta:
+        db_table = "bill_payment_transactions"
+
+    def __str__(self):
+        return f"{self.payment_receipt_no}"
+    
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+        
+        # Only generate and set the order number if this is a new record
+        if is_new_record and not getattr(self, self.order_no_field):
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=BillPaymentTransactions,
+                field_name='payment_receipt_no'
+            )
+            setattr(self, self.order_no_field, order_number)
+
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print(f"Creating new Bill payment receipt: {self.payment_receipt_no}")
+            increment_order_number(self.order_no_prefix)
+        else:
+            print(f"Updating existing Bill payment receipt: {self.payment_receipt_no}")
+            

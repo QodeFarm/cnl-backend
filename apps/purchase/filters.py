@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters
 from config.utils_methods import filter_uuid
-from .models import PurchaseOrders, PurchaseInvoiceOrders, PurchaseReturnOrders, PurchaseorderItems, Products
+from .models import BillPaymentTransactions, PurchaseOrders, PurchaseInvoiceOrders, PurchaseReturnOrders, PurchaseorderItems, Products
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -326,3 +326,63 @@ class StockReplenishmentReportFilter(filters.FilterSet):
     class Meta:
         model = Products
         fields = ['name', 'current_stock', 'minimum_stock', 'reorder_quantity', 's', 'sort', 'page', 'limit']
+
+class BillPaymentTransactionsReportFilter(filters.FilterSet):
+    """
+    Filter for Bill Payment Transactions Report showing all vendor bill payments
+    """
+
+    # Vendor filters
+    vendor_name = filters.CharFilter(field_name='vendor__name', lookup_expr='icontains')
+    vendor_id = filters.NumberFilter(field_name='vendor__vendor_id')
+
+    # Bill payment receipt filters
+    payment_receipt_no = filters.CharFilter(lookup_expr='icontains')
+
+    # Invoice filters
+    invoice_no = filters.CharFilter(field_name='purchase_invoice__invoice_no', lookup_expr='icontains')
+
+    # Date filters
+    payment_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+
+    # Payment details filters
+    payment_method = filters.CharFilter(lookup_expr='icontains')
+    payment_status = filters.ChoiceFilter(
+        choices=[('Pending', 'Pending'), ('Completed', 'Completed'), ('Failed', 'Failed')],
+        lookup_expr='exact'
+    )
+    status_name = filters.CharFilter(field_name='payment_status', lookup_expr='iexact')
+
+    # Amount filters
+    min_amount = filters.NumberFilter(field_name='adjusted_now', lookup_expr='gte')
+    max_amount = filters.NumberFilter(field_name='adjusted_now', lookup_expr='lte')
+
+    # Common global filters
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    created_at = filters.DateFromToRangeFilter(field_name='created_at')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    # === Custom filter methods ===
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = BillPaymentTransactions
+        fields = [
+            'vendor_name', 'vendor_id', 'payment_receipt_no', 'invoice_no',
+            'payment_date', 'payment_method', 'payment_status',
+            'min_amount', 'max_amount', 'status_name',
+            'period_name', 'created_at', 's', 'sort', 'page', 'limit'
+        ]
