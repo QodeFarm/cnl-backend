@@ -1228,9 +1228,51 @@ class SaleOrderViewSet(APIView):
                     [],
                     status.HTTP_400_BAD_REQUEST
                 )
+                
+            # # --------------------------------------------
+            # # 2️ Permanent Deletion for 'Other' & 'Completed'
+            # # --------------------------------------------
+            # if instance.sale_type_id == "1a9d6cdb-2416-4d49-afd7-292cc6fb41de" and instance.order_status_id == "717c922f-c092-4d40-94e7-6a12d7095600":
+            #     logger.info(f"SaleOrder {pk} (Other & Completed) is already replicated to mstcnl, skipping delete.")
+            #     return build_response(
+            #         0,
+            #         "Sale order already replicated to mstcnl; deletion skipped.",
+            #         [],
+            #         status.HTTP_400_BAD_REQUEST
+            #     )
+            
+            # --------------------------------------------
+            # 2️ Permanent Deletion for 'Other' & 'Completed'
+            # --------------------------------------------
+            try:
+                # Fetch the correct SaleType and OrderStatus objects dynamically
+                other_sale_type = SaleTypes.objects.using(db_to_use).get(name="Other")
+                completed_status = OrderStatuses.objects.using(db_to_use).get(status_name="Completed")
+
+                if (
+                    instance.sale_type_id == other_sale_type.sale_type_id
+                    and instance.order_status_id == completed_status.order_status_id
+                ):
+                    logger.info(f"SaleOrder {pk} (Other & Completed) is already replicated to mstcnl, skipping delete.")
+                    return build_response(
+                        0,
+                        "Sale order already replicated to mstcnl; deletion skipped.",
+                        [],
+                        status.HTTP_400_BAD_REQUEST
+                    )
+
+            except (SaleTypes.DoesNotExist, OrderStatuses.DoesNotExist) as e:
+                logger.error(f"Required SaleType or OrderStatus not found: {str(e)}")
+                return build_response(
+                    0,
+                    "Required SaleType ('Other') or OrderStatus ('Completed') not found.",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
 
             # --------------------------------------------
-            # 2️⃣  Delete related child data
+            # 3 Delete related child data
             # --------------------------------------------
             if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -2170,7 +2212,7 @@ class SaleInvoiceOrdersViewSet(APIView):
                 else:
                     exclude_q = Q(order_status_id__in=canceled_status_ids)
 
-                saleinvoiceorder = saleinvoiceorder.exclude(exclude_q)
+                saleinvoiceorder = saleinvoiceorder.exclude(exclude_q) 
 
                 data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
 
@@ -2570,13 +2612,101 @@ class SaleInvoiceOrdersViewSet(APIView):
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
             return []
         
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the cancellation of a sale invoice order:
+    #     - Marks it as 'Cancelled' instead of deleting
+    #     - Reverts products back to inventory
+    #     - Creates reversing ledger entry
+    #     """
+    #     db_to_use = None
+    #     try:
+    #         # Determine which database to use
+    #         try:
+    #             SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
+    #             set_db('mstcnl')
+    #             db_to_use = 'mstcnl'
+    #         except SaleInvoiceOrders.DoesNotExist:
+    #             SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
+    #             set_db('default')
+    #             db_to_use = 'default'
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    #     try:
+    #         # Get the SaleInvoiceOrders instance
+    #         instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
+
+    #         # Get the "Cancelled" status
+    #         try:
+    #             canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
+    #         except OrderStatuses.DoesNotExist:
+    #             logger.error("'Cancelled' status not found in OrderStatuses table")
+    #             return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
+
+    #         # --- STEP 1: Update invoice status to "Cancelled"
+    #         instance.order_status_id = canceled_status
+    #         instance.save(using=db_to_use)
+    #         invoice_no = instance.invoice_no
+    #         customer_id = instance.customer_id
+
+    #         # --- STEP 2: Revert products back to inventory
+    #         try:
+    #             invoice_items = SaleInvoiceItems.objects.using(db_to_use).filter(sale_invoice_id=instance.sale_invoice_id)
+
+    #             for item in invoice_items:
+    #                 product = item.product_id  # ForeignKey to Product
+    #                 # Safely increase the available quantity
+    #                 product.balance = F('balance') + item.quantity
+    #                 product.save(using=db_to_use)
+
+    #             logger.info(f"Reverted {len(invoice_items)} products to inventory for cancelled invoice {invoice_no}")
+
+    #         except Exception as e:
+    #             logger.error(f"Error reverting products to inventory for invoice {invoice_no}: {str(e)}")
+
+    #         # --- STEP 3: Create offsetting ledger entry
+    #         existing_balance = (
+    #             JournalEntryLines.objects.filter(customer_id=customer_id)
+    #             .order_by('is_deleted', '-created_at')
+    #             .values_list('balance', flat=True)
+    #             .first()
+    #         ) or Decimal('0.00')
+
+    #         latest_balance = existing_balance - Decimal(instance.total_amount)
+
+    #         try:
+    #             journal_entry = JournalEntryLines.objects.using(db_to_use).create(
+    #                 description=f"Cancellation of invoice {invoice_no}",
+    #                 credit=instance.total_amount,
+    #                 debit=0,
+    #                 voucher_no=invoice_no,
+    #                 customer_id=customer_id,
+    #                 balance=latest_balance
+    #             )
+    #             logger.info(f"Created offsetting credit entry of {instance.total_amount} for cancelled invoice {invoice_no}")
+    #         except Exception as e:
+    #             logger.error(f"Error creating offsetting credit entry: {str(e)}")
+
+    #         # --- STEP 4: Return success response
+    #         return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
+
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error cancelling SaleInvoiceOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Invoice cancellation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the cancellation of a sale invoice order:
-        - Marks it as 'Cancelled' instead of deleting
-        - Reverts products back to inventory
-        - Creates reversing ledger entry
+        Handles the cancellation or permanent deletion of a sale invoice order:
+        - If bill_type='Others' & order_status='Completed' → permanently delete and replicate
+        - Otherwise → mark as 'Cancelled', revert stock, and create ledger reversal
         """
         db_to_use = None
         try:
@@ -2594,17 +2724,34 @@ class SaleInvoiceOrdersViewSet(APIView):
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
 
         try:
-            # Get the SaleInvoiceOrders instance
             instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
 
-            # Get the "Cancelled" status
+            # ✅ STEP 0: Check if this invoice qualifies for PERMANENT DELETION
+            if instance.bill_type == "Others" and instance.order_status_id.status_name == "Completed":
+                logger.info(f"Deleting permanently: Invoice {instance.invoice_no} (bill_type='Others', status='Completed')")
+
+                # First replicate record to mstcnl if needed
+                try:
+                    result = replicate_sale_invoice_to_mstcnl(instance.sale_invoice_id)
+                    logger.info(f"Replication result for invoice {instance.invoice_no}: {result}")
+                except Exception as e:
+                    logger.error(f"Error replicating invoice {instance.invoice_no} to mstcnl: {str(e)}")
+
+                # Now permanently delete from the current database
+                instance.delete(using=db_to_use)
+                logger.info(f"Invoice {instance.invoice_no} permanently deleted from {db_to_use} database.")
+
+                return build_response(1, "Invoice permanently deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+            # ---------------------------------------------
+            # Default Cancellation Flow (Existing Logic)
+            # ---------------------------------------------
             try:
                 canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
             except OrderStatuses.DoesNotExist:
                 logger.error("'Cancelled' status not found in OrderStatuses table")
                 return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
 
-            # --- STEP 1: Update invoice status to "Cancelled"
             instance.order_status_id = canceled_status
             instance.save(using=db_to_use)
             invoice_no = instance.invoice_no
@@ -2613,15 +2760,11 @@ class SaleInvoiceOrdersViewSet(APIView):
             # --- STEP 2: Revert products back to inventory
             try:
                 invoice_items = SaleInvoiceItems.objects.using(db_to_use).filter(sale_invoice_id=instance.sale_invoice_id)
-
                 for item in invoice_items:
-                    product = item.product_id  # ForeignKey to Product
-                    # Safely increase the available quantity
+                    product = item.product_id
                     product.balance = F('balance') + item.quantity
                     product.save(using=db_to_use)
-
                 logger.info(f"Reverted {len(invoice_items)} products to inventory for cancelled invoice {invoice_no}")
-
             except Exception as e:
                 logger.error(f"Error reverting products to inventory for invoice {invoice_no}: {str(e)}")
 
@@ -2634,9 +2777,8 @@ class SaleInvoiceOrdersViewSet(APIView):
             ) or Decimal('0.00')
 
             latest_balance = existing_balance - Decimal(instance.total_amount)
-
             try:
-                journal_entry = JournalEntryLines.objects.using(db_to_use).create(
+                JournalEntryLines.objects.using(db_to_use).create(
                     description=f"Cancellation of invoice {invoice_no}",
                     credit=instance.total_amount,
                     debit=0,
@@ -2648,7 +2790,6 @@ class SaleInvoiceOrdersViewSet(APIView):
             except Exception as e:
                 logger.error(f"Error creating offsetting credit entry: {str(e)}")
 
-            # --- STEP 4: Return success response
             return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
 
         except SaleInvoiceOrders.DoesNotExist:
@@ -6090,15 +6231,15 @@ def replicate_sale_invoice_to_mstcnl(invoice_id):
 
             print("Completed whole sale invoice and payment transactions in mstcnl")
             #  10) Delete from default DB
-            # time.sleep(1)
+            time.sleep(1)
 
-            # SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-            # OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-            # OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-            # CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
-            # SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
+            SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
+            OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
+            OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
+            CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
+            SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
 
-            # return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
+            return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
 
     except Exception as e:
         import traceback
@@ -6253,13 +6394,13 @@ def replicate_sale_order_to_mstcnl(sale_order_id):
                 
             # # #print(" CustomFields replicated to mstcnl")
             
-            # time.sleep(1)
+            time.sleep(1)
                 
-            # SaleOrderItems.objects.using('default').filter(sale_order_id=sale_order_id).delete()
-            # OrderShipments.objects.using('default').filter(order_id=sale_order_id).delete()
-            # OrderAttachments.objects.using('default').filter(order_id=sale_order_id).delete()
-            # CustomFieldValue.objects.using('default').filter(custom_id=sale_order_id).delete()
-            # SaleOrder.objects.using('default').filter(pk=sale_order_id).delete()
+            SaleOrderItems.objects.using('default').filter(sale_order_id=sale_order_id).delete()
+            OrderShipments.objects.using('default').filter(order_id=sale_order_id).delete()
+            OrderAttachments.objects.using('default').filter(order_id=sale_order_id).delete()
+            CustomFieldValue.objects.using('default').filter(custom_id=sale_order_id).delete()
+            SaleOrder.objects.using('default').filter(pk=sale_order_id).delete()
 
             return {"message": f"SaleOrder {sale_order_id} replicated to mstcnl"}
 
