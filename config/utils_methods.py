@@ -494,7 +494,7 @@ class OrderNumberMixin(models.Model):
                 return 'SOO-INV'
         
         # Validate existing prefix before returning
-        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD', 'PTR']  # add all that you use
+        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD', 'PTR', 'BPR']  # add all that you use
         if self.order_no_prefix not in valid_prefixes:
             raise ValueError("Invalid prefix")  # <== this will surface clearly
 
@@ -1346,6 +1346,7 @@ def send_pdf_via_email(to_email, pdf_relative_path, document_type):
         "purchase_order": ("Purchase Order Document", "Please Find Your Requested Purchase Order Documents."),
         "purchase_return": ("Purchase Return Document", "Please Find Your Requested Purchase Return Documents."),
         "payment_receipt": ("Payment Receipt Document", "Please Find Your Requested Payment Receipt Documents."), #payment_receipt
+        "bill_receipt": ("Bill Payment Receipt Document", "Please Find Your Requested Bill Payment Receipt Documents."), #payment_receipt
     }
 
     subject, body = doc_messages.get(document_type, ("Your Requested Documents", "Please Find Your Requested Documents."))

@@ -6,12 +6,14 @@ from apps.company.models import Companies
 from apps.company.serializers import CompaniesSerializer
 from apps.customer.models import Customer
 from apps.customer.serializers import CustomerSerializer
-from apps.purchase.models import PurchaseOrders, PurchaseorderItems
-from apps.purchase.serializers import PurchaseReturnOrdersSerializer
+from apps.purchase.models import BillPaymentTransactions, PurchaseOrders, PurchaseorderItems
+from apps.purchase.serializers import BillPaymentTransactionSerializer, PurchaseReturnOrdersSerializer
 from apps.purchase.models import PurchaseReturnOrders, PurchaseReturnItems
 from apps.sales.models import PaymentTransactions, SaleOrder, SaleOrderItems, SaleInvoiceOrders, SaleReturnItems, SaleReturnOrders, SaleInvoiceItems, OrderShipments
 from  apps.purchase.serializers import PurchaseOrdersSerializer, PurchaseReturnItemsSerializer, PurchaseorderItemsSerializer
 from apps.sales.serializers import PaymentTransactionSerializer, SaleOrderSerializer, SaleOrderItemsSerializer,SaleInvoiceOrdersSerializer, SaleInvoiceItemsSerializer, OrderShipmentsSerializer, SaleReturnItemsSerializer, SaleReturnOrdersSerializer
+from apps.vendor.models import Vendor
+from apps.vendor.serializers import VendorSerializer
 
 # needed for DocumentGeneratorView(present in sales.view) view for sending sales order rcpt, sales invoice rcpt etc 
 doc_data = {
@@ -114,6 +116,24 @@ doc_data = {
                 "Item_Model": Customer,  # No items for payment receipts
                 "Items_Serializer": CustomerSerializer,
                 "Item_Model_PK": "customer_id",
+                "Related_Model": None,
+                "Related_Serializer": None,
+                "Related_filter_field": None,
+                
+                "number_lbl": "Receipt No.",
+                "date_lbl": "Receipt Date",
+                "Doc_Header": "RECEIPT VOUCHER",
+                "net_lbl": "Net Amount",
+                
+                "number_value": "payment_receipt_no",
+                "date_value": "payment_date",
+            },
+            "bill_receipt": {
+                "Model": BillPaymentTransactions,
+                "Serializer": BillPaymentTransactionSerializer,
+                "Item_Model": Vendor,  # No items for payment receipts
+                "Items_Serializer": VendorSerializer,
+                "Item_Model_PK": "vendor_id",
                 "Related_Model": None,
                 "Related_Serializer": None,
                 "Related_filter_field": None,
