@@ -23,10 +23,14 @@ urlpatterns = [
     path('purchase_return_order/<str:pk>/', PurchaseReturnOrderViewSet.as_view(), name='purchase-return-order-detail-update-delete'),
     
     # === Bill Payments (Purchase Payments) ===
-    path('bill_payments/', BillPaymentTransactionAPIView.as_view(), name='bill_payment_transactions'),
+    # path('bill-payments/<str:pk>/', BillPaymentTransactionAPIView.as_view(), name='bill-payment-detail'),
+    # path('bill_payments/', BillPaymentTransactionAPIView.as_view(), name='bill-payment-list-create'),
+    path('bill_payments/', BillPaymentTransactionAPIView.as_view(), name='bill-payment-list-create'),
+    path('bill_payments/<str:transaction_id>/', BillPaymentTransactionAPIView.as_view(), name='bill-payment-detail-update'),
 
     # Optional: retrieve a specific bill payment by ID
-    path('bill_payments/<uuid:pk>/', BillPaymentTransactionAPIView.as_view(), name='bill_payment_detail'),
+    # path('bill_payments/<uuid:pk>/', BillPaymentTransactionAPIView.as_view(), name='bill_payment_detail'),
+    
     
     path('data_for_payment_receipt_table/<str:vendor_id>/', FetchPurchaseInvoicesForPaymentReceiptTable.as_view(), name='purchase-Invoice-data-for-payment-receipt-table-by-customer-ID'),
 ]

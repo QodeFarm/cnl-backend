@@ -253,6 +253,7 @@ class BillPaymentTransactionSerializer(serializers.ModelSerializer):
     due_date = serializers.DateField(source='purchase_invoice.due_date')
     ref_date = serializers.DateField(source='purchase_invoice.ref_date', allow_null=True)
     total_amount = serializers.DecimalField(source='purchase_invoice.total_amount', max_digits=18, decimal_places=2)
+    pending_amount = serializers.DecimalField(source='purchase_invoice.pending_amount', max_digits=18, decimal_places=2)
     taxable = serializers.DecimalField(source='purchase_invoice.taxable', max_digits=18, decimal_places=2)
     tax_amount = serializers.DecimalField(source='purchase_invoice.tax_amount', max_digits=18, decimal_places=2)
     
@@ -267,6 +268,6 @@ class BillPaymentTransactionSerializer(serializers.ModelSerializer):
             'bill_no', 'vendor_id', 'vendor_name',
             'bill_date', 'due_date', 'ref_date',
             'amount', 'payment_receipt_no', 'payment_date',
-            'payment_method', 'payment_status', 'total_amount',
+            'payment_method', 'payment_status', 'total_amount', 'pending_amount',
             'outstanding_amount', 'adjusted_now', 'taxable', 'tax_amount'
         ]
