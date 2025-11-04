@@ -1,5 +1,6 @@
 from decimal import Decimal
 import logging
+import time
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
@@ -1743,46 +1744,37 @@ class BillPaymentTransactionAPIView(APIView):
     Handles retrieval of Bill Payment Transactions.
     Supports both single record (via pk) and filtered list retrieval.
     """
-    filterset_class = BillPaymentTransactionsReportFilter
+    def get(self, request, transaction_id=None):
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
 
-    def get(self, request, pk=None):
-        try:
-            # === Single record fetch ===
-            if pk:
-                bill_payment = get_object_or_404(BillPaymentTransactions, pk=pk)
-                serializer = BillPaymentTransactionSerializer(bill_payment)
-                return build_response(
-                    1,
-                    "Bill Payment Transaction Details Retrieved Successfully",
-                    serializer.data,
-                    status.HTTP_200_OK
-                )
+        # ✅ CASE 1: FETCH SINGLE RECORD
+        if transaction_id:
+            try:
+                transaction = BillPaymentTransactions.objects.get(transaction_id=transaction_id)
+                serializer = BillPaymentTransactionSerializer(transaction)
+                return build_response(1, "Bill Payment Transaction fetched successfully", serializer.data, status.HTTP_200_OK)
+            except BillPaymentTransactions.DoesNotExist:
+                return build_response(0, "Bill Payment Transaction not found", None, status.HTTP_404_NOT_FOUND)
 
-            # === List fetch with filters ===
-            queryset = BillPaymentTransactions.objects.select_related(
-                'purchase_invoice', 'vendor', 'account'
-            ).order_by('-payment_date', '-created_at')
+        # ✅ CASE 2: FETCH ALL RECORDS WITH PAGINATION
+        transactions = BillPaymentTransactions.objects.all().order_by('-created_at')
 
-            # Apply filters
-            filtered_queryset = self.filterset_class(request.GET, queryset=queryset).qs
+        total_count = transactions.count()
+        start = (page - 1) * limit
+        end = start + limit
+        paginated_transactions = transactions[start:end]
 
-            # Serialize filtered data
-            serializer = BillPaymentTransactionSerializer(filtered_queryset, many=True)
+        if not paginated_transactions.exists():
+            return filter_response(0, "No Bill Payment Transactions found", page, limit, total_count, None, status.HTTP_404_NOT_FOUND)
 
-            return build_response(
-                len(serializer.data),
-                "Bill Payment Transactions Retrieved Successfully",
-                serializer.data,
-                status.HTTP_200_OK
-            )
+        serializer = BillPaymentTransactionSerializer(paginated_transactions, many=True)
 
-        except Exception as e:
-            return build_response(
-                0,
-                "Something Went Wrong While Fetching Bill Payment Transactions",
-                str(e),
-                status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return filter_response(len(serializer.data), "Bill Payment Transactions fetched successfully",
+                            serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+
+
     """
     Handles Purchase Bill Payments (Vendor Side)
     - adjustNow → one-to-one invoice payment
@@ -1862,6 +1854,7 @@ class BillPaymentTransactionAPIView(APIView):
                                     payment_receipt_no=payment_receipt_no,
                                     payment_method=payment_method,
                                     total_amount=total_amount,
+                                    amount=allocated_amount,   # ✅ Add this line
                                     outstanding_amount=new_outstanding,
                                     adjusted_now=allocated_amount,
                                     payment_status=data.get('payment_status', 'Completed'),
@@ -1916,7 +1909,7 @@ class BillPaymentTransactionAPIView(APIView):
                 traceback.print_exc()
                 return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            return build_response(len(results), "Bill payments processed successfully", results, status.HTTP_201_CREATED)
+            return build_response(len(results), "Bill Payment transactions processed successfully", results, status.HTTP_201_CREATED)
 
         # ========= Case 2: Non-adjustNow (bulk allocation) =========
         else:
@@ -1930,9 +1923,9 @@ class BillPaymentTransactionAPIView(APIView):
             try:
                 with transaction.atomic():
                     # Fetch all pending purchase invoices for this vendor
-                    invoices = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id).exclude(order_status_id__status_name="Completed")
+                    invoices = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"])
                     if not invoices.exists():
-                        return build_response(0, "No pending invoices found for this vendor.", None, status.HTTP_404_NOT_FOUND)
+                        return build_response(0, "No pending invoices found for this vendor.", None, status.HTTP_400_BAD_REQUEST)
 
                     results = []
                     remaining_payment = input_amount
@@ -1958,6 +1951,7 @@ class BillPaymentTransactionAPIView(APIView):
                             payment_receipt_no=payment_receipt_no,
                             payment_method=payment_method,
                             total_amount=invoice.total_amount,
+                            amount=allocated_amount,   # ✅ Add this line
                             outstanding_amount=new_outstanding,
                             adjusted_now=allocated_amount,
                             payment_status='Completed' if new_outstanding == 0 else 'Pending',
@@ -2007,49 +2001,286 @@ class BillPaymentTransactionAPIView(APIView):
                 traceback.print_exc()
                 return build_response(1, "Error processing bulk bill payments", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            return build_response(len(results), "Bulk bill payments processed successfully", {
+            return build_response(len(results), "Bill Payment transactions processed successfully", {
                 "processed_invoices": results,
                 "journal_entry_line": journal_entry_line_response.data.get("message"),
                 "vendor_balance": vendor_balance_response.data.get("message")
             }, status.HTTP_201_CREATED)
             
             
-    # def get(self, request, pk=None):
+            
+    # def put(self, request, transaction_id):
     #     """
-    #     Retrieve all bill payment transactions or a specific bill payment record.
+    #     Updates an existing Bill Payment Transaction.
+    #     - Adjusts outstanding and paid amounts in PurchaseInvoiceOrders.
+    #     - Prevents overpayments.
+    #     - Updates related vendor balance and journal entry lines.
+    #     - Maintains proper order status transitions.
     #     """
-    #     try:
-    #         # If a specific bill payment ID (pk) is provided
-    #         if pk:
-    #             bill_payment = get_object_or_404(BillPaymentTransactions, pk=pk)
-    #             serializer = BillPaymentTransactionSerializer(bill_payment)
-    #             return build_response(
-    #                 1,
-    #                 "Bill Payment Transaction Details Retrieved Successfully",
-    #                 serializer.data,
-    #                 status.HTTP_200_OK
+    #     with transaction.atomic():
+    #         try:
+    #             # === Step 1: Fetch required statuses ===
+    #             try:
+    #                 pending_status = OrderStatuses.objects.get(status_name="Pending")
+    #                 completed_status = OrderStatuses.objects.get(status_name="Completed")
+    #             except ObjectDoesNotExist:
+    #                 return build_response(
+    #                     0,
+    #                     "Required order statuses 'Pending' or 'Completed' not found.",
+    #                     None,
+    #                     status.HTTP_404_NOT_FOUND
+    #                 )
+
+    #             # === Step 2: Fetch Bill Payment record ===
+    #             bill_payment = get_object_or_404(BillPaymentTransactions, transaction_id=transaction_id)
+    #             old_adjusted = bill_payment.adjusted_now
+
+    #             # === Step 3: Parse new adjusted amount ===
+    #             new_adjusted = Decimal(request.data.get('adjusted_now', old_adjusted)).quantize(Decimal('0.01'))
+    #             if new_adjusted < 0:
+    #                 return build_response(0, "Adjusted amount cannot be negative.", None, status.HTTP_406_NOT_ACCEPTABLE)
+
+    #             # === Step 4: Get related Purchase Invoice ===
+    #             invoice = bill_payment.purchase_invoice
+    #             if not invoice:
+    #                 return build_response(0, "No linked Purchase Invoice found.", None, status.HTTP_404_NOT_FOUND)
+
+    #             # === Step 5: Prevent overpayment ===
+    #             all_txns = BillPaymentTransactions.objects.filter(purchase_invoice=invoice)
+    #             total_existing = (
+    #                 BillPaymentTransactions.objects
+    #                 .filter(purchase_invoice=invoice)
+    #                 .exclude(payment_receipt_no=bill_payment.payment_receipt_no)
+    #                 .aggregate(total=Sum('adjusted_now'))
+    #                 .get('total') or Decimal('0.00')
     #             )
 
-    #         # Otherwise, return all bill payments
-    #         bill_payments = BillPaymentTransactions.objects.select_related(
-    #             'purchase_invoice', 'vendor', 'account'
-    #         ).order_by('-payment_date', '-created_at')
+    #             max_allowed = invoice.total_amount - total_existing
+    #             if new_adjusted > max_allowed:
+    #                 return build_response(
+    #                     0,
+    #                     f"Overpayment detected. Max allowed: ₹{max_allowed}",
+    #                     None,
+    #                     status.HTTP_422_UNPROCESSABLE_ENTITY
+    #                 )
 
-    #         serializer = BillPaymentTransactionSerializer(bill_payments, many=True)
-    #         return build_response(
-    #             len(serializer.data),
-    #             "Bill Payment Transactions Retrieved Successfully",
-    #             serializer.data,
-    #             status.HTTP_200_OK
-    #         )
+    #             # === Step 6: Update current bill payment ===
+    #             bill_payment.adjusted_now = new_adjusted
+    #             bill_payment.payment_method = request.data.get('payment_method', bill_payment.payment_method)
+    #             bill_payment.payment_status = request.data.get('payment_status', bill_payment.payment_status)
+    #             bill_payment.cheque_no = request.data.get('cheque_no', bill_payment.cheque_no)
+    #             bill_payment.save()
 
-    #     except Exception as e:
-    #         return build_response(
-    #             0,
-    #             "Something Went Wrong While Fetching Bill Payment Transactions",
-    #             str(e),
-    #             status.HTTP_500_INTERNAL_SERVER_ERROR
-    #         )
+    #             # === Step 7: Update invoice totals ===
+    #             paid = all_txns.aggregate(total=Sum('adjusted_now'))['total'] or Decimal('0.00')
+    #             invoice.paid_amount = paid
+    #             invoice.pending_amount = (invoice.total_amount - paid).quantize(Decimal('0.01'))
+    #             invoice.save()
+
+    #             # === Step 8: Update latest transaction’s outstanding ===
+    #             latest_txn = all_txns.latest('payment_date')
+    #             latest_txn.outstanding_amount = invoice.pending_amount
+    #             latest_txn.save(update_fields=['outstanding_amount'])
+
+    #             # === Step 9: Update invoice order status ===
+    #             invoice.order_status_id = completed_status if invoice.pending_amount == 0 else pending_status
+    #             invoice.save(update_fields=['order_status_id'])
+
+    #             # === Step 10: Update Vendor Account Ledger (Journal Entry) ===
+    #             account_instance = ChartOfAccounts.objects.get(account_id=request.data.get('account_id'))
+    #             vendor_instance = Vendor.objects.get(vendor_id=request.data.get('vendor_id'))
+
+    #             existing_balance = (
+    #                 JournalEntryLines.objects.filter(vendor_id=vendor_instance.vendor_id)
+    #                 .order_by('-created_at')
+    #                 .values_list('balance', flat=True)
+    #                 .first()
+    #             ) or Decimal('0.00')
+
+    #             reversal_balance = old_adjusted + existing_balance
+
+    #             # Reverse old entry
+    #             JournalEntryLines.objects.create(
+    #                 account_id=account_instance,
+    #                 debit=old_adjusted,
+    #                 credit=0.00,
+    #                 voucher_no=bill_payment.payment_receipt_no,
+    #                 description=f"Reversal of wrong entry for bill receipt {bill_payment.payment_receipt_no} - System Generated Entry",
+    #                 vendor_id=vendor_instance,
+    #                 balance=reversal_balance
+    #             )
+
+    #             time.sleep(1)
+
+    #             # Add corrected new entry
+    #             final_balance = reversal_balance - new_adjusted
+    #             JournalEntryLines.objects.create(
+    #                 account_id=account_instance,
+    #                 debit=0.00,
+    #                 credit=new_adjusted,
+    #                 voucher_no=bill_payment.payment_receipt_no,
+    #                 description=f"Updated bill receipt {bill_payment.payment_receipt_no} for Invoice {invoice.invoice_no} - revision recorded",
+    #                 vendor_id=vendor_instance,
+    #                 balance=final_balance
+    #             )
+
+    #             # === Step 11: Build response payload ===
+    #             response_data = {
+    #                 "payment_receipt_no": bill_payment.payment_receipt_no,
+    #                 "bill_no": invoice.invoice_no,
+    #                 "paid_amount": invoice.paid_amount,
+    #                 "pending_amount": invoice.pending_amount,
+    #                 "outstanding_amount": latest_txn.outstanding_amount,
+    #                 "payment_status": bill_payment.payment_status
+    #             }
+
+    #             return build_response(1, "Bill Payment Transaction updated successfully.", response_data, status.HTTP_200_OK)
+
+    #         except Exception as e:
+    #             traceback.print_exc()
+    #             return build_response(0, "Error occurred while updating Bill Payment Transaction", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, transaction_id):
+        with transaction.atomic():
+            try:
+                pending_status = OrderStatuses.objects.get(status_name="Pending")
+                completed_status = OrderStatuses.objects.get(status_name="Completed")
+            except ObjectDoesNotExist:
+                return build_response(
+                    1,
+                    "Required order statuses 'Pending' or 'Completed' not found.",
+                    None,
+                    status.HTTP_404_NOT_FOUND
+                )
+
+            # Step 1: Get Bill Payment Transaction record
+            bill_payment = get_object_or_404(BillPaymentTransactions, transaction_id=transaction_id)
+            old_amount = bill_payment.amount or Decimal("0.00")
+            old_adjusted = bill_payment.adjusted_now or Decimal("0.00")
+            old_outstanding = bill_payment.outstanding_amount or Decimal("0.00")
+
+            # Step 2: Extract new values
+            new_amount = Decimal(request.data.get("amount")).quantize(Decimal("0.01"))
+            adjusted_now = Decimal(request.data.get("adjusted_now", bill_payment.adjusted_now)).quantize(Decimal("0.01"))
+            payment_method = request.data.get("payment_method", bill_payment.payment_method)
+            payment_status = request.data.get("payment_status", bill_payment.payment_status)
+            payment_receipt_no = request.data.get("payment_receipt_no", bill_payment.payment_receipt_no)
+
+            # Step 3: Get related purchase invoice
+            invoice = bill_payment.purchase_invoice
+            all_txns = BillPaymentTransactions.objects.filter(purchase_invoice=invoice)
+
+            # Step 4: Calculate sum excluding this record to avoid duplication
+            total_of_amount = (
+                BillPaymentTransactions.objects.filter(purchase_invoice=invoice)
+                .exclude(payment_receipt_no=payment_receipt_no)
+                .aggregate(total_amount=Sum("amount"))
+                .get("total_amount") or Decimal("0.00")
+            )
+
+            max_allowed = invoice.total_amount - total_of_amount
+            if new_amount > max_allowed:
+                return build_response(
+                    1,
+                    f"Overpayment detected. Max allowed: ₹{max_allowed}",
+                    None,
+                    status.HTTP_422_UNPROCESSABLE_ENTITY
+                )
+
+            # === Step 5: Delta adjustment for outstanding amount ===
+            # payment_diff = adjusted_now - old_adjusted
+            # new_outstanding = (old_outstanding - payment_diff).quantize(Decimal("0.01"))
+            amount_diff = new_amount - old_amount
+            adjusted_diff = adjusted_now - old_adjusted
+
+            # The effective difference to subtract from outstanding
+            effective_diff = amount_diff if amount_diff != 0 else adjusted_diff
+
+            new_outstanding = (old_outstanding - effective_diff).quantize(Decimal("0.01"))
+
+            # Prevent negative values
+            if new_outstanding < 0:
+                new_outstanding = Decimal("0.00")
+            # Prevent negative values
+            if new_outstanding < 0:
+                new_outstanding = Decimal("0.00")
+
+            # === Step 6: Update payment transaction ===
+            bill_payment.amount = new_amount
+            bill_payment.adjusted_now = adjusted_now
+            bill_payment.outstanding_amount = new_outstanding
+            bill_payment.payment_status = payment_status
+            bill_payment.payment_method = payment_method
+            bill_payment.payment_receipt_no = payment_receipt_no
+            bill_payment.save()
+
+            # === Step 7: Update invoice totals ===
+            paid = all_txns.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+            invoice.paid_amount = paid
+            invoice.pending_amount = new_outstanding
+            invoice.order_status_id = completed_status if new_outstanding == 0 else pending_status
+            invoice.save(update_fields=["paid_amount", "pending_amount", "order_status_id"])
+
+            # === Step 8: Update Journal Entries ===
+            account_instance = ChartOfAccounts.objects.get(account_id=request.data.get("account_id"))
+            vendor_instance = Vendor.objects.get(vendor_id=request.data.get("vendor_id"))
+
+            # Get latest balance
+            existing_balance = (
+                JournalEntryLines.objects.filter(vendor_id=vendor_instance)
+                .order_by("-created_at")
+                .values_list("balance", flat=True)
+                .first()
+            ) or Decimal("0.00")
+
+            reversal_balance = old_amount + existing_balance
+
+            # Reversal entry
+            JournalEntryLines.objects.create(
+                account_id=account_instance,
+                debit=old_amount,
+                voucher_no=payment_receipt_no,
+                credit=Decimal("0.00"),
+                description=f"Reversal of wrong entry for bill receipt {payment_receipt_no} - System Generated Entry",
+                vendor_id=vendor_instance,
+                balance=reversal_balance,
+            )
+
+            time.sleep(1)
+
+            total_related = (
+                BillPaymentTransactions.objects.filter(payment_receipt_no=payment_receipt_no)
+                .exclude(purchase_invoice=invoice)
+                .aggregate(total=Sum("amount"))["total"]
+                or Decimal("0.00")
+            )
+
+            final_addition = total_related + new_amount
+            total_pending = (reversal_balance - new_amount).quantize(Decimal("0.01"))
+
+            # Create revision entry
+            JournalEntryLines.objects.create(
+                account_id=account_instance,
+                debit=Decimal("0.00"),
+                voucher_no=payment_receipt_no,
+                credit=final_addition,
+                description=f"Updated bill receipt {payment_receipt_no} for Invoice {invoice.invoice_no} - revision recorded",
+                vendor_id=vendor_instance,
+                balance=total_pending,
+            )
+
+            # === Step 9: Prepare response ===
+            response_data = {
+                "payment_receipt_no": bill_payment.payment_receipt_no,
+                "bill_no": invoice.invoice_no,
+                "paid_amount": invoice.paid_amount,
+                "pending_amount": invoice.pending_amount,
+                "outstanding_amount": new_outstanding,
+                "payment_status": payment_status,
+            }
+
+            return build_response(1, "Bill Payment Transaction updated successfully.", response_data, status.HTTP_200_OK)
+
 
 class FetchPurchaseInvoicesForPaymentReceiptTable(APIView):
     '''This API is used to fetch all information related to sales invoices for 

@@ -5767,24 +5767,113 @@ class PaymentTransactionAPIView(APIView):
             else:
                 return build_response(0, "No Invoices", [], status.HTTP_204_NO_CONTENT)
             
-    def get(self, request, customer_id=None):
+    # def get(self, request, customer_id=None):
+    #     records_all = request.query_params.get('records_all', 'false').lower() == 'true'
+
+    #     page = int(request.query_params.get('page', 1))
+    #     limit = int(request.query_params.get('limit', 10))
+
+    #     if customer_id:
+    #         # default db
+    #         payment_transactions = PaymentTransactions.objects.filter(
+    #             customer_id=customer_id
+    #         ).order_by('-created_at')
+
+    #         # secondary db (only if records_all=true)
+    #         mstcnl_payment_transactions = []
+    #         if records_all:
+    #             mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(
+    #                 customer_id=customer_id
+    #             ).order_by('-created_at')
+
+    #         combined = []
+
+    #         if payment_transactions.exists():
+    #             serializer_default = PaymentTransactionSerializer(payment_transactions, many=True)
+    #             combined.extend(serializer_default.data)
+
+    #         if mstcnl_payment_transactions:
+    #             serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_payment_transactions, many=True)
+    #             combined.extend(serializer_mstcnl.data)
+
+    #         total_count = len(combined)
+
+    #         if not combined:
+    #             return filter_response(0, "No payment transactions found for this customer", page, limit, total_count, None, status.HTTP_400_BAD_REQUEST)
+
+    #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
+
+    #     else:
+    #         # default db
+    #         transactions = PaymentTransactions.objects.all()
+
+    #         if request.query_params:
+    #             filterset = PaymentTransactionsReportFilter(request.GET, queryset=transactions)
+    #             if filterset.is_valid():
+    #                 transactions = filterset.qs
+
+    #         # secondary db (only if records_all=true)
+    #         mstcnl_transactions = []
+    #         if records_all:
+    #             mstcnl_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').all()
+
+    #         combined = []
+
+    #         if transactions.exists():
+    #             serializer_default = PaymentTransactionSerializer(transactions, many=True)
+    #             combined.extend(serializer_default.data)
+
+    #         if mstcnl_transactions:
+    #             serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_transactions, many=True)
+    #             combined.extend(serializer_mstcnl.data)
+
+    #         # ✅ total_count should reflect both DBs when records_all=true
+    #         if records_all:
+    #             total_count = PaymentTransactions.objects.count() + MstCnlPaymentTransactions.objects.using('mstcnl').count()
+    #         else:
+    #             total_count = PaymentTransactions.objects.count()
+
+    #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
+    
+#====================================================================================
+    def get(self, request, customer_id=None, transaction_id=None):
         records_all = request.query_params.get('records_all', 'false').lower() == 'true'
 
         page = int(request.query_params.get('page', 1))
         limit = int(request.query_params.get('limit', 10))
 
+        # ✅ CASE 1: FETCH SINGLE RECORD
+        if transaction_id:
+            try:
+                # Try default DB first
+                transaction = PaymentTransactions.objects.get(pk=transaction_id)
+                serializer = PaymentTransactionSerializer(transaction)
+                return build_response(1, "Payment Transaction (Default DB)", serializer.data, status.HTTP_200_OK)
+            except PaymentTransactions.DoesNotExist:
+                transaction = None
+
+            # Try secondary DB if records_all = true
+            if records_all:
+                try:
+                    transaction_mstcnl = MstCnlPaymentTransactions.objects.using('mstcnl').get(pk=transaction_id)
+                    serializer_mstcnl = MstCnlPaymentTransactionsSerializer(transaction_mstcnl)
+                    return build_response(1, "Payment Transaction (MSTCNL DB)", serializer_mstcnl.data, status.HTTP_200_OK)
+                except MstCnlPaymentTransactions.DoesNotExist:
+                    pass
+
+            return build_response(0, "Payment transaction not found.", None, status.HTTP_404_NOT_FOUND)
+
+        # ✅ CASE 2: FETCH MULTIPLE RECORDS (your existing logic)
         if customer_id:
-            # default db
             payment_transactions = PaymentTransactions.objects.filter(
                 customer_id=customer_id
-            ).order_by('is_deleted', '-created_at')
+            ).order_by('-created_at')
 
-            # secondary db (only if records_all=true)
             mstcnl_payment_transactions = []
             if records_all:
                 mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(
                     customer_id=customer_id
-                ).order_by('is_deleted', '-created_at')
+                ).order_by('-created_at')
 
             combined = []
 
@@ -5799,12 +5888,11 @@ class PaymentTransactionAPIView(APIView):
             total_count = len(combined)
 
             if not combined:
-                return filter_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND)
+                return filter_response(0, "No payment transactions found for this customer", page, limit, total_count, None, status.HTTP_400_BAD_REQUEST)
 
             return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 
         else:
-            # default db
             transactions = PaymentTransactions.objects.all()
 
             if request.query_params:
@@ -5812,7 +5900,6 @@ class PaymentTransactionAPIView(APIView):
                 if filterset.is_valid():
                     transactions = filterset.qs
 
-            # secondary db (only if records_all=true)
             mstcnl_transactions = []
             if records_all:
                 mstcnl_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').all()
@@ -5827,13 +5914,14 @@ class PaymentTransactionAPIView(APIView):
                 serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_transactions, many=True)
                 combined.extend(serializer_mstcnl.data)
 
-            # ✅ total_count should reflect both DBs when records_all=true
-            if records_all:
-                total_count = PaymentTransactions.objects.count() + MstCnlPaymentTransactions.objects.using('mstcnl').count()
-            else:
-                total_count = PaymentTransactions.objects.count()
+            total_count = (
+                PaymentTransactions.objects.count() +
+                (MstCnlPaymentTransactions.objects.using('mstcnl').count() if records_all else 0)
+            )
 
             return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
+
+#=====================================================================================
 
 
     # def get(self, request, customer_id=None):
