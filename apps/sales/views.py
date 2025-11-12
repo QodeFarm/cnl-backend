@@ -5480,10 +5480,30 @@ class PaymentTransactionAPIView(APIView):
         """
         data = request.data
         cust_data = data.get('customer')
-        customer_id = cust_data.get('customer_id').replace('-','')
+        
         account_data = data.get('account')
-        account_id = account_data.get('account_id').replace('-','')
+        
+        # Handle both string and dict cases
+        if isinstance(cust_data, dict):
+            customer_id = cust_data.get('customer_id') or cust_data.get('id')
+        else:
+            customer_id = cust_data
+
+        if isinstance(account_data, dict):
+            account_id = account_data.get('account_id') or account_data.get('id')
+        else:
+            account_id = account_data
+
+        # Clean up dashes if they exist
+        if customer_id:
+            customer_id = customer_id.replace('-', '')
+        if account_id:
+            account_id = account_id.replace('-', '')
+        
         description = data.get('description')
+        
+        # customer_id = cust_data.get('customer_id').replace('-','')
+        # account_id = account_data.get('account_id').replace('-','')
 
         # Validate account_id
         try:
@@ -6042,8 +6062,8 @@ class PaymentTransactionAPIView(APIView):
                     ).exclude(
                 invoice_no=payment_transactions.invoice_no)
                 
-                account_instance = ChartOfAccounts.objects.get(account_id=request.data.get('account_id'))
-                customer_instance = Customer.objects.get(customer_id=request.data.get('customer_id'))
+                account_instance = ChartOfAccounts.objects.get(account_id=request.data.get('account'))
+                customer_instance = Customer.objects.get(customer_id=request.data.get('customer'))
                 
                 existing_balance = (JournalEntryLines.objects.filter(customer_id=request.data.get('customer_id'))
                                                                                 .order_by('is_deleted', '-created_at')                   # most recent entry first
@@ -6078,7 +6098,7 @@ class PaymentTransactionAPIView(APIView):
                 balance=total_pending 
                 )
 
-                return build_response(1, response_data, None, status.HTTP_200_OK)    
+                return build_response(1, "Payment Transaction updated successfully", response_data, None, status.HTTP_200_OK)    
             else:
                 return build_response(1, f"Overpayment detected. Max allowed: ₹{max_allowed}", None, status.HTTP_422_UNPROCESSABLE_ENTITY)    
  
