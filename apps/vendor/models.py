@@ -167,3 +167,18 @@ class VendorAddress(models.Model):
 
     def __str__(self):
         return f'{self.vendor_address_id}_{self.address}'
+    
+    
+class VendorBalance(models.Model):
+    vendor_balance_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, db_column='vendor_id')
+    balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    last_updated = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'vendorbalance'
+
+    def __str__(self):
+        return f"VendorBalance {self.vendor_balance_id} for {self.vendor_id}"

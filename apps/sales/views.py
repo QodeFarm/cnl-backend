@@ -1,16 +1,7 @@
-from datetime import timedelta
-import json
-import time
-from django.db.models import Q
-
-
-from django.forms import model_to_dict
-from apps.users.models import User
-from itertools import chain
-from config.utils_db_router import set_db
 from config.utils_methods import update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
+from apps.finance.models import JournalEntryLines, PaymentTransaction
 from apps.customfields.serializers import CustomFieldValueSerializer
 from django.db.models import F,Q, Sum, F, ExpressionWrapper,Value
 from django_filters.rest_framework import DjangoFilterBackend
@@ -30,10 +21,11 @@ from decimal import Decimal, ROUND_HALF_UP
 from config.utils_db_router import set_db
 from rest_framework.views import APIView
 from django.forms import model_to_dict
+from django.db.models import Sum, Q
+from apps.users.models import User
 from django.utils import timezone
 from django.db import transaction
 from rest_framework import status
-from django.db.models import Sum
 from django.http import Http404
 from datetime import timedelta
 from django.apps import apps
@@ -47,7 +39,6 @@ import logging
 import uuid
 import json
 import time
-
 
 workflow_progression_dict = {}
 # Set up basic configuration for logging
@@ -1211,31 +1202,91 @@ class SaleOrderViewSet(APIView):
     #         logger.error(f"Error soft-deleting SaleOrder with ID {pk}: {str(e)}")
     #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale order and its related attachments and shipments.
-        Based on the sale_order_id, it checks the appropriate database and deletes the records.
+        Handles the deletion of a sale order and its related data.
+        Before deleting, checks if the sale order is linked to any transactional data
+        such as sale invoices or sale returns.
         """
         db_to_use = None
         try:
-            # Get the SaleOrder instance from the appropriate database
+            # Get the SaleOrder instance
             instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
 
-            # Delete related OrderAttachments, OrderShipments, and CustomFieldValues from the correct database
+            # --------------------------------------------
+            # 1️⃣  Check for linked transactional data
+            # --------------------------------------------
+            linked_invoice_exists = SaleInvoiceOrders.objects.filter(sale_order_id=pk, is_deleted=False).exists()
+            # linked_return_exists = SaleReturnOrders.objects.filter(sale_order_id=pk, is_deleted=False).exists()
+
+            if linked_invoice_exists:
+                # If the sale order is linked to invoices or returns, do not delete
+                logger.warning(f"SaleOrder with ID {pk} cannot be deleted as it has transactional data.")
+                return build_response(
+                    0,
+                    "Sale order cannot be deleted as it has transactional data",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+                
+            # # --------------------------------------------
+            # # 2️ Permanent Deletion for 'Other' & 'Completed'
+            # # --------------------------------------------
+            # if instance.sale_type_id == "1a9d6cdb-2416-4d49-afd7-292cc6fb41de" and instance.order_status_id == "717c922f-c092-4d40-94e7-6a12d7095600":
+            #     logger.info(f"SaleOrder {pk} (Other & Completed) is already replicated to mstcnl, skipping delete.")
+            #     return build_response(
+            #         0,
+            #         "Sale order already replicated to mstcnl; deletion skipped.",
+            #         [],
+            #         status.HTTP_400_BAD_REQUEST
+            #     )
+            
+            # --------------------------------------------
+            # 2️ Permanent Deletion for 'Other' & 'Completed'
+            # --------------------------------------------
+            try:
+                # Fetch the correct SaleType and OrderStatus objects dynamically
+                other_sale_type = SaleTypes.objects.using(db_to_use).get(name="Other")
+                completed_status = OrderStatuses.objects.using(db_to_use).get(status_name="Completed")
+
+                if (
+                    instance.sale_type_id == other_sale_type.sale_type_id
+                    and instance.order_status_id == completed_status.order_status_id
+                ):
+                    logger.info(f"SaleOrder {pk} (Other & Completed) is already replicated to mstcnl, skipping delete.")
+                    return build_response(
+                        0,
+                        "Sale order already replicated to mstcnl; deletion skipped.",
+                        [],
+                        status.HTTP_400_BAD_REQUEST
+                    )
+
+            except (SaleTypes.DoesNotExist, OrderStatuses.DoesNotExist) as e:
+                logger.error(f"Required SaleType or OrderStatus not found: {str(e)}")
+                return build_response(
+                    0,
+                    "Required SaleType ('Other') or OrderStatus ('Completed') not found.",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+
+            # --------------------------------------------
+            # 3 Delete related child data
+            # --------------------------------------------
             if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
             if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+
             if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
                 return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Delete the main SaleOrder instance from the correct database
-            # instance.delete(using=db_to_use)
-            # Delete the main CustomField instance
+            # --------------------------------------------
+            # 3️⃣  Mark main SaleOrder as deleted
+            # --------------------------------------------
             instance.is_deleted = True
             instance.save(using=db_to_use)
 
@@ -1245,9 +1296,48 @@ class SaleOrderViewSet(APIView):
         except SaleOrder.DoesNotExist:
             logger.warning(f"SaleOrder with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
             logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale order and its related attachments and shipments.
+    #     Based on the sale_order_id, it checks the appropriate database and deletes the records.
+    #     """
+    #     db_to_use = None
+    #     try:
+    #         # Get the SaleOrder instance from the appropriate database
+    #         instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
+
+    #         # Delete related OrderAttachments, OrderShipments, and CustomFieldValues from the correct database
+    #         if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    #         if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+    #         if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete the main SaleOrder instance from the correct database
+    #         # instance.delete(using=db_to_use)
+    #         # Delete the main CustomField instance
+    #         instance.is_deleted = True
+    #         instance.save(using=db_to_use)
+
+    #         logger.info(f"SaleOrder with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+    #     except SaleOrder.DoesNotExist:
+    #         logger.warning(f"SaleOrder with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleOrder with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
     # Handling POST requests for creating
@@ -2123,7 +2213,7 @@ class SaleInvoiceOrdersViewSet(APIView):
                 else:
                     exclude_q = Q(order_status_id__in=canceled_status_ids)
 
-                saleinvoiceorder = saleinvoiceorder.exclude(exclude_q)
+                saleinvoiceorder = saleinvoiceorder.exclude(exclude_q) 
 
                 data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
 
@@ -2522,94 +2612,282 @@ class SaleInvoiceOrdersViewSet(APIView):
         except Exception as e:
             logger.exception("Error retrieving related data for model %s with filter %s=%s: %s", model.__name__, filter_field, filter_value, str(e))
             return []
+        
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the cancellation of a sale invoice order:
+    #     - Marks it as 'Cancelled' instead of deleting
+    #     - Reverts products back to inventory
+    #     - Creates reversing ledger entry
+    #     """
+    #     db_to_use = None
+    #     try:
+    #         # Determine which database to use
+    #         try:
+    #             SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
+    #             set_db('mstcnl')
+    #             db_to_use = 'mstcnl'
+    #         except SaleInvoiceOrders.DoesNotExist:
+    #             SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
+    #             set_db('default')
+    #             db_to_use = 'default'
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    #     try:
+    #         # Get the SaleInvoiceOrders instance
+    #         instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
+
+    #         # Get the "Cancelled" status
+    #         try:
+    #             canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
+    #         except OrderStatuses.DoesNotExist:
+    #             logger.error("'Cancelled' status not found in OrderStatuses table")
+    #             return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
+
+    #         # --- STEP 1: Update invoice status to "Cancelled"
+    #         instance.order_status_id = canceled_status
+    #         instance.save(using=db_to_use)
+    #         invoice_no = instance.invoice_no
+    #         customer_id = instance.customer_id
+
+    #         # --- STEP 2: Revert products back to inventory
+    #         try:
+    #             invoice_items = SaleInvoiceItems.objects.using(db_to_use).filter(sale_invoice_id=instance.sale_invoice_id)
+
+    #             for item in invoice_items:
+    #                 product = item.product_id  # ForeignKey to Product
+    #                 # Safely increase the available quantity
+    #                 product.balance = F('balance') + item.quantity
+    #                 product.save(using=db_to_use)
+
+    #             logger.info(f"Reverted {len(invoice_items)} products to inventory for cancelled invoice {invoice_no}")
+
+    #         except Exception as e:
+    #             logger.error(f"Error reverting products to inventory for invoice {invoice_no}: {str(e)}")
+
+    #         # --- STEP 3: Create offsetting ledger entry
+    #         existing_balance = (
+    #             JournalEntryLines.objects.filter(customer_id=customer_id)
+    #             .order_by('is_deleted', '-created_at')
+    #             .values_list('balance', flat=True)
+    #             .first()
+    #         ) or Decimal('0.00')
+
+    #         latest_balance = existing_balance - Decimal(instance.total_amount)
+
+    #         try:
+    #             journal_entry = JournalEntryLines.objects.using(db_to_use).create(
+    #                 description=f"Cancellation of invoice {invoice_no}",
+    #                 credit=instance.total_amount,
+    #                 debit=0,
+    #                 voucher_no=invoice_no,
+    #                 customer_id=customer_id,
+    #                 balance=latest_balance
+    #             )
+    #             logger.info(f"Created offsetting credit entry of {instance.total_amount} for cancelled invoice {invoice_no}")
+    #         except Exception as e:
+    #             logger.error(f"Error creating offsetting credit entry: {str(e)}")
+
+    #         # --- STEP 4: Return success response
+    #         return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
+
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error cancelling SaleInvoiceOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Invoice cancellation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale invoice order and its related attachments and shipments.
+        Handles the cancellation or permanent deletion of a sale invoice order:
+        - If bill_type='Others' & order_status='Completed' → permanently delete and replicate
+        - Otherwise → mark as 'Cancelled', revert stock, and create ledger reversal
         """
         db_to_use = None
         try:
-            # Check which database the SaleInvoiceOrders belongs to
-            SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
-            set_db('mstcnl')
-            db_to_use = 'mstcnl'
-        except SaleInvoiceOrders.DoesNotExist:
+            # Determine which database to use
             try:
+                SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
+                set_db('mstcnl')
+                db_to_use = 'mstcnl'
+            except SaleInvoiceOrders.DoesNotExist:
                 SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
                 set_db('default')
                 db_to_use = 'default'
-            except SaleInvoiceOrders.DoesNotExist:
-                logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
-                return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except SaleInvoiceOrders.DoesNotExist:
+            logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
         try:
-            # Get the SaleInvoiceOrders instance
             instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
-            
-             # Get or create "Canceled" order status
-            canceled_status = None
+
+            # ✅ STEP 0: Check if this invoice qualifies for PERMANENT DELETION
+            if instance.bill_type == "Others" and instance.order_status_id.status_name == "Completed":
+                logger.info(f"Deleting permanently: Invoice {instance.invoice_no} (bill_type='Others', status='Completed')")
+
+                # First replicate record to mstcnl if needed
+                try:
+                    result = replicate_sale_invoice_to_mstcnl(instance.sale_invoice_id)
+                    logger.info(f"Replication result for invoice {instance.invoice_no}: {result}")
+                except Exception as e:
+                    logger.error(f"Error replicating invoice {instance.invoice_no} to mstcnl: {str(e)}")
+
+                # Now permanently delete from the current database
+                instance.delete(using=db_to_use)
+                logger.info(f"Invoice {instance.invoice_no} permanently deleted from {db_to_use} database.")
+
+                return build_response(1, "Invoice permanently deleted successfully", [], status.HTTP_204_NO_CONTENT)
+
+            # ---------------------------------------------
+            # Default Cancellation Flow (Existing Logic)
+            # ---------------------------------------------
             try:
                 canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
             except OrderStatuses.DoesNotExist:
-                logger.error("'Cancelled' status found in OrderStatuses table")
+                logger.error("'Cancelled' status not found in OrderStatuses table")
                 return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
-            
-            # Store the invoice amount before marking as canceled
-            # invoice_amount = instance.total_amount
-            customer_id = instance.customer_id
-            invoice_no = instance.invoice_no
-            
-            # Update the invoice status to "Cancelled" instead of deleting
+
             instance.order_status_id = canceled_status
             instance.save(using=db_to_use)
-            existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
-                                                                            .order_by('is_deleted', '-created_at')                   # most recent entry first
-                                                                            .values_list('balance', flat=True)         # get only the balance field
-                                                                            .first()) or Decimal('0.00')               # grab the first result
-            # new_balance =  Decimal(instance.total_amount) - Decimal(existing_balance)
-            latest_balance = existing_balance - Decimal(instance.total_amount)
+            invoice_no = instance.invoice_no
+            customer_id = instance.customer_id
 
-            
-            # Create offsetting credit entry in the finance system
+            # --- STEP 2: Revert products back to inventory
             try:
-                # Here we would typically call your finance module to create a credit entry
-                # This is a placeholder - implement according to your actual finance module
-                journal_entry = JournalEntryLines.objects.using(db_to_use).create(
+                invoice_items = SaleInvoiceItems.objects.using(db_to_use).filter(sale_invoice_id=instance.sale_invoice_id)
+                for item in invoice_items:
+                    product = item.product_id
+                    product.balance = F('balance') + item.quantity
+                    product.save(using=db_to_use)
+                logger.info(f"Reverted {len(invoice_items)} products to inventory for cancelled invoice {invoice_no}")
+            except Exception as e:
+                logger.error(f"Error reverting products to inventory for invoice {invoice_no}: {str(e)}")
+
+            # --- STEP 3: Create offsetting ledger entry
+            existing_balance = (
+                JournalEntryLines.objects.filter(customer_id=customer_id)
+                .order_by('is_deleted', '-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+
+            latest_balance = existing_balance - Decimal(instance.total_amount)
+            try:
+                JournalEntryLines.objects.using(db_to_use).create(
                     description=f"Cancellation of invoice {invoice_no}",
                     credit=instance.total_amount,
                     debit=0,
                     voucher_no=invoice_no,
                     customer_id=customer_id,
-                    balance=latest_balance  
+                    balance=latest_balance
                 )
-                logger.info(f"Created offsetting credit entry of {instance.total_amount} for canceled invoice {invoice_no}")
-
-                
+                logger.info(f"Created offsetting credit entry of {instance.total_amount} for cancelled invoice {invoice_no}")
             except Exception as e:
                 logger.error(f"Error creating offsetting credit entry: {str(e)}")
-            
-            # Return success response for cancellation
+
             return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
-            
-            # # Delete related OrderAttachments and OrderShipments
-            # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
-            #     return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
-            #     return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            # if not delete_multi_instance(pk, SaleInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
-            #     return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # # Delete the main SaleInvoiceOrder instance from the correct database
-            # instance.delete(using=db_to_use)
-
-            # logger.info(f"SaleInvoiceOrders with ID {pk} deleted successfully.")
-            # return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
         except SaleInvoiceOrders.DoesNotExist:
             logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting SaleInvoiceOrders with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error cancelling SaleInvoiceOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Invoice cancellation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale invoice order and its related attachments and shipments.
+    #     """
+    #     db_to_use = None
+    #     try:
+    #         # Check which database the SaleInvoiceOrders belongs to
+    #         SaleInvoiceOrders.objects.using('mstcnl').get(sale_invoice_id=pk)
+    #         set_db('mstcnl')
+    #         db_to_use = 'mstcnl'
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         try:
+    #             SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
+    #             set_db('default')
+    #             db_to_use = 'default'
+    #         except SaleInvoiceOrders.DoesNotExist:
+    #             logger.warning(f"Sale Invoice Orders with ID {pk} does not exist in any database.")
+    #             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     try:
+    #         # Get the SaleInvoiceOrders instance
+    #         instance = SaleInvoiceOrders.objects.using(db_to_use).get(pk=pk)
+            
+    #          # Get or create "Canceled" order status
+    #         canceled_status = None
+    #         try:
+    #             canceled_status = OrderStatuses.objects.using(db_to_use).get(status_name='Cancelled')
+    #         except OrderStatuses.DoesNotExist:
+    #             logger.error("'Cancelled' status found in OrderStatuses table")
+    #             return build_response(0, "Cannot cancel invoice - required status not found", [], status.HTTP_400_BAD_REQUEST)
+            
+    #         # Store the invoice amount before marking as canceled
+    #         # invoice_amount = instance.total_amount
+    #         customer_id = instance.customer_id
+    #         invoice_no = instance.invoice_no
+            
+    #         # Update the invoice status to "Cancelled" instead of deleting
+    #         instance.order_status_id = canceled_status
+    #         instance.save(using=db_to_use)
+    #         existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
+    #                                                                         .order_by('is_deleted', '-created_at')                   # most recent entry first
+    #                                                                         .values_list('balance', flat=True)         # get only the balance field
+    #                                                                         .first()) or Decimal('0.00')               # grab the first result
+    #         # new_balance =  Decimal(instance.total_amount) - Decimal(existing_balance)
+    #         latest_balance = existing_balance - Decimal(instance.total_amount)
+
+            
+    #         # Create offsetting credit entry in the finance system
+    #         try:
+    #             # Here we would typically call your finance module to create a credit entry
+    #             # This is a placeholder - implement according to your actual finance module
+    #             journal_entry = JournalEntryLines.objects.using(db_to_use).create(
+    #                 description=f"Cancellation of invoice {invoice_no}",
+    #                 credit=instance.total_amount,
+    #                 debit=0,
+    #                 voucher_no=invoice_no,
+    #                 customer_id=customer_id,
+    #                 balance=latest_balance  
+    #             )
+    #             logger.info(f"Created offsetting credit entry of {instance.total_amount} for canceled invoice {invoice_no}")
+
+                
+    #         except Exception as e:
+    #             logger.error(f"Error creating offsetting credit entry: {str(e)}")
+            
+    #         # Return success response for cancellation
+    #         return build_response(1, "Invoice cancelled successfully", [], status.HTTP_200_OK)
+            
+    #         # # Delete related OrderAttachments and OrderShipments
+    #         # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderAttachments, main_model_field_name='order_id'):
+    #         #     return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         # if not delete_multi_instance(pk, SaleInvoiceOrders, OrderShipments, main_model_field_name='order_id'):
+    #         #     return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         # if not delete_multi_instance(pk, SaleInvoiceOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #         #     return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # # Delete the main SaleInvoiceOrder instance from the correct database
+    #         # instance.delete(using=db_to_use)
+
+    #         # logger.info(f"SaleInvoiceOrders with ID {pk} deleted successfully.")
+    #         # return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except SaleInvoiceOrders.DoesNotExist:
+    #         logger.warning(f"SaleInvoiceOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleInvoiceOrders with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     # Handling POST requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
@@ -3267,35 +3545,120 @@ class SaleReturnOrdersViewSet(APIView):
                              model.__name__, filter_field, filter_value, str(e))
             return []
 
+    # @transaction.atomic
+    # def delete(self, request, pk, *args, **kwargs):
+    #     """
+    #     Handles the deletion of a sale return order and its related attachments and shipments.
+    #     """
+    #     try:
+    #         # Get the SaleReturnOrders instance
+    #         instance = SaleReturnOrders.objects.get(pk=pk)
+
+    #         # Delete related OrderAttachments and OrderShipments
+    #         if not delete_multi_instance(pk, SaleReturnOrders, OrderAttachments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, SaleReturnOrders, OrderShipments, main_model_field_name='order_id'):
+    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    #         if not delete_multi_instance(pk, SaleReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
+    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         # Delete the main SaleOrder instance
+    #         instance.is_deleted=True 
+    #         instance.save()
+
+    #         logger.info(f"SaleReturnOrders with ID {pk} deleted successfully.")
+    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+    #     except SaleReturnOrders.DoesNotExist:
+    #         logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
+    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+    #     except Exception as e:
+    #         logger.error(f"Error deleting SaleReturnOrder with ID {pk}: {str(e)}")
+    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Handles the deletion of a sale return order and its related attachments and shipments.
+        Handles the cancellation of a Sale Return order:
+        - Marks it as 'Cancelled' instead of deleting
+        - If Damaged: no inventory update, no ledger entry
+        - If Wrong Product: revert inventory + create reversal ledger entry
         """
         try:
-            # Get the SaleReturnOrders instance
+            # --- Step 1: Get the SaleReturnOrders instance
             instance = SaleReturnOrders.objects.get(pk=pk)
 
-            # Delete related OrderAttachments and OrderShipments
-            if not delete_multi_instance(pk, SaleReturnOrders, OrderAttachments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleReturnOrders, OrderShipments, main_model_field_name='order_id'):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-            if not delete_multi_instance(pk, SaleReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
-                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # --- Step 2: Get or verify the 'Cancelled' status
+            try:
+                canceled_status = OrderStatuses.objects.get(status_name='Cancelled')
+            except OrderStatuses.DoesNotExist:
+                logger.error("'Cancelled' status not found in OrderStatuses table")
+                return build_response(0, "Cannot cancel sale return - required status not found", [], status.HTTP_400_BAD_REQUEST)
 
-            # Delete the main SaleOrder instance
-            instance.is_deleted=True 
+            # --- Step 3: Mark the return as Cancelled
+            instance.order_status_id = canceled_status
             instance.save()
 
-            logger.info(f"SaleReturnOrders with ID {pk} deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            return_reason = getattr(instance, 'return_reason', None)
+            invoice_no = getattr(instance, 'return_no', None)
+            customer_id = instance.customer_id
+
+            logger.info(f"Sale Return {invoice_no} marked as Cancelled (Reason: {return_reason})")
+
+            # --- Step 4: Handle based on reason
+            if return_reason and return_reason.lower() == 'damaged':
+                # Skip inventory update & ledger action
+                logger.info(f"Skipping inventory and ledger actions for damaged return {invoice_no}")
+
+            elif return_reason and return_reason.lower() == 'wrong product':
+                # --- Step 4a: Revert products back to inventory
+                try:
+                    return_items = SaleReturnItems.objects.filter(sale_return_id=instance.sale_return_id)
+                    for item in return_items:
+                        product = item.product_id  # FK to Product
+                        product.balance = F('balance') + item.quantity
+                        product.save()
+
+                    logger.info(f"Reverted {len(return_items)} products to inventory for cancelled return {invoice_no}")
+                except Exception as e:
+                    logger.error(f"Error reverting products to inventory for return {invoice_no}: {str(e)}")
+
+                # --- Step 4b: Create reversing ledger entry
+                try:
+                    existing_balance = (
+                        JournalEntryLines.objects.filter(customer_id=customer_id)
+                        .order_by('is_deleted', '-created_at')
+                        .values_list('balance', flat=True)
+                        .first()
+                    ) or Decimal('0.00')
+
+                    latest_balance = existing_balance - Decimal(instance.total_amount)
+
+                    JournalEntryLines.objects.create(
+                        description=f"Cancellation of sale return {invoice_no}",
+                        credit=instance.total_amount,
+                        debit=0,
+                        voucher_no=invoice_no,
+                        customer_id=customer_id,
+                        balance=latest_balance
+                    )
+
+                    logger.info(f"Created reversal ledger entry for cancelled sale return {invoice_no}")
+                except Exception as e:
+                    logger.error(f"Error creating ledger reversal entry for return {invoice_no}: {str(e)}")
+
+            else:
+                logger.warning(f"Unknown or missing return reason for sale return {invoice_no}. No additional actions taken.")
+
+            # --- Step 5: Success response
+            return build_response(1, "Sale Return cancelled successfully", [], status.HTTP_200_OK)
+
         except SaleReturnOrders.DoesNotExist:
             logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error deleting SaleReturnOrder with ID {pk}: {str(e)}")
-            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error cancelling SaleReturnOrders with ID {pk}: {str(e)}")
+            return build_response(0, "Sale return cancellation failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
     @transaction.atomic
     def patch(self, request, pk, *args, **kwargs):
@@ -5445,19 +5808,108 @@ class PaymentTransactionAPIView(APIView):
             else:
                 return build_response(0, "No Invoices", [], status.HTTP_204_NO_CONTENT)
             
-    def get(self, request, customer_id=None):
+    # def get(self, request, customer_id=None):
+    #     records_all = request.query_params.get('records_all', 'false').lower() == 'true'
+
+    #     page = int(request.query_params.get('page', 1))
+    #     limit = int(request.query_params.get('limit', 10))
+
+    #     if customer_id:
+    #         # default db
+    #         payment_transactions = PaymentTransactions.objects.filter(
+    #             customer_id=customer_id
+    #         ).order_by('-created_at')
+
+    #         # secondary db (only if records_all=true)
+    #         mstcnl_payment_transactions = []
+    #         if records_all:
+    #             mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(
+    #                 customer_id=customer_id
+    #             ).order_by('-created_at')
+
+    #         combined = []
+
+    #         if payment_transactions.exists():
+    #             serializer_default = PaymentTransactionSerializer(payment_transactions, many=True)
+    #             combined.extend(serializer_default.data)
+
+    #         if mstcnl_payment_transactions:
+    #             serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_payment_transactions, many=True)
+    #             combined.extend(serializer_mstcnl.data)
+
+    #         total_count = len(combined)
+
+    #         if not combined:
+    #             return filter_response(0, "No payment transactions found for this customer", page, limit, total_count, None, status.HTTP_400_BAD_REQUEST)
+
+    #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
+
+    #     else:
+    #         # default db
+    #         transactions = PaymentTransactions.objects.all()
+
+    #         if request.query_params:
+    #             filterset = PaymentTransactionsReportFilter(request.GET, queryset=transactions)
+    #             if filterset.is_valid():
+    #                 transactions = filterset.qs
+
+    #         # secondary db (only if records_all=true)
+    #         mstcnl_transactions = []
+    #         if records_all:
+    #             mstcnl_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').all()
+
+    #         combined = []
+
+    #         if transactions.exists():
+    #             serializer_default = PaymentTransactionSerializer(transactions, many=True)
+    #             combined.extend(serializer_default.data)
+
+    #         if mstcnl_transactions:
+    #             serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_transactions, many=True)
+    #             combined.extend(serializer_mstcnl.data)
+
+    #         # ✅ total_count should reflect both DBs when records_all=true
+    #         if records_all:
+    #             total_count = PaymentTransactions.objects.count() + MstCnlPaymentTransactions.objects.using('mstcnl').count()
+    #         else:
+    #             total_count = PaymentTransactions.objects.count()
+
+    #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
+    
+#====================================================================================
+    def get(self, request, customer_id=None, transaction_id=None):
         records_all = request.query_params.get('records_all', 'false').lower() == 'true'
 
         page = int(request.query_params.get('page', 1))
         limit = int(request.query_params.get('limit', 10))
 
+        # ✅ CASE 1: FETCH SINGLE RECORD
+        if transaction_id:
+            try:
+                # Try default DB first
+                transaction = PaymentTransactions.objects.get(pk=transaction_id)
+                serializer = PaymentTransactionSerializer(transaction)
+                return build_response(1, "Payment Transaction (Default DB)", serializer.data, status.HTTP_200_OK)
+            except PaymentTransactions.DoesNotExist:
+                transaction = None
+
+            # Try secondary DB if records_all = true
+            if records_all:
+                try:
+                    transaction_mstcnl = MstCnlPaymentTransactions.objects.using('mstcnl').get(pk=transaction_id)
+                    serializer_mstcnl = MstCnlPaymentTransactionsSerializer(transaction_mstcnl)
+                    return build_response(1, "Payment Transaction (MSTCNL DB)", serializer_mstcnl.data, status.HTTP_200_OK)
+                except MstCnlPaymentTransactions.DoesNotExist:
+                    pass
+
+            return build_response(0, "Payment transaction not found.", None, status.HTTP_404_NOT_FOUND)
+
+        # ✅ CASE 2: FETCH MULTIPLE RECORDS (your existing logic)
         if customer_id:
-            # default db
             payment_transactions = PaymentTransactions.objects.filter(
                 customer_id=customer_id
             ).order_by( '-created_at')
 
-            # secondary db (only if records_all=true)
             mstcnl_payment_transactions = []
             if records_all:
                 mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(
@@ -5477,14 +5929,11 @@ class PaymentTransactionAPIView(APIView):
             total_count = len(combined)
 
             if not combined:
-                return filter_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND)
-                # return filter_response(0, "No payment transactions found for this customer", None, page, limit,  status.HTTP_404_NOT_FOUND)
-
+                return filter_response(0, "No payment transactions found for this customer", page, limit, total_count, None, status.HTTP_400_BAD_REQUEST)
 
             return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 
         else:
-            # default db
             transactions = PaymentTransactions.objects.all()
 
             if request.query_params:
@@ -5492,7 +5941,6 @@ class PaymentTransactionAPIView(APIView):
                 if filterset.is_valid():
                     transactions = filterset.qs
 
-            # secondary db (only if records_all=true)
             mstcnl_transactions = []
             if records_all:
                 mstcnl_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').all()
@@ -5507,13 +5955,14 @@ class PaymentTransactionAPIView(APIView):
                 serializer_mstcnl = MstCnlPaymentTransactionsSerializer(mstcnl_transactions, many=True)
                 combined.extend(serializer_mstcnl.data)
 
-            # ✅ total_count should reflect both DBs when records_all=true
-            if records_all:
-                total_count = PaymentTransactions.objects.count() + MstCnlPaymentTransactions.objects.using('mstcnl').count()
-            else:
-                total_count = PaymentTransactions.objects.count()
+            total_count = (
+                PaymentTransactions.objects.count() +
+                (MstCnlPaymentTransactions.objects.using('mstcnl').count() if records_all else 0)
+            )
 
             return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
+
+#=====================================================================================
 
 
     # def get(self, request, customer_id=None):
@@ -5572,62 +6021,108 @@ class PaymentTransactionAPIView(APIView):
     #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 
     def put(self, request, transaction_id):
-        try:
-            # Already fetched earlier (line 2)
-            pending_status = OrderStatuses.objects.get(status_name="Pending")
-            completed_status = OrderStatuses.objects.get(status_name="Completed")
-        except ObjectDoesNotExist:
-            return build_response(1, "Required order statuses 'Pending' or 'Completed' not found.", None, status.HTTP_404_NOT_FOUND)    
-        
-        # Step 1: Get transaction object
-        transaction = get_object_or_404(PaymentTransactions, transaction_id=transaction_id)
-        old_amount = transaction.amount
-        new_amount = Decimal(request.data.get('amount')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        with transaction.atomic():                        
+            try:
+                pending_status = OrderStatuses.objects.get(status_name="Pending")
+                completed_status = OrderStatuses.objects.get(status_name="Completed")
+            except ObjectDoesNotExist:
+                return build_response(1, "Required order statuses 'Pending' or 'Completed' not found.", None, status.HTTP_404_NOT_FOUND)
+            
+            # Step 1: Get payment_transactions object
+            payment_transactions = get_object_or_404(PaymentTransactions, transaction_id=transaction_id)
+            old_amount = payment_transactions.amount
+            new_amount = Decimal(request.data.get('amount')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+  
+            # Step 2: Get related invoice (Model object, not dict)
+            invoice = SaleInvoiceOrders.objects.get(invoice_no=payment_transactions.invoice_no)
+            all_txns = PaymentTransactions.objects.filter(invoice_no=invoice.invoice_no)
+            total_of_amount = (PaymentTransactions.objects
+                                .filter(invoice_no=invoice.invoice_no)
+                                .exclude(payment_receipt_no=request.data.get('payment_receipt_no'))
+                                .aggregate(total_amount=Sum('amount'))
+                                .get('total_amount') or Decimal('0.00')  )
+            
+            max_allowed = invoice.total_amount - total_of_amount
+            if new_amount <= max_allowed:
+                # Step 3: Calculate delta
+                delta = new_amount - old_amount
 
-        
-        # Step 2: Get related invoice (Model object, not dict)
-        invoice = SaleInvoiceOrders.objects.get(invoice_no=transaction.invoice_no)
-        all_txns = PaymentTransactions.objects.filter(invoice_no=invoice.invoice_no)
+                # Step 4: Update transaction
+                payment_transactions.amount = new_amount
+                payment_transactions.payment_status = request.data.get('payment_status', payment_transactions.payment_status)
+                payment_transactions.save()
 
+                # Step 5: Update sale invoice amounts
+                paid = all_txns.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                invoice.paid_amount = paid
+                invoice.pending_amount = invoice.total_amount - paid
 
-        # Step 3: Calculate delta
-        delta = new_amount - old_amount
+                # Step 6: Update latest transaction's outstanding
+                latest_txn = all_txns.latest('payment_date')
+                latest_txn.outstanding_amount = invoice.pending_amount
+                latest_txn.save()
 
-        # Step 4: Update transaction
-        transaction.amount = new_amount
-        transaction.payment_status = request.data.get('payment_status', transaction.payment_status)
-        transaction.save()
+                # Step 7: Update order_status_id from sale_invoice_orders table
+                # Step 7: Assign actual model instance
+                invoice.order_status_id = completed_status if invoice.pending_amount == 0 else pending_status
+                invoice.save()
+                
+                # Step 8: Return updated data
+                response_data = {
+                    **request.data,
+                    "payment_receipt_no": payment_transactions.payment_receipt_no,
+                    "invoice_no": invoice.invoice_no,
+                    "paid_amount": invoice.paid_amount,
+                    "pending_amount": invoice.pending_amount,
+                    "outstanding_amount": latest_txn.outstanding_amount
+                }
 
-        # Step 5: Update sale invoice amounts
-        paid = all_txns.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        invoice.paid_amount = paid
-        invoice.pending_amount = invoice.total_amount - paid
+                #==========*************Updating ACCOUNT LEDGER ENTRY *************==========
+                Pay_transactions = PaymentTransactions.objects.filter(
+                        payment_receipt_no=payment_transactions.payment_receipt_no
+                    ).exclude(
+                invoice_no=payment_transactions.invoice_no)
+                
+                account_instance = ChartOfAccounts.objects.get(account_id=request.data.get('account_id'))
+                customer_instance = Customer.objects.get(customer_id=request.data.get('customer_id'))
+                
+                existing_balance = (JournalEntryLines.objects.filter(customer_id=request.data.get('customer_id'))
+                                                                                .order_by('is_deleted', '-created_at')                   # most recent entry first
+                                                                                .values_list('balance', flat=True)         # get only the balance field
+                                                                                .first() ) or Decimal('0.00')                               # grab the first result
+                
+                Reversal_of_wrong_entry_balance = old_amount  +  existing_balance
 
-        # Step 6: Update order_status
-        # Step 6: Assign actual model instance
-        invoice.order_status = completed_status if invoice.pending_amount <= 0 else pending_status
-        invoice.save()
+                #Creating JournalEntryLines record for Reversal of wrong entry
+                JournalEntryLines.objects.create(
+                account_id=  account_instance,  
+                debit=old_amount,
+                voucher_no = request.data.get('payment_receipt_no'),
+                credit=0.00,
+                description=f"Reversal of wrong entry for payment receipt {request.data.get('payment_receipt_no')} - System Generated Entry",
+                customer_id=customer_instance,
+                balance= Reversal_of_wrong_entry_balance
+                )
+                time.sleep(1)
+                table_addition = Pay_transactions.aggregate(total=models.Sum('amount'))['total'] or Decimal('0.00')
+                final_addition = table_addition + new_amount
+                total_pending = Decimal(Reversal_of_wrong_entry_balance) - Decimal(new_amount)                
 
-        # Step 7: Update latest transaction's outstanding
-        latest_txn = all_txns.latest('payment_date')
-        latest_txn.outstanding_amount = invoice.pending_amount
-        latest_txn.save()
+                # Step 3: Creating JournalEntryLines record
+                JournalEntryLines.objects.create(
+                account_id=  account_instance,  
+                debit=0.00,
+                voucher_no = request.data.get('payment_receipt_no'),
+                credit=final_addition,
+                description=f"Updated payment receipt {request.data.get('payment_receipt_no')} for Invoice {payment_transactions.invoice_no} - revision recorded",
+                customer_id=customer_instance,
+                balance=total_pending 
+                )
 
-        print("request.data :", request.data)
-        # journal_entry_line_response = JournalEntryLinesAPIView.post(self, customer_id, account_id, input_amount, description, total_pending, transaction.payment_receipt_no)
-
-        # Step 8: Return updated data
-        response_data = {
-            **request.data,
-            "payment_receipt_no": transaction.payment_receipt_no,
-            "invoice_no": invoice.invoice_no,
-            "paid_amount": invoice.paid_amount,
-            "pending_amount": invoice.pending_amount,
-            "outstanding_amount": latest_txn.outstanding_amount
-        }
-
-        return Response(response_data, status=status.HTTP_200_OK)
-    
+                return build_response(1, response_data, None, status.HTTP_200_OK)    
+            else:
+                return build_response(1, f"Overpayment detected. Max allowed: ₹{max_allowed}", None, status.HTTP_422_UNPROCESSABLE_ENTITY)    
+ 
     # def get(self, request, customer_id = None):
     #     if customer_id:
     #         '''Fetch All Payment Transactions for a Customer'''
@@ -5865,15 +6360,15 @@ def replicate_sale_invoice_to_mstcnl(invoice_id):
 
             print("Completed whole sale invoice and payment transactions in mstcnl")
             #  10) Delete from default DB
-            # time.sleep(1)
+            time.sleep(1)
 
-            # SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
-            # OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
-            # OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
-            # CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
-            # SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
+            SaleInvoiceItems.objects.using('default').filter(sale_invoice_id=invoice_id).delete()
+            OrderShipments.objects.using('default').filter(order_id=invoice_id).delete()
+            OrderAttachments.objects.using('default').filter(order_id=invoice_id).delete()
+            CustomFieldValue.objects.using('default').filter(custom_id=invoice_id).delete()
+            SaleInvoiceOrders.objects.using('default').filter(pk=invoice_id).delete()
 
-            # return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
+            return {"message": f"Sale Invoice {invoice_id} moved to mstcnl DB successfully"}
 
     except Exception as e:
         import traceback
@@ -6028,13 +6523,13 @@ def replicate_sale_order_to_mstcnl(sale_order_id):
                 
             # # #print(" CustomFields replicated to mstcnl")
             
-            # time.sleep(1)
+            time.sleep(1)
                 
-            # SaleOrderItems.objects.using('default').filter(sale_order_id=sale_order_id).delete()
-            # OrderShipments.objects.using('default').filter(order_id=sale_order_id).delete()
-            # OrderAttachments.objects.using('default').filter(order_id=sale_order_id).delete()
-            # CustomFieldValue.objects.using('default').filter(custom_id=sale_order_id).delete()
-            # SaleOrder.objects.using('default').filter(pk=sale_order_id).delete()
+            SaleOrderItems.objects.using('default').filter(sale_order_id=sale_order_id).delete()
+            OrderShipments.objects.using('default').filter(order_id=sale_order_id).delete()
+            OrderAttachments.objects.using('default').filter(order_id=sale_order_id).delete()
+            CustomFieldValue.objects.using('default').filter(custom_id=sale_order_id).delete()
+            SaleOrder.objects.using('default').filter(pk=sale_order_id).delete()
 
             return {"message": f"SaleOrder {sale_order_id} replicated to mstcnl"}
 

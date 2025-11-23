@@ -1,8 +1,9 @@
 from apps.finance.models import JournalEntry
+from apps.masters.template.billpayment_receipt.billpayment_receipt import billpayment_receipt_data, billpayment_receipt_doc
 from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
 from apps.production.models import MaterialIssue, MaterialReceived
 from apps.products.models import Products
-from apps.purchase.models import PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
+from apps.purchase.models import BillPaymentTransactions, PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
 from apps.sales.models import OrderShipments, PaymentTransactions, SaleCreditNotes, SaleDebitNotes, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate, soft_delete
@@ -709,6 +710,7 @@ ORDER_MODEL_MAPPING = {
     'SHIP': (OrderShipments, 'shipping_tracking_no'),
     'PRD': (Products, 'code'),
     'PTR': (PaymentTransactions, 'payment_receipt_no'),
+    'BPR': (BillPaymentTransactions, 'payment_receipt_no'),
     'MI' :(MaterialIssue, 'issue_no'),
     'MR' :(MaterialReceived, 'receipt_no'),
     'JE': (JournalEntry, 'voucher_no'),
@@ -948,7 +950,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']
                                 )
                 
-            elif document_type == "payment_receipt":
+            if document_type == "payment_receipt":
                 pdf_data = payment_receipt_data(pk, document_type)
                 print("pdf_data--->>>", pdf_data)
                 sub_header = 'Receipt Voucher'
@@ -965,6 +967,43 @@ class DocumentGeneratorView(APIView):
                     pdf_data['date_lbl'], 
                     pdf_data['receipt_date'],
                     pdf_data['customer_name'], 
+                    pdf_data['billing_address'], 
+                    pdf_data['phone'],
+                    pdf_data['email'],
+                    [{
+                        'invoice_no': pdf_data['invoice_no'],
+                        'invoice_date': pdf_data['invoice_date'],
+                        'payment_method': pdf_data['payment_method'],
+                        'cheque_no': pdf_data['cheque_no'],
+                        'amount': pdf_data['amount']
+                    }],  # Pass as list to match sale order's product_data structure
+                    pdf_data['amount'],
+                    pdf_data['outstanding'],
+                    pdf_data['total'],
+                    pdf_data['amount_in_words'],
+                    pdf_data['receipt_no'],
+                    # pdf_data['net_lbl'],
+                    # pdf_data['amount']  # Using amount as net_value
+                )
+            
+            elif document_type == "bill_receipt":
+                print("We entered in bill-receipt....")
+                pdf_data = billpayment_receipt_data(pk, document_type)
+                print("pdf_data--->>>", pdf_data)
+                sub_header = 'Bill Payment Receipt Voucher'
+                # Use same doc_heading pattern as sale order
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header)
+                
+                # Generate payment receipt with same structure as sale order
+                billpayment_receipt_doc(
+                    elements, doc,
+                    pdf_data['company_name'], pdf_data['company_address'], pdf_data['company_phone'],
+                    pdf_data['cust_bill_dtl'], 
+                    pdf_data['number_lbl'], 
+                    pdf_data['invoice_no'], 
+                    pdf_data['date_lbl'], 
+                    pdf_data['receipt_date'],
+                    pdf_data['vendor_name'], 
                     pdf_data['billing_address'], 
                     pdf_data['phone'],
                     pdf_data['email'],

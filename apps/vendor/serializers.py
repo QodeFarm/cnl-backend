@@ -367,3 +367,11 @@ class VendorPaymentReportSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
         return "N/A"
+    
+#-----------------------------------------------------------------
+class VendorBalanceSerializer(serializers.ModelSerializer):
+    vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+
+    class Meta:
+        model = VendorBalance
+        fields = ['vendor_balance_id', 'vendor', 'balance_amount', 'created_at']

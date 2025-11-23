@@ -7,13 +7,14 @@ from requests import Response
 from rest_framework import viewsets,status
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
+from django.core.exceptions import  ObjectDoesNotExist
 
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorFilter, VendorPaymentTermsFilter
 from config.utils_filter_methods import filter_response, list_filtered_objects
-from .models import Vendor, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
-from .serializers import VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer
+from .models import Vendor, VendorBalance, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
+from .serializers import VendorBalanceSerializer, VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer
 from config.utils_methods import delete_multi_instance, soft_delete, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
 from django_filters.rest_framework import DjangoFilterBackend 
@@ -641,6 +642,31 @@ class VendorViewSet(APIView):
             logger.error(f"Error deleting Vendor with ID {pk}: {str(e)}")
             return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+    @transaction.atomic
+    def patch(self, request, pk, *args, **kwargs):
+        """
+        Restores a soft-deleted Vendor record (is_deleted=True → is_deleted=False).
+        """
+        try:
+            instance = Vendor.objects.get(pk=pk)
+
+            if not instance.is_deleted:
+                logger.info(f"Vendor with ID {pk} is already active.")
+                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+
+            instance.is_deleted = False
+            instance.save()
+
+            logger.info(f"Vendor with ID {pk} restored successfully.")
+            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+
+        except Vendor.DoesNotExist:
+            logger.warning(f"Vendor with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error restoring Vendor with ID {pk}: {str(e)}")
+            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):   #To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
         return self.create(request, *args, **kwargs)
@@ -1190,3 +1216,42 @@ class VendorExcelUploadAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in vendor Excel import: {str(e)}")
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)    
+  
+        
+#-------------------------------------------------------------------------------------
+class VendorBalanceView(APIView):
+    def post(self, request, vendor_id, remaining_payment):
+        """
+        Update or create vendor balance after a bill payment transaction.
+        Used in the BillPaymentTransactionAPIView.
+        """
+        try:
+            vendor_instance = Vendor.objects.get(vendor_id=vendor_id)
+            vendor_balance = VendorBalance.objects.filter(vendor_id=vendor_instance)
+
+            if vendor_balance.exists():
+                # Update existing balance (reduce payable since we paid the vendor)
+                for balance in vendor_balance:
+                    vendor_balance.update(balance_amount=balance.balance_amount - remaining_payment)
+            else:
+                # Create new record if it doesn't exist yet
+                VendorBalance.objects.create(vendor_id=vendor_instance, balance_amount=(0 - remaining_payment))
+
+        except ObjectDoesNotExist as e:
+            return build_response(1, f"Vendor with ID {vendor_id} does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        return build_response(1, "Balance Updated In Vendor Balance Table", [], status.HTTP_201_CREATED)
+
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                vendor_id = get_object_or_404(Vendor, pk=pk)
+                balance = get_object_or_404(VendorBalance, vendor_id=vendor_id)
+                serializer = VendorBalanceSerializer(balance)
+                return build_response(1, "Vendor Balance", serializer.data, status.HTTP_200_OK)
+            except Exception as e:
+                return build_response(1, "Something Went Wrong", str(e), status.HTTP_403_FORBIDDEN)
+        else:
+            balances = VendorBalance.objects.all()
+            serializer = VendorBalanceSerializer(balances, many=True)
+            return build_response(len(serializer.data), "Vendor Balances", serializer.data, status.HTTP_200_OK)
