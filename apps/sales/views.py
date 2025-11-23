@@ -19,9 +19,9 @@ from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
-from apps.finance.models import JournalEntryLines, PaymentTransaction
+from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts
+from apps.customer.models import CustomerBalance, LedgerAccounts
 from rest_framework.filters import OrderingFilter
-from apps.customer.models import CustomerBalance
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
@@ -5118,17 +5118,57 @@ class PaymentTransactionAPIView(APIView):
         """
         data = request.data
         cust_data = data.get('customer')
-        customer_id = cust_data.get('customer_id').replace('-','')
+        if not cust_data:
+            return build_response(1, "Customer data is required.", None, status.HTTP_400_BAD_REQUEST)
+        
+        customer_id = cust_data.get('customer_id')
+        if not customer_id:
+            return build_response(1, "Customer ID is required.", None, status.HTTP_400_BAD_REQUEST)
+        customer_id = customer_id.replace('-', '')
+        
+        # Handle both 'account' (ChartOfAccounts) and 'ledger_account' (LedgerAccounts) for backward compatibility
         account_data = data.get('account')
-        account_id = account_data.get('account_id').replace('-','')
+        ledger_account_data = data.get('ledger_account')
+        
+        if ledger_account_data:
+            # New approach: using LedgerAccounts directly
+            ledger_account_id = ledger_account_data.get('ledger_account_id')
+            if not ledger_account_id:
+                return build_response(1, "Ledger Account ID is required.", None, status.HTTP_400_BAD_REQUEST)
+            ledger_account_id = ledger_account_id.replace('-', '')
+            
+            # Validate ledger_account_id
+            try:
+                uuid.UUID(ledger_account_id)
+                ledger_account = LedgerAccounts.objects.get(pk=ledger_account_id)
+            except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+                return build_response(1, "Invalid Ledger Account ID format OR Ledger Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+            
+            account_id = ledger_account_id  # Use ledger account ID for journal posting
+            
+        elif account_data:
+            # Old approach: using ChartOfAccounts (kept for backward compatibility but needs mapping)
+            account_id = account_data.get('account_id')
+            if not account_id:
+                return build_response(1, "Account ID is required.", None, status.HTTP_400_BAD_REQUEST)
+            account_id = account_id.replace('-', '')
+            
+            # Validate account_id
+            try:
+                uuid.UUID(account_id)
+                chart_account = ChartOfAccounts.objects.get(pk=account_id)
+                # Try to find corresponding LedgerAccounts linked to this ChartOfAccounts
+                # This assumes the FK we're adding: ledger_account.chart_account_id
+                ledger_account = LedgerAccounts.objects.filter(chart_account_id=account_id).first()
+                if not ledger_account:
+                    return build_response(1, "No Ledger Account linked to this Chart of Account. Please use ledger_account instead.", None, status.HTTP_400_BAD_REQUEST)
+                account_id = str(ledger_account.ledger_account_id)  # Use the linked ledger account
+            except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
+                return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+        else:
+            return build_response(1, "Either 'account' or 'ledger_account' data is required.", None, status.HTTP_400_BAD_REQUEST)
+        
         description = data.get('description')
-
-        # Validate account_id
-        try:
-            uuid.UUID(account_id)  # Ensure valid UUID format
-            ChartOfAccounts.objects.get(pk=account_id)
-        except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
-            return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
         # Validate customer_id
         try:
@@ -5205,7 +5245,7 @@ class PaymentTransactionAPIView(APIView):
                                     sale_invoice=invoice, 
                                     invoice_no=invoice.invoice_no,
                                     customer=customer_id,
-                                    account_id=account_id
+                                    ledger_account_id=account_id
                                 )
                                 
                                 # If the invoice is fully paid, update its order_status_id to "Completed".
@@ -5337,7 +5377,7 @@ class PaymentTransactionAPIView(APIView):
                             customer_id=customer_id,
                             sale_invoice_id=sale_invoice.sale_invoice_id,
                             invoice_no=sale_invoice.invoice_no,
-                            account_id = account_id
+                            ledger_account_id=account_id
                         )
                         payment_transactions_created.append(payment_txn)
                         
@@ -5415,14 +5455,14 @@ class PaymentTransactionAPIView(APIView):
             # default db
             payment_transactions = PaymentTransactions.objects.filter(
                 customer_id=customer_id
-            ).order_by('is_deleted', '-created_at')
+            ).order_by( '-created_at')
 
             # secondary db (only if records_all=true)
             mstcnl_payment_transactions = []
             if records_all:
                 mstcnl_payment_transactions = MstCnlPaymentTransactions.objects.using('mstcnl').filter(
                     customer_id=customer_id
-                ).order_by('is_deleted', '-created_at')
+                ).order_by('-created_at')
 
             combined = []
 
@@ -5438,6 +5478,8 @@ class PaymentTransactionAPIView(APIView):
 
             if not combined:
                 return filter_response(0, "No payment transactions found for this customer", None, status.HTTP_404_NOT_FOUND)
+                # return filter_response(0, "No payment transactions found for this customer", None, page, limit,  status.HTTP_404_NOT_FOUND)
+
 
             return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 

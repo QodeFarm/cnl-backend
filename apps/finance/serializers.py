@@ -1,8 +1,9 @@
 from rest_framework import serializers
 from .models import *
 from apps.hrms.serializers import ModEmployeesSerializer
-from apps.customer.serializers import ModCustomersSerializer
+from apps.customer.serializers import ModCustomersSerializer, ModLedgerAccountsSerializers
 from apps.vendor.serializers import ModVendorSerializer    
+from django.db.models import Sum
 
 class ModBankAccountSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,19 +33,28 @@ class ChartOfAccountsSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class JournalEntrySerializer(serializers.ModelSerializer):
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
+
     class Meta:
         model = JournalEntry
         fields = '__all__'
 
 class JournalEntryLinesSerializer(serializers.ModelSerializer):
     # journal_entry = ModJournalEntrySerializer(source='journal_entry_id', read_only=True)
-    account = ModChartOfAccountsSerializer(source='account_id', read_only=True)
+    # account = ModChartOfAccountsSerializer(source='account_id', read_only=True)
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    voucher_no = serializers.CharField(source='journal_entry_id.voucher_no', read_only=True)  # <-- FIXED LINE
 
     class Meta:
         model = JournalEntryLines
         fields = '__all__'
+        
+class GeneralAccountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LedgerAccounts
+        fields = ['ledger_account_id', 'name']        
 
 class PaymentTransactionSerializer(serializers.ModelSerializer):
     invoice = serializers.SerializerMethodField()
@@ -92,16 +102,20 @@ class JournalDetailSerializer(serializers.ModelSerializer):
         
 class GeneralLedgerReportSerializer(serializers.ModelSerializer):
     date = serializers.DateField(source='journal_entry_id.entry_date')
-    reference = serializers.CharField(source='journal_entry_id.reference')
-    account = serializers.CharField(source='account_id.account_name', default='N/A')
+    voucher = serializers.CharField(source='journal_entry_id.voucher_no', read_only=True)
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     description = serializers.SerializerMethodField()
+    # Use the balance field directly from the model
+    # The balance is calculated and updated when ledger reports are generated
 
     def get_description(self, obj):
         return obj.description or obj.journal_entry_id.description
 
     class Meta:
         model = JournalEntryLines
-        fields = ['date', 'reference', 'account', 'debit', 'credit', 'description']
+        fields = ['date', 'voucher', 'ledger_account', 'debit', 'credit', 'balance', 'description']
+        
+        
 class TrialBalanceReportSerializer(serializers.ModelSerializer):
     total_debit = serializers.DecimalField(max_digits=15, decimal_places=2)
     total_credit = serializers.DecimalField(max_digits=15, decimal_places=2)
@@ -152,20 +166,21 @@ class JournalEntryReportSerializer(serializers.ModelSerializer):
         fields = ['journal_entry_id', 'entry_date', 'reference', 'description', 'created_at', 'updated_at']
                 
                 
-class ExpenseCategorySerializer(serializers.ModelSerializer):
-    account = ModChartOfAccountsSerializer(source='account_id', read_only=True)
+# class ExpenseCategorySerializer(serializers.ModelSerializer):
+#     account = ModChartOfAccountsSerializer(source='account_id', read_only=True)
     
-    class Meta:
-        model = ExpenseCategory
-        fields = '__all__'
+#     class Meta:
+#         model = ExpenseCategory
+#         fields = '__all__'
 
-class ModExpenseCategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ExpenseCategory
-        fields = ['category_id', 'category_name']
+# class ModExpenseCategorySerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = ExpenseCategory
+#         fields = ['category_id', 'category_name']
+
 
 class ExpenseItemSerializer(serializers.ModelSerializer):
-    category = ModExpenseCategorySerializer(source='category_id', read_only=True)
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     bank_account = ModBankAccountSerializer(source='bank_account_id', read_only=True)
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
     employee = ModEmployeesSerializer(source='employee_id', read_only=True)

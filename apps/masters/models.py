@@ -72,7 +72,9 @@ class LedgerGroups(models.Model):
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, null=True, default=None)
     inactive = models.BooleanField(default=False, null=True)
-    under_group = models.CharField(max_length=255, null=True, default=None)
+    under_group_id = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, 
+                                      default=None, related_name='child_groups', 
+                                      db_column='under_group_id')
     nature = models.CharField(max_length=255, null=True, default=None)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -83,6 +85,38 @@ class LedgerGroups(models.Model):
     
     class Meta:
         db_table = ledgergroupstable
+        
+    def save(self, *args, **kwargs):
+        """
+        Auto-generate code on save and update child ledger accounts if code changes.
+        """
+        from config.utils_methods import generate_ledger_group_code, update_child_ledger_accounts_codes
+        
+        # Track if this is a new record or an update
+        is_new = self._state.adding
+        old_code = None
+        
+        # If updating, get the old code
+        if not is_new and self.pk:
+            try:
+                old_instance = LedgerGroups.objects.get(pk=self.pk)
+                old_code = old_instance.code
+            except LedgerGroups.DoesNotExist:
+                pass
+        
+        # Auto-generate code if not provided or if it's a new record
+        if is_new and not self.code:
+            self.code = generate_ledger_group_code(
+                parent_group_id=self.under_group_id.ledger_group_id if self.under_group_id else None
+            )
+        elif not is_new and old_code and self.code != old_code:
+            # Code was manually changed, update all child accounts
+            super().save(*args, **kwargs)
+            update_child_ledger_accounts_codes(self.ledger_group_id, old_code, self.code)
+            return
+        
+        super().save(*args, **kwargs)
+     
         
 class FirmStatuses(models.Model):
     firm_status_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

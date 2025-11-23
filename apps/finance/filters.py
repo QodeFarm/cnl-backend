@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseCategory, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
+from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -280,13 +280,14 @@ class FinancialReportFilter(filters.FilterSet):
 
 
 class JournalEntryLineFilter(filters.FilterSet):
+    ledger_account_id = filters.UUIDFilter(field_name='ledger_account_id__ledger_account_id', lookup_expr='exact')
     date = filters.DateFromToRangeFilter(field_name='journal_entry_id__entry_date')  # Fixed
     account = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')  
     reference = filters.CharFilter(field_name='journal_entry_id__reference', lookup_expr='icontains')  # Fixed
     debit = filters.NumberFilter(field_name='debit')
     credit = filters.NumberFilter(field_name='credit')
     description = filters.CharFilter(field_name='description',lookup_expr='icontains')
-
+    created_at = filters.DateFromToRangeFilter()        
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
@@ -308,12 +309,17 @@ class JournalEntryLineFilter(filters.FilterSet):
 
     class Meta:
         model = JournalEntryLines
-        fields = ['date', 'account', 'reference']
+        fields = ['date', 'account', 'reference','ledger_account_id', 'debit', 'credit', 'description','created_at','s','sort','page','limit']
 
 class JournalEntryLinesListFilter(filters.FilterSet):
     """Filter for Journal Entry Lines when listed by customer or vendor ID"""
-    account_id = filters.CharFilter(method=filter_uuid)
-    account = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')
+    # account_id = filters.CharFilter(method=filter_uuid)
+    # account = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')
+    ledger_account_id = filters.CharFilter(method=filter_uuid)
+    ledger_account = filters.CharFilter(field_name='ledger_account_id__name', lookup_expr='icontains')
+    voucher_no = filters.CharFilter(lookup_expr='icontains')
+    debit = filters.RangeFilter()
+    voucher_no = filters.CharFilter( lookup_expr='icontains')
     debit = filters.RangeFilter()
     credit = filters.RangeFilter()
     balance = filters.RangeFilter()
@@ -343,7 +349,7 @@ class JournalEntryLinesListFilter(filters.FilterSet):
     
     class Meta:
         model = JournalEntryLines
-        fields = ['account_id', 'account', 'debit', 'credit', 'description', 'balance', 'created_at', 's', 'sort', 'page', 'limit']
+        fields = ['ledger_account_id', 'ledger_account',  'voucher_no', 'debit', 'credit', 'description', 'balance', 'created_at', 's', 'sort', 'page', 'limit']
 
 class TrialBalanceReportFilter(filters.FilterSet):
     start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
@@ -615,36 +621,36 @@ class JournalEntryReportFilter(filters.FilterSet):
         fields = ['entry_date', 'reference', 'description', 's', 'sort', 'page', 'limit']
         
         
-class ExpenseCategoryFilter(filters.FilterSet):
-    category_name = filters.CharFilter(lookup_expr='icontains')
-    description = filters.CharFilter(lookup_expr='icontains')
-    account_id = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')
-    is_active = filters.BooleanFilter()
-    created_at = filters.DateFromToRangeFilter()
-    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
-    s = filters.CharFilter(method='filter_by_search', label="Search")
-    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
-    page = filters.NumberFilter(method='filter_by_page', label="Page")
-    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+# class ExpenseCategoryFilter(filters.FilterSet):
+#     category_name = filters.CharFilter(lookup_expr='icontains')
+#     description = filters.CharFilter(lookup_expr='icontains')
+#     account_id = filters.CharFilter(field_name='account_id__account_name', lookup_expr='icontains')
+#     is_active = filters.BooleanFilter()
+#     created_at = filters.DateFromToRangeFilter()
+#     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+#     s = filters.CharFilter(method='filter_by_search', label="Search")
+#     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+#     page = filters.NumberFilter(method='filter_by_page', label="Page")
+#     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
 
-    def filter_by_period_name(self, queryset, name, value):
-        return filter_by_period_name(self, queryset, self.data, value)
+#     def filter_by_period_name(self, queryset, name, value):
+#         return filter_by_period_name(self, queryset, self.data, value)
 
-    def filter_by_search(self, queryset, name, value):
-        return filter_by_search(queryset, self, value)
+#     def filter_by_search(self, queryset, name, value):
+#         return filter_by_search(queryset, self, value)
 
-    def filter_by_sort(self, queryset, name, value):
-        return filter_by_sort(self, queryset, value)
+#     def filter_by_sort(self, queryset, name, value):
+#         return filter_by_sort(self, queryset, value)
 
-    def filter_by_page(self, queryset, name, value):
-        return filter_by_page(self, queryset, value)
+#     def filter_by_page(self, queryset, name, value):
+#         return filter_by_page(self, queryset, value)
 
-    def filter_by_limit(self, queryset, name, value):
-        return filter_by_limit(self, queryset, value)
+#     def filter_by_limit(self, queryset, name, value):
+#         return filter_by_limit(self, queryset, value)
     
-    class Meta:
-        model = ExpenseCategory
-        fields = ['category_name','description','account_id','is_active','created_at','period_name','s','sort','page','limit']
+#     class Meta:
+#         model = ExpenseCategory
+#         fields = ['category_name','description','account_id','is_active','created_at','period_name','s','sort','page','limit']
 
 class ExpenseItemFilter(filters.FilterSet):
     expense_date = filters.DateFromToRangeFilter()
