@@ -1744,34 +1744,6 @@ class BillPaymentTransactionAPIView(APIView):
     Handles retrieval of Bill Payment Transactions.
     Supports both single record (via pk) and filtered list retrieval.
     """
-    # def get(self, request, transaction_id=None):
-    #     page = int(request.query_params.get('page', 1))
-    #     limit = int(request.query_params.get('limit', 10))
-
-    #     # ✅ CASE 1: FETCH SINGLE RECORD
-    #     if transaction_id:
-    #         try:
-    #             transaction = BillPaymentTransactions.objects.get(transaction_id=transaction_id)
-    #             serializer = BillPaymentTransactionSerializer(transaction)
-    #             return build_response(1, "Bill Payment Transaction fetched successfully", serializer.data, status.HTTP_200_OK)
-    #         except BillPaymentTransactions.DoesNotExist:
-    #             return build_response(0, "Bill Payment Transaction not found", None, status.HTTP_404_NOT_FOUND)
-
-    #     # ✅ CASE 2: FETCH ALL RECORDS WITH PAGINATION
-    #     transactions = BillPaymentTransactions.objects.all().order_by('-created_at')
-
-    #     total_count = transactions.count()
-    #     start = (page - 1) * limit
-    #     end = start + limit
-    #     paginated_transactions = transactions[start:end]
-
-    #     if not paginated_transactions.exists():
-    #         return filter_response(0, "No Bill Payment Transactions found", page, limit, total_count, None, status.HTTP_404_NOT_FOUND)
-
-    #     serializer = BillPaymentTransactionSerializer(paginated_transactions, many=True)
-
-    #     return filter_response(len(serializer.data), "Bill Payment Transactions fetched successfully",
-    #                         serializer.data, page, limit, total_count, status.HTTP_200_OK)
     
     def get(self, request, transaction_id=None):
         page = int(request.query_params.get('page', 1))
@@ -1815,10 +1787,6 @@ class BillPaymentTransactionAPIView(APIView):
             total_count,   # ✅ total of all filtered records, not just per page
             status.HTTP_200_OK
         )
-
-
-
-
 
     """
     Handles Purchase Bill Payments (Vendor Side)
@@ -1874,6 +1842,9 @@ class BillPaymentTransactionAPIView(APIView):
             pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
         except ObjectDoesNotExist:
             return build_response(1, "Required order status 'Pending' not found.", None, status.HTTP_404_NOT_FOUND)
+        
+        
+
 
         # ========= Case 1: AdjustNow (specific invoice) =========
         if data.get('adjustNow'):
@@ -2071,6 +2042,16 @@ class BillPaymentTransactionAPIView(APIView):
 
             # Step 1: Get Bill Payment Transaction record
             bill_payment = get_object_or_404(BillPaymentTransactions, transaction_id=transaction_id)
+            
+            # === New validation for Completed status ===
+            if bill_payment.payment_status == "Completed":
+                return build_response(
+                    0,
+                    "This transaction is already completed and cannot be updated.",
+                    None,
+                    status.HTTP_400_BAD_REQUEST
+                )
+                
             old_amount = bill_payment.amount or Decimal("0.00")
             old_adjusted = bill_payment.adjusted_now or Decimal("0.00")
             old_outstanding = bill_payment.outstanding_amount or Decimal("0.00")
@@ -2205,7 +2186,7 @@ class FetchPurchaseInvoicesForPaymentReceiptTable(APIView):
         purchase_invoice = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id)
         
         if not purchase_invoice.exists():
-            return build_response(0, "No sale invoice found for this customer", None, status.HTTP_200_OK) 
+            return build_response(0, "No Purchase invoice found for this customer", None, status.HTTP_400_BAD_REQUEST) 
 
         try:
             serializer = PurchaseInvoiceOrdersSerializer(purchase_invoice, many=True)

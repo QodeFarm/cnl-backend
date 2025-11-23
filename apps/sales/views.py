@@ -1,3 +1,5 @@
+from apps.auditlogs.utils import log_user_action
+from apps.production.models import WorkOrder
 from config.utils_methods import update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
@@ -1229,68 +1231,82 @@ class SaleOrderViewSet(APIView):
                     status.HTTP_400_BAD_REQUEST
                 )
                 
+            # --------------------------------------------
+            # 2. Permanent delete if no linked invoice exists
+            # --------------------------------------------
+            else:
+                record_id = instance.pk
+                # Delete related child data first
+                SaleOrderItems.objects.using(db_to_use).filter(sale_order_id=pk).delete()
+                BlockedInventory.objects.using(db_to_use).filter(sale_order_id=pk).delete()
+                WorkOrder.objects.using(db_to_use).filter(sale_order_id=pk).delete()
+                
+                # No linked sale invoice → delete permanently
+                instance.delete(using=db_to_use)
+
+                # Log the permanent deletion
+                log_user_action(
+                    db_to_use,
+                    request.user,
+                    "DELETE",
+                    "Sale Order",
+                    record_id,
+                    f"Sale Order {record_id} permanently deleted by {request.user.username}"
+                )
+
+                logger.info(f"SaleOrder {record_id} permanently deleted from database.")
+                return build_response(1, "Sale order permanently deleted successfully.", [], status.HTTP_204_NO_CONTENT)
+            
             # # --------------------------------------------
             # # 2️ Permanent Deletion for 'Other' & 'Completed'
             # # --------------------------------------------
-            # if instance.sale_type_id == "1a9d6cdb-2416-4d49-afd7-292cc6fb41de" and instance.order_status_id == "717c922f-c092-4d40-94e7-6a12d7095600":
-            #     logger.info(f"SaleOrder {pk} (Other & Completed) is already replicated to mstcnl, skipping delete.")
+            # try:
+            #     # Fetch the correct SaleType and OrderStatus objects dynamically
+            #     other_sale_type = SaleTypes.objects.using(db_to_use).get(name="Other")
+            #     completed_status = OrderStatuses.objects.using(db_to_use).get(status_name="Completed")
+
+            #     if (
+            #         instance.sale_type_id == other_sale_type.sale_type_id
+            #         and instance.order_status_id == completed_status.order_status_id
+            #     ):
+            #         logger.info(f"SaleOrder {pk} (Other & Completed) is already replicated to mstcnl, skipping delete.")
+            #         return build_response(
+            #             0,
+            #             "Sale order already replicated to mstcnl; deletion skipped.",
+            #             [],
+            #             status.HTTP_400_BAD_REQUEST
+            #         )
+
+            # except (SaleTypes.DoesNotExist, OrderStatuses.DoesNotExist) as e:
+            #     logger.error(f"Required SaleType or OrderStatus not found: {str(e)}")
             #     return build_response(
             #         0,
-            #         "Sale order already replicated to mstcnl; deletion skipped.",
+            #         "Required SaleType ('Other') or OrderStatus ('Completed') not found.",
             #         [],
             #         status.HTTP_400_BAD_REQUEST
             #     )
-            
-            # --------------------------------------------
-            # 2️ Permanent Deletion for 'Other' & 'Completed'
-            # --------------------------------------------
-            try:
-                # Fetch the correct SaleType and OrderStatus objects dynamically
-                other_sale_type = SaleTypes.objects.using(db_to_use).get(name="Other")
-                completed_status = OrderStatuses.objects.using(db_to_use).get(status_name="Completed")
-
-                if (
-                    instance.sale_type_id == other_sale_type.sale_type_id
-                    and instance.order_status_id == completed_status.order_status_id
-                ):
-                    logger.info(f"SaleOrder {pk} (Other & Completed) is already replicated to mstcnl, skipping delete.")
-                    return build_response(
-                        0,
-                        "Sale order already replicated to mstcnl; deletion skipped.",
-                        [],
-                        status.HTTP_400_BAD_REQUEST
-                    )
-
-            except (SaleTypes.DoesNotExist, OrderStatuses.DoesNotExist) as e:
-                logger.error(f"Required SaleType or OrderStatus not found: {str(e)}")
-                return build_response(
-                    0,
-                    "Required SaleType ('Other') or OrderStatus ('Completed') not found.",
-                    [],
-                    status.HTTP_400_BAD_REQUEST
-                )
 
 
-            # --------------------------------------------
-            # 3 Delete related child data
-            # --------------------------------------------
-            if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
-                return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # # --------------------------------------------
+            # # 3 Delete related child data
+            # # --------------------------------------------
+            # if not delete_multi_instance(pk, SaleOrder, OrderAttachments, main_model_field_name='order_id', using_db=db_to_use):
+            #     return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
-                return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # if not delete_multi_instance(pk, SaleOrder, OrderShipments, main_model_field_name='order_id', using_db=db_to_use):
+            #     return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
-                return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # if not delete_multi_instance(pk, SaleOrder, CustomFieldValue, main_model_field_name='custom_id', using_db=db_to_use):
+            #     return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # --------------------------------------------
-            # 3️⃣  Mark main SaleOrder as deleted
-            # --------------------------------------------
-            instance.is_deleted = True
-            instance.save(using=db_to_use)
+            # # --------------------------------------------
+            # # 3️ Mark main SaleOrder as deleted
+            # # --------------------------------------------
+            # instance.is_deleted = True
+            # instance.save(using=db_to_use)
 
-            logger.info(f"SaleOrder with ID {pk} deleted successfully.")
-            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+            # logger.info(f"SaleOrder with ID {pk} deleted successfully.")
+            # return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
 
         except SaleOrder.DoesNotExist:
             logger.warning(f"SaleOrder with ID {pk} does not exist.")
