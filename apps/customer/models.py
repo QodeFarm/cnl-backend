@@ -14,7 +14,8 @@ class LedgerAccounts(models.Model):
         ('Bank', 'Bank'),
         ('Cash', 'Cash'),
         ('Customer', 'Customer'),
-        ('Vendor', 'Vendor')
+        ('Vendor', 'Vendor'),
+        ('General', 'General'),
     )
     ledger_account_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -38,7 +39,34 @@ class LedgerAccounts(models.Model):
         return f"{self.ledger_account_id} {self.name}"
     
     class Meta:
-        db_table = ledgeraccountstable 
+        db_table = ledgeraccountstable
+        
+    def save(self, *args, **kwargs):
+        """
+        Auto-generate code on save based on parent LedgerGroup.
+        If ledger_group_id changes, regenerate the code.
+        """
+        from config.utils_methods import generate_ledger_account_code
+        
+        # Track if this is a new record or an update
+        is_new = self._state.adding
+        old_ledger_group_id = None
+        
+        # If updating, check if ledger_group_id changed
+        if not is_new and self.pk:
+            try:
+                old_instance = LedgerAccounts.objects.get(pk=self.pk)
+                old_ledger_group_id = old_instance.ledger_group_id
+            except LedgerAccounts.DoesNotExist:
+                pass
+        
+        # Auto-generate code if:
+        # 1. New record without code
+        # 2. Ledger group changed
+        if (is_new and not self.code) or (old_ledger_group_id and old_ledger_group_id != self.ledger_group_id):
+            self.code = generate_ledger_account_code(self.ledger_group_id.ledger_group_id)
+        
+        super().save(*args, **kwargs) 
         
 def customer_picture(instance, filename):
     # Get the file extension

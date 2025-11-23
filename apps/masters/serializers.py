@@ -45,15 +45,18 @@ class StatusesSerializer(serializers.ModelSerializer):
         model = Statuses 
         fields = '__all__'
 
-class LedgerGroupsSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LedgerGroups
-        fields = '__all__'
-
 class ModLedgerGroupsSerializer(serializers.ModelSerializer):
     class Meta:
         model = LedgerGroups
         fields = ['ledger_group_id', 'name', 'code']
+
+class LedgerGroupsSerializer(serializers.ModelSerializer):
+    under_group = ModLedgerGroupsSerializer(source='under_group_id', read_only=True)
+    class Meta:
+        model = LedgerGroups
+        fields = '__all__'
+
+
 
 class FirmStatusesSerializers(serializers.ModelSerializer):
     class Meta:
