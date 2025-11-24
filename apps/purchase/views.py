@@ -1842,9 +1842,6 @@ class BillPaymentTransactionAPIView(APIView):
             pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
         except ObjectDoesNotExist:
             return build_response(1, "Required order status 'Pending' not found.", None, status.HTTP_404_NOT_FOUND)
-        
-        
-
 
         # ========= Case 1: AdjustNow (specific invoice) =========
         if data.get('adjustNow'):
@@ -1943,7 +1940,7 @@ class BillPaymentTransactionAPIView(APIView):
             try:
                 with transaction.atomic():
                     # Fetch all pending purchase invoices for this vendor
-                    invoices = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"])
+                    invoices = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"]).order_by('invoice_date')  # Oldest invoice first
                     if not invoices.exists():
                         return build_response(0, "No pending invoices found for this vendor.", None, status.HTTP_400_BAD_REQUEST)
 
@@ -2183,6 +2180,10 @@ class FetchPurchaseInvoicesForPaymentReceiptTable(APIView):
     '''This API is used to fetch all information related to sales invoices for 
         the Payment Receipt. It's related to the Payment Transaction table only.'''
     def get(self, request, vendor_id):
+        
+        page = int(request.query_params.get('page', 1))
+        limit = int(request.query_params.get('limit', 10))
+        
         purchase_invoice = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id)
         
         if not purchase_invoice.exists():
@@ -2194,6 +2195,9 @@ class FetchPurchaseInvoicesForPaymentReceiptTable(APIView):
                 serializer.data,
                 key=lambda x: x['created_at']
             )
-            return build_response(len(serializer.data), "Purchase Invoices", sorted_data, status.HTTP_200_OK)
+            
+            total_count = len(serializer.data)
+            return filter_response(total_count, "Purchase Invoices", sorted_data, page, limit, total_count, status.HTTP_200_OK)
+            # return filter_response(len(serializer.data), "Purchase Invoices", sorted_data, status.HTTP_200_OK)
         except Exception as e:
             return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
