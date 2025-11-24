@@ -666,21 +666,21 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
         logger.info("Generating General Ledger Report")
         from decimal import Decimal
         
-        # Base queryset - Filter first
-        base_queryset = JournalEntryLines.objects.select_related('ledger_account_id', 'journal_entry_id') \
-                                            .filter(is_deleted=False)
-
-        # Apply filters if query parameters are present
-        if request.query_params:
-            filterset = JournalEntryLineFilter(request.GET, queryset=base_queryset)
-            if filterset.is_valid():
-                base_queryset = filterset.qs
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
         
-        # Get the filtered ledger accounts BEFORE pagination
-        ledger_account_ids = list(base_queryset.values_list('ledger_account_id', flat=True).distinct())
+        # Base queryset with ordering applied first
+        queryset = JournalEntryLines.objects.select_related('ledger_account_id', 'journal_entry_id') \
+                                            .filter(is_deleted=False) \
+                                            .order_by('ledger_account_id__name', '-journal_entry_id__entry_date', '-created_at', '-journal_entry_line_id')
         
-        # Recalculate balances for filtered accounts to ensure correctness
-        for ledger_account_id in ledger_account_ids:
+        total_count = queryset.count()
+        
+        # Get all unique ledger account IDs from the unfiltered queryset for balance recalculation
+        all_ledger_account_ids = list(set(queryset.values_list('ledger_account_id', flat=True)))
+        
+        # Recalculate balances for all accounts to ensure correctness
+        for ledger_account_id in all_ledger_account_ids:
             if ledger_account_id:
                 # Get all lines for this account in chronological order
                 account_lines = JournalEntryLines.objects.filter(
@@ -699,12 +699,15 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
                             journal_entry_line_id=line.journal_entry_line_id
                         ).update(balance=running_balance)
         
-        # Now order for display (newest first)
-        final_queryset = base_queryset.order_by('ledger_account_id__name', '-journal_entry_id__entry_date', '-created_at', '-journal_entry_line_id')
+        # Apply filters if query parameters are present
+        if request.query_params:
+            filterset = JournalEntryLineFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
 
         # Serialize
-        serializer = GeneralLedgerReportSerializer(final_queryset, many=True)
-        return Response({"count": final_queryset.count(),"msg": "General Ledger Report","data": serializer.data}, status=200)
+        serializer = GeneralLedgerReportSerializer(queryset, many=True)
+        return filter_response(queryset.count(), "General Ledger Report", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
 
     @action(detail=False, methods=['get'])
