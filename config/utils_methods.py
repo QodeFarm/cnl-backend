@@ -133,7 +133,7 @@ from itertools import chain
 #         records_all = request.query_params.get("records_all", "false").lower() == "true"
 
 #         # Default queryset (from default DB)
-#         queryset = self.filter_queryset(self.get_queryset().order_by('is_deleted', '-created_at'))
+#         queryset = self.filter_queryset(self.get_queryset().order_by('-created_at'))
 
 #         #  Special logic: only if sale_order_id is provided
 #         if sale_order_id:
@@ -141,16 +141,16 @@ from itertools import chain
 #             mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id)
 
 #             if default_qs.exists():
-#                 queryset = self.filter_queryset(default_qs.order_by('is_deleted', '-created_at'))
+#                 queryset = self.filter_queryset(default_qs.order_by('-created_at'))
 #             elif mstcnl_qs.exists():
-#                 queryset = self.filter_queryset(mstcnl_qs.order_by('is_deleted', '-created_at'))
+#                 queryset = self.filter_queryset(mstcnl_qs.order_by('-created_at'))
 #             else:
 #                 queryset = []  # not found in either DB
 
 #         #  records_all logic (combine both DBs)
 #         elif records_all:
-#             default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('is_deleted', '-created_at'))
-#             mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('is_deleted', '-created_at'))
+#             default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
+#             mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
 #             queryset = list(chain(default_qs, mstcnl_qs))
 
 #         #  All other cases = default logic is already active
@@ -194,17 +194,17 @@ def list_all_objects(self, request, *args, **kwargs):
             return obj[s:e]
 
         # --- default queryset (already filtered & ordered) ---
-        base_qs = self.filter_queryset(self.get_queryset().order_by('is_deleted', '-created_at'))
+        base_qs = self.filter_queryset(self.get_queryset().order_by('-created_at'))
 
         total_count = 0
         page_items = []
 
         # --- special: sale_order_id (pick ONLY one DB if present there) ---
         if sale_order_id:
-            default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id).order_by('is_deleted', '-created_at')
+            default_qs = self.get_queryset().using('default').filter(sale_order_id=sale_order_id).order_by('-created_at')
             default_qs = self.filter_queryset(default_qs)
 
-            mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id).order_by('is_deleted', '-created_at')
+            mstcnl_qs = self.get_queryset().using('mstcnl').filter(sale_order_id=sale_order_id).order_by('-created_at')
             mstcnl_qs = self.filter_queryset(mstcnl_qs)
 
             if default_qs.exists():
@@ -219,8 +219,8 @@ def list_all_objects(self, request, *args, **kwargs):
 
         # --- records_all=true: combine BOTH DBs (default first, then mstcnl) ---
         elif records_all:
-            default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('is_deleted', '-created_at'))
-            mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('is_deleted', '-created_at'))
+            default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
+            mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
 
             default_count = qs_count(default_qs)
             mstcnl_count = qs_count(mstcnl_qs)
@@ -473,6 +473,182 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
     return f"{prefix}-{last_number + 1:05d}"
 
 #----------------------------Pramod-end------------------------------------------------
+
+def generate_ledger_group_code(parent_group_id=None):
+    """
+    Generate hierarchical code for LedgerGroups based on parent group.
+    
+    Format:
+    - Root level (no parent): 10000000, 20000000, 30000000...
+    - Child level 1: 11000000, 12000000, 13000000... (under 10000000)
+    - Child level 2: 11100000, 11200000... (under 11000000)
+    - Child level 3: 11110000, 11120000... (under 11100000)
+    
+    Args:
+        parent_group_id: UUID of the parent ledger group, or None for root level
+        
+    Returns:
+        str: The generated code
+    """
+    from apps.masters.models import LedgerGroups
+    
+    if parent_group_id is None:
+        # Root level - increment by 10000000
+        last_root = LedgerGroups.objects.filter(
+            under_group_id__isnull=True,
+            code__isnull=False
+        ).order_by('-code').first()
+        
+        if last_root and last_root.code:
+            try:
+                last_code = int(last_root.code)
+                next_code = last_code + 10000000
+            except (ValueError, TypeError):
+                next_code = 10000000
+        else:
+            next_code = 10000000
+            
+        return str(next_code)
+    else:
+        # Child level - based on parent code
+        try:
+            parent = LedgerGroups.objects.get(ledger_group_id=parent_group_id)
+            if not parent.code:
+                raise ValueError("Parent group must have a code")
+                
+            parent_code = int(parent.code)
+            
+            # Find the level by counting zeros from right
+            # 10000000 = level 0, 11000000 = level 1, 11100000 = level 2, etc.
+            parent_str = str(parent_code)
+            
+            # Determine increment based on number of trailing zeros
+            trailing_zeros = len(parent_str) - len(parent_str.rstrip('0'))
+            
+            if trailing_zeros >= 6:  # Level 0 (e.g., 10000000)
+                increment = 1000000
+            elif trailing_zeros >= 5:  # Level 1 (e.g., 11000000)
+                increment = 100000
+            elif trailing_zeros >= 4:  # Level 2 (e.g., 11100000)
+                increment = 10000
+            elif trailing_zeros >= 3:  # Level 3 (e.g., 11110000)
+                increment = 1000
+            elif trailing_zeros >= 2:  # Level 4
+                increment = 100
+            else:  # Deeper levels
+                increment = 10
+            
+            # Get last sibling code
+            last_sibling = LedgerGroups.objects.filter(
+                under_group_id=parent_group_id,
+                code__isnull=False
+            ).order_by('-code').first()
+            
+            if last_sibling and last_sibling.code:
+                try:
+                    last_code = int(last_sibling.code)
+                    next_code = last_code + increment
+                except (ValueError, TypeError):
+                    # Start from parent code + increment
+                    next_code = parent_code + increment
+            else:
+                # First child
+                next_code = parent_code + increment
+                
+            return str(next_code)
+            
+        except LedgerGroups.DoesNotExist:
+            raise ValueError("Parent group does not exist")
+
+
+def generate_ledger_account_code(ledger_group_id):
+    """
+    Generate code for LedgerAccounts based on the parent LedgerGroup code.
+    
+    Format: Takes the ledger group code and increments by 1 for each account
+    Example: If group code is 23700000, accounts will be 23700001, 23700002, etc.
+    
+    Args:
+        ledger_group_id: UUID of the parent ledger group
+        
+    Returns:
+        str: The generated code
+    """
+    from apps.masters.models import LedgerGroups
+    from apps.customer.models import LedgerAccounts
+    
+    try:
+        ledger_group = LedgerGroups.objects.get(ledger_group_id=ledger_group_id)
+        
+        if not ledger_group.code:
+            raise ValueError("Ledger Group must have a code before creating accounts")
+            
+        base_code = int(ledger_group.code)
+        
+        # Get the last account code under this group
+        last_account = LedgerAccounts.objects.filter(
+            ledger_group_id=ledger_group_id,
+            code__isnull=False
+        ).order_by('-code').first()
+        
+        if last_account and last_account.code:
+            try:
+                last_code = int(last_account.code)
+                # Ensure we're incrementing within the group's range
+                if last_code >= base_code:
+                    next_code = last_code + 1
+                else:
+                    next_code = base_code + 1
+            except (ValueError, TypeError):
+                next_code = base_code + 1
+        else:
+            # First account in this group
+            next_code = base_code + 1
+            
+        return str(next_code)
+        
+    except LedgerGroups.DoesNotExist:
+        raise ValueError("Ledger Group does not exist")
+
+
+def update_child_ledger_accounts_codes(ledger_group_id, old_code, new_code):
+    """
+    Update all child LedgerAccount codes when parent LedgerGroup code changes.
+    
+    Args:
+        ledger_group_id: UUID of the ledger group
+        old_code: Previous code of the ledger group
+        new_code: New code of the ledger group
+    """
+    from apps.customer.models import LedgerAccounts
+    
+    if old_code == new_code or not old_code:
+        return
+        
+    try:
+        old_base = int(old_code)
+        new_base = int(new_code)
+        
+        # Get all accounts under this group
+        accounts = LedgerAccounts.objects.filter(
+            ledger_group_id=ledger_group_id,
+            code__isnull=False
+        )
+        
+        for account in accounts:
+            try:
+                current_code = int(account.code)
+                # Calculate offset from old base
+                offset = current_code - old_base
+                # Apply same offset to new base
+                account.code = str(new_base + offset)
+                account.save(update_fields=['code'])
+            except (ValueError, TypeError):
+                continue
+                
+    except (ValueError, TypeError):
+        pass
+
 
 class OrderNumberMixin(models.Model):
     order_no_prefix = ''

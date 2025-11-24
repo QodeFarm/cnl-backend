@@ -1074,7 +1074,8 @@ class PaymentTransactions(OrderNumberMixin):
     updated_at = models.DateTimeField(auto_now=True)
     invoice_no = models.CharField(max_length=20, unique=True, default='')
     customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name='payment_transactions', null=False)
-    account = models.ForeignKey(ChartOfAccounts, on_delete=models.PROTECT, related_name='payment_transactions', null=False)
+    # Changed from ChartOfAccounts to LedgerAccounts for proper journal posting
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, related_name='payment_transactions', null=False, db_column='ledger_account_id')
     sale_invoice = models.ForeignKey(SaleInvoiceOrders, on_delete=models.CASCADE, related_name='payment_transactions', default='')
 
     def __str__(self):
@@ -1335,7 +1336,8 @@ class MstCnlPaymentTransactions(models.Model):
     customer_id = models.CharField(max_length=36)
     invoice_no = models.CharField(max_length=20, null=True, blank=True)
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
-    account_id = models.CharField(max_length=36, null=True, blank=True)
+    # account_id = models.CharField(max_length=36, null=True, blank=True)  # Field doesn't exist in mstcnl DB
 
     class Meta:
         db_table = 'payment_transactions'
+        managed = False

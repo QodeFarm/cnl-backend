@@ -1,3 +1,4 @@
+from apps.finance.models import JournalEntry
 from apps.masters.template.billpayment_receipt.billpayment_receipt import billpayment_receipt_data, billpayment_receipt_doc
 from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
 from apps.production.models import MaterialIssue, MaterialReceived
@@ -27,6 +28,7 @@ from .serializers import *
 from .filters import *
 from .models import *
 import os
+import uuid
 
 class FileUploadView(APIView):
     parser_classes = (MultiPartParser, FormParser)
@@ -711,6 +713,7 @@ ORDER_MODEL_MAPPING = {
     'BPR': (BillPaymentTransactions, 'payment_receipt_no'),
     'MI' :(MaterialIssue, 'issue_no'),
     'MR' :(MaterialReceived, 'receipt_no'),
+    'JE': (JournalEntry, 'voucher_no'),
     # Add others as needed
 }
 
@@ -736,6 +739,87 @@ def generate_order_number_view(request):
         }, status=status.HTTP_200_OK)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def generate_ledger_code_view(request):
+    """
+    API endpoint to get the next available code for LedgerGroups or LedgerAccounts.
+   
+    """
+    code_type = request.GET.get('type', '').lower()
+    parent_id = request.GET.get('parent_id')
+    
+    if not code_type:
+        return Response({
+            "error": "Please pass the 'type' parameter ('group' or 'account')"
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    if code_type not in ['group', 'account']:
+        return Response({
+            "error": "Invalid type. Must be 'group' or 'account'"
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        if code_type == 'group':
+            from config.utils_methods import generate_ledger_group_code
+            
+            # Convert parent_id to UUID or None
+            parent_uuid = None
+            if parent_id:
+                try:
+                    parent_uuid = uuid.UUID(parent_id)
+                except ValueError:
+                    return Response({
+                        "error": "Invalid parent_id format"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            next_code = generate_ledger_group_code(parent_group_id=parent_uuid)
+            
+            return Response({
+                'msg': 'Next available ledger group code',
+                'data': {
+                    'code': next_code,
+                    'type': 'group',
+                    'parent_id': parent_id
+                }
+            }, status=status.HTTP_200_OK)
+            
+        elif code_type == 'account':
+            from config.utils_methods import generate_ledger_account_code
+            
+            if not parent_id:
+                return Response({
+                    "error": "parent_id (ledger_group_id) is required for accounts"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                parent_uuid = uuid.UUID(parent_id)
+            except ValueError:
+                return Response({
+                    "error": "Invalid parent_id format"
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            next_code = generate_ledger_account_code(ledger_group_id=parent_uuid)
+            
+            return Response({
+                'msg': 'Next available ledger account code',
+                'data': {
+                    'code': next_code,
+                    'type': 'account',
+                    'ledger_group_id': parent_id
+                }
+            }, status=status.HTTP_200_OK)
+            
+    except ValueError as e:
+        return Response({
+            "error": str(e)
+        }, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({
+            "error": f"An error occurred: {str(e)}"
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 def get_next_order_number(order_type_prefix):
     """

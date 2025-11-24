@@ -12,8 +12,9 @@ from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
+from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts
+from apps.customer.models import CustomerBalance, LedgerAccounts
 from rest_framework.filters import OrderingFilter
-from apps.customer.models import CustomerBalance
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
 from rest_framework import viewsets, status
@@ -5521,13 +5522,6 @@ class PaymentTransactionAPIView(APIView):
         # customer_id = cust_data.get('customer_id').replace('-','')
         # account_id = account_data.get('account_id').replace('-','')
 
-        # Validate account_id
-        try:
-            uuid.UUID(account_id)  # Ensure valid UUID format
-            ChartOfAccounts.objects.get(pk=account_id)
-        except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
-            return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
-
         # Validate customer_id
         try:
             uuid.UUID(customer_id)  # Ensure valid UUID format
@@ -5603,7 +5597,7 @@ class PaymentTransactionAPIView(APIView):
                                     sale_invoice=invoice, 
                                     invoice_no=invoice.invoice_no,
                                     customer=customer_id,
-                                    account_id=account_id
+                                    ledger_account_id=account_id
                                 )
                                 
                                 # If the invoice is fully paid, update its order_status_id to "Completed".
@@ -5735,7 +5729,7 @@ class PaymentTransactionAPIView(APIView):
                             customer_id=customer_id,
                             sale_invoice_id=sale_invoice.sale_invoice_id,
                             invoice_no=sale_invoice.invoice_no,
-                            account_id = account_id
+                            ledger_account_id=account_id
                         )
                         payment_transactions_created.append(payment_txn)
                         
@@ -5903,7 +5897,7 @@ class PaymentTransactionAPIView(APIView):
         if customer_id:
             payment_transactions = PaymentTransactions.objects.filter(
                 customer_id=customer_id
-            ).order_by('-created_at')
+            ).order_by( '-created_at')
 
             mstcnl_payment_transactions = []
             if records_all:
