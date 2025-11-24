@@ -94,7 +94,8 @@ INSTALLED_APPS = [
     'apps.finance',
     'apps.customfields',
     'apps.reminders',
-    'apps.dashboard'
+    'apps.dashboard',
+    'apps.auditlogs'
 ]
 
 MIDDLEWARE = [

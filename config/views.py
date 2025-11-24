@@ -24,6 +24,7 @@ def api_links(request):
         ('api/v1/finance/', 'Finance API'),
         ('api/v1/customfields/', 'Customfields API'),
         ('api/v1/reminders/', 'Reminders API'),
+        ('api/v1/audit/logs/', 'Audit API'),
         ('swagger/','Swagger')
     ]
 
