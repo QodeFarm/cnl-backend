@@ -5616,6 +5616,10 @@ class PaymentTransactionAPIView(APIView):
                                     new_outstanding = outstanding_amount - input_adjustNow
                                     remaining_payment = Decimal("0.00")
 
+                                # Get the Customer and LedgerAccounts instances
+                                customer_instance = Customer.objects.get(pk=customer_id)
+                                ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+                                
                                 # Create PaymentTransactions record.
                                 payment_transaction = PaymentTransactions.objects.create(
                                     payment_receipt_no=data.get('payment_receipt_no'),
@@ -5626,8 +5630,8 @@ class PaymentTransactionAPIView(APIView):
                                     payment_status=data.get('payment_status'),
                                     sale_invoice=invoice, 
                                     invoice_no=invoice.invoice_no,
-                                    customer=customer_id,
-                                    ledger_account_id=account_id
+                                    customer=customer_instance,
+                                    ledger_account_id=ledger_account_instance
                                 )
                                 
                                 # If the invoice is fully paid, update its order_status_id to "Completed".
@@ -5652,7 +5656,7 @@ class PaymentTransactionAPIView(APIView):
                                     result = replicate_sale_invoice_to_mstcnl(invoice.sale_invoice_id)
                                     #print(result)
                                 else:
-                                    print("⚠️ Could not find 'Completed' status — replication skipped.")
+                                    print("⚠ Could not find 'Completed' status — replication skipped.")
                             else:
                                 return build_response(0, f"Wrong outstanding_amount given your correct outstanding_amount is {bal_amt}", None, status.HTTP_400_BAD_REQUEST)
                         else:
@@ -5747,6 +5751,10 @@ class PaymentTransactionAPIView(APIView):
                         new_outstanding = current_outstanding - allocated_amount
                         remaining_amount -= allocated_amount
 
+                        # Get the Customer and LedgerAccounts instances
+                        customer_instance = Customer.objects.get(pk=customer_id)
+                        ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+                        
                         # Create payment transaction
                         payment_txn = PaymentTransactions.objects.create(
                             payment_receipt_no=data.get('payment_receipt_no'),
@@ -5756,10 +5764,10 @@ class PaymentTransactionAPIView(APIView):
                             amount=allocated_amount,
                             outstanding_amount=new_outstanding,
                             payment_status=data.get('payment_status'),
-                            customer_id=customer_id,
+                            customer=customer_instance,
                             sale_invoice_id=sale_invoice.sale_invoice_id,
                             invoice_no=sale_invoice.invoice_no,
-                            ledger_account_id=account_id
+                            ledger_account_id=ledger_account_instance
                         )
                         payment_transactions_created.append(payment_txn)
                         
@@ -5782,7 +5790,7 @@ class PaymentTransactionAPIView(APIView):
                                 result = replicate_sale_invoice_to_mstcnl(sale_invoice.sale_invoice_id)
                                 print(result)
                             else:
-                                print("⚠️ Could not find 'Completed' status — replication skipped.")
+                                print("⚠ Could not find 'Completed' status — replication skipped.")
 
 
                         # # Step 5: Update invoice status if fully paid
