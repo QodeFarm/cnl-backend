@@ -5497,25 +5497,55 @@ class PaymentTransactionAPIView(APIView):
         """
         data = request.data
         cust_data = data.get('customer')
+        if not cust_data:
+            return build_response(1, "Customer data is required.", None, status.HTTP_400_BAD_REQUEST)
         
+        customer_id = cust_data.get('customer_id')
+        if not customer_id:
+            return build_response(1, "Customer ID is required.", None, status.HTTP_400_BAD_REQUEST)
+        customer_id = customer_id.replace('-', '')
+        
+        # Handle both 'account' (ChartOfAccounts) and 'ledger_account' (LedgerAccounts) for backward compatibility
         account_data = data.get('account')
+        ledger_account_data = data.get('ledger_account')
         
-        # Handle both string and dict cases
-        if isinstance(cust_data, dict):
-            customer_id = cust_data.get('customer_id') or cust_data.get('id')
-        else:
-            customer_id = cust_data
-
-        if isinstance(account_data, dict):
-            account_id = account_data.get('account_id') or account_data.get('id')
-        else:
-            account_id = account_data
-
-        # Clean up dashes if they exist
-        if customer_id:
-            customer_id = customer_id.replace('-', '')
-        if account_id:
+        if ledger_account_data:
+            # New approach: using LedgerAccounts directly
+            ledger_account_id = ledger_account_data.get('ledger_account_id')
+            if not ledger_account_id:
+                return build_response(1, "Ledger Account ID is required.", None, status.HTTP_400_BAD_REQUEST)
+            ledger_account_id = ledger_account_id.replace('-', '')
+            
+            # Validate ledger_account_id
+            try:
+                uuid.UUID(ledger_account_id)
+                ledger_account = LedgerAccounts.objects.get(pk=ledger_account_id)
+            except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+                return build_response(1, "Invalid Ledger Account ID format OR Ledger Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+            
+            account_id = ledger_account_id  # Use ledger account ID for journal posting
+            
+        elif account_data:
+            # Old approach: using ChartOfAccounts (kept for backward compatibility but needs mapping)
+            account_id = account_data.get('account_id')
+            if not account_id:
+                return build_response(1, "Account ID is required.", None, status.HTTP_400_BAD_REQUEST)
             account_id = account_id.replace('-', '')
+            
+            # Validate account_id
+            try:
+                uuid.UUID(account_id)
+                chart_account = ChartOfAccounts.objects.get(pk=account_id)
+                # Try to find corresponding LedgerAccounts linked to this ChartOfAccounts
+                # This assumes the FK we're adding: ledger_account.chart_account_id
+                ledger_account = LedgerAccounts.objects.filter(chart_account_id=account_id).first()
+                if not ledger_account:
+                    return build_response(1, "No Ledger Account linked to this Chart of Account. Please use ledger_account instead.", None, status.HTTP_400_BAD_REQUEST)
+                account_id = str(ledger_account.ledger_account_id)  # Use the linked ledger account
+            except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
+                return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+        else:
+            return build_response(1, "Either 'account' or 'ledger_account' data is required.", None, status.HTTP_400_BAD_REQUEST)
         
         description = data.get('description')
         
