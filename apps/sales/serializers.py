@@ -389,10 +389,12 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
     tax_amount = serializers.DecimalField(source='sale_invoice.tax_amount', max_digits=18, decimal_places=2)
     # customer_name = serializers.CharField(source='customer.name', read_only=True)
     customer_name = serializers.CharField(source='sale_invoice.customer_id.name', read_only=True)
+    
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
 
     class Meta:
         model = PaymentTransactions
-        fields = ['transaction_id', 'ledger_account_id' ,'invoice_no','customer_id','customer_name','invoice_date', 'amount', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'payment_status', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
+        fields = ['transaction_id', 'ledger_account', 'invoice_no','customer_id','customer_name','invoice_date', 'amount', 'due_date', 'payment_receipt_no', 'payment_date', 'payment_method', 'payment_status', 'total_amount', 'outstanding_amount', 'adjusted_now', 'payment_status', 'ref_date', 'taxable', 'tax_amount']
 
 class SalesByProductReportSerializer(serializers.ModelSerializer):
     product = serializers.CharField(source="product_id__name")  
