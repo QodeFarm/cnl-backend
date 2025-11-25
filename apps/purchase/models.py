@@ -403,7 +403,7 @@ class BillPaymentTransactions(OrderNumberMixin):
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id')
     bill_no = models.CharField(max_length=20, null=True, default=None)
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    account = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, null=True, db_column='account_id')
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, null=False, db_column='ledger_account_id')
 
     class Meta:
         db_table = "bill_payment_transactions"

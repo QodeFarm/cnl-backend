@@ -5684,6 +5684,9 @@ class PaymentTransactionAPIView(APIView):
         except (ValueError, TypeError):
             return build_response(1, "Invalid amount provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
 
+        invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"]).order_by('invoice_date')  # Oldest invoice first
+        if not invoices.exists():
+            return build_response(0, "No pending invoices found for this customer.", None, status.HTTP_400_BAD_REQUEST)
         remaining_amount = input_amount
         payment_transactions_created = []
 
@@ -6161,7 +6164,7 @@ class FetchSalesInvoicesForPaymentReceiptTable(APIView):
         sale_invoice = SaleInvoiceOrders.objects.filter(customer_id=customer_id)
         
         if not sale_invoice.exists():
-            return build_response(0, "No sale invoice found for this customer", None, status.HTTP_404_NOT_FOUND) 
+            return build_response(0, "No sale invoice found for this customer", None, status.HTTP_400_BAD_REQUEST) 
 
         try:
             serializer = SaleInvoiceOrdersSerializer(sale_invoice, many=True)
