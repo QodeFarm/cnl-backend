@@ -1798,38 +1798,17 @@ class BillPaymentTransactionAPIView(APIView):
         data = request.data
         vendor_data = data.get('vendor')
         
-        account_data = data.get('account')
+        # account_data = data.get('ledger_account')
         
         # Handle both string and dict cases
         if isinstance(vendor_data, dict):
             vendor_id = vendor_data.get('vendor_id') or vendor_data.get('id')
         else:
             vendor_id = vendor_data
-
-        if isinstance(account_data, dict):
-            account_id = account_data.get('account_id') or account_data.get('id')
-        else:
-            account_id = account_data
-
-        # Clean up dashes if they exist
-        if vendor_id:
+            if not vendor_id:
+                return build_response(1, "vendor ID is required.", None, status.HTTP_400_BAD_REQUEST)
             vendor_id = vendor_id.replace('-', '')
-        if account_id:
-            account_id = account_id.replace('-', '')
-        
-        # vendor_id = vendor_data.get('vendor_id').replace('-', '')
-        # account_id = account_data.get('account_id').replace('-', '')
-        description = data.get('description')
-        payment_method = data.get('payment_method', 'CASH')
-        payment_receipt_no = data.get('payment_receipt_no')
-
-        # Validate account_id
-        try:
-            uuid.UUID(account_id)
-            ChartOfAccounts.objects.get(pk=account_id)
-        except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
-            return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
-
+            
         # Validate vendor_id
         try:
             uuid.UUID(vendor_id)
@@ -1837,6 +1816,44 @@ class BillPaymentTransactionAPIView(APIView):
         except (ValueError, TypeError, Vendor.DoesNotExist) as e:
             return build_response(1, "Invalid vendor ID format OR Vendor does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
+
+        ledger_account_data = data.get('ledger_account_id')
+
+        if isinstance(ledger_account_data, str):
+            ledger_account_id = ledger_account_data.replace('-', '')
+        elif isinstance(ledger_account_data, dict):
+            ledger_account_id = ledger_account_data.get("ledger_account_id")
+            if not ledger_account_id:
+                return build_response(1, "Ledger Account ID is required.", None, status.HTTP_400_BAD_REQUEST)
+            ledger_account_id = ledger_account_id.replace('-', '')
+        else:
+            return build_response(1, "'ledger_account' must be a string or object.", None, status.HTTP_400_BAD_REQUEST)
+
+        # Validate FK object properly
+        try:
+            uuid.UUID(ledger_account_id)
+            ledger_account_instance = LedgerAccounts.objects.get(pk=ledger_account_id)
+        except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+            return build_response(1, "Invalid Ledger Account ID format OR Ledger Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        # This is the correct FK object to use everywhere
+        account_id = ledger_account_instance.ledger_account_id
+
+        
+        # vendor_id = vendor_data.get('vendor_id').replace('-', '')
+        # account_id = account_data.get('account_id').replace('-', '')
+        description = data.get('description')
+        payment_method = data.get('payment_method', 'CASH')
+        payment_receipt_no = data.get('payment_receipt_no')
+
+        # # Validate ledger_account_id
+        # try:
+        #     uuid.UUID(ledger_account_id)
+        #     LedgerAccounts.objects.get(pk=ledger_account_id)
+        # except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+        #     return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        
         # Fetch Pending status
         try:
             pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
@@ -1881,6 +1898,10 @@ class BillPaymentTransactionAPIView(APIView):
                                     allocated_amount = input_adjustNow
                                     new_outstanding = outstanding_amount - input_adjustNow
                                     remaining_payment = Decimal("0.00")
+                                    
+                                # Create Payment Transaction
+                                vendor_instance = Vendor.objects.get(pk=vendor_id)
+                                ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
 
                                 bill_payment = BillPaymentTransactions.objects.create(
                                     payment_receipt_no=payment_receipt_no,
@@ -1892,8 +1913,8 @@ class BillPaymentTransactionAPIView(APIView):
                                     payment_status=data.get('payment_status', 'Completed'),
                                     purchase_invoice=invoice,
                                     bill_no=invoice.invoice_no,
-                                    vendor_id=vendor_id,
-                                    account_id=account_id
+                                    vendor=vendor_instance,
+                                    ledger_account_id=ledger_account_instance
                                 )
 
                                 completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
@@ -1902,7 +1923,7 @@ class BillPaymentTransactionAPIView(APIView):
                                     BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
 
                                 journal_entry_line_response = JournalEntryLinesAPIView.post(
-                                    self, vendor_id, account_id, input_adjustNow, description, remaining_payment, payment_receipt_no
+                                    self, vendor_id, ledger_account_id, input_adjustNow, description, remaining_payment, payment_receipt_no
                                 )
                                 vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
 
@@ -1964,6 +1985,10 @@ class BillPaymentTransactionAPIView(APIView):
                             new_outstanding = outstanding - remaining_payment
                             remaining_payment = Decimal("0.00")
 
+                        # Create Payment Transaction
+                        vendor_instance = Vendor.objects.get(pk=vendor_id)
+                        ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+                        
                         bill_payment = BillPaymentTransactions.objects.create(
                             payment_receipt_no=payment_receipt_no,
                             payment_method=payment_method,
@@ -1974,8 +1999,8 @@ class BillPaymentTransactionAPIView(APIView):
                             payment_status='Completed' if new_outstanding == 0 else 'Pending',
                             purchase_invoice=invoice,
                             bill_no=invoice.invoice_no,
-                            vendor_id=vendor_id,
-                            account_id=account_id
+                            vendor=vendor_instance,
+                            ledger_account_id=ledger_account_instance
                         )
                         
                         # invoice.update_paid_amount_and_pending_amount_after_bill_payment(
@@ -2116,12 +2141,14 @@ class BillPaymentTransactionAPIView(APIView):
             invoice.save(update_fields=["paid_amount", "pending_amount", "order_status_id"])
 
             # === Step 8: Update Journal Entries ===
-            account_instance = ChartOfAccounts.objects.get(account_id=request.data.get("account"))
-            vendor_instance = Vendor.objects.get(vendor_id=request.data.get("vendor"))
+            # Fetch ledger account used in original payment
+            account_instance = bill_payment.ledger_account_id
+
+            vendor_instance = bill_payment.vendor
 
             # Get latest balance
             existing_balance = (
-                JournalEntryLines.objects.filter(vendor_id=vendor_instance)
+                JournalEntryLines.objects.filter(vendor_id=vendor_instance.vendor_id)
                 .order_by("-created_at")
                 .values_list("balance", flat=True)
                 .first()
@@ -2131,7 +2158,7 @@ class BillPaymentTransactionAPIView(APIView):
 
             # Reversal entry
             JournalEntryLines.objects.create(
-                account_id=account_instance,
+                ledger_account_id=account_instance,
                 debit=old_amount,
                 voucher_no=payment_receipt_no,
                 credit=Decimal("0.00"),
@@ -2154,7 +2181,7 @@ class BillPaymentTransactionAPIView(APIView):
 
             # Create revision entry
             JournalEntryLines.objects.create(
-                account_id=account_instance,
+                ledger_account_id=account_instance,
                 debit=Decimal("0.00"),
                 voucher_no=payment_receipt_no,
                 credit=final_addition,

@@ -260,11 +260,12 @@ class BillPaymentTransactionSerializer(serializers.ModelSerializer):
     # Vendor details from related vendor_id
     vendor_name = serializers.CharField(source='purchase_invoice.vendor_id.name', read_only=True)
     vendor_id = serializers.CharField(source='purchase_invoice.vendor_id.vendor_id', read_only=True)
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
 
     class Meta:
         model = BillPaymentTransactions
         fields = [
-            'transaction_id', 'account_id',
+            'transaction_id', 'ledger_account',
             'bill_no', 'vendor_id', 'vendor_name',
             'bill_date', 'due_date', 'ref_date',
             'amount', 'payment_receipt_no', 'payment_date',
