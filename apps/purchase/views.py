@@ -1773,8 +1773,8 @@ class BillPaymentTransactionAPIView(APIView):
         paginated_qs = filtered_qs[start:end]
 
         # ✅ No records case
-        if not paginated_qs.exists():
-            return filter_response(0, "No Bill Payment Transactions found", page, limit, total_count, None, status.HTTP_404_NOT_FOUND)
+        # if not paginated_qs.exists():
+        #     return filter_response(0, "No Bill Payment Transactions found", page, limit, total_count, None, status.HTTP_404_NOT_FOUND)
 
         serializer = BillPaymentTransactionSerializer(paginated_qs, many=True)
 
@@ -2035,7 +2035,7 @@ class BillPaymentTransactionAPIView(APIView):
 
                     # Post journal + update balance
                     journal_entry_line_response = JournalEntryLinesAPIView.post(
-                        self, vendor_id, account_id, input_amount, description, remaining_payment, payment_receipt_no
+                        self, vendor_id, ledger_account_id, input_amount, description, remaining_payment, payment_receipt_no
                     )
                     vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
 
