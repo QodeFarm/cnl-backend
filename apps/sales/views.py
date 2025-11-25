@@ -5814,7 +5814,7 @@ class PaymentTransactionAPIView(APIView):
             return build_response(len(payment_transactions_created), "Payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
 
         else:
-            return build_response(0, "No Invoices", [], status.HTTP_204_NO_CONTENT)
+            return build_response(0, "No pending or outstanding invoices for this customer", None, status.HTTP_400_BAD_REQUEST)
 
             
     # def get(self, request, customer_id=None):
