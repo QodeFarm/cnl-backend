@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 from django.db.models import Sum, F
 
 from .models import PurchaseInvoiceOrders, BillPaymentTransactions
-from apps.finance.models import JournalEntryLines, ChartOfAccounts
+from apps.finance.models import JournalEntryLines, LedgerAccounts
 import logging
 
 # Setup logging
@@ -37,13 +37,13 @@ def update_pending_amount_after_invoice_creation(sender, instance, created, **kw
 
         # Fetch Purchase Account
         try:
-            purchase_account = ChartOfAccounts.objects.get(account_name__iexact="Purchase Account", is_active=True)
-        except ChartOfAccounts.DoesNotExist:
+            purchase_account = LedgerAccounts.objects.get(name__iexact="Purchase Account", is_deleted=False)
+        except LedgerAccounts.DoesNotExist:
             purchase_account = None
 
         # Create Journal Entry
         JournalEntryLines.objects.create(
-            account_id=purchase_account,
+            ledger_account_id=purchase_account,
             debit=instance.total_amount,
             voucher_no=instance.invoice_no,
             credit=0.00,
@@ -97,7 +97,7 @@ def update_purchase_invoice_balance_after_bill_payment(sender, instance, created
 
 #             new_balance = Decimal(existing_balance) - Decimal(instance.total_amount)
 
-#             purchase_account = ChartOfAccounts.objects.filter(account_name__iexact="Purchase Account", is_active=True).first()
+#             purchase_account = LedgerAccounts.objects.filter(account_name__iexact="Purchase Account", is_active=True).first()
 
 #             JournalEntryLines.objects.create(
 #                 account_id=purchase_account,
@@ -109,7 +109,7 @@ def update_purchase_invoice_balance_after_bill_payment(sender, instance, created
 #                 balance=new_balance
 #             )
 
-#         except (ChartOfAccounts.DoesNotExist, InvalidOperation, TypeError, ValueError) as e:
+#         except (LedgerAccounts.DoesNotExist, InvalidOperation, TypeError, ValueError) as e:
 #             logger.error(f"Error in PurchaseReturn signal: {e}")
 
 
@@ -129,7 +129,7 @@ def update_purchase_invoice_balance_after_bill_payment(sender, instance, created
 
 #             new_balance = Decimal(existing_balance) - Decimal(instance.total_amount)
 
-#             purchase_account = ChartOfAccounts.objects.filter(account_name__iexact="Purchase Account", is_active=True).first()
+#             purchase_account = LedgerAccounts.objects.filter(account_name__iexact="Purchase Account", is_active=True).first()
 
 #             JournalEntryLines.objects.create(
 #                 account_id=purchase_account,
@@ -141,5 +141,5 @@ def update_purchase_invoice_balance_after_bill_payment(sender, instance, created
 #                 balance=new_balance
 #             )
 
-#         except (ChartOfAccounts.DoesNotExist, InvalidOperation, TypeError, ValueError) as e:
+#         except (LedgerAccounts.DoesNotExist, InvalidOperation, TypeError, ValueError) as e:
 #             logger.error(f"Error in PurchaseDebitNotes signal: {e}")
