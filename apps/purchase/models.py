@@ -185,14 +185,14 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
             )
             setattr(self, self.order_no_field, order_number)
             
-        # # ✅ Set pending amount by default = total_amount if new record
-        # if is_new_record:
-        #     if self.total_amount and (self.pending_amount is None or self.pending_amount == 0):
-        #         self.pending_amount = self.total_amount
+        # ✅ Set pending amount by default = total_amount if new record
+        if is_new_record:
+            if self.total_amount and (self.pending_amount is None or self.pending_amount == 0):
+                self.pending_amount = self.total_amount
 
-        # # ✅ Ensure pending_amount doesn’t go below 0
-        # if self.pending_amount and self.pending_amount < 0:
-        #     self.pending_amount = 0
+        # ✅ Ensure pending_amount doesn’t go below 0
+        if self.pending_amount and self.pending_amount < 0:
+            self.pending_amount = 0
 
         # Save the record
         super().save(*args, **kwargs)
