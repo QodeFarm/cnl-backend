@@ -10,8 +10,10 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import transaction
+from apps.auditlogs.utils import log_user_action
 from apps.masters.filters import ItemMasterFilter
 from apps.masters.models import City, Country, State
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from config.utils_variables import *
 from config.utils_methods import *
@@ -35,6 +37,12 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGroupsFilter
     ordering_fields = ['group_name','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Groups"
+    log_pk_field = "product_group_id"
+    log_display_field = "group_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductGroups,*args, **kwargs)
@@ -55,6 +63,12 @@ class ProductCategoriesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductCategoriesFilter
     ordering_fields = ['category_name','code','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Categories"
+    log_pk_field = "category_id"
+    log_display_field = "category_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductCategories,*args, **kwargs)
@@ -75,6 +89,12 @@ class ProductStockUnitsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductStockUnitsFilter
     ordering_fields = ['stock_unit_name','quantity_code_id']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Stock Units"
+    log_pk_field = "stock_unit_id"
+    log_display_field = "stock_unit_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductStockUnits,*args, **kwargs)
@@ -95,6 +115,12 @@ class ProductGstClassificationsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductGstClassificationsFilter
     ordering_fields = ['type','code','hsn_or_sac_code','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Gst Classifications"
+    log_pk_field = "gst_classification_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductGstClassifications,*args, **kwargs)
@@ -116,6 +142,12 @@ class ProductSalesGlViewSet(viewsets.ModelViewSet):
     filterset_class = ProductSalesGlFilter
     ordering_fields = ['name','sales_accounts','code','type','account_no','rtgs_ifsc_code','address','pan','employee']
 
+    #log actions
+    log_actions = True
+    log_module_name = "Product Sales Gl"
+    log_pk_field = "sales_gl_id"
+    log_display_field = "name"
+
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductSalesGl,*args, **kwargs)
 
@@ -135,6 +167,12 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductPurchaseGlFilter
     ordering_fields = ['name','purchase_accounts','code','type','account_no','rtgs_ifsc_code','address','pan','employee']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Purchase Gl"
+    log_pk_field = "purchase_gl_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductPurchaseGl,*args, **kwargs)
@@ -225,6 +263,12 @@ class ProductItemBalanceViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductItemBalanceFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Item Balance"
+    log_pk_field = "product_item_balance_id"
+    log_display_field = "quantity"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductItemBalance,*args, **kwargs)
@@ -241,6 +285,12 @@ class SizeViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = SizeFilter
     ordering_fields = []
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Sizes"
+    log_pk_field = "size_id"
+    log_display_field = "size_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Size,*args, **kwargs)
@@ -261,6 +311,12 @@ class ColorViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ColorFilter
     ordering_fields = []
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Color"
+    log_pk_field = "color_id"
+    log_display_field = "color_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Color,*args, **kwargs)
@@ -281,6 +337,12 @@ class ProductVariationViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = ProductVariationFilter
     ordering_fields = []
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Variation"
+    log_pk_field = "product_variation_id"
+    log_display_field = "sku"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -297,6 +359,12 @@ class ItemMasterViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = ItemMasterFilter
     ordering_fields = []
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Item Master"
+    log_pk_field = "item_master_id"
+    log_display_field = "mode_name"
     
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ItemMaster, *args, **kwargs)
@@ -635,6 +703,17 @@ class ProductViewSet(APIView):
         custom_data["products"] = new_products_data
         product_id = new_products_data.get("product_id", None)  # Fetch product_id from mew instance
         logger.info('Products - created*')
+        
+        product_name = products_data.get("name")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Products",
+            product_id,
+            f"{product_name} - Products Record Created by {request.user.username}"
+        )
 
         # Create 'product_variations' data
         if product_variations_data:
@@ -721,6 +800,17 @@ class ProductViewSet(APIView):
             # update 'product_item_balance'
             item_bal_data = update_multi_instances(self, pk, product_balance_data, ProductItemBalance, ProductItemBalanceSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_item_balance_id')
             custom_data['product_item_balance'] = item_bal_data
+            
+            product_name = products_data.get("name")
+            # Log the Create
+            log_user_action(
+                set_db('default'),
+                request.user,
+                "UPDATE",
+                "Products",
+                pk,
+                f"{product_name} - Products Record Updated by {request.user.username}"
+            )
 
         except Exception as e:
             logger.error(f'Error: {e}')

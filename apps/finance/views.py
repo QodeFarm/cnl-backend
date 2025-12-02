@@ -2,9 +2,12 @@ import datetime
 from decimal import Decimal
 import logging
 from django.forms import IntegerField
+from requests import request
+from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
 from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter
 from apps.sales.models import SaleInvoiceOrders
+from config.utils_db_router import set_db
 from .models import *
 from .serializers import *
 from django.http import Http404
@@ -38,6 +41,12 @@ class BankAccountViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BankAccountFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Bank Accounts"
+    log_pk_field = "bank_account_id"
+    log_display_field = "bank_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, BankAccount,*args, **kwargs)
@@ -78,6 +87,12 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = JournalEntryFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Journal Entry"
+    log_pk_field = "journal_entry_id"
+    log_display_field = "voucher_no"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -91,6 +106,12 @@ class JournalEntryViewSet(viewsets.ModelViewSet):
 class JournalEntryLinesViewSet(viewsets.ModelViewSet):
     queryset = JournalEntryLines.objects.all().order_by('-created_at')
     serializer_class = JournalEntryLinesSerializer
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Journal Entry Lines"
+    log_pk_field = "journal_entry_line_id"
+    log_display_field = "description"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -118,6 +139,15 @@ class JournalEntryLinesAPIView(APIView):
             serializer = JournalEntryLinesSerializer(data=entry_data)
             if serializer.is_valid():
                 serializer.save() 
+                
+                # log_user_action(
+                #     set_db('default'),
+                #     request.user,
+                #     "CREATE",
+                #     "Journal Entry Lines",
+                #     journal_entry_line_id,
+                #     f"{description} - Custom Fields record created by {request.user.username}"
+                # )
             else:
                 raise ValueError(f"serializer validation failed, {serializer.errors}")
         
@@ -181,6 +211,12 @@ class TaxConfigurationViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TaxConfigurationFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Tax Configuration"
+    log_pk_field = "tax_id"
+    log_display_field = "tax_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, TaxConfiguration,*args, **kwargs)
@@ -201,6 +237,12 @@ class BudgetViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BudgetFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Budget"
+    log_pk_field = "budget_id"
+    log_display_field = "fiscal_year"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Budget,*args, **kwargs)
@@ -221,6 +263,12 @@ class ExpenseClaimViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ExpenseClaimFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Expense Claim"
+    log_pk_field = "expense_claim_id"
+    log_display_field = "expense_claim_id"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ExpenseClaim,*args, **kwargs)
@@ -264,6 +312,12 @@ class ExpenseItemViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ExpenseItemFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Expense Item"
+    log_pk_field = "expense_item_id"
+    log_display_field = "expense_item_id"
    
 
     def list(self, request, *args, **kwargs):

@@ -4,9 +4,11 @@ from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework import viewsets,status
+from apps.auditlogs.utils import log_user_action
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.tasks.filters import TasksFilter
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response
 from config.utils_methods import list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances, validate_put_method_data
 from apps.tasks.serializers import TasksSerializer,TaskCommentsSerializer,TaskAttachmentsSerializer,TaskHistorySerializer
@@ -366,6 +368,17 @@ class TaskView(APIView):
             "task_history":task_history_data[0] if task_history_data else [],
             "custom_field_values": custom_fields_data
         }
+        
+        taskname = task_data.get("title")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Tasks",
+            task_id,
+            f"{taskname} - Task Record Created by {request.user.username}"
+        )
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
@@ -514,5 +527,16 @@ class TaskView(APIView):
             "task_history":task_history_data if task_history_data else [],
             "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
+        
+        taskname = task_data.get("title")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Tasks",
+            pk,
+            f"{taskname} - Task Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)

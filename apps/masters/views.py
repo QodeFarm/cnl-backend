@@ -77,6 +77,12 @@ class ProductionFloorViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductionFloorFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Production Floor"
+    log_pk_field = "production_floor_id"
+    log_display_field = "code" 
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductionFloor,*args, **kwargs)
@@ -97,6 +103,12 @@ class CountryViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CountryFilters
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Country"
+    log_pk_field = "country_id"
+    log_display_field = "country_name" 
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -117,6 +129,12 @@ class StateViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = StateFilters
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "State"
+    log_pk_field = "state_id"
+    log_display_field = "state_name" 
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -137,6 +155,12 @@ class CityViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CityFilters
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "City"
+    log_pk_field = "city_id"
+    log_display_field = "city_name" 
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -158,6 +182,12 @@ class StatusesViewset(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = StatusesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Statuses"
+    log_pk_field = "status_id"
+    log_display_field = "status_name" 
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Statuses,*args, **kwargs)
@@ -178,6 +208,12 @@ class LedgerGroupsViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LedgerGroupsFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Ledger Groups"
+    log_pk_field = "ledger_group_id"
+    log_display_field = "code" 
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, LedgerGroups,*args, **kwargs)
@@ -198,6 +234,12 @@ class FirmStatusesViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FirmStatusesFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Firm Status"
+    log_pk_field = "firm_status_id"
+    log_display_field = "name" 
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, FirmStatuses,*args, **kwargs)
@@ -218,6 +260,12 @@ class TerritoryViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TerritoryFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Territory"
+    log_pk_field = "territory_id"
+    log_display_field = "name" 
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Territory,*args, **kwargs)
@@ -238,6 +286,12 @@ class CustomerCategoriesViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerCategoriesFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Customer Categories"
+    log_pk_field = "customer_category_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -259,6 +313,12 @@ class GstCategoriesViews(viewsets.ModelViewSet):
     filterset_class = GstCategoriesFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
     
+    #log actions
+    log_actions = True
+    log_module_name = "GST Categories"
+    log_pk_field = "gst_category_id"
+    log_display_field = "name"
+    
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, GstCategories,*args, **kwargs)
 
@@ -278,6 +338,12 @@ class CustomerPaymentTermsViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerPaymentTermsFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Customer PaymentTerms"
+    log_pk_field = "payment_term_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, CustomerPaymentTerms,*args, **kwargs)
@@ -299,6 +365,12 @@ class PriceCategoriesViews(viewsets.ModelViewSet):
     filterset_class = PriceCategoriesFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
     
+    #log actions
+    log_actions = True
+    log_module_name = "Price Categories"
+    log_pk_field = "price_category_id"
+    log_display_field = "code"
+    
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, PriceCategories,*args, **kwargs)
 
@@ -319,6 +391,13 @@ class TransportersViews(viewsets.ModelViewSet):
     filterset_class = TransportersFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
     
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Transporters"
+    log_pk_field = "transporter_id"
+    log_display_field = "code"
+    
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Transporters,*args, **kwargs)
 
@@ -338,6 +417,12 @@ class ProductTypesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Types"
+    log_pk_field = "type_id"
+    log_display_field = "type_name"
 
     def list(self, request, *args, **kwargs):
         # Check if there's a mode_type filter applied
@@ -377,6 +462,12 @@ class ProductUniqueQuantityCodesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductUniqueQuantityCodesFilter
     ordering_fields = ['quantity_code_name','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Unique Quantity Codes"
+    log_pk_field = "quantity_code_id"
+    log_display_field = "quantity_code_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductUniqueQuantityCodes,*args, **kwargs)
@@ -397,6 +488,12 @@ class UnitOptionsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UnitOptionsFilter
     ordering_fields = ['unit_name','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Unit Options"
+    log_pk_field = "unit_options_id"
+    log_display_field = "unit_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, UnitOptions,*args, **kwargs)
@@ -417,6 +514,12 @@ class ProductDrugTypesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductDrugTypesFilter
     ordering_fields = ['drug_type_name']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Drug Types"
+    log_pk_field = "drug_type_id"
+    log_display_field = "drug_type_name"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -437,6 +540,12 @@ class ProductItemTypeViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductItemTypeFilter
     ordering_fields = ['item_name','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Item Types"
+    log_pk_field = "item_type_id"
+    log_display_field = "item_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductItemType,*args, **kwargs)
@@ -457,6 +566,12 @@ class BrandSalesmanViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BrandSalesmanFilter
     ordering_fields = ['code','name']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Brand Salesman"
+    log_pk_field = "brand_salesman_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -477,6 +592,12 @@ class ProductBrandsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ProductBrandsFilter
     ordering_fields = ['brand_name','code','brand_salesman_id','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Product Brands"
+    log_pk_field = "brand_id"
+    log_display_field = "brand_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, ProductBrands,*args, **kwargs)
@@ -497,6 +618,12 @@ class PurchaseTypesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PurchaseTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Purchase Types"
+    log_pk_field = "purchase_type_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, PurchaseTypes,*args, **kwargs)
@@ -514,6 +641,12 @@ class PurchaseTypesViewSet(viewsets.ModelViewSet):
 class ShippingCompaniesView(viewsets.ModelViewSet):
     queryset = ShippingCompanies.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ShippingCompaniesSerializer
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Shipping Companies"
+    log_pk_field = "shipping_company_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -535,6 +668,12 @@ class SaleTypesView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = SaleTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Sale Types"
+    log_pk_field = "sale_type_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, SaleTypes,*args, **kwargs)
@@ -555,6 +694,12 @@ class GstTypesView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GstTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "GST Types"
+    log_pk_field = "gst_type_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, GstTypes,*args, **kwargs)
@@ -572,6 +717,12 @@ class GstTypesView(viewsets.ModelViewSet):
 class ShippingModesView(viewsets.ModelViewSet):
     queryset = ShippingModes.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = ShippingModesSerializer
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Shipping Modes"
+    log_pk_field = "shipping_mode_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -589,6 +740,12 @@ class ShippingModesView(viewsets.ModelViewSet):
 class OrdersSalesmanView(viewsets.ModelViewSet):
     queryset = OrdersSalesman.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = OrdersSalesmanSerializer
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Orders Salesman"
+    log_pk_field = "order_salesman_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -610,6 +767,12 @@ class PaymentLinkTypesView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PaymentLinkTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Payment Link Types"
+    log_pk_field = "payment_link_type_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, PaymentLinkTypes,*args, **kwargs)
@@ -630,6 +793,12 @@ class OrderStatusesView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = OrderStatusesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Order Statuses"
+    log_pk_field = "order_status_id"
+    log_display_field = "status_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, OrderStatuses,*args, **kwargs)
@@ -650,6 +819,12 @@ class OrderTypesView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = OrderTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Order Types"
+    log_pk_field = "order_type_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, OrderTypes,*args, **kwargs)
@@ -853,6 +1028,12 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = TaskPrioritiesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Task Priority"
+    log_pk_field = "priority_id"
+    log_display_field = "priority_name" 
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, TaskPriorities,*args, **kwargs)
@@ -1054,6 +1235,12 @@ class DocumentGeneratorView(APIView):
 class ReturnOptionsViewset(viewsets.ModelViewSet):
     queryset = ReturnOptions.objects.exclude(name__iexact='Sale order').order_by('is_deleted', '-created_at')
     serializer_class = ReturnOptionsSerializers
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Return Options"
+    log_pk_field = "return_option_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -1071,6 +1258,12 @@ class ReturnOptionsViewset(viewsets.ModelViewSet):
 class FieldTypeViewSet(viewsets.ModelViewSet):
     queryset = FieldType.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = FieldTypeSerializer
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Field Type"
+    log_pk_field = "field_type_id"
+    log_display_field = "field_type_name"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -1091,6 +1284,12 @@ class EntitiesViewSet(viewsets.ModelViewSet):
     """
     queryset = Entities.objects.all().order_by('is_deleted', '-created_at')
     serializer_class = EntitiesSerializer
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Entities"
+    log_pk_field = "entity_id"
+    log_display_field = "entity_name"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
@@ -1111,6 +1310,12 @@ class UserGroupsViewset(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UserGroupsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "User Groups"
+    log_pk_field = "group_id"
+    log_display_field = "group_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, UserGroups,*args, **kwargs)
@@ -1131,6 +1336,12 @@ class UserGroupMembersViewset(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = UserGroupMembersFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "User Groups Members"
+    log_pk_field = "member_id"
+    log_display_field = "member_id"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, UserGroupMembers,*args, **kwargs)
@@ -1154,6 +1365,12 @@ class PackageUnitViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = PackageUnitFilter
     ordering_fields = []
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Package Unit"
+    log_pk_field = "pack_unit_id"
+    log_display_field = "unit_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, PackageUnit,*args, **kwargs)
@@ -1175,6 +1392,12 @@ class GPackageUnitViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = GPackageUnitFilter
     ordering_fields = []
+    
+    #log actions
+    log_actions = True
+    log_module_name = "G Package Unit"
+    log_pk_field = "g_pack_unit_id"
+    log_display_field = "unit_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, GPackageUnit,*args, **kwargs)
@@ -1195,6 +1418,12 @@ class FlowStatusViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FlowStatusFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Flow Status"
+    log_pk_field = "flow_status_id"
+    log_display_field = "flow_status_name"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

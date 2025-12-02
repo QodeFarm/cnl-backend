@@ -4,6 +4,7 @@ import time
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
+from apps.auditlogs.utils import log_user_action
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.finance.models import JournalEntryLines
@@ -11,6 +12,7 @@ from apps.finance.views import JournalEntryLinesAPIView
 from apps.purchase.filters import BillPaymentTransactionsReportFilter, PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
 from apps.purchase.filters import OutstandingPurchaseFilter, PurchaseInvoiceOrdersFilter, PurchaseOrderItemsFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter, PurchasesByVendorReportFilter, PurchasesbyVendorReportFilter, StockReplenishmentReportFilter
 from apps.vendor.views import VendorBalanceView
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
@@ -481,6 +483,15 @@ class PurchaseOrderViewSet(APIView):
 
             instance.is_deleted = False
             instance.save()
+            # Log the Create
+            log_user_action(
+                set_db('default'),
+                request.user,
+                "Patch",
+                "Purchase Order",
+                pk,
+                f"{instance.order_no} - Purchase Order Restored by {request.user.username}"
+            )
 
             logger.info(f"PurchaseOrders with ID {pk} restored successfully.")
             return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
@@ -619,6 +630,17 @@ class PurchaseOrderViewSet(APIView):
             "order_shipments":order_shipments,
             "custom_field_values": custom_fields_data
         }
+        
+        orderno = purchase_order_data.get("order_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Purchase Order",
+            purchase_order_id,
+            f"{orderno} - Purchase Order Record Created by {request.user.username}"
+        )
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
@@ -729,6 +751,16 @@ class PurchaseOrderViewSet(APIView):
             "order_shipments":shipment_data if shipment_data else {},
             "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
+        orderno = purchase_order_data.get("order_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Purchase Order",
+            pk,
+            f"{orderno} - Purchase Order Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
@@ -1127,6 +1159,16 @@ class PurchaseInvoiceOrderViewSet(APIView):
             "order_shipments":order_shipments,
             "custom_field_values": custom_fields_data
         }
+        invoiceno = purchase_invoice_orders_data.get("invoice_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Purchase Invoice",
+            purchase_invoice_id,
+            f"{invoiceno} - Purchase Invoice Order Record Created by {request.user.username}"
+        )
 
         # Update Product Stock
         update_product_stock(Products, ProductVariation, purchase_invoice_items_data, 'subtract')        
@@ -1240,6 +1282,16 @@ class PurchaseInvoiceOrderViewSet(APIView):
             "order_shipments":shipment_data if shipment_data else {},
             "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
+        invoiceno = purchase_invoice_orders_data.get("invoice_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Purchase Invoice",
+            pk,
+            f"{invoiceno} - Purchase Invoice Order Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
@@ -1414,6 +1466,15 @@ class PurchaseReturnOrderViewSet(APIView):
                         product.balance = F('balance') + item.quantity
                         product.save()
                     logger.info(f"Reverted {len(return_items)} products for return {return_no}")
+                    # Log the Create
+                    log_user_action(
+                        set_db('default'),
+                        request.user,
+                        "RETURN",
+                        "Purchase Return",
+                        pk,
+                        f"{instance.return_no} - products Reverted for return by {request.user.username}"
+                    )
                 except Exception as e:
                     logger.error(f"Error reverting products: {str(e)}")
 
@@ -1437,6 +1498,7 @@ class PurchaseReturnOrderViewSet(APIView):
                         balance=latest_balance
                     )
                     logger.info(f"Created reversal ledger entry for return {return_no}")
+                    
                 except Exception as e:
                     logger.error(f"Error creating ledger entry: {str(e)}")
 
@@ -1614,6 +1676,17 @@ class PurchaseReturnOrderViewSet(APIView):
             "order_shipments":order_shipments,
             "custom_field_values": custom_fields_data
         }
+        
+        returnno = purchase_return_orders_data.get("return_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Purchase Return",
+            purchase_return_id,
+            f"{returnno} - Purchase Return Record Created by {request.user.username}"
+        )
 
         # Update the stock with returned products.
         update_product_stock(Products, ProductVariation, purchase_return_items_data, 'add')
@@ -1727,6 +1800,17 @@ class PurchaseReturnOrderViewSet(APIView):
             "order_shipments":shipment_data if shipment_data else {},
             "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
+        
+        returnno = purchase_return_orders_data.get("return_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Purchase Return",
+            pk,
+            f"{returnno} - Purchase Return Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
@@ -1916,6 +2000,26 @@ class BillPaymentTransactionAPIView(APIView):
                                     vendor=vendor_instance,
                                     ledger_account_id=ledger_account_instance
                                 )
+                                
+                                #log action
+                                if new_outstanding == 0:
+                                    log_user_action(
+                                        set_db('default'),
+                                        request.user,
+                                        "CREATE & UPDATE",
+                                        "Bill Payments & Purchase Invoice",
+                                        invoice.purchase_invoice_id,
+                                        f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
+                                    )
+                                else:
+                                    log_user_action(
+                                        set_db('default'),
+                                        request.user,
+                                        "CREATE",
+                                        "Bill Payments",
+                                        bill_payment.transaction_id,
+                                        f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
+                                    )
 
                                 completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
                                 if completed_status:
@@ -2002,6 +2106,26 @@ class BillPaymentTransactionAPIView(APIView):
                             vendor=vendor_instance,
                             ledger_account_id=ledger_account_instance
                         )
+                        
+                        #log action
+                        if new_outstanding == 0:
+                            log_user_action(
+                                set_db('default'),
+                                request.user,
+                                "CREATE & UPDATE",
+                                "Bill Payments & Purchase Invoice",
+                                invoice.purchase_invoice_id,
+                                f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
+                            )
+                        else:
+                            log_user_action(
+                                set_db('default'),
+                                request.user,
+                                "CREATE",
+                                "Bill Payments",
+                                bill_payment.transaction_id,
+                                f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
+                            )
                         
                         # invoice.update_paid_amount_and_pending_amount_after_bill_payment(
                         #     payment_amount=allocated_amount,
