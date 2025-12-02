@@ -271,17 +271,58 @@ def list_all_objects(self, request, *args, **kwargs):
 
 
 
+# def create_instance(self, request, *args, **kwargs):
+#     serializer = self.get_serializer(data=request.data)
+    
+#     if serializer.is_valid():
+#         serializer.save()
+#         data = serializer.data
+        
+#         # ----------------Pramod -update ----------------------------
+        
+        
+#         #-------------------------------------------------------------
+#         return build_response(1, "Record created successfully", data, status.HTTP_201_CREATED)
+#     else:
+#         errors_str = json.dumps(serializer.errors, indent=2)
+#         logger.error("Serializer validation error: %s", errors_str)
+#         return build_response(0, "Form validation failed", [], errors = serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
 def create_instance(self, request, *args, **kwargs):
     serializer = self.get_serializer(data=request.data)
-    
+
     if serializer.is_valid():
-        serializer.save()
+        instance = serializer.save()
         data = serializer.data
+
+        # ---------------- LOGGING ---------------- #
+        if getattr(self, "log_actions", False):
+            from apps.auditlogs.utils import log_user_action
+
+            module = getattr(self, "log_module_name", self.__class__.__name__.replace("ViewSet", ""))
+            pk_field = getattr(self, "log_pk_field", "id")
+            pk_value = data.get(pk_field)
+
+            display_field = getattr(self, "log_display_field", None)
+            display_value = data.get(display_field) if display_field else pk_value
+
+            log_user_action(
+                "default",
+                request.user,
+                "CREATE",
+                module,
+                pk_value,
+                f"{module} ({display_value}) Created by {request.user.username}"
+            )
+        # ------------------------------------------- #
+
         return build_response(1, "Record created successfully", data, status.HTTP_201_CREATED)
+
     else:
         errors_str = json.dumps(serializer.errors, indent=2)
         logger.error("Serializer validation error: %s", errors_str)
         return build_response(0, "Form validation failed", [], errors = serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
 
 def update_instance(self, request, *args, **kwargs):
     partial = kwargs.pop('partial', False)
@@ -290,6 +331,31 @@ def update_instance(self, request, *args, **kwargs):
     serializer.is_valid(raise_exception=True)
     self.perform_update(serializer)
     data = serializer.data
+    
+    #------------Pramod -updated --------------------------
+    
+    # ---------------- LOGGING ---------------- #
+    if getattr(self, "log_actions", False):
+        from apps.auditlogs.utils import log_user_action
+
+        module = getattr(self, "log_module_name", self.__class__.__name__.replace("ViewSet", ""))
+        pk_field = getattr(self, "log_pk_field", "id")
+        pk_value = data.get(pk_field)
+
+        display_field = getattr(self, "log_display_field", None)
+        display_value = data.get(display_field) if display_field else pk_value
+
+        log_user_action(
+            "default",
+            request.user,
+            "UPDATE",
+            module,
+            pk_value,
+            f"{module} ({display_value}) Updated by {request.user.username}"
+        )
+    # ------------------------------------------- #
+    
+    #---------------------------------------------------------
     return build_response(1, "Record updated successfully", data, status.HTTP_200_OK)
 
 def perform_update(self, serializer):

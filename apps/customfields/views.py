@@ -1,5 +1,7 @@
 from rest_framework import viewsets
+from apps.auditlogs.utils import log_user_action
 from apps.customfields.filters import CustomFieldFilter, CustomFieldOptionsFilters, CustomFieldValuesFilters
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from config.utils_methods import create_instance, list_all_objects, list_all_objects_1, update_instance, soft_delete
 from .models import CustomField, CustomFieldOption, CustomFieldValue
@@ -197,6 +199,17 @@ class CustomFieldCreateViewSet(APIView):
                 "custom_field": custom_field_serializer.data,
                 "custom_field_options": custom_field_options if custom_field_options_data else []
             }
+            
+            custom_field_name = custom_field_data.get("field_name")
+            
+            log_user_action(
+                set_db('default'),
+                request.user,
+                "CREATE",
+                "Custom Fields",
+                custom_field_id,
+                f"{custom_field_name} - Custom Fields record created by {request.user.username}"
+            )
 
             return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
@@ -286,6 +299,17 @@ class CustomFieldCreateViewSet(APIView):
             "custom_field": custom_field_update[0] if custom_field_update else {},
             "custom_field_options": custom_field_options_update if custom_field_options_update else []
         }
+        
+        custom_field_name = custom_field_data.get("field_name")
+        
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Custom Fields",
+            pk,
+            f"{custom_field_name} - Custom Fields record created by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     

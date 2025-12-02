@@ -118,6 +118,12 @@ class BranchBankDetailsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = BranchBankDetailsFilters
     ordering_fields = []
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Branch Bank Details"
+    log_pk_field = "bank_detail_id"
+    log_display_field = "bank_name"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)
