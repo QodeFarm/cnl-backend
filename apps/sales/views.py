@@ -1161,48 +1161,6 @@ class SaleOrderViewSet(APIView):
         except Exception as e:
             logger.exception(f"Error retrieving related data for model {model.__name__} with filter {filter_field}={filter_value} from {using_db}: {str(e)}")
             return []
-        
-
-
-    # @transaction.atomic
-    # def delete(self, request, pk, *args, **kwargs):
-    #     """
-    #     Safely marks the sale order and its related attachments and shipments as deleted.
-    #     """
-    #     db_to_use = None
-    #     try:
-    #         # Get the SaleOrder instance from the appropriate database
-    #         instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
-
-    #         # Soft delete related OrderAttachments
-    #         OrderAttachments.objects.using(db_to_use).filter(order_id=pk, is_deleted=False).update(
-    #             is_deleted=True, deleted_at=timezone.now()
-    #         )
-
-    #         # Soft delete related OrderShipments
-    #         OrderShipments.objects.using(db_to_use).filter(order_id=pk, is_deleted=False).update(
-    #             is_deleted=True, deleted_at=timezone.now()
-    #         )
-
-    #         # Soft delete related CustomFieldValue
-    #         CustomFieldValue.objects.using(db_to_use).filter(custom_id=pk, is_deleted=False).update(
-    #             is_deleted=True, deleted_at=timezone.now()
-    #         )
-
-    #         # Soft delete the main SaleOrder instance
-    #         instance.is_deleted = True
-    #         instance.deleted_at = timezone.now()
-    #         instance.save(using=db_to_use)
-
-    #         logger.info(f"SaleOrder with ID {pk} soft-deleted successfully.")
-    #         return build_response(1, "Record soft-deleted successfully", [], status.HTTP_200_OK)
-
-    #     except SaleOrder.DoesNotExist:
-    #         logger.warning(f"SaleOrder with ID {pk} does not exist.")
-    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-    #     except Exception as e:
-    #         logger.error(f"Error soft-deleting SaleOrder with ID {pk}: {str(e)}")
-    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
@@ -1375,6 +1333,15 @@ class SaleOrderViewSet(APIView):
         order_attachments_data = given_data.pop('order_attachments', None)
         order_shipments_data = given_data.pop('order_shipments', None)
         custom_fields_data = given_data.pop('custom_field_values', None)
+        
+        # ---------------- CLEAN EMPTY SALE ORDER ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5 default rows)
+        # 👉 ADD THIS BELOW
+        sale_order_items_data = [
+            item for item in sale_order_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        #----------------------------------------------------------
 
         sale_type_name = sale_order_data.get("sale_type", {}).get("name")
         flow_status_name = sale_order_data.get("flow_status", {}).get("flow_status_name")
@@ -1711,6 +1678,15 @@ class SaleOrderViewSet(APIView):
 
         # Vlidated SaleOrderItems Data
         sale_order_items_data = given_data.pop('sale_order_items', None)
+        
+        # ------------------ IMPORTANT NEW LOGIC ------------------ #
+        # Filter out empty UI rows (only keep rows with real product)
+        if sale_order_items_data:
+            sale_order_items_data = [
+                item for item in sale_order_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+            
         if sale_order_items_data:
             exclude_fields = ['sale_order_id']
             item_error = validate_put_method_data(self, sale_order_items_data, SaleOrderItemsSerializer,
@@ -2802,6 +2778,15 @@ class SaleInvoiceOrdersViewSet(APIView):
         order_attachments_data = given_data.pop('order_attachments', None)
         order_shipments_data = given_data.pop('order_shipments', None)
         custom_fields_data = given_data.pop('custom_field_values', None)
+        
+        # ---------------- CLEAN EMPTY SALE ORDER ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5 default rows)
+        # 👉 ADD THIS BELOW
+        sale_invoice_items_data = [
+            item for item in sale_invoice_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        #----------------------------------------------------------
 
         # ---------------------- VALIDATION ----------------------------------#
         invoice_error, item_error, attachment_error, shipment_error, custom_error = [], [], [], [], []
@@ -2938,6 +2923,15 @@ class SaleInvoiceOrdersViewSet(APIView):
         
         # Validate SaleInvoiceItems Data
         sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
+        
+        # ------------------ IMPORTANT NEW LOGIC ------------------ #
+        # Filter out empty UI rows (only keep rows with real product)
+        if sale_invoice_items_data:
+            sale_invoice_items_data = [
+                item for item in sale_invoice_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        #-----------------------------------------------------------------------
         if sale_invoice_items_data:
             exclude_fields = ['sale_invoice_id']
             item_error = validate_put_method_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, exclude_fields, SaleInvoiceItems, current_model_pk_field='sale_invoice_item_id', db_to_use=db_to_use)
@@ -3199,35 +3193,6 @@ class SaleReturnOrdersViewSet(APIView):
                              model.__name__, filter_field, filter_value, str(e))
             return []
 
-    # @transaction.atomic
-    # def delete(self, request, pk, *args, **kwargs):
-    #     """
-    #     Handles the deletion of a sale return order and its related attachments and shipments.
-    #     """
-    #     try:
-    #         # Get the SaleReturnOrders instance
-    #         instance = SaleReturnOrders.objects.get(pk=pk)
-
-    #         # Delete related OrderAttachments and OrderShipments
-    #         if not delete_multi_instance(pk, SaleReturnOrders, OrderAttachments, main_model_field_name='order_id'):
-    #             return build_response(0, "Error deleting related order attachments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-    #         if not delete_multi_instance(pk, SaleReturnOrders, OrderShipments, main_model_field_name='order_id'):
-    #             return build_response(0, "Error deleting related order shipments", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-    #         if not delete_multi_instance(pk, SaleReturnOrders, CustomFieldValue, main_model_field_name='custom_id'):
-    #             return build_response(0, "Error deleting related CustomFieldValue", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    #         # Delete the main SaleOrder instance
-    #         instance.is_deleted=True 
-    #         instance.save()
-
-    #         logger.info(f"SaleReturnOrders with ID {pk} deleted successfully.")
-    #         return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
-    #     except SaleReturnOrders.DoesNotExist:
-    #         logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
-    #         return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-    #     except Exception as e:
-    #         logger.error(f"Error deleting SaleReturnOrder with ID {pk}: {str(e)}")
-    #         return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
@@ -3378,6 +3343,17 @@ class SaleReturnOrdersViewSet(APIView):
         db_name = set_db('default')
         # Vlidated SaleReturnOrders Data
         sale_return_order_data = given_data.pop('sale_return_order', None)  # parent_data
+        sale_return_items_data = given_data.pop('sale_return_items', None)
+        
+        # ---------------- CLEAN EMPTY SALE ORDER ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5 default rows)
+        # 👉 ADD THIS BELOW
+        sale_return_items_data = [
+            item for item in sale_return_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        #----------------------------------------------------------
+
         if sale_return_order_data:
             order_error = validate_payload_data(
                 self, sale_return_order_data, SaleReturnOrdersSerializer, using=db_name)
@@ -3386,7 +3362,7 @@ class SaleReturnOrdersViewSet(APIView):
                                 OrderTypes, look_up='order_type')
 
         # Vlidated SaleReturnItems Data
-        sale_return_items_data = given_data.pop('sale_return_items', None)
+        
         if sale_return_items_data:
             item_error = validate_multiple_data(
                 self, sale_return_items_data, SaleReturnItemsSerializer, ['sale_return_id'], using_db=db_name)
@@ -3538,6 +3514,14 @@ class SaleReturnOrdersViewSet(APIView):
 
         # Vlidated SaleReturnItems Data
         sale_return_items_data = given_data.pop('sale_return_items', None)
+        # ------------------ IMPORTANT NEW LOGIC ------------------ #
+        # Filter out empty UI rows (only keep rows with real product)
+        if sale_return_items_data:
+            sale_return_items_data = [
+                item for item in sale_return_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+            
         if sale_return_items_data:
             exclude_fields = ['sale_return_id']
             item_error = validate_put_method_data(self, sale_return_items_data, SaleReturnItemsSerializer,

@@ -531,6 +531,16 @@ class PurchaseOrderViewSet(APIView):
 
         # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
+        
+        # ---------------- CLEAN EMPTY Purchase ORDER ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5 default rows)
+        purchase_order_items_data = [
+            item for item in purchase_order_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        #----------------------------------------------------------
+
+        
         if purchase_order_items_data:
             item_error = validate_multiple_data(self, purchase_order_items_data,PurchaseorderItemsSerializer,['purchase_order_id'])
 
@@ -670,6 +680,14 @@ class PurchaseOrderViewSet(APIView):
 
         # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
+        
+        # Filter out empty UI rows (only keep rows with real product)
+        if purchase_order_items_data:
+            purchase_order_items_data = [
+                item for item in purchase_order_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        
         if purchase_order_items_data:
             exclude_fields = ['purchase_order_id']
             item_error = validate_put_method_data(self, purchase_order_items_data, PurchaseorderItemsSerializer, exclude_fields, PurchaseorderItems, current_model_pk_field='purchase_order_item_id')
@@ -1055,6 +1073,12 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 
         # Validated PurchaseInvoiceItems Data
         purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+        
+        purchase_invoice_items_data = [
+            item for item in purchase_invoice_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        
         if purchase_invoice_items_data:
             invoice_item_error = validate_multiple_data(self, purchase_invoice_items_data,PurchaseInvoiceItemSerializer,['purchase_invoice_id'])
 
@@ -1201,6 +1225,13 @@ class PurchaseInvoiceOrderViewSet(APIView):
 
         # Validated PurchaseInvoiceItem Data
         purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+        
+        if purchase_invoice_items_data:
+            purchase_invoice_items_data = [
+                item for item in purchase_invoice_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        
         if purchase_invoice_items_data:
             exclude_fields = ['purchase_invoice_id']
             invoice_item_error = validate_put_method_data(self, purchase_invoice_items_data, PurchaseInvoiceItemSerializer, exclude_fields, PurchaseInvoiceItem, current_model_pk_field='purchase_invoice_item_id')
@@ -1569,6 +1600,12 @@ class PurchaseReturnOrderViewSet(APIView):
                 
         # Validated PurchaseInvoiceItems Data
         purchase_return_items_data = given_data.pop('purchase_return_items', None)
+        
+        purchase_return_items_data = [
+            item for item in purchase_return_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        
         if purchase_return_items_data:
             return_item_error = validate_multiple_data(self, purchase_return_items_data,PurchaseReturnItemsSerializer,['purchase_return_id'])
 
@@ -1719,6 +1756,13 @@ class PurchaseReturnOrderViewSet(APIView):
 
         # Validated PurchaseReturnItems Data
         purchase_return_items_data = given_data.pop('purchase_return_items', None)
+        
+        if purchase_return_items_data:
+            purchase_return_items_data = [
+                item for item in purchase_return_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        
         if purchase_return_items_data:
             exclude_fields = ['purchase_return_id']
             return_item_error = validate_put_method_data(self, purchase_return_items_data, PurchaseReturnItemsSerializer, exclude_fields, PurchaseReturnItems, current_model_pk_field='purchase_return_item_id')
