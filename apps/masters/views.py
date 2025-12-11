@@ -1080,7 +1080,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['product_data'], 
                                    pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
                                    pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['round_0ff'], pdf_data['cess_amount'], 
-                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type']
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks']
                                 )
                 
             if document_type == "sale_invoice":
@@ -1096,7 +1096,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['product_data'],
                                    pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
                                    pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'],pdf_data['finalDiscount'], pdf_data['cess_amount'], pdf_data['round_0ff'], #finalDiscount
-                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type']
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks'],
                                 )
             # Add this in the DocumentGeneratorView class after the sale_invoice condition
             if document_type == "sale_return":
@@ -1105,15 +1105,15 @@ class DocumentGeneratorView(APIView):
                 sale_return_doc(
                     elements, doc, 
                     pdf_data['company_name'], pdf_data['company_address'], pdf_data['company_phone'],
-                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['final_invoice'],
-                    pdf_data['date_lbl'], pdf_data['final_invoiceDate'],
+                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['return_no'],
+                    pdf_data['date_lbl'], pdf_data['date_value'],
                     pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'],
                     pdf_data['city'],
                     pdf_data['product_data'],
                     pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['cess_amount'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], pdf_data['itemstotal'],
                     pdf_data['finalDiscount'], pdf_data['bill_amount_in_words'],
                     pdf_data['round_0ff'],
-                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type']
+                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['return_reason']
                 )
             if document_type == "purchase_order" or document_type == "purchase_return":
                 pdf_data = purchase_data(pk, document_type, format_value)
@@ -1156,7 +1156,8 @@ class DocumentGeneratorView(APIView):
                         'invoice_date': pdf_data['invoice_date'],
                         'payment_method': pdf_data['payment_method'],
                         'cheque_no': pdf_data['cheque_no'],
-                        'amount': pdf_data['amount']
+                        'amount': pdf_data['amount'],
+                        'total': pdf_data['total']
                     }],  # Pass as list to match sale order's product_data structure
                     pdf_data['amount'],
                     pdf_data['outstanding'],

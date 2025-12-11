@@ -40,11 +40,16 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             
             # Get the invoice OrderedDict
             InvoiceNo = customer_data_for_cust_data.get('sale_invoice')
-            print("InvoiceNo : ", InvoiceNo)
+            
+            ReturnNo = customer_data_for_cust_data.get('sale_return')
+            print("ReturnNo : ", ReturnNo)
 
             # Extract invoice_no and invoice_date
             final_invoice = InvoiceNo.get('invoice_no') if InvoiceNo else None
             final_invoiceDate = InvoiceNo.get('invoice_date') if InvoiceNo else None
+            
+            final_return = ReturnNo.get('return_no') if ReturnNo else None
+            final_returnDate = ReturnNo.get('return_date') if ReturnNo else None
             
             obj = get_object_or_404(model, pk=pk)
             is_estimate = getattr(obj, 'sale_estimate', 'No') == 'Yes'  # Safely get the attribute
@@ -190,12 +195,30 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             round_0ff = round(net_value - (party_old_balance + final_amount - finalDiscount), 2)  # e.g., "+0.00", "-0.01"
             bill_amount_in_words = convert_amount_to_words(net_value)
             
+            # ===== Combine Date + Time for Invoice =====
+            raw_date = getattr(obj, date_value, None)           # DateField
+            raw_time = getattr(obj, "created_at", None)         # DateTimeField
+
+            if raw_date:
+                date_part = raw_date.strftime("%d-%m-%Y")
+            else:
+                date_part = ""
+
+            if raw_time:
+                time_part = raw_time.strftime("%I:%M %p")
+            else:
+                time_part = ""
+
+            combined_date_time = f"{date_part}  {time_part}".strip()
+
+            
             return {
                 'sale_estimate': sale_estimate,
                 # Add the doc_header to the returned data
                 'doc_header': doc_header,
                 'final_invoice' : final_invoice, 
                 'final_invoiceDate' : final_invoiceDate,
+                'return_no': final_return,
                 #Company details
                 'company_logo': company_logo,
                 'company_name': company_name,
@@ -216,7 +239,7 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                 'doc_header' : model_data.get('Doc_Header'),
                 'net_lbl' : model_data.get('net_lbl'),
                 'number_value' : customer_data_for_cust_data[number_value],
-                'date_value' :  customer_data_for_cust_data[date_value],
+                'date_value' :  combined_date_time,#customer_data_for_cust_data[date_value],
                 'shipping_address' : shipping_address,
                 'billing_address' : billing_address,
 
@@ -245,7 +268,9 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                 'cess_amount' : cessAmt,
                 'round_0ff' : round_0ff,
                 'party_old_balance' :  party_old_balance,
-                'net_value' : net_value
+                'net_value' : net_value,
+                'remarks': customer_data_for_cust_data.get("remarks", ""),
+                'return_reason': customer_data_for_cust_data.get("return_reason", "")
 
                 }
 
@@ -257,7 +282,7 @@ def sale_order_sales_invoice_doc(
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
     bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, round_0ff, cess_amount,
-    party_old_balance, net_lbl, net_value, tax_type
+    party_old_balance, net_lbl, net_value, tax_type, remarks
 ):  
     
     # Append document details
@@ -305,7 +330,7 @@ def sales_invoice_doc(
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
     bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, cess_amount, round_0ff, 
-    party_old_balance, net_lbl, net_value, tax_type
+    party_old_balance, net_lbl, net_value, tax_type, remarks
 ):  
 
     # Append document details
@@ -337,7 +362,7 @@ def sales_invoice_doc(
     # Add to your PDF story just like other tables
     # elements.append(Spacer(1, 0.5*inch))  # Add some space first
     elements.append(create_footer_section(
-        bank_name, bank_acno, bank_ifsc, bank_branch
+        bank_name, bank_acno, bank_ifsc, bank_branch, remarks
     ))
 
     # Build the PDF
@@ -347,12 +372,12 @@ def sales_invoice_doc(
 def sale_return_doc(
     elements, doc, 
     company_name, company_address, company_phone,
-    cust_bill_dtl, number_lbl, final_invoice, date_lbl, final_invoiceDate,
+    cust_bill_dtl, number_lbl, return_no, date_lbl, date_value,
     customer_name, billing_address, phone, city,
     product_data,
     total_qty, total_amt, cess_amount, total_cgst, total_sgst, total_igst, itemstotal, finalDiscount,
     bill_amount_in_words, round_0ff,
-    party_old_balance, net_lbl, net_value, tax_type
+    party_old_balance, net_lbl, net_value, tax_type, return_reason
 ):  
     # 1. Add company header
     elements.extend(
@@ -361,13 +386,19 @@ def sale_return_doc(
     
     # 2. Add document details (invoice no/date)
     elements.append(return_doc_details(
-        cust_bill_dtl, number_lbl, final_invoice, date_lbl, final_invoiceDate
+        cust_bill_dtl, number_lbl, return_no, date_lbl, date_value
     ))
     
     # 3. Add customer details
-    elements.append(return_customer_details(
-        customer_name, billing_address, phone, city
+    elements.append(return_customer_details_with_reason(
+        customer_name, billing_address, phone, city, return_reason
     ))
+    
+    # 2️⃣ Return Reason (mandatory, directly from pdf_data)
+    # elements.append(Paragraph(
+    #     f"<b>Return Reason:</b> {[return_reason]}", 
+    #     getSampleStyleSheet()['Normal']
+    # ))
     
     # 4. Add complete bordered table (products + financials)
     elements.append(return_complete_table(
