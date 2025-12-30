@@ -26,7 +26,8 @@ def purchase_data(pk, document_type, format_value=None):
             date_value = model_data.get('date_value')
         
         # Retrieve the PurchaseOrders instance
-        obj = get_object_or_404(model, pk=pk)        
+        obj = get_object_or_404(model, pk=pk) 
+        print("Objects data : ", obj)       
         
         # for extracting phone number, email from vendor_id
         vendor_id = list(model.objects.filter(**{item_model_pk : pk}).values_list('vendor_id', flat=True))
@@ -43,6 +44,13 @@ def purchase_data(pk, document_type, format_value=None):
         order_date =  serializer(obj).data.get(date_value)
         # tax_type = serializer(obj).data.get('tax')
         
+        print("-"*30)
+        print("format_value check : ", format_value)
+        print("-"*30)
+        print("serializer data : ", serializer(obj).data)
+        
+        tax_type = serializer(obj).data.get('tax') # or 'Exclusive'
+        print("tax_type : ", tax_type)
         # Override tax_type display based on format selection
         if format_value == 'CNL_Standard_Incl':
             print("We are in the method...1")
@@ -51,6 +59,7 @@ def purchase_data(pk, document_type, format_value=None):
             print("We are in the method...2")
             tax_type = 'Exclusive'
 
+        print("final tax type : ", tax_type)
         
         # Retrieve related data
         items_data = get_related_data(item_model, items_serializer, item_model_pk, pk)

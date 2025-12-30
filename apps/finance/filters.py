@@ -1,8 +1,11 @@
 from django_filters import rest_framework as filters
+from apps.customer.models import CustomerAddresses
 from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
+from apps.vendor.models import VendorAddress
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
+from django.db.models import Q
 logger = logging.getLogger(__name__)
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
 
@@ -326,6 +329,7 @@ class JournalEntryLinesListFilter(filters.FilterSet):
     description = filters.CharFilter(lookup_expr='icontains')
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    city = filters.CharFilter(method='filter_by_city')
     # Standard filter methods
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
@@ -334,6 +338,35 @@ class JournalEntryLinesListFilter(filters.FilterSet):
     
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
+    
+    def filter_by_city(self, queryset, name, value):
+        """
+        Apply city filter based on active ledger context
+        (customer / vendor only)
+        """
+
+        # Get active PK from URL
+        # pk = self.request.parser_context.get('kwargs', {}).get('pk')
+        pk = self.request.resolver_match.kwargs.get('pk')
+
+        if pk == 'customer_id':
+            return queryset.filter(
+                customer_id__in=CustomerAddresses.objects.filter(
+                    city_id=value
+                ).values_list('customer_id', flat=True)
+            )
+
+        elif pk == 'vendor_id':
+            return queryset.filter(
+                vendor_id__in=VendorAddress.objects.filter(
+                    city_id=value
+                ).values_list('vendor_id', flat=True)
+            )
+
+        # ledger_account_id → city NOT applicable
+        return queryset
+
+
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
@@ -349,7 +382,7 @@ class JournalEntryLinesListFilter(filters.FilterSet):
     
     class Meta:
         model = JournalEntryLines
-        fields = ['ledger_account_id', 'ledger_account',  'voucher_no', 'debit', 'credit', 'description', 'balance', 'created_at', 's', 'sort', 'page', 'limit']
+        fields = ['ledger_account_id', 'ledger_account',  'voucher_no', 'debit', 'credit', 'description', 'balance', 'created_at', 'city',  's', 'sort', 'page', 'limit']
 
 class TrialBalanceReportFilter(filters.FilterSet):
     start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
