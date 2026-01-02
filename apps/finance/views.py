@@ -5,8 +5,10 @@ from django.forms import IntegerField
 from requests import request
 from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
+from apps.customer.models import CustomerAddresses
 from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter
 from apps.sales.models import SaleInvoiceOrders
+from apps.vendor.models import VendorAddress
 from config.utils_db_router import set_db
 from .models import *
 from .serializers import *
@@ -156,34 +158,251 @@ class JournalEntryLinesAPIView(APIView):
         
         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
     
-    def get(self, request, input_id):  
-            # Try to determine if this UUID is for a customer
-            if Customer.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
-            elif Vendor.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
-            elif LedgerAccounts.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(ledger_account_id=input_id).order_by('-created_at')
-            else:
-                return build_response(0, "Please provide either customer_id or vendor_id.", [], status.HTTP_400_BAD_REQUEST)
-            
-            # Get pagination parameters
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10))
-            total_count = queryset.count()
-            
-            # Apply filters if query parameters are present
-            if request.query_params:
-                filterset = JournalEntryLinesListFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-                    logger.debug(f"Applied filters. Filtered queryset count: {queryset.count()}")
+    # def get(self, request, input_id):
 
-            # Serialize the data
-            serializer = JournalEntryLinesSerializer(queryset, many=True)
-            
-            # Return response using filter_response helper
-            return filter_response( count=queryset.count(), message="Journal Entry Lines data", data=serializer.data,page=page,limit=limit,total_count=total_count,status_code=status.HTTP_200_OK)
+    #     # ADD THIS UUID CHECK (NEW – SMALL & SAFE)
+    #     is_uuid = True
+    #     try:
+    #         uuid.UUID(str(input_id))
+    #     except ValueError:
+    #         is_uuid = False
+
+    #     # EXISTING FLOW (UUID BASED – UNCHANGED)
+    #     if is_uuid and Customer.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(ledger_account_id=input_id).order_by('-created_at')
+
+    #     # 🔵 CITY FLOW (ONLY WHEN input_id IS NOT UUID)
+    #     else:
+    #         city_id = request.query_params.get('city')
+
+    #         if not city_id:
+    #             return build_response(
+    #                 0,
+    #                 "City is required",
+    #                 [],
+    #                 status.HTTP_400_BAD_REQUEST
+    #             )
+
+    #         if input_id == 'customer_id':
+    #             queryset = JournalEntryLines.objects.filter(
+    #                 customer_id__in=CustomerAddresses.objects.filter(
+    #                     city_id=city_id
+    #                 ).values_list('customer_id', flat=True)
+    #             ).order_by('-created_at')
+
+    #         elif input_id == 'vendor_id':
+    #             queryset = JournalEntryLines.objects.filter(
+    #                 vendor_id__in=VendorAddress.objects.filter(
+    #                     city_id=city_id
+    #                 ).values_list('vendor_id', flat=True)
+    #             ).order_by('-created_at')
+
+    #         else:
+    #             return build_response(
+    #                 0,
+    #                 "Invalid account identifier",
+    #                 [],
+    #                 status.HTTP_400_BAD_REQUEST
+    #             )
+
+    #     # ⬇️ REST OF YOUR CODE (UNCHANGED)
+    #     page = int(request.query_params.get('page', 1))
+    #     limit = int(request.query_params.get('limit', 10))
+    #     total_count = queryset.count()
+
+    #     if request.query_params:
+    #         filterset = JournalEntryLinesListFilter(request.GET, queryset=queryset, request=request)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     serializer = JournalEntryLinesSerializer(queryset, many=True)
+
+    #     return filter_response(
+    #         count=queryset.count(),
+    #         message="Journal Entry Lines data",
+    #         data=serializer.data,
+    #         page=page,
+    #         limit=limit,
+    #         total_count=total_count,
+    #         status_code=status.HTTP_200_OK
+    #     )
+    
+    def get(self, request, input_id):
+
+        # ---------------------------
+        # STEP 1: UUID CHECK
+        # ---------------------------
+        is_uuid = True
+        try:
+            uuid.UUID(str(input_id))
+        except ValueError:
+            is_uuid = False
+
+        # ---------------------------
+        # STEP 2: BASE QUERYSET
+        # ---------------------------
+        if is_uuid and Customer.objects.filter(pk=input_id).exists():
+            queryset = JournalEntryLines.objects.filter(
+                customer_id=input_id,
+                is_deleted=False
+            ).order_by('-created_at')
+
+        elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
+            queryset = JournalEntryLines.objects.filter(
+                vendor_id=input_id,
+                is_deleted=False
+            ).order_by('-created_at')
+
+        elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
+            queryset = JournalEntryLines.objects.filter(
+                ledger_account_id=input_id,
+                is_deleted=False
+            ).order_by('-created_at')
+
+        else:
+            # ---------------------------
+            # CITY BASED FLOW
+            # ---------------------------
+            city_id = request.query_params.get('city')
+
+            if not city_id:
+                return build_response(
+                    0,
+                    "City is required",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+            if input_id == 'customer_id':
+                queryset = JournalEntryLines.objects.filter(
+                    customer_id__in=CustomerAddresses.objects.filter(
+                        city_id=city_id
+                    ).values_list('customer_id', flat=True),
+                    is_deleted=False
+                ).order_by('-created_at')
+
+            elif input_id == 'vendor_id':
+                queryset = JournalEntryLines.objects.filter(
+                    vendor_id__in=VendorAddress.objects.filter(
+                        city_id=city_id
+                    ).values_list('vendor_id', flat=True),
+                    is_deleted=False
+                ).order_by('-created_at')
+
+            else:
+                return build_response(
+                    0,
+                    "Invalid account identifier",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+        # ---------------------------
+        # STEP 3: APPLY FILTERS (WITHOUT PAGINATION)
+        # ---------------------------
+        filter_params = request.GET.copy()
+        filter_params.pop('page', None)
+        filter_params.pop('limit', None)
+
+        filterset = JournalEntryLinesListFilter(
+            filter_params,
+            queryset=queryset,
+            request=request
+        )
+
+        filtered_queryset = filterset.qs if filterset.is_valid() else queryset
+
+        # ---------------------------
+        # STEP 4: TOTAL COUNT (FULL FILTERED COUNT)
+        # ---------------------------
+        total_count = filtered_queryset.count()
+
+        # ---------------------------
+        # STEP 5: PAGINATION (ALWAYS APPLIED)
+        # ---------------------------
+        page = max(int(request.query_params.get('page', 1)), 1)
+        limit = max(int(request.query_params.get('limit', 10)), 1)
+
+
+        start = (page - 1) * limit
+        end = start + limit
+
+        paginated_queryset = filtered_queryset[start:end]
+
+        # ---------------------------
+        # STEP 6: SERIALIZATION
+        # ---------------------------
+        serializer = JournalEntryLinesSerializer(paginated_queryset, many=True)
+
+        # ---------------------------
+        # STEP 7: RESPONSE
+        # ---------------------------
+        return filter_response(
+            count=paginated_queryset.count(),   # page-wise count
+            message="Journal Entry Lines data",
+            data=serializer.data,
+            page=page,
+            limit=limit,
+            total_count=total_count,             # full count
+            status_code=status.HTTP_200_OK
+        )
+
+
+
+
+
+    # def get(self, request, input_id):
+
+    #     # ✅ NEW: check whether input_id is UUID
+    #     is_uuid = True
+    #     try:
+    #         uuid.UUID(str(input_id))
+    #     except ValueError:
+    #         is_uuid = False
+
+    #     # 🟢 EXISTING FLOW (UUID BASED – NO CHANGE)
+    #     if is_uuid and Customer.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(ledger_account_id=input_id).order_by('-created_at')
+
+    #     # 🔵 NEW FLOW (CITY BASED – ADDED ONLY)
+    #     elif not is_uuid:
+    
+
+    #     # ⬇️ REST OF YOUR CODE (UNCHANGED)
+    #     page = int(request.query_params.get('page', 1))
+    #     limit = int(request.query_params.get('limit', 10))
+    #     total_count = queryset.count()
+
+    #     if request.query_params:
+    #         filterset = JournalEntryLinesListFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     serializer = JournalEntryLinesSerializer(queryset, many=True)
+
+    #     return filter_response(
+    #         count=queryset.count(),
+    #         message="Journal Entry Lines data",
+    #         data=serializer.data,
+    #         page=page,
+    #         limit=limit,
+    #         total_count=total_count,
+    #         status_code=status.HTTP_200_OK
+    #     )
+
+
         
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
     queryset = PaymentTransaction.objects.all().order_by('-created_at')
@@ -1997,67 +2216,116 @@ class JournalVoucherPostView(APIView):
             logger.error(f"Error posting voucher: {str(e)}")
             return build_response(0, f"Error posting voucher: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+#No Need This Api
 
-class PullFromExpenseClaimView(APIView):
-    """
-    Pull expense claim data to populate Journal Voucher.
-    Used for "Pull from Expense Claim" feature in UI.
-    """
+# class PullFromExpenseClaimView(APIView):
+#     """
+#     Pull expense claim data to populate Journal Voucher.
+#     Used for "Pull from Expense Claim" feature in UI.
+#     """
     
-    def get(self, request, expense_claim_id, *args, **kwargs):
-        """
-        Get expense claim data formatted for Journal Voucher creation.
-        Returns pre-populated voucher lines.
-        """
-        try:
-            expense_claim = ExpenseClaim.objects.get(pk=expense_claim_id)
+#     def get(self, request, expense_claim_id, *args, **kwargs):
+#         """
+#         Get expense claim data formatted for Journal Voucher creation.
+#         Returns pre-populated voucher lines.
+#         """
+#         try:
+#             expense_claim = ExpenseClaim.objects.get(pk=expense_claim_id)
             
-            if expense_claim.status != 'Approved':
-                return build_response(0, "Only approved expense claims can be pulled", [], status.HTTP_400_BAD_REQUEST)
+#             if expense_claim.status != 'Approved':
+#                 return build_response(0, "Only approved expense claims can be pulled", [], status.HTTP_400_BAD_REQUEST)
             
-            # Get expense items for this claim
-            expense_items = ExpenseItem.objects.filter(expense_claim_id=expense_claim_id)
+#             # Get expense items for this claim
+#             expense_items = ExpenseItem.objects.filter(expense_claim_id=expense_claim_id)
             
-            # Prepare voucher lines
-            voucher_lines = []
-            total_amount = Decimal('0.00')
+#             # Prepare voucher lines
+#             voucher_lines = []
+#             total_amount = Decimal('0.00')
             
-            for item in expense_items:
-                voucher_lines.append({
-                    "ledger_account_id": str(item.ledger_account_id_id) if item.ledger_account_id else None,
-                    "entry_type": "Debit",
-                    "amount": str(item.amount),
-                    "remark": item.description,
-                    "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None
-                })
-                total_amount += item.amount
+#             for item in expense_items:
+#                 voucher_lines.append({
+#                     "ledger_account_id": str(item.ledger_account_id_id) if item.ledger_account_id else None,
+#                     "entry_type": "Debit",
+#                     "amount": str(item.amount),
+#                     "remark": item.description,
+#                     "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None
+#                 })
+#                 total_amount += item.amount
             
-            # Add credit entry for employee reimbursement
-            voucher_lines.append({
-                "ledger_account_id": None,  # To be selected by user (Cash/Bank account)
-                "entry_type": "Credit",
-                "amount": str(total_amount),
-                "remark": f"Reimbursement for expense claim",
-                "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None
-            })
+#             # Add credit entry for employee reimbursement
+#             voucher_lines.append({
+#                 "ledger_account_id": None,  # To be selected by user (Cash/Bank account)
+#                 "entry_type": "Credit",
+#                 "amount": str(total_amount),
+#                 "remark": f"Reimbursement for expense claim",
+#                 "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None
+#             })
             
-            response_data = {
-                "expense_claim": {
-                    "expense_claim_id": str(expense_claim.expense_claim_id),
-                    "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None,
-                    "claim_date": str(expense_claim.claim_date),
-                    "total_amount": str(expense_claim.total_amount),
-                    "description": expense_claim.description
-                },
-                "suggested_voucher_lines": voucher_lines,
-                "total_debit": str(total_amount),
-                "total_credit": str(total_amount)
-            }
+#             response_data = {
+#                 "expense_claim": {
+#                     "expense_claim_id": str(expense_claim.expense_claim_id),
+#                     "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None,
+#                     "claim_date": str(expense_claim.claim_date),
+#                     "total_amount": str(expense_claim.total_amount),
+#                     "description": expense_claim.description
+#                 },
+#                 "suggested_voucher_lines": voucher_lines,
+#                 "total_debit": str(total_amount),
+#                 "total_credit": str(total_amount)
+#             }
             
-            return build_response(1, "Expense claim data retrieved", response_data, status.HTTP_200_OK)
+#             return build_response(1, "Expense claim data retrieved", response_data, status.HTTP_200_OK)
             
-        except ExpenseClaim.DoesNotExist:
-            return build_response(0, "Expense claim not found", [], status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            logger.error(f"Error pulling expense claim: {str(e)}")
-            return build_response(0, f"Error: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+#         except ExpenseClaim.DoesNotExist:
+#             return build_response(0, "Expense claim not found", [], status.HTTP_404_NOT_FOUND)
+#         except Exception as e:
+#             logger.error(f"Error pulling expense claim: {str(e)}")
+#             return build_response(0, f"Error: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+from django.db.models import Q
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class AccountCityListAPIView(APIView):
+    def get(self, request):
+        account_type = request.query_params.get('type')
+
+        if account_type == 'customer':
+            qs = CustomerAddresses.objects.filter(city_id__isnull=False)
+
+        elif account_type == 'vendor':
+            qs = VendorAddress.objects.filter(city_id__isnull=False)
+            
+        # ✅ NEW: GENERAL → NO CITY FILTER
+        elif account_type == 'general':
+            return Response(
+                {"message": "General ledger has no city filter", "data": []},
+                status=status.HTTP_200_OK
+            )
+
+        else:
+            return Response(
+                {"message": "Invalid account type", "data": []},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cities = (
+            qs.values(
+                'city_id',
+                'city_id__city_name'
+            )
+            .distinct()
+            .order_by('city_id__city_name')
+        )
+
+        return Response({
+            "data": [
+                {
+                    "label": c['city_id__city_name'],
+                    "value": c['city_id']
+                }
+                for c in cities
+            ]
+        })        

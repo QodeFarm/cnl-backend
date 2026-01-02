@@ -1827,7 +1827,7 @@ class StockSummaryAPIView(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs
             
-            total_count = queryset.count()
+            total_count = StockSummary.objects.all().count()
             serializer = StockSummarySerializer(queryset, many=True)
             
             return filter_response(

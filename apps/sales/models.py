@@ -20,7 +20,7 @@ class SaleOrder(OrderNumberMixin): #required fields are updated
     gst_type_id = models.ForeignKey(GstTypes, on_delete=models.PROTECT, null=True, default=None, db_column='gst_type_id')
     customer_id = models.ForeignKey(Customer, on_delete=models.PROTECT, db_column='customer_id')
     email = models.CharField(max_length=255, null=True, default=None)
-    delivery_date = models.DateField()
+    delivery_date = models.DateField(null=True, default=None)
     order_date = models.DateField()
     order_no = models.CharField(max_length=20, unique=True, default='')
     order_no_prefix = 'SO'

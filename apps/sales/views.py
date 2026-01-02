@@ -2875,7 +2875,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             using_db,
             request.user,
             "CREATE",
-            "Sale Order",
+            "Sale Invoice",
             sale_invoice_id,
             f"{saleinvocie_no} - Sale Invoice Record Created by {request.user.username}"
         )
