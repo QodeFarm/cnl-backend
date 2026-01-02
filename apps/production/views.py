@@ -1325,6 +1325,14 @@ class MaterialIssueView(APIView):
 
         # Validate items
         items_data = given_data.pop('items', [])
+        
+        #---------------Pramod -change---------------------------        
+        items_data = [
+            item for item in items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        #---------------Pramod -change---------------------------
+        
         items_error = validate_multiple_data(self, items_data, MaterialIssueItemSerializer, ['material_issue_id']) if items_data else None
         if items_error:
             errors["items"] = items_error

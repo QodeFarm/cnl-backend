@@ -212,19 +212,31 @@ def filter_by_limit(filter_set, queryset, value):
 
 #========================Filter Response==================================
 
-def filter_response(count, message, data,page, limit,total_count,status_code):
-    """
-    Builds a standardized API response.
-    """
+# def filter_response(count, message, data,page, limit,total_count,status_code):
+#     """
+#     Builds a standardized API response.
+#     """
+#     response = {
+#         'count': count,
+#         'message': message,
+#         'data': data,
+#         'page': page,
+#         'limit': limit,
+#         'totalCount': total_count
+#     }
+#     return Response(response, status=status_code)
+
+def filter_response(count, message, data, page, limit, total_count, status_code):
     response = {
         'count': count,
         'message': message,
         'data': data,
         'page': page,
         'limit': limit,
-        'totalCount': total_count
+        'totalCount': total_count   # camelCase only in JSON
     }
     return Response(response, status=status_code)
+
 
 
 # def list_filtered_objects(viewset, request, model_name, *args, **kwargs):

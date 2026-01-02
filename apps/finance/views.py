@@ -5,8 +5,10 @@ from django.forms import IntegerField
 from requests import request
 from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
+from apps.customer.models import CustomerAddresses
 from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter
 from apps.sales.models import SaleInvoiceOrders
+from apps.vendor.models import VendorAddress
 from config.utils_db_router import set_db
 from .models import *
 from .serializers import *
@@ -156,34 +158,251 @@ class JournalEntryLinesAPIView(APIView):
         
         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
     
-    def get(self, request, input_id):  
-            # Try to determine if this UUID is for a customer
-            if Customer.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
-            elif Vendor.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
-            elif LedgerAccounts.objects.filter(pk=input_id).exists():
-                queryset = JournalEntryLines.objects.filter(ledger_account_id=input_id).order_by('-created_at')
-            else:
-                return build_response(0, "Please provide either customer_id or vendor_id.", [], status.HTTP_400_BAD_REQUEST)
-            
-            # Get pagination parameters
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10))
-            total_count = queryset.count()
-            
-            # Apply filters if query parameters are present
-            if request.query_params:
-                filterset = JournalEntryLinesListFilter(request.GET, queryset=queryset)
-                if filterset.is_valid():
-                    queryset = filterset.qs
-                    logger.debug(f"Applied filters. Filtered queryset count: {queryset.count()}")
+    # def get(self, request, input_id):
 
-            # Serialize the data
-            serializer = JournalEntryLinesSerializer(queryset, many=True)
-            
-            # Return response using filter_response helper
-            return filter_response( count=queryset.count(), message="Journal Entry Lines data", data=serializer.data,page=page,limit=limit,total_count=total_count,status_code=status.HTTP_200_OK)
+    #     # ADD THIS UUID CHECK (NEW – SMALL & SAFE)
+    #     is_uuid = True
+    #     try:
+    #         uuid.UUID(str(input_id))
+    #     except ValueError:
+    #         is_uuid = False
+
+    #     # EXISTING FLOW (UUID BASED – UNCHANGED)
+    #     if is_uuid and Customer.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(ledger_account_id=input_id).order_by('-created_at')
+
+    #     # 🔵 CITY FLOW (ONLY WHEN input_id IS NOT UUID)
+    #     else:
+    #         city_id = request.query_params.get('city')
+
+    #         if not city_id:
+    #             return build_response(
+    #                 0,
+    #                 "City is required",
+    #                 [],
+    #                 status.HTTP_400_BAD_REQUEST
+    #             )
+
+    #         if input_id == 'customer_id':
+    #             queryset = JournalEntryLines.objects.filter(
+    #                 customer_id__in=CustomerAddresses.objects.filter(
+    #                     city_id=city_id
+    #                 ).values_list('customer_id', flat=True)
+    #             ).order_by('-created_at')
+
+    #         elif input_id == 'vendor_id':
+    #             queryset = JournalEntryLines.objects.filter(
+    #                 vendor_id__in=VendorAddress.objects.filter(
+    #                     city_id=city_id
+    #                 ).values_list('vendor_id', flat=True)
+    #             ).order_by('-created_at')
+
+    #         else:
+    #             return build_response(
+    #                 0,
+    #                 "Invalid account identifier",
+    #                 [],
+    #                 status.HTTP_400_BAD_REQUEST
+    #             )
+
+    #     # ⬇️ REST OF YOUR CODE (UNCHANGED)
+    #     page = int(request.query_params.get('page', 1))
+    #     limit = int(request.query_params.get('limit', 10))
+    #     total_count = queryset.count()
+
+    #     if request.query_params:
+    #         filterset = JournalEntryLinesListFilter(request.GET, queryset=queryset, request=request)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     serializer = JournalEntryLinesSerializer(queryset, many=True)
+
+    #     return filter_response(
+    #         count=queryset.count(),
+    #         message="Journal Entry Lines data",
+    #         data=serializer.data,
+    #         page=page,
+    #         limit=limit,
+    #         total_count=total_count,
+    #         status_code=status.HTTP_200_OK
+    #     )
+    
+    def get(self, request, input_id):
+
+        # ---------------------------
+        # STEP 1: UUID CHECK
+        # ---------------------------
+        is_uuid = True
+        try:
+            uuid.UUID(str(input_id))
+        except ValueError:
+            is_uuid = False
+
+        # ---------------------------
+        # STEP 2: BASE QUERYSET
+        # ---------------------------
+        if is_uuid and Customer.objects.filter(pk=input_id).exists():
+            queryset = JournalEntryLines.objects.filter(
+                customer_id=input_id,
+                is_deleted=False
+            ).order_by('-created_at')
+
+        elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
+            queryset = JournalEntryLines.objects.filter(
+                vendor_id=input_id,
+                is_deleted=False
+            ).order_by('-created_at')
+
+        elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
+            queryset = JournalEntryLines.objects.filter(
+                ledger_account_id=input_id,
+                is_deleted=False
+            ).order_by('-created_at')
+
+        else:
+            # ---------------------------
+            # CITY BASED FLOW
+            # ---------------------------
+            city_id = request.query_params.get('city')
+
+            if not city_id:
+                return build_response(
+                    0,
+                    "City is required",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+            if input_id == 'customer_id':
+                queryset = JournalEntryLines.objects.filter(
+                    customer_id__in=CustomerAddresses.objects.filter(
+                        city_id=city_id
+                    ).values_list('customer_id', flat=True),
+                    is_deleted=False
+                ).order_by('-created_at')
+
+            elif input_id == 'vendor_id':
+                queryset = JournalEntryLines.objects.filter(
+                    vendor_id__in=VendorAddress.objects.filter(
+                        city_id=city_id
+                    ).values_list('vendor_id', flat=True),
+                    is_deleted=False
+                ).order_by('-created_at')
+
+            else:
+                return build_response(
+                    0,
+                    "Invalid account identifier",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+        # ---------------------------
+        # STEP 3: APPLY FILTERS (WITHOUT PAGINATION)
+        # ---------------------------
+        filter_params = request.GET.copy()
+        filter_params.pop('page', None)
+        filter_params.pop('limit', None)
+
+        filterset = JournalEntryLinesListFilter(
+            filter_params,
+            queryset=queryset,
+            request=request
+        )
+
+        filtered_queryset = filterset.qs if filterset.is_valid() else queryset
+
+        # ---------------------------
+        # STEP 4: TOTAL COUNT (FULL FILTERED COUNT)
+        # ---------------------------
+        total_count = filtered_queryset.count()
+
+        # ---------------------------
+        # STEP 5: PAGINATION (ALWAYS APPLIED)
+        # ---------------------------
+        page = max(int(request.query_params.get('page', 1)), 1)
+        limit = max(int(request.query_params.get('limit', 10)), 1)
+
+
+        start = (page - 1) * limit
+        end = start + limit
+
+        paginated_queryset = filtered_queryset[start:end]
+
+        # ---------------------------
+        # STEP 6: SERIALIZATION
+        # ---------------------------
+        serializer = JournalEntryLinesSerializer(paginated_queryset, many=True)
+
+        # ---------------------------
+        # STEP 7: RESPONSE
+        # ---------------------------
+        return filter_response(
+            count=paginated_queryset.count(),   # page-wise count
+            message="Journal Entry Lines data",
+            data=serializer.data,
+            page=page,
+            limit=limit,
+            total_count=total_count,             # full count
+            status_code=status.HTTP_200_OK
+        )
+
+
+
+
+
+    # def get(self, request, input_id):
+
+    #     # ✅ NEW: check whether input_id is UUID
+    #     is_uuid = True
+    #     try:
+    #         uuid.UUID(str(input_id))
+    #     except ValueError:
+    #         is_uuid = False
+
+    #     # 🟢 EXISTING FLOW (UUID BASED – NO CHANGE)
+    #     if is_uuid and Customer.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(customer_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(vendor_id=input_id).order_by('-created_at')
+
+    #     elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
+    #         queryset = JournalEntryLines.objects.filter(ledger_account_id=input_id).order_by('-created_at')
+
+    #     # 🔵 NEW FLOW (CITY BASED – ADDED ONLY)
+    #     elif not is_uuid:
+    
+
+    #     # ⬇️ REST OF YOUR CODE (UNCHANGED)
+    #     page = int(request.query_params.get('page', 1))
+    #     limit = int(request.query_params.get('limit', 10))
+    #     total_count = queryset.count()
+
+    #     if request.query_params:
+    #         filterset = JournalEntryLinesListFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+
+    #     serializer = JournalEntryLinesSerializer(queryset, many=True)
+
+    #     return filter_response(
+    #         count=queryset.count(),
+    #         message="Journal Entry Lines data",
+    #         data=serializer.data,
+    #         page=page,
+    #         limit=limit,
+    #         total_count=total_count,
+    #         status_code=status.HTTP_200_OK
+    #     )
+
+
         
 class PaymentTransactionViewSet(viewsets.ModelViewSet):
     queryset = PaymentTransaction.objects.all().order_by('-created_at')
@@ -1541,3 +1760,50 @@ class JournalDetailRetrieveUpdateDeleteAPIView(APIView):
         journal_detail.delete()
         return build_response(0, "Records Deleted successfully", "", status.HTTP_204_NO_CONTENT)
 
+
+from django.db.models import Q
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+
+class AccountCityListAPIView(APIView):
+    def get(self, request):
+        account_type = request.query_params.get('type')
+
+        if account_type == 'customer':
+            qs = CustomerAddresses.objects.filter(city_id__isnull=False)
+
+        elif account_type == 'vendor':
+            qs = VendorAddress.objects.filter(city_id__isnull=False)
+            
+        # ✅ NEW: GENERAL → NO CITY FILTER
+        elif account_type == 'general':
+            return Response(
+                {"message": "General ledger has no city filter", "data": []},
+                status=status.HTTP_200_OK
+            )
+
+        else:
+            return Response(
+                {"message": "Invalid account type", "data": []},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        cities = (
+            qs.values(
+                'city_id',
+                'city_id__city_name'
+            )
+            .distinct()
+            .order_by('city_id__city_name')
+        )
+
+        return Response({
+            "data": [
+                {
+                    "label": c['city_id__city_name'],
+                    "value": c['city_id']
+                }
+                for c in cities
+            ]
+        })

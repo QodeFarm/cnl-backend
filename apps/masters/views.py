@@ -1,4 +1,5 @@
 from apps.finance.models import JournalEntry
+from apps.masters.template.account_ledger.account_ledger import ledger_document_data, ledger_document_doc
 from apps.masters.template.billpayment_receipt.billpayment_receipt import billpayment_receipt_data, billpayment_receipt_doc
 from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
 from apps.production.models import MaterialIssue, MaterialReceived
@@ -1061,6 +1062,13 @@ class DocumentGeneratorView(APIView):
             document_type = kwargs.get('document_type')
             doc_name, file_path, relative_file_path = path_generate(document_type)
             
+            from django.conf import settings
+            
+            print(" PATH :", f"{settings.MEDIA_URL}{relative_file_path}")
+            cdn_path = f"{settings.MEDIA_URL}{relative_file_path}"
+            
+            print("CDN PATH :", cdn_path)
+            
 #   #=======================================ReportLab Code Started============================          
             if document_type == "sale_order":
                 pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)
@@ -1194,7 +1202,8 @@ class DocumentGeneratorView(APIView):
                         'invoice_date': pdf_data['invoice_date'],
                         'payment_method': pdf_data['payment_method'],
                         'cheque_no': pdf_data['cheque_no'],
-                        'amount': pdf_data['amount']
+                        'amount': pdf_data['amount'],
+                        'total': pdf_data['total']
                     }],  # Pass as list to match sale order's product_data structure
                     pdf_data['amount'],
                     pdf_data['outstanding'],
@@ -1204,6 +1213,52 @@ class DocumentGeneratorView(APIView):
                     # pdf_data['net_lbl'],
                     # pdf_data['amount']  # Using amount as net_value
                 )
+                
+            elif document_type == "account_ledger":
+                print("We entered in account-ledger....")
+
+                pdf_data = ledger_document_data(request, pk, document_type)
+                print("pdf_data--->>>", pdf_data)
+
+                sub_header = 'Account Ledger Statement'
+
+                # Same doc heading pattern
+                elements, doc = doc_heading(
+                    file_path,
+                    pdf_data['doc_header'],
+                    sub_header
+                )
+
+                # Build ledger document
+                ledger_document_doc(
+                    elements,
+                    doc,
+                    # Company details
+                    pdf_data['company_name'],
+                    pdf_data['company_address'],
+                    pdf_data['company_phone'],
+
+                    # Period
+                    pdf_data['from_date'],
+                    pdf_data['to_date'],
+
+                    # Ledger header
+                    pdf_data['ledger_name'],
+                    pdf_data['number_lbl'],
+                    pdf_data['date_lbl'],
+                    pdf_data['doc_date'],
+
+                    # Ledger table rows
+                    pdf_data['ledger_data'],
+
+                    # Totals
+                    pdf_data['debit_total'],
+                    pdf_data['credit_total'],
+                    pdf_data['closing_balance'],
+                    pdf_data['amount_in_words']
+                )
+
+
                 
             if flag == 'email':
                 pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path, document_type)
@@ -1223,6 +1278,57 @@ class DocumentGeneratorView(APIView):
                 
             # elif flag == 'whatsapp':
             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
+            elif flag == 'whatsapp':
+
+                from django.conf import settings
+
+                city_id = request.GET.get('city')
+
+                # 1️⃣ Resolve phone
+                phone = resolve_phone_from_document(
+                    document_type=document_type,
+                    pk=pk,
+                    city_id=city_id
+                )
+
+                if not phone:
+                    return Response({
+                        "status": 0,
+                        "message": "Phone number not found in address"
+                    }, status=400)
+
+                # 2️⃣ WATI ENABLED (PROD)
+                if getattr(settings, 'ENABLE_WATI', False):
+                    result = send_whatsapp_message_via_wati(phone, cdn_path)
+
+                    return Response({
+                        "status": 1,
+                        "message": result,
+                        "mode": "wati",
+                        "phone": phone
+                    })
+
+                # 3️⃣ LOCAL / DEV MODE (NO LICENSE)
+                customer_name = pdf_data.get("customer_name", "Customer")
+
+                message = (
+                    f"Hello {customer_name} 👋\n\n"
+                    f"Please find your *{document_type.replace('_', ' ').title()}* below:\n\n"
+                    f"{cdn_path}\n\n"
+                    "Thank you.\n"
+                    "Rudhra Industries"
+                )
+
+                whatsapp_url = build_whatsapp_click_url(phone, message)
+
+                return Response({
+                    "status": 1,
+                    "mode": "click_to_chat",
+                    "phone": phone,
+                    "whatsapp_url": whatsapp_url
+                })
+
+
 
         except Http404:
             logger.error("pk %s does not exist.", pk)
