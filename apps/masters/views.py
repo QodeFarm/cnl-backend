@@ -1,4 +1,4 @@
-from apps.finance.models import JournalEntry
+from apps.finance.models import JournalEntry, JournalVoucher
 from apps.masters.template.account_ledger.account_ledger import ledger_document_data, ledger_document_doc
 from apps.masters.template.billpayment_receipt.billpayment_receipt import billpayment_receipt_data, billpayment_receipt_doc
 from apps.masters.template.payment_receipt.payment_receipt import payment_receipt_data, payment_receipt_doc
@@ -890,6 +890,7 @@ ORDER_MODEL_MAPPING = {
     'MI' :(MaterialIssue, 'issue_no'),
     'MR' :(MaterialReceived, 'receipt_no'),
     'JE': (JournalEntry, 'voucher_no'),
+    'JV': (JournalVoucher, 'voucher_no'),  # Journal Voucher
     # Add others as needed
 }
 

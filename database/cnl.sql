@@ -2935,5 +2935,90 @@ CREATE TABLE `material_received_attachments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
+-- ======================================
+-- Table: journal_vouchers (Header)
+-- Similar to: products, material_issues, sale_orders
+-- ======================================
+CREATE TABLE `journal_vouchers` (
+  `journal_voucher_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `voucher_no` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `voucher_date` date NOT NULL,
+  `voucher_type` enum('Journal','Contra','Receipt','Payment','DebitNote','CreditNote') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'Journal',
+  `reference_no` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `reference_date` date DEFAULT NULL,
+  `expense_claim_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `narration` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `total_debit` decimal(18,2) DEFAULT '0.00',
+  `total_credit` decimal(18,2) DEFAULT '0.00',
+  `is_posted` tinyint(1) DEFAULT '0',
+  `is_deleted` tinyint(1) DEFAULT '0',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`journal_voucher_id`),
+  UNIQUE KEY `voucher_no` (`voucher_no`),
+  KEY `expense_claim_id` (`expense_claim_id`),
+  KEY `idx_voucher_date` (`voucher_date`),
+  KEY `idx_voucher_type` (`voucher_type`),
+  KEY `idx_is_posted` (`is_posted`),
+  KEY `idx_is_deleted` (`is_deleted`),
+  CONSTRAINT `journal_vouchers_ibfk_1` FOREIGN KEY (`expense_claim_id`) REFERENCES `expense_claims` (`expense_claim_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- ======================================
+-- Table: journal_voucher_lines (Line Items)
+-- Similar to: sale_order_items, material_issue_items
+-- ======================================
+CREATE TABLE `journal_voucher_lines` (
+  `journal_voucher_line_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `journal_voucher_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `ledger_account_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `customer_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `vendor_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `employee_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `entry_type` enum('Debit','Credit') CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT 'Debit',
+  `amount` decimal(18,2) DEFAULT '0.00',
+  `bill_no` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `bill_date` date DEFAULT NULL,
+  `bill_amount` decimal(18,2) DEFAULT NULL,
+  `tds_applicable` tinyint(1) DEFAULT '0',
+  `tds_rate` decimal(5,2) DEFAULT NULL,
+  `tds_amount` decimal(18,2) DEFAULT NULL,
+  `is_panel` tinyint(1) DEFAULT '0',
+  `is_investment` tinyint(1) DEFAULT '0',
+  `remark` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`journal_voucher_line_id`),
+  KEY `journal_voucher_id` (`journal_voucher_id`),
+  KEY `ledger_account_id` (`ledger_account_id`),
+  KEY `customer_id` (`customer_id`),
+  KEY `vendor_id` (`vendor_id`),
+  KEY `employee_id` (`employee_id`),
+  KEY `idx_entry_type` (`entry_type`),
+  CONSTRAINT `journal_voucher_lines_ibfk_1` FOREIGN KEY (`journal_voucher_id`) REFERENCES `journal_vouchers` (`journal_voucher_id`) ON DELETE CASCADE,
+  CONSTRAINT `journal_voucher_lines_ibfk_2` FOREIGN KEY (`ledger_account_id`) REFERENCES `ledger_accounts` (`ledger_account_id`),
+  CONSTRAINT `journal_voucher_lines_ibfk_3` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`customer_id`),
+  CONSTRAINT `journal_voucher_lines_ibfk_4` FOREIGN KEY (`vendor_id`) REFERENCES `vendor` (`vendor_id`),
+  CONSTRAINT `journal_voucher_lines_ibfk_5` FOREIGN KEY (`employee_id`) REFERENCES `employees` (`employee_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+
+-- ======================================
+-- Table: journal_voucher_attachments
+-- Similar to: material_issue_attachments, order_attachments
+-- ======================================
+CREATE TABLE `journal_voucher_attachments` (
+  `attachment_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `journal_voucher_id` char(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `attachment_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `attachment_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`attachment_id`),
+  KEY `journal_voucher_id` (`journal_voucher_id`),
+  CONSTRAINT `journal_voucher_attachments_ibfk_1` FOREIGN KEY (`journal_voucher_id`) REFERENCES `journal_vouchers` (`journal_voucher_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 
 

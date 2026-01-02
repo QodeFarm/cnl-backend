@@ -191,4 +191,65 @@ class ExpenseItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExpenseItem
         fields = '__all__'
-                
+
+
+# ======================================
+# JOURNAL VOUCHER SERIALIZERS
+# ======================================
+
+class ModJournalVoucherSerializer(serializers.ModelSerializer):
+    """Minimal serializer for nested references"""
+    class Meta:
+        model = JournalVoucher
+        fields = ['journal_voucher_id', 'voucher_no', 'voucher_date']
+
+
+class JournalVoucherSerializer(serializers.ModelSerializer):
+    """Main Journal Voucher Serializer with nested read-only data"""
+    expense_claim = ExpenseClaimSerializer(source='expense_claim_id', read_only=True)
+    
+    # Allow blank/null for optional fields
+    narration = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    reference_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    
+    class Meta:
+        model = JournalVoucher
+        fields = '__all__'
+    
+    def validate_voucher_no(self, value):
+        """Validate unique voucher number on update"""
+        journal_voucher_id = None
+        if self.instance and hasattr(self.instance, 'journal_voucher_id'):
+            journal_voucher_id = self.instance.journal_voucher_id
+        elif 'journal_voucher_id' in self.initial_data:
+            journal_voucher_id = self.initial_data['journal_voucher_id']
+        
+        qs = JournalVoucher.objects.filter(voucher_no=value)
+        if journal_voucher_id:
+            qs = qs.exclude(journal_voucher_id=journal_voucher_id)
+        if qs.exists():
+            raise serializers.ValidationError("Journal voucher with this voucher number already exists.")
+        return value
+
+
+class JournalVoucherLineSerializer(serializers.ModelSerializer):
+    """Journal Voucher Line Serializer"""
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
+    
+    # Allow blank/null for optional fields
+    remark = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    bill_no = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    
+    class Meta:
+        model = JournalVoucherLine
+        fields = '__all__'
+
+
+class JournalVoucherAttachmentSerializer(serializers.ModelSerializer):
+    """Journal Voucher Attachment Serializer"""
+    class Meta:
+        model = JournalVoucherAttachment
+        fields = '__all__'

@@ -16,6 +16,7 @@ router.register(r'expense_claims', ExpenseClaimViewSet)
 # router.register(r'expense_categories', ExpenseCategoryViewSet)
 # router.register(r'expense_items', ExpenseItemViewSet)
 router.register(r'financial_reports', FinancialReportViewSet)
+router.register(r'journal_voucher_lines', JournalVoucherLineViewSet)  # For individual line operations
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -37,5 +38,17 @@ urlpatterns = [
     # path('expense_items/', ExpenseItemAPIView.as_view(), name='expenseitem-detail-update-delete'),
     # path('expense_items/<str:pk>/', ExpenseItemAPIView.as_view(), name='expenseitem-detail-update-delete'),
     path('general_accounts/', GeneralAccountsListAPIView.as_view()),
+    
+    # ======================================
+    # JOURNAL VOUCHER URLS
+    # ======================================
+    # Main Journal Voucher CRUD (with lines and attachments)
+    path('journal_vouchers/', JournalVoucherView.as_view(), name='journal_vouchers-list-create'),
+    path('journal_vouchers/<str:pk>/', JournalVoucherView.as_view(), name='journal_vouchers-detail-update-delete'),
+    # Post voucher to ledger
+    path('journal_vouchers/<str:pk>/post/', JournalVoucherPostView.as_view(), name='journal_vouchers-post'),
+    # Pull from expense claim
+    # path('journal_vouchers/pull_expense_claim/<str:expense_claim_id>/', PullFromExpenseClaimView.as_view(), name='journal_vouchers-pull-expense-claim'),
+    
     path('account-cities/', AccountCityListAPIView.as_view())
 ]
