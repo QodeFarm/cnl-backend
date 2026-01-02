@@ -4,6 +4,7 @@ import time
 from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
+from apps.auditlogs.utils import log_user_action
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.finance.models import JournalEntryLines
@@ -11,6 +12,7 @@ from apps.finance.views import JournalEntryLinesAPIView
 from apps.purchase.filters import BillPaymentTransactionsReportFilter, PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
 from apps.purchase.filters import OutstandingPurchaseFilter, PurchaseInvoiceOrdersFilter, PurchaseOrderItemsFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter, PurchasesByVendorReportFilter, PurchasesbyVendorReportFilter, StockReplenishmentReportFilter
 from apps.vendor.views import VendorBalanceView
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response
 from .models import *
 from .serializers import *
@@ -481,6 +483,15 @@ class PurchaseOrderViewSet(APIView):
 
             instance.is_deleted = False
             instance.save()
+            # Log the Create
+            log_user_action(
+                set_db('default'),
+                request.user,
+                "Patch",
+                "Purchase Order",
+                pk,
+                f"{instance.order_no} - Purchase Order Restored by {request.user.username}"
+            )
 
             logger.info(f"PurchaseOrders with ID {pk} restored successfully.")
             return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
@@ -520,6 +531,16 @@ class PurchaseOrderViewSet(APIView):
 
         # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
+        
+        # ---------------- CLEAN EMPTY Purchase ORDER ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5 default rows)
+        purchase_order_items_data = [
+            item for item in purchase_order_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        #----------------------------------------------------------
+
+        
         if purchase_order_items_data:
             item_error = validate_multiple_data(self, purchase_order_items_data,PurchaseorderItemsSerializer,['purchase_order_id'])
 
@@ -619,6 +640,17 @@ class PurchaseOrderViewSet(APIView):
             "order_shipments":order_shipments,
             "custom_field_values": custom_fields_data
         }
+        
+        orderno = purchase_order_data.get("order_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Purchase Order",
+            purchase_order_id,
+            f"{orderno} - Purchase Order Record Created by {request.user.username}"
+        )
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
@@ -648,6 +680,14 @@ class PurchaseOrderViewSet(APIView):
 
         # Validated PurchaseorderItems Data
         purchase_order_items_data = given_data.pop('purchase_order_items', None)
+        
+        # Filter out empty UI rows (only keep rows with real product)
+        if purchase_order_items_data:
+            purchase_order_items_data = [
+                item for item in purchase_order_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        
         if purchase_order_items_data:
             exclude_fields = ['purchase_order_id']
             item_error = validate_put_method_data(self, purchase_order_items_data, PurchaseorderItemsSerializer, exclude_fields, PurchaseorderItems, current_model_pk_field='purchase_order_item_id')
@@ -729,6 +769,16 @@ class PurchaseOrderViewSet(APIView):
             "order_shipments":shipment_data if shipment_data else {},
             "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
+        orderno = purchase_order_data.get("order_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Purchase Order",
+            pk,
+            f"{orderno} - Purchase Order Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
     
@@ -1023,6 +1073,12 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 
         # Validated PurchaseInvoiceItems Data
         purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+        
+        purchase_invoice_items_data = [
+            item for item in purchase_invoice_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        
         if purchase_invoice_items_data:
             invoice_item_error = validate_multiple_data(self, purchase_invoice_items_data,PurchaseInvoiceItemSerializer,['purchase_invoice_id'])
 
@@ -1127,6 +1183,16 @@ class PurchaseInvoiceOrderViewSet(APIView):
             "order_shipments":order_shipments,
             "custom_field_values": custom_fields_data
         }
+        invoiceno = purchase_invoice_orders_data.get("invoice_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Purchase Invoice",
+            purchase_invoice_id,
+            f"{invoiceno} - Purchase Invoice Order Record Created by {request.user.username}"
+        )
 
         # Update Product Stock
         update_product_stock(Products, ProductVariation, purchase_invoice_items_data, 'subtract')        
@@ -1159,6 +1225,13 @@ class PurchaseInvoiceOrderViewSet(APIView):
 
         # Validated PurchaseInvoiceItem Data
         purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+        
+        if purchase_invoice_items_data:
+            purchase_invoice_items_data = [
+                item for item in purchase_invoice_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        
         if purchase_invoice_items_data:
             exclude_fields = ['purchase_invoice_id']
             invoice_item_error = validate_put_method_data(self, purchase_invoice_items_data, PurchaseInvoiceItemSerializer, exclude_fields, PurchaseInvoiceItem, current_model_pk_field='purchase_invoice_item_id')
@@ -1240,6 +1313,16 @@ class PurchaseInvoiceOrderViewSet(APIView):
             "order_shipments":shipment_data if shipment_data else {},
             "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
+        invoiceno = purchase_invoice_orders_data.get("invoice_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Purchase Invoice",
+            pk,
+            f"{invoiceno} - Purchase Invoice Order Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
@@ -1414,6 +1497,15 @@ class PurchaseReturnOrderViewSet(APIView):
                         product.balance = F('balance') + item.quantity
                         product.save()
                     logger.info(f"Reverted {len(return_items)} products for return {return_no}")
+                    # Log the Create
+                    log_user_action(
+                        set_db('default'),
+                        request.user,
+                        "RETURN",
+                        "Purchase Return",
+                        pk,
+                        f"{instance.return_no} - products Reverted for return by {request.user.username}"
+                    )
                 except Exception as e:
                     logger.error(f"Error reverting products: {str(e)}")
 
@@ -1437,6 +1529,7 @@ class PurchaseReturnOrderViewSet(APIView):
                         balance=latest_balance
                     )
                     logger.info(f"Created reversal ledger entry for return {return_no}")
+                    
                 except Exception as e:
                     logger.error(f"Error creating ledger entry: {str(e)}")
 
@@ -1507,6 +1600,12 @@ class PurchaseReturnOrderViewSet(APIView):
                 
         # Validated PurchaseInvoiceItems Data
         purchase_return_items_data = given_data.pop('purchase_return_items', None)
+        
+        purchase_return_items_data = [
+            item for item in purchase_return_items_data
+            if item.get("product_id") and item.get("quantity")
+        ]
+        
         if purchase_return_items_data:
             return_item_error = validate_multiple_data(self, purchase_return_items_data,PurchaseReturnItemsSerializer,['purchase_return_id'])
 
@@ -1614,6 +1713,17 @@ class PurchaseReturnOrderViewSet(APIView):
             "order_shipments":order_shipments,
             "custom_field_values": custom_fields_data
         }
+        
+        returnno = purchase_return_orders_data.get("return_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Purchase Return",
+            purchase_return_id,
+            f"{returnno} - Purchase Return Record Created by {request.user.username}"
+        )
 
         # Update the stock with returned products.
         update_product_stock(Products, ProductVariation, purchase_return_items_data, 'add')
@@ -1646,6 +1756,13 @@ class PurchaseReturnOrderViewSet(APIView):
 
         # Validated PurchaseReturnItems Data
         purchase_return_items_data = given_data.pop('purchase_return_items', None)
+        
+        if purchase_return_items_data:
+            purchase_return_items_data = [
+                item for item in purchase_return_items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        
         if purchase_return_items_data:
             exclude_fields = ['purchase_return_id']
             return_item_error = validate_put_method_data(self, purchase_return_items_data, PurchaseReturnItemsSerializer, exclude_fields, PurchaseReturnItems, current_model_pk_field='purchase_return_item_id')
@@ -1727,6 +1844,17 @@ class PurchaseReturnOrderViewSet(APIView):
             "order_shipments":shipment_data if shipment_data else {},
             "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
         }
+        
+        returnno = purchase_return_orders_data.get("return_no")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Purchase Return",
+            pk,
+            f"{returnno} - Purchase Return Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
@@ -1773,8 +1901,8 @@ class BillPaymentTransactionAPIView(APIView):
         paginated_qs = filtered_qs[start:end]
 
         # ✅ No records case
-        if not paginated_qs.exists():
-            return filter_response(0, "No Bill Payment Transactions found", page, limit, total_count, None, status.HTTP_404_NOT_FOUND)
+        # if not paginated_qs.exists():
+        #     return filter_response(0, "No Bill Payment Transactions found", page, limit, total_count, None, status.HTTP_404_NOT_FOUND)
 
         serializer = BillPaymentTransactionSerializer(paginated_qs, many=True)
 
@@ -1798,38 +1926,17 @@ class BillPaymentTransactionAPIView(APIView):
         data = request.data
         vendor_data = data.get('vendor')
         
-        account_data = data.get('account')
+        # account_data = data.get('ledger_account')
         
         # Handle both string and dict cases
         if isinstance(vendor_data, dict):
             vendor_id = vendor_data.get('vendor_id') or vendor_data.get('id')
         else:
             vendor_id = vendor_data
-
-        if isinstance(account_data, dict):
-            account_id = account_data.get('account_id') or account_data.get('id')
-        else:
-            account_id = account_data
-
-        # Clean up dashes if they exist
-        if vendor_id:
+            if not vendor_id:
+                return build_response(1, "vendor ID is required.", None, status.HTTP_400_BAD_REQUEST)
             vendor_id = vendor_id.replace('-', '')
-        if account_id:
-            account_id = account_id.replace('-', '')
-        
-        # vendor_id = vendor_data.get('vendor_id').replace('-', '')
-        # account_id = account_data.get('account_id').replace('-', '')
-        description = data.get('description')
-        payment_method = data.get('payment_method', 'CASH')
-        payment_receipt_no = data.get('payment_receipt_no')
-
-        # Validate account_id
-        try:
-            uuid.UUID(account_id)
-            ChartOfAccounts.objects.get(pk=account_id)
-        except (ValueError, TypeError, ChartOfAccounts.DoesNotExist) as e:
-            return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
-
+            
         # Validate vendor_id
         try:
             uuid.UUID(vendor_id)
@@ -1837,6 +1944,44 @@ class BillPaymentTransactionAPIView(APIView):
         except (ValueError, TypeError, Vendor.DoesNotExist) as e:
             return build_response(1, "Invalid vendor ID format OR Vendor does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
+
+        ledger_account_data = data.get('ledger_account_id')
+
+        if isinstance(ledger_account_data, str):
+            ledger_account_id = ledger_account_data.replace('-', '')
+        elif isinstance(ledger_account_data, dict):
+            ledger_account_id = ledger_account_data.get("ledger_account_id")
+            if not ledger_account_id:
+                return build_response(1, "Ledger Account ID is required.", None, status.HTTP_400_BAD_REQUEST)
+            ledger_account_id = ledger_account_id.replace('-', '')
+        else:
+            return build_response(1, "'ledger_account' must be a string or object.", None, status.HTTP_400_BAD_REQUEST)
+
+        # Validate FK object properly
+        try:
+            uuid.UUID(ledger_account_id)
+            ledger_account_instance = LedgerAccounts.objects.get(pk=ledger_account_id)
+        except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+            return build_response(1, "Invalid Ledger Account ID format OR Ledger Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        # This is the correct FK object to use everywhere
+        account_id = ledger_account_instance.ledger_account_id
+
+        
+        # vendor_id = vendor_data.get('vendor_id').replace('-', '')
+        # account_id = account_data.get('account_id').replace('-', '')
+        description = data.get('description')
+        payment_method = data.get('payment_method', 'CASH')
+        payment_receipt_no = data.get('payment_receipt_no')
+
+        # # Validate ledger_account_id
+        # try:
+        #     uuid.UUID(ledger_account_id)
+        #     LedgerAccounts.objects.get(pk=ledger_account_id)
+        # except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+        #     return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        
         # Fetch Pending status
         try:
             pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
@@ -1881,6 +2026,10 @@ class BillPaymentTransactionAPIView(APIView):
                                     allocated_amount = input_adjustNow
                                     new_outstanding = outstanding_amount - input_adjustNow
                                     remaining_payment = Decimal("0.00")
+                                    
+                                # Create Payment Transaction
+                                vendor_instance = Vendor.objects.get(pk=vendor_id)
+                                ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
 
                                 bill_payment = BillPaymentTransactions.objects.create(
                                     payment_receipt_no=payment_receipt_no,
@@ -1892,9 +2041,29 @@ class BillPaymentTransactionAPIView(APIView):
                                     payment_status=data.get('payment_status', 'Completed'),
                                     purchase_invoice=invoice,
                                     bill_no=invoice.invoice_no,
-                                    vendor_id=vendor_id,
-                                    account_id=account_id
+                                    vendor=vendor_instance,
+                                    ledger_account_id=ledger_account_instance
                                 )
+                                
+                                #log action
+                                if new_outstanding == 0:
+                                    log_user_action(
+                                        set_db('default'),
+                                        request.user,
+                                        "CREATE & UPDATE",
+                                        "Bill Payments & Purchase Invoice",
+                                        invoice.purchase_invoice_id,
+                                        f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
+                                    )
+                                else:
+                                    log_user_action(
+                                        set_db('default'),
+                                        request.user,
+                                        "CREATE",
+                                        "Bill Payments",
+                                        bill_payment.transaction_id,
+                                        f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
+                                    )
 
                                 completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
                                 if completed_status:
@@ -1902,7 +2071,7 @@ class BillPaymentTransactionAPIView(APIView):
                                     BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
 
                                 journal_entry_line_response = JournalEntryLinesAPIView.post(
-                                    self, vendor_id, account_id, input_adjustNow, description, remaining_payment, payment_receipt_no
+                                    self, vendor_id, ledger_account_id, input_adjustNow, description, remaining_payment, payment_receipt_no
                                 )
                                 vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
 
@@ -1964,6 +2133,10 @@ class BillPaymentTransactionAPIView(APIView):
                             new_outstanding = outstanding - remaining_payment
                             remaining_payment = Decimal("0.00")
 
+                        # Create Payment Transaction
+                        vendor_instance = Vendor.objects.get(pk=vendor_id)
+                        ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+                        
                         bill_payment = BillPaymentTransactions.objects.create(
                             payment_receipt_no=payment_receipt_no,
                             payment_method=payment_method,
@@ -1974,9 +2147,29 @@ class BillPaymentTransactionAPIView(APIView):
                             payment_status='Completed' if new_outstanding == 0 else 'Pending',
                             purchase_invoice=invoice,
                             bill_no=invoice.invoice_no,
-                            vendor_id=vendor_id,
-                            account_id=account_id
+                            vendor=vendor_instance,
+                            ledger_account_id=ledger_account_instance
                         )
+                        
+                        #log action
+                        if new_outstanding == 0:
+                            log_user_action(
+                                set_db('default'),
+                                request.user,
+                                "CREATE & UPDATE",
+                                "Bill Payments & Purchase Invoice",
+                                invoice.purchase_invoice_id,
+                                f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
+                            )
+                        else:
+                            log_user_action(
+                                set_db('default'),
+                                request.user,
+                                "CREATE",
+                                "Bill Payments",
+                                bill_payment.transaction_id,
+                                f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
+                            )
                         
                         # invoice.update_paid_amount_and_pending_amount_after_bill_payment(
                         #     payment_amount=allocated_amount,
@@ -2010,7 +2203,7 @@ class BillPaymentTransactionAPIView(APIView):
 
                     # Post journal + update balance
                     journal_entry_line_response = JournalEntryLinesAPIView.post(
-                        self, vendor_id, account_id, input_amount, description, remaining_payment, payment_receipt_no
+                        self, vendor_id, ledger_account_id, input_amount, description, remaining_payment, payment_receipt_no
                     )
                     vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
 
@@ -2116,12 +2309,14 @@ class BillPaymentTransactionAPIView(APIView):
             invoice.save(update_fields=["paid_amount", "pending_amount", "order_status_id"])
 
             # === Step 8: Update Journal Entries ===
-            account_instance = ChartOfAccounts.objects.get(account_id=request.data.get("account"))
-            vendor_instance = Vendor.objects.get(vendor_id=request.data.get("vendor"))
+            # Fetch ledger account used in original payment
+            account_instance = bill_payment.ledger_account_id
+
+            vendor_instance = bill_payment.vendor
 
             # Get latest balance
             existing_balance = (
-                JournalEntryLines.objects.filter(vendor_id=vendor_instance)
+                JournalEntryLines.objects.filter(vendor_id=vendor_instance.vendor_id)
                 .order_by("-created_at")
                 .values_list("balance", flat=True)
                 .first()
@@ -2131,7 +2326,7 @@ class BillPaymentTransactionAPIView(APIView):
 
             # Reversal entry
             JournalEntryLines.objects.create(
-                account_id=account_instance,
+                ledger_account_id=account_instance,
                 debit=old_amount,
                 voucher_no=payment_receipt_no,
                 credit=Decimal("0.00"),
@@ -2154,7 +2349,7 @@ class BillPaymentTransactionAPIView(APIView):
 
             # Create revision entry
             JournalEntryLines.objects.create(
-                account_id=account_instance,
+                ledger_account_id=account_instance,
                 debit=Decimal("0.00"),
                 voucher_no=payment_receipt_no,
                 credit=final_addition,

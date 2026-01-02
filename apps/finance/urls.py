@@ -33,7 +33,9 @@ urlpatterns = [
     path('journal_details/<str:journal_detail_id>/', JournalDetailRetrieveUpdateDeleteAPIView.as_view(), name='journal-detail-retrieve-update-delete'),
 
     path('journal_entry_lines_list/<str:input_id>/', JournalEntryLinesAPIView.as_view(),name='JournalEntryLinesAPIView-List-for-customer-or-vendor-ledger-reports'),
+    path('journal_entry_lines_list/', JournalEntryLinesAPIView.as_view(),name='JournalEntryLinesAPIView-List-for-customer-or-vendor-ledger-city'),
     # path('expense_items/', ExpenseItemAPIView.as_view(), name='expenseitem-detail-update-delete'),
     # path('expense_items/<str:pk>/', ExpenseItemAPIView.as_view(), name='expenseitem-detail-update-delete'),
     path('general_accounts/', GeneralAccountsListAPIView.as_view()),
+    path('account-cities/', AccountCityListAPIView.as_view())
 ]

@@ -129,7 +129,30 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
         ('Exclusive', 'Exclusive'),
         ('Inclusive', 'Inclusive')
     ]
-    tax = models.CharField(max_length=20, choices=TAX_CHOICES, blank=True, null=True)    
+    tax = models.CharField(max_length=20, choices=TAX_CHOICES, blank=True, null=True)  
+    VOUCHER_CHOICES = [
+    ('GST_Purchase', 'GST_Purchase'),
+    ('Purchase', 'Purchase'),
+    ]
+
+    voucher = models.CharField(
+        max_length=20,
+        choices=VOUCHER_CHOICES,
+        null=True,
+        blank=True
+    )
+    
+    TAX_CODE_CHOICES = [
+    ('Local', 'Local'),
+    ('Exempted', 'Exempted'),
+    ]
+
+    tax_code = models.CharField(
+        max_length=20,
+        choices=TAX_CODE_CHOICES,
+        null=True,
+        blank=True
+    )  
     vendor_address_id = models.ForeignKey(VendorAddress, on_delete=models.PROTECT, null=True, default=None, db_column = 'vendor_address_id')
     remarks = models.CharField(max_length=1024, blank=True, null=True)
     payment_term_id = models.ForeignKey(VendorPaymentTerms, on_delete=models.PROTECT, null=True, default=None, db_column = 'payment_term_id')
@@ -185,14 +208,14 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
             )
             setattr(self, self.order_no_field, order_number)
             
-        # # ✅ Set pending amount by default = total_amount if new record
-        # if is_new_record:
-        #     if self.total_amount and (self.pending_amount is None or self.pending_amount == 0):
-        #         self.pending_amount = self.total_amount
+        # ✅ Set pending amount by default = total_amount if new record
+        if is_new_record:
+            if self.total_amount and (self.pending_amount is None or self.pending_amount == 0):
+                self.pending_amount = self.total_amount
 
-        # # ✅ Ensure pending_amount doesn’t go below 0
-        # if self.pending_amount and self.pending_amount < 0:
-        #     self.pending_amount = 0
+        # ✅ Ensure pending_amount doesn’t go below 0
+        if self.pending_amount and self.pending_amount < 0:
+            self.pending_amount = 0
 
         # Save the record
         super().save(*args, **kwargs)
@@ -403,7 +426,7 @@ class BillPaymentTransactions(OrderNumberMixin):
     vendor = models.ForeignKey(Vendor, on_delete=models.CASCADE, db_column='vendor_id')
     bill_no = models.CharField(max_length=20, null=True, default=None)
     total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
-    account = models.ForeignKey(ChartOfAccounts, on_delete=models.CASCADE, null=True, db_column='account_id')
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, null=False, db_column='ledger_account_id')
 
     class Meta:
         db_table = "bill_payment_transactions"

@@ -237,6 +237,8 @@ class Products(OrderNumberMixin):
     print_name = models.CharField(max_length=255)
     hsn_code= models.CharField(max_length=15, null=True, default=None)
     balance = models.IntegerField(default=0)
+    physical_balance = models.IntegerField(default=0)
+    balance_diff = models.IntegerField(default=0)
     pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.PROTECT, null=True, default=None, db_column = 'pack_unit_id', related_name='pack_unit')
     g_pack_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.PROTECT, null=True, default=None, db_column = 'g_pack_unit_id', related_name='g_pack_unit')
     pack_vs_stock = models.IntegerField(default=0)
@@ -266,6 +268,9 @@ class Products(OrderNumberMixin):
             if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
                 order_number = generate_order_number(self.order_no_prefix)
                 setattr(self, self.order_no_field, order_number)
+                
+        # ✅ AUTO CALCULATE BALANCE DIFF
+        self.balance_diff = (self.physical_balance or 0) - (self.balance or 0)
 
         # Save the record
         super().save(*args, **kwargs)
@@ -319,7 +324,7 @@ class ProductVariation(models.Model):
     sku = models.CharField(max_length=100, unique=True,null=True,)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True,)
     quantity = models.IntegerField(default=0,null=True,)
-    is_deleted = models.BooleanField(default=False)
+    # is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

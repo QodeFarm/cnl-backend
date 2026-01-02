@@ -271,17 +271,58 @@ def list_all_objects(self, request, *args, **kwargs):
 
 
 
+# def create_instance(self, request, *args, **kwargs):
+#     serializer = self.get_serializer(data=request.data)
+    
+#     if serializer.is_valid():
+#         serializer.save()
+#         data = serializer.data
+        
+#         # ----------------Pramod -update ----------------------------
+        
+        
+#         #-------------------------------------------------------------
+#         return build_response(1, "Record created successfully", data, status.HTTP_201_CREATED)
+#     else:
+#         errors_str = json.dumps(serializer.errors, indent=2)
+#         logger.error("Serializer validation error: %s", errors_str)
+#         return build_response(0, "Form validation failed", [], errors = serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
 def create_instance(self, request, *args, **kwargs):
     serializer = self.get_serializer(data=request.data)
-    
+
     if serializer.is_valid():
-        serializer.save()
+        instance = serializer.save()
         data = serializer.data
+
+        # ---------------- LOGGING ---------------- #
+        if getattr(self, "log_actions", False):
+            from apps.auditlogs.utils import log_user_action
+
+            module = getattr(self, "log_module_name", self.__class__.__name__.replace("ViewSet", ""))
+            pk_field = getattr(self, "log_pk_field", "id")
+            pk_value = data.get(pk_field)
+
+            display_field = getattr(self, "log_display_field", None)
+            display_value = data.get(display_field) if display_field else pk_value
+
+            log_user_action(
+                "default",
+                request.user,
+                "CREATE",
+                module,
+                pk_value,
+                f"{module} ({display_value}) Created by {request.user.username}"
+            )
+        # ------------------------------------------- #
+
         return build_response(1, "Record created successfully", data, status.HTTP_201_CREATED)
+
     else:
         errors_str = json.dumps(serializer.errors, indent=2)
         logger.error("Serializer validation error: %s", errors_str)
         return build_response(0, "Form validation failed", [], errors = serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
+
 
 def update_instance(self, request, *args, **kwargs):
     partial = kwargs.pop('partial', False)
@@ -290,6 +331,31 @@ def update_instance(self, request, *args, **kwargs):
     serializer.is_valid(raise_exception=True)
     self.perform_update(serializer)
     data = serializer.data
+    
+    #------------Pramod -updated --------------------------
+    
+    # ---------------- LOGGING ---------------- #
+    if getattr(self, "log_actions", False):
+        from apps.auditlogs.utils import log_user_action
+
+        module = getattr(self, "log_module_name", self.__class__.__name__.replace("ViewSet", ""))
+        pk_field = getattr(self, "log_pk_field", "id")
+        pk_value = data.get(pk_field)
+
+        display_field = getattr(self, "log_display_field", None)
+        display_value = data.get(display_field) if display_field else pk_value
+
+        log_user_action(
+            "default",
+            request.user,
+            "UPDATE",
+            module,
+            pk_value,
+            f"{module} ({display_value}) Updated by {request.user.username}"
+        )
+    # ------------------------------------------- #
+    
+    #---------------------------------------------------------
     return build_response(1, "Record updated successfully", data, status.HTTP_200_OK)
 
 def perform_update(self, serializer):
@@ -1577,6 +1643,107 @@ def send_whatsapp_message_via_wati(to_number, file_url):
     else:
         result = response_data.get('info')
         return result
+    
+# from apps.customers.models import Customer
+# from apps.vendors.models import Vendor
+
+
+
+import urllib.parse
+from django.conf import settings
+
+
+def resolve_phone_from_document(document_type, pk, city_id=None):
+    """
+    Resolve phone number based on document & city
+    """
+    
+    from apps.customer.models import CustomerAddresses
+    from apps.vendor.models import VendorAddress
+    from apps.sales.models import SaleOrder, SaleInvoiceOrders, SaleReturnOrders, PaymentTransactions
+    from apps.purchase.models import PurchaseOrders, PurchaseReturnOrders, BillPaymentTransactions
+
+    # SALE ORDER → CUSTOMER PHONE
+    if document_type == "sale_order":
+        sale = SaleOrder.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+
+    # ACCOUNT LEDGER / CUSTOMER
+    if document_type == "sale_invoice": #, "payment_receipt"]
+        sale = SaleInvoiceOrders.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+    
+    # ACCOUNT LEDGER / CUSTOMER
+    if document_type == "sale_return": #, "payment_receipt"]
+        sale = SaleReturnOrders.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+    
+    # ACCOUNT LEDGER / CUSTOMER
+    if document_type == "payment_receipt": #, "payment_receipt"]
+        sale = PaymentTransactions.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+
+    # VENDOR DOCUMENTS
+    if document_type in ["purchase_order", "purchase_return", "bill_receipt"]:
+        if document_type == 'purchase_order':
+            purchase = PurchaseOrders.objects.filter(pk=pk).first()
+            if not purchase:
+                return None
+            
+        if document_type == 'purchase_return':
+            purchase = PurchaseReturnOrders.objects.filter(pk=pk).first()
+            if not purchase:
+                return None
+            
+        if document_type == 'bill_receipt':
+            purchase = BillPaymentTransactions.objects.filter(pk=pk).first()
+            if not purchase:
+                return None
+        
+        qs = VendorAddress.objects.filter(vendor_id=purchase.vendor_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+
+    return None
+
+
+def build_whatsapp_click_url(phone, message):
+    encoded = urllib.parse.quote(message)
+    return f"https://wa.me/{phone}?text={encoded}"
+
+
 
 def convert_amount_to_words(amount):
     '''

@@ -73,10 +73,10 @@ def billpayment_receipt_data(pk, document_type):
         'receipt_date': payment_data['payment_date'],
         
         # Amounts
-        'amount': total,
+        'amount': amount,
         'outstanding': outstanding,
         'total': total,
-        'amount_in_words': convert_amount_to_words(total),
+        'amount_in_words': convert_amount_to_words(amount),
         
         # Voucher details
         'voucher_no': voucher_no,
@@ -121,9 +121,6 @@ def billpayment_receipt_doc(
     elements.append(payment_amount_summary(
         outstanding, amount_in_words
     ))
-    
-    # Append declaration (same as sale order)
-    # elements.append(declaration())
     
     # Build the PDF
     doc.build(elements)

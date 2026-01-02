@@ -30,6 +30,12 @@ class JobTypesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = JobTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Job Types"
+    log_pk_field = "job_type_id"
+    log_display_field = "job_type_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, JobTypes,*args, **kwargs)
@@ -51,6 +57,12 @@ class DesignationsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = DesignationsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Designations"
+    log_pk_field = "designation_id"
+    log_display_field = "designation_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Designations,*args, **kwargs)
@@ -71,6 +83,12 @@ class JobCodesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = JobCodesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Job Codes"
+    log_pk_field = "job_code_id"
+    log_display_field = "job_code"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, JobCodes,*args, **kwargs)
@@ -91,6 +109,12 @@ class DepartmentsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = DepartmentsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Departments"
+    log_pk_field = "department_id"
+    log_display_field = "department_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Departments,*args, **kwargs)
@@ -111,6 +135,12 @@ class ShiftsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = ShiftsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Shifts"
+    log_pk_field = "shift_id"
+    log_display_field = "shift_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Shifts,*args, **kwargs)
@@ -131,6 +161,12 @@ class EmployeesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = EmployeesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Employees"
+    log_pk_field = "employee_id"
+    log_display_field = "full_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Employees,*args, **kwargs)
@@ -152,6 +188,12 @@ class EmployeeSalaryViewSet(viewsets.ModelViewSet):
     filterset_class = EmployeeSalaryFilter
     ordering_fields = ['created_at']
     
+    #log actions
+    log_actions = True
+    log_module_name = "Employee Salary"
+    log_pk_field = "salary_id"
+    log_display_field = "salary_amount"
+    
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, EmployeeSalary,*args, **kwargs)
 
@@ -171,6 +213,12 @@ class SalaryComponentsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = SalaryComponentsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Salary Component"
+    log_pk_field = "component_id"
+    log_display_field = "component_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, SalaryComponents,*args, **kwargs)
@@ -191,6 +239,12 @@ class EmployeeSalaryComponentsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = EmployeeSalaryComponentsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Employee Salary Component"
+    log_pk_field = "employee_component_id"
+    log_display_field = "component_amount"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, EmployeeSalaryComponents,*args, **kwargs)
@@ -209,6 +263,12 @@ class LeaveTypesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LeaveTypesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Leave Types"
+    log_pk_field = "leave_type_id"
+    log_display_field = "leave_type_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, LeaveTypes,*args, **kwargs)
@@ -230,6 +290,12 @@ class EmployeeLeavesViewSet(viewsets.ModelViewSet):
     filterset_class = EmployeeLeavesFilter
     ordering_fields = ['created_at']
     
+    #log actions
+    log_actions = True
+    log_module_name = "Employee Leaves"
+    log_pk_field = "leave_id"
+    log_display_field = "leave_id"
+    
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, EmployeeLeaves,*args, **kwargs)
 
@@ -250,6 +316,12 @@ class LeaveApprovalsViewSet(viewsets.ModelViewSet):
     filterset_class = LeaveApprovalsFilter
     ordering_fields = ['created_at']
     
+    #log actions
+    log_actions = True
+    log_module_name = "Leave Approvals"
+    log_pk_field = "approval_id"
+    log_display_field = "approval_id"
+    
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, LeaveApprovals,*args, **kwargs)
 
@@ -265,6 +337,12 @@ class EmployeeLeaveBalanceViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = EmployeeLeaveBalanceFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Employee Leave Balance"
+    log_pk_field = "balance_id"
+    log_display_field = "leave_balance"
     
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, EmployeeLeaveBalance,*args, **kwargs)
@@ -283,6 +361,12 @@ class EmployeeAttendanceViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = EmployeeAttendanceFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Employee Attendance"
+    log_pk_field = "employee_attendance_id"
+    log_display_field = "attendance_date"
     
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, EmployeeAttendance,*args, **kwargs)
@@ -317,6 +401,12 @@ class SwipesViewSet(viewsets.ModelViewSet):
     filterset_class = SwipesFilter
     ordering_fields = ['created_at']
     
+    #log actions
+    log_actions = True
+    log_module_name = "Swipes"
+    log_pk_field = "swipe_id"
+    log_display_field = "swipe_time"
+    
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Swipes,*args, **kwargs)
 
@@ -333,6 +423,12 @@ class SwipesViewSet(viewsets.ModelViewSet):
 class BiometricViewSet(viewsets.ModelViewSet):
     queryset = Biometric.objects.all().order_by('-created_at')
     serializer_class = BiometricSerializer
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Biometric"
+    log_pk_field = "biometric_id"
+    log_display_field = "biometric_entry_id"
 
     def list(self, request, *args, **kwargs):
         return list_all_objects(self, request, *args, **kwargs)

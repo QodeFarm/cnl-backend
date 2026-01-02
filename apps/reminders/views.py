@@ -5,6 +5,8 @@ from django.http import  Http404
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets,status
+from apps.auditlogs.utils import log_user_action
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
@@ -367,6 +369,18 @@ class ReminderView(APIView):
             "reminder_recipients": reminder_recipients_data,
             "reminder_logs":reminder_logs_data[0] if reminder_logs_data else {}
         }
+        
+        remindersub = reminders_data.get("subject")
+        
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Reminders",
+            reminder_id,
+            f"{remindersub} - Reminders Record Created by {request.user.username}"
+        )
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
@@ -443,5 +457,17 @@ class ReminderView(APIView):
             "reminder_recipients": recipients_data if recipients_data else [],
             "reminder_logs":logs_data if logs_data else {}            
         }
+        
+        remindersub = reminders_data.get("subject")
+        
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Reminders",
+            pk,
+            f"{remindersub} - Reminders Record Updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)

@@ -9,9 +9,11 @@ from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 from django.core.exceptions import  ObjectDoesNotExist
 
+from apps.auditlogs.utils import log_user_action
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorFilter, VendorPaymentTermsFilter
+from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorBalance, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from .serializers import VendorBalanceSerializer, VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer
@@ -75,6 +77,12 @@ class VendorCategoryView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorCategoryFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Vendor Category"
+    log_pk_field = "vendor_category_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, VendorCategory,*args, **kwargs)
@@ -95,6 +103,12 @@ class VendorPaymentTermsView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorPaymentTermsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Vendor Payment Terms"
+    log_pk_field = "payment_term_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, VendorPaymentTerms,*args, **kwargs)
@@ -115,6 +129,12 @@ class VendorAgentView(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = VendorAgentFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Vendor Agent"
+    log_pk_field = "vendor_agent_id"
+    log_display_field = "name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, VendorAgent,*args, **kwargs)
@@ -755,6 +775,17 @@ class VendorViewSet(APIView):
             "vendor_addresses": addresses_data,
             "custom_field_values": custom_fields_data
         }
+        
+        vendorname = vendors_data.get("name")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Vendors",
+            vendor_id,
+            f"{vendorname} - Vendor Record Created by {request.user.username}"
+        )
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
@@ -839,6 +870,17 @@ class VendorViewSet(APIView):
             {"vendor_addresses":addresses_data if addresses_data else []},
             {"custom_field_values": custom_field_values_data if custom_field_values_data else []}  # Add custom field values to response
         ]
+        
+        vendorname = vendors_data.get("name")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "UPDATE",
+            "Vendors",
+            pk,
+            f"{vendorname} - Vendor Record updated by {request.user.username}"
+        )
 
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 

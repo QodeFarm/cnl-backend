@@ -148,193 +148,314 @@ def format_numeric(cell):
     except (ValueError, TypeError):
         return str(cell)
 
+# def product_details(data, show_gst=True):
+#     style_normal = getSampleStyleSheet()['Normal']
+
+#     tbl_3_col_widths = [
+#         0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch, 0.8 * inch,
+#         1.0 * inch, 1.0 * inch, 0.7 * inch, 0.8 * inch
+#     ]
+
+#     table_3_heading = [["Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate", "Amount", "Disc(%)", "Disc(Rs)"]]
+
+#     if show_gst:
+#         table_3_heading[0].append("GST(Rs)")
+#         table_3_heading[0].append("Total Amount")
+#         tbl_3_col_widths += [0.8 * inch, 1.0 * inch]
+#     else:
+#         table_3_heading[0].append("Total Amount")
+#         tbl_3_col_widths += [1.0 * inch]
+
+#     for index, item in enumerate(data):
+#         if len(item) < 11:
+#             continue
+
+#         row = item[:9]  # First 9 fields are common
+
+#         if show_gst:
+#             row.append(format_numeric(item[9]))  # GST(Rs)
+#             row.append(format_numeric(item[10]))  # Total Amount
+#         else:
+#             row.append(format_numeric(item[10]))  # Total Amount (shift left)
+
+#         wrapped_row = [Paragraph(str(cell), style_normal) for cell in row]
+#         table_3_heading.append(wrapped_row)
+
+#     # Ensure minimum rows for spacing
+#     while len(table_3_heading) < 6:
+#         table_3_heading.append([" "] * len(table_3_heading[0]))
+
+#     table = Table(table_3_heading, colWidths=tbl_3_col_widths)
+#     # table = Table(table_3_heading, colWidths=tbl_3_col_widths)
+#     table.setStyle(TableStyle([
+#         # Basic styling
+#         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+#         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+#         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+#         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        
+#         # Alignment
+#         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header alignment
+#         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+#         ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Numeric columns right-aligned
+#         ('ALIGN', (0, 1), (1, -1), 'LEFT'),    # Text columns left-aligned
+        
+#         # Vertical lines
+#         ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),  
+#         ('LINEAFTER', (6, 0), (10, -1), 1, colors.black),   
+        
+#         # Horizontal lines
+#         ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),  # Header top
+#         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Header bottom
+#         ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),  # Last row
+        
+#         # Increase row padding for spacing
+#         ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+#         ('TOPPADDING', (0, 0), (-1, -1), 12),
+#         ('LEFTPADDING', (0, 0), (-1, -1), 6),
+#         ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+#     ]))
+    
+#     return table
+
 def product_details(data, show_gst=True):
     style_normal = getSampleStyleSheet()['Normal']
 
-    tbl_3_col_widths = [
-        0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch, 0.8 * inch,
-        1.0 * inch, 1.0 * inch, 0.7 * inch, 0.8 * inch
+    # FULL TABLE WIDTH (same for all versions)
+    TOTAL_WIDTH = (
+        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
+        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
+    )
+
+    # HEADERS
+    headers = [
+        "Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate",
+        "Amount", "Disc(%)", "Disc(Rs)", "GST(Rs)", "Total Amount"
     ]
 
-    table_3_heading = [["Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate", "Amount", "Disc(%)", "Disc(Rs)"]]
+    # Remove GST column completely if not showing
+    if not show_gst:
+        headers.pop(9)  # remove GST header
 
-    if show_gst:
-        table_3_heading[0].append("GST(Rs)")
-        table_3_heading[0].append("Total Amount")
-        tbl_3_col_widths += [0.8 * inch, 1.0 * inch]
-    else:
-        table_3_heading[0].append("Total Amount")
-        tbl_3_col_widths += [1.0 * inch]
+    num_columns = len(headers)
 
-    for index, item in enumerate(data):
-        if len(item) < 11:
-            continue
+    # AUTO DISTRIBUTE WIDTHS PERFECTLY
+    col_width = TOTAL_WIDTH / num_columns
+    col_widths = [col_width] * num_columns
 
-        row = item[:9]  # First 9 fields are common
+    # Build table data
+    table_data = [headers]
 
-        if show_gst:
-            row.append(format_numeric(item[9]))  # GST(Rs)
-            row.append(format_numeric(item[10]))  # Total Amount
-        else:
-            row.append(format_numeric(item[10]))  # Total Amount (shift left)
+    for item in data:
+        row = item.copy()
 
-        wrapped_row = [Paragraph(str(cell), style_normal) for cell in row]
-        table_3_heading.append(wrapped_row)
+        # Remove GST value if hiding
+        if not show_gst:
+            row.pop(9)
 
-    # Ensure minimum rows for spacing
-    while len(table_3_heading) < 6:
-        table_3_heading.append([" "] * len(table_3_heading[0]))
+        # Wrap row cells
+        wrapped = [Paragraph(str(x), style_normal) for x in row]
+        table_data.append(wrapped)
 
-    table = Table(table_3_heading, colWidths=tbl_3_col_widths)
-    # table = Table(table_3_heading, colWidths=tbl_3_col_widths)
-    table.setStyle(TableStyle([
-        # Basic styling
+    # Add filler rows for consistency
+    while len(table_data) < 6:
+        table_data.append([" "] * num_columns)
+
+    # Create table
+    table = Table(table_data, colWidths=col_widths)
+
+    table.setStyle(TableStyle([        
         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        
-        # Alignment
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header alignment
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Numeric columns right-aligned
-        ('ALIGN', (0, 1), (1, -1), 'LEFT'),    # Text columns left-aligned
-        
-        # Vertical lines
-        ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),  
-        ('LINEAFTER', (6, 0), (10, -1), 1, colors.black),   
-        
-        # Horizontal lines
-        ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),  # Header top
-        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Header bottom
-        ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),  # Last row
-        
-        # Increase row padding for spacing
+        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
+        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
+        ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),
+        ('LINEAFTER', (6, 0), (10, -1), 1, colors.black),
+        ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
         ('TOPPADDING', (0, 0), (-1, -1), 12),
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
         ('RIGHTPADDING', (0, 0), (-1, -1), 6),
     ]))
-    
+
     return table
 
 
-# def product_total_details(ttl_Qty, final_Amount, ttl_Amount,total_disc):
-#     table_4_col_widths = [
-#         0.5 * inch,   # Idx
-#         2.0 * inch,   # Product
-#         0.7 * inch,   # Boxes
-#         0.7 * inch,   # Qty
-#         0.8 * inch,   # Unit Name
-#         1.0 * inch,   # Rate
-#         1.0 * inch,   # Amount
-#         0.7 * inch,   # Dis(%)
-#         0.8 * inch,   # Disc(Rs)
-#         0.8 * inch,    # Total Amount
-#         1.0 * inch    # Total Amount
-#     ]
 
-#     # table_4_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
-#     # table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount, total_disc]]
-#     table_4_heading = [[
-#         '',            # Idx
-#         'Total',       # Product
-#         '',            # Boxes
-#         ttl_Qty,       # Qty
-#         '',            # Unit Name
-#         '',            # Rate
-#         final_Amount,    # Amount
-#         '',            # Dis(%)
-#         total_disc,    # Disc(Rs)
-#         '',
-#         ttl_Amount     # Total Amount
-#     ]]
-    
-#     table = Table(table_4_heading, colWidths=table_4_col_widths)
-#     table.setStyle(TableStyle([
-#         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-#         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-#         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-#         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-#         ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
-#         ('VALIGN', (0, 1), (-1, -1), 'TOP'),
-#         ('GRID', (0, 0), (-1, 0), 1, colors.black),
-#         ('BOX', (0, 0), (-1, -1), 0, colors.black),
-#         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-#         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-#         ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-#     ]))
-#     return table
 def product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gst=False):
+    # if show_gst:
+    #     print("Entered with show_gst")
+    #     col_widths = [
+    #         0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
+    #         0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
+    #         0.8 * inch, 0.8 * inch, 1.0 * inch
+    #     ]
+    #     row = [
+    #         '', 'Total', '', ttl_Qty, '', '', final_Amount,
+    #         '', total_disc, '', ttl_Amount
+    #     ]
+    # else:
+    #     print("Entered with out show_gst")
+    #     col_widths = [
+    #         0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
+    #         0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
+    #         0.8 * inch, 1.0 * inch  # One less column
+    #     ]
+    #     row = [
+    #         '', 'Total', '', ttl_Qty, '', '', final_Amount,
+    #         '', total_disc, ttl_Amount
+    #     ]
+
+    # table = Table([row], colWidths=col_widths)
+    # table.setStyle(TableStyle([
+    #     ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+    #     ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+    #     ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+    #     ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+    #     ('GRID', (0, 0), (-1, 0), 1, colors.black),
+    #     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    #     ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+    # ]))
+    # return table
+    
+    # SAME TOTAL WIDTH AS PRODUCT TABLE
+    TOTAL_WIDTH = (
+        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
+        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
+    )
+
+    # HEADERS COUNT MATCHES PRODUCT TABLE
     if show_gst:
-        print("Entered with show_gst")
-        col_widths = [
-            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-            0.8 * inch, 0.8 * inch, 1.0 * inch
-        ]
+        num_columns = 11
+    else:
+        num_columns = 10
+
+    # AUTO-CALCULATED COLUMN WIDTHS
+    col_width = TOTAL_WIDTH / num_columns
+    col_widths = [col_width] * num_columns
+
+    # ----- BUILD ROW -----
+
+    if show_gst:
         row = [
-            '', 'Total', '', ttl_Qty, '', '', final_Amount,
-            '', total_disc, '', ttl_Amount
+            "",          # idx
+            "Total",     # Total label
+            "",          # Boxes
+            ttl_Qty,     # Qty total
+            "",          # Unit
+            "",          # Rate
+            final_Amount,# Amount
+            "",          # Disc%
+            total_disc,  # Disc Rs
+            "",          # GST
+            ttl_Amount   # Total Amt
         ]
     else:
-        print("Entered with out show_gst")
-        col_widths = [
-            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch  # One less column
-        ]
         row = [
-            '', 'Total', '', ttl_Qty, '', '', final_Amount,
-            '', total_disc, ttl_Amount
+            "",          # idx
+            "Total",     
+            "",          # Boxes
+            ttl_Qty,     
+            "",          # Unit
+            "",          # Rate
+            final_Amount,
+            "",          # Disc%
+            total_disc,
+            ttl_Amount   # Last column (no GST)
         ]
 
+    # CREATE TABLE
     table = Table([row], colWidths=col_widths)
-    table.setStyle(TableStyle([
+
+    # STYLE MATCHES PRODUCT TABLE
+    style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-    ]))
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # MERGE Total across Product + Boxes columns
+        ('SPAN', (1, 0), (2, 0)),
+
+        # Merge Unit + Rate columns
+        ('SPAN', (4, 0), (5, 0)),
+    ]
+
+    table.setStyle(TableStyle(style))
     return table
 
 def product_total_details_purchase(ttl_Qty, final_Amount, total_disc, ttl_Amount, show_gst=False):
+    TOTAL_WIDTH = (
+        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
+        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
+    )
+
+    # HEADERS COUNT MATCHES PRODUCT TABLE
     if show_gst:
-        print("Entered with show_gst")
-        col_widths = [
-            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-            0.8 * inch, 0.8 * inch, 1.0 * inch
-        ]
+        num_columns = 11
+    else:
+        num_columns = 10
+
+    # AUTO-CALCULATED COLUMN WIDTHS
+    col_width = TOTAL_WIDTH / num_columns
+    col_widths = [col_width] * num_columns
+
+    # ----- BUILD ROW -----
+
+    if show_gst:
         row = [
-            '', 'Total', '', ttl_Qty, '', '', final_Amount,
-            '', total_disc, '', ttl_Amount
+            "",          # idx
+            "Total",     # Total label
+            "",          # Boxes
+            ttl_Qty,     # Qty total
+            "",          # Unit
+            "",          # Rate
+            final_Amount,# Amount
+            "",          # Disc%
+            total_disc,  # Disc Rs
+            "",          # GST
+            ttl_Amount   # Total Amt
         ]
     else:
-        print("Entered with out show_gst")
-        col_widths = [
-            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch  # One less column
-        ]
         row = [
-            '', 'Total', '', ttl_Qty, '', '', final_Amount,
-            '', total_disc, ttl_Amount
+            "",          # idx
+            "Total",     
+            "",          # Boxes
+            ttl_Qty,     
+            "",          # Unit
+            "",          # Rate
+            final_Amount,
+            "",          # Disc%
+            total_disc,
+            ttl_Amount   # Last column (no GST)
         ]
 
+    # CREATE TABLE
     table = Table([row], colWidths=col_widths)
-    table.setStyle(TableStyle([
+
+    # STYLE MATCHES PRODUCT TABLE
+    style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-    ]))
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # MERGE Total across Product + Boxes columns
+        ('SPAN', (1, 0), (2, 0)),
+
+        # Merge Unit + Rate columns
+        ('SPAN', (4, 0), (5, 0)),
+    ]
+
+    table.setStyle(TableStyle(style))
     return table
 
 
@@ -385,7 +506,7 @@ def product_total_details_inwords(
     ]
 
     # Main Table
-    table = Table(table_data, colWidths=[6.7 * inch, 3.3 * inch])
+    table = Table(table_data, colWidths=[7 * inch, 3 * inch])
     table.setStyle(TableStyle([
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
@@ -396,26 +517,80 @@ def product_total_details_inwords(
 
 
 
+# def declaration():
+#     table_data_6 = [['<b>Declaration:</b>\n' 'We declare that this invoice shows the actual price of the goods/services' '\n' 'described and that all particulars are true and correct.' '\n' 'Original For Recipient', 'Authorised Signatory']]
+#     table_6_col_widths = [6.7*inch, 3.3*inch]
+    
+#     table = Table(table_data_6, colWidths=table_6_col_widths)
+#     table.setStyle(TableStyle([
+#     ('BACKGROUND', (0, 0), (-1, -1), colors.white),  # Background color for the entire table
+#     ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),   # Text color for the entire table
+#     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),              # Left align all cells
+#     ('VALIGN', (0, 0), (-1, -1), 'TOP'),              # Top align all cells
+#     ('ALIGN', (1, 0), (1, 0), 'CENTER'),              # Center align text in the second column header cell
+#     ('VALIGN', (1, 0), (1, 0), 'BOTTOM'),             # Bottom align text in the second column header cell
+    
+#     # Add border around header cells
+#     ('GRID', (0, 0), (-1, 0), 1, colors.black),  # Add border around the header row
+    
+#     # Optional: Additional styling
+#     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),  # Font for the header row
+#     ('BOTTOMPADDING', (0, 0), (-1, 0), 10),       # Padding for the header row
+#     ]))
+#     return table
+
 def declaration():
-    table_data_6 = [['Declaration:' '\n' 'We declare that this invoice shows the actual price of the goods/services' '\n' 'described and that all particulars are true and correct.' '\n' 'Original For Recipient', 'Authorised Signatory']]
-    table_6_col_widths = [6.7*inch, 3.3*inch]
+    styles = getSampleStyleSheet()
     
+    # Normal style (slightly small for ERP declaration footer)
+    styleN = ParagraphStyle(
+        'normal_declaration',
+        parent=styles['Normal'],
+        fontSize=9,
+        leading=12
+    )
+
+    # LEFT SIDE: Declaration Text
+    left_text = Paragraph(
+        "<b>Declaration:</b><br/><br/>"
+        "We declare that this invoice shows the actual price of the goods/services<br/>"
+        "described and that all particulars are true and correct.<br/><br/>"
+        "Original For Recipient",
+        styleN
+    )
+
+    # RIGHT SIDE: Authorised Signatory with signature line
+    right_text = Paragraph(
+        "<br/><br/><br/>__________________________<br/>"
+        "<b>Authorised Signatory</b>",
+        styleN
+    )
+
+    # Table data
+    table_data_6 = [[left_text, right_text]]
+
+    # Column widths (ERP standard)
+    table_6_col_widths = [7 * inch, 3 * inch]
+
+    # Create table
     table = Table(table_data_6, colWidths=table_6_col_widths)
+
+    # Styling
     table.setStyle(TableStyle([
-    ('BACKGROUND', (0, 0), (-1, -1), colors.white),  # Background color for the entire table
-    ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),   # Text color for the entire table
-    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),              # Left align all cells
-    ('VALIGN', (0, 0), (-1, -1), 'TOP'),              # Top align all cells
-    ('ALIGN', (1, 0), (1, 0), 'CENTER'),              # Center align text in the second column header cell
-    ('VALIGN', (1, 0), (1, 0), 'BOTTOM'),             # Bottom align text in the second column header cell
-    
-    # Add border around header cells
-    ('GRID', (0, 0), (-1, 0), 1, colors.black),  # Add border around the header row
-    
-    # Optional: Additional styling
-    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),  # Font for the header row
-    ('BOTTOMPADDING', (0, 0), (-1, 0), 10),       # Padding for the header row
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),      # Declaration left aligned
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),    # Signatory centered
+
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),    # Both top aligned
+
+        ('TOPPADDING', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+
+        ('GRID', (0, 0), (-1, 0), 1, colors.black),  # Border around it (optional)
     ]))
+
     return table
 
 
@@ -716,118 +891,53 @@ def invoice_customer_details(cust_name, city, country, phone, destination, shipp
     
     return table
 
-# def invoice_product_details(data, show_gst=True):
-    
-#     style_normal = getSampleStyleSheet()['Normal']
-
-#     tbl_3_col_widths = [
-#         0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch, 0.8 * inch,
-#         1.0 * inch, 1.0 * inch, 0.7 * inch, 0.8 * inch
-#     ]
-
-#     table_3_heading = [["Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate", "Amount", "Disc(%)", "Disc(Rs)"]]
-
-#     if show_gst:
-#         table_3_heading[0].append("GST(Rs)")
-#         table_3_heading[0].append("Total Amount")
-#         tbl_3_col_widths += [0.8 * inch, 1.0 * inch]
-#     else:
-#         table_3_heading[0].append("Total Amount")
-#         tbl_3_col_widths += [1.0 * inch]
-
-#     for index, item in enumerate(data):
-#         if len(item) < 11:
-#             continue
-
-#         row = item[:9]  # First 9 fields are common
-
-#         if show_gst:
-#             row.append(format_numeric(item[9]))  # GST(Rs)
-#             row.append(format_numeric(item[10]))  # Total Amount
-#         else:
-#             row.append(format_numeric(item[10]))  # Total Amount (shift left)
-
-#         wrapped_row = [Paragraph(str(cell), style_normal) for cell in row]
-#         table_3_heading.append(wrapped_row)
-
-#     # Ensure minimum rows for spacing
-#     while len(table_3_heading) < 6:
-#         table_3_heading.append([" "] * len(table_3_heading[0]))
-
-#     table = Table(table_3_heading, colWidths=tbl_3_col_widths)
-#     # table = Table(table_3_heading, colWidths=tbl_3_col_widths)
-#     table.setStyle(TableStyle([
-#         # Basic styling
-#         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-#         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-#         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-#         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        
-#         # Alignment
-#         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header alignment
-#         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-#         ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Numeric columns right-aligned
-#         ('ALIGN', (0, 1), (1, -1), 'LEFT'),    # Text columns left-aligned
-        
-#         # Vertical lines
-#         ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),  
-#         ('LINEAFTER', (6, 0), (10, -1), 1, colors.black),   
-        
-#         # Horizontal lines
-#         ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),  # Header top
-#         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Header bottom
-#         ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),  # Last row
-        
-#         # Increase row padding for spacing
-#         ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-#         ('TOPPADDING', (0, 0), (-1, -1), 12),
-#         ('LEFTPADDING', (0, 0), (-1, -1), 6),
-#         ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-#     ]))
-    
-#     return table
-
 def invoice_product_details(data, show_gst=True):
     style_normal = getSampleStyleSheet()['Normal']
 
-    tbl_3_col_widths = [
-        0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch, 0.8 * inch,
-        1.0 * inch, 1.0 * inch, 0.7 * inch, 0.8 * inch
+    # FULL TABLE WIDTH (same for all versions)
+    TOTAL_WIDTH = (
+        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
+        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
+    )
+
+    # HEADERS
+    headers = [
+        "Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate",
+        "Amount", "Disc(%)", "Disc(Rs)", "GST(Rs)", "Total Amount"
     ]
 
-    table_3_heading = [["Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate", "Amount", "Disc(%)", "Disc(Rs)"]]
+    # Remove GST column completely if not showing
+    if not show_gst:
+        headers.pop(9)  # remove GST header
 
-    # ✅ Respect passed-in flag without overriding
-    if show_gst:
-        table_3_heading[0].append("GST(Rs)")
-        table_3_heading[0].append("Total Amount")
-        tbl_3_col_widths += [0.8 * inch, 1.0 * inch]
-    else:
-        table_3_heading[0].append("Total Amount")
-        tbl_3_col_widths += [1.0 * inch]
+    num_columns = len(headers)
 
-    for index, item in enumerate(data):
-        if len(item) < 11:
-            continue
+    # AUTO DISTRIBUTE WIDTHS PERFECTLY
+    col_width = TOTAL_WIDTH / num_columns
+    col_widths = [col_width] * num_columns
 
-        row = item[:9]
+    # Build table data
+    table_data = [headers]
 
-        if show_gst:
-            row.append(format_numeric(item[9]))  # GST(Rs)
-            row.append(format_numeric(item[10]))  # Total Amount
-        else:
-            row.append(format_numeric(item[10]))  # Total Amount (shift left)
+    for item in data:
+        row = item.copy()
 
-        wrapped_row = [Paragraph(str(cell), style_normal) for cell in row]
-        table_3_heading.append(wrapped_row)
+        # Remove GST value if hiding
+        if not show_gst:
+            row.pop(9)
 
-    # Padding
-    while len(table_3_heading) < 6:
-        table_3_heading.append([" "] * len(table_3_heading[0]))
+        # Wrap row cells
+        wrapped = [Paragraph(str(x), style_normal) for x in row]
+        table_data.append(wrapped)
 
-    table = Table(table_3_heading, colWidths=tbl_3_col_widths)
+    # Add filler rows for consistency
+    while len(table_data) < 6:
+        table_data.append([" "] * num_columns)
 
-    table.setStyle(TableStyle([
+    # Create table
+    table = Table(table_data, colWidths=col_widths)
+
+    table.setStyle(TableStyle([        
         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
@@ -849,229 +959,111 @@ def invoice_product_details(data, show_gst=True):
 
     return table
 
-    # style_normal = getSampleStyleSheet()['Normal']
-    
-    # # Adjusted column widths (Total = 10 inches)
-    # # tbl_3_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
-    # tbl_3_col_widths = [
-    #     0.5 * inch,   # Idx
-    #     2.0 * inch,   # Product
-    #     0.7 * inch,   # Boxes
-    #     0.7 * inch,   # Qty
-    #     0.8 * inch,   # Unit Name
-    #     1.0 * inch,   # Rate
-    #     1.0 * inch,   # Amount
-    #     0.7 * inch,   # Dis(%)
-    #     0.8 * inch,   # Disc(Rs)
-    #     0.8 * inch,    # Total Amount
-    #     1.0 * inch    # Total Amount
-    # ]
+def invoice_product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gst=True):
 
+    # SAME TOTAL WIDTH AS PRODUCT TABLE
+    TOTAL_WIDTH = (
+        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
+        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
+    )
 
-    # table_3_heading = [["Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate", "Amount", "Disc(%)", "Disc(Rs)", "GST(Rs)", "Total Amount" ]]
-    
-    # EXPECTED_FIELDS = 8  # Originally had 8 fields, now using only 7
-    
-    # for index, item in enumerate(data):
-    #     if len(item) < EXPECTED_FIELDS:
-    #         print(f"Skipping row {index}: Insufficient fields")
-    #         continue
-            
-    #     row = [
-    #         str(index + 1),                   # Index
-    #         str(item[1]),                     # Product (force string)
-    #         format_numeric(item[2]),          # Boxes
-    #         str(item[3]),                     # Unit Name
-    #         format_numeric(item[4]),          # Rate
-    #         format_numeric(item[5]),          # Amount
-    #         format_numeric(item[6]),          # Discount_percentage
-    #         format_numeric(item[7]),          # Discount
-    #         format_numeric(item[8]),          # Boxes
-    #         format_numeric(item[9]),          # Amount
-    #         format_numeric(item[10]),          # Amount
-    #     ]
-    #     # Convert each cell into a Paragraph with normal style
-    #     wrapped_row = [Paragraph(cell, style_normal) for cell in row]
-    #     table_3_heading.append(wrapped_row)
-    
-    # # Ensure a minimum of 5 rows for spacing
-    # while len(table_3_heading) < 6:
-    #     table_3_heading.append([" "] * 7)
-    
-    
-    # table = Table(table_3_heading, colWidths=tbl_3_col_widths)
-    # table.setStyle(TableStyle([
-    #     # Basic styling
-    #     ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-    #     ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-    #     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-    #     ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        
-    #     # Alignment
-    #     ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header alignment
-    #     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    #     ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Numeric columns right-aligned
-    #     ('ALIGN', (0, 1), (1, -1), 'LEFT'),    # Text columns left-aligned
-        
-    #     # Vertical lines
-    #     ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),  
-    #     ('LINEAFTER', (6, 0), (10, -1), 1, colors.black),   
-        
-    #     # Horizontal lines
-    #     ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),  # Header top
-    #     ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Header bottom
-    #     ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),  # Last row
-        
-    #     # Increase row padding for spacing
-    #     ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-    #     ('TOPPADDING', (0, 0), (-1, -1), 12),
-    #     ('LEFTPADDING', (0, 0), (-1, -1), 6),
-    #     ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-    # ]))
-    # # style_normal = getSampleStyleSheet()['Normal']
-    
-    # # # Adjusted column widths (Total = 10 inches)
-    # # tbl_3_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
-    # # table_3_heading = [["Idx", "Product", "Qty", "Unit Name", "Rate", "Amount", "Discount"]]
-    
-    # # EXPECTED_FIELDS = 8  # Originally had 8 fields, now using only 7
-    
-    # # for index, item in enumerate(data):
-    # #     if len(item) < EXPECTED_FIELDS:
-    # #         print(f"Skipping row {index}: Insufficient fields")
-    # #         continue
-            
-    # #     row = [
-    # #         str(index + 1),                   # Index
-    # #         str(item[1]),                     # Product (force string)
-    # #         format_numeric(item[2]),          # Qty
-    # #         str(item[3]),                     # Unit Name
-    # #         format_numeric(item[4]),          # Rate
-    # #         format_numeric(item[5]),          # Amount
-    # #         format_numeric(item[6])           # Discount
-    # #     ]
-    # #     # Convert each cell into a Paragraph with normal style
-    # #     wrapped_row = [Paragraph(cell, style_normal) for cell in row]
-    # #     table_3_heading.append(wrapped_row)
-    
-    # # # Ensure a minimum of 5 rows for spacing
-    # # while len(table_3_heading) < 6:
-    # #     table_3_heading.append([" "] * 7)
-    
-    # # table = Table(table_3_heading, colWidths=tbl_3_col_widths)
-    # # table.setStyle(TableStyle([
-    # #     # Basic styling
-    # #     ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-    # #     ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-    # #     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-    # #     ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        
-    # #     # Alignment
-    # #     ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header alignment
-    # #     ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    # #     ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),  # Numeric columns right-aligned
-    # #     ('ALIGN', (0, 1), (1, -1), 'LEFT'),    # Text columns left-aligned
-        
-    # #     # Vertical lines
-    # #     ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),  
-    # #     ('LINEAFTER', (6, 0), (6, -1), 1, colors.black),   
-        
-    # #     # Horizontal lines
-    # #     ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),  # Header top
-    # #     ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Header bottom
-    # #     ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),  # Last row
-        
-    # #     # Increase row padding for spacing
-    # #     ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-    # #     ('TOPPADDING', (0, 0), (-1, -1), 12),
-    # #     ('LEFTPADDING', (0, 0), (-1, -1), 6),
-    # #     ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-    # # ]))
-    
-    # return table
-
-def invoice_product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gst=False):
-    # table_4_col_widths = [0.7 * inch, 3.5 * inch, 0.8 * inch, 1.1 * inch, 1.4 * inch, 1.3 * inch, 1.2 * inch]
-    # table_4_heading = [[' ','Total',ttl_Qty,' ',' ',ttl_Amount, total_disc]]
-    
-    # table = Table(table_4_heading, colWidths=table_4_col_widths)
-    # table.setStyle(TableStyle([
-    #     ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-    #     ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-    #     ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-    #     ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-    #     ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
-    #     ('VALIGN', (0, 1), (-1, -1), 'TOP'),
-    #     ('GRID', (0, 0), (-1, 0), 1, colors.black),
-    #     ('BOX', (0, 0), (-1, -1), 0, colors.black),
-    #     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-    #     ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-    #     ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-    # ]))
-    # return table
-    
+    # HEADERS COUNT MATCHES PRODUCT TABLE
     if show_gst:
-        print("Entered with show_gst")
-        col_widths = [
-            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-            0.8 * inch, 0.8 * inch, 1.0 * inch
-        ]
+        num_columns = 11
+    else:
+        num_columns = 10
+
+    # AUTO-CALCULATED COLUMN WIDTHS
+    col_width = TOTAL_WIDTH / num_columns
+    col_widths = [col_width] * num_columns
+
+    # ----- BUILD ROW -----
+
+    if show_gst:
         row = [
-            '', 'Total', '', ttl_Qty, '', '', final_Amount,
-            '', total_disc, '', ttl_Amount
+            "",          # idx
+            "Total",     # Total label
+            "",          # Boxes
+            ttl_Qty,     # Qty total
+            "",          # Unit
+            "",          # Rate
+            final_Amount,# Amount
+            "",          # Disc%
+            total_disc,  # Disc Rs
+            "",          # GST
+            ttl_Amount   # Total Amt
         ]
     else:
-        print("Entered with out show_gst")
-        col_widths = [
-            0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-            0.8 * inch, 1.0 * inch  # One less column
-        ]
         row = [
-            '', 'Total', '', ttl_Qty, '', '', final_Amount,
-            '', total_disc, ttl_Amount
+            "",          # idx
+            "Total",     
+            "",          # Boxes
+            ttl_Qty,     
+            "",          # Unit
+            "",          # Rate
+            final_Amount,
+            "",          # Disc%
+            total_disc,
+            ttl_Amount   # Last column (no GST)
         ]
 
+    # CREATE TABLE
     table = Table([row], colWidths=col_widths)
-    table.setStyle(TableStyle([
+
+    # STYLE MATCHES PRODUCT TABLE
+    style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-    ]))
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # MERGE Total across Product + Boxes columns
+        ('SPAN', (1, 0), (2, 0)),
+
+        # Merge Unit + Rate columns
+        ('SPAN', (4, 0), (5, 0)),
+    ]
+
+    table.setStyle(TableStyle(style))
     return table
 
-def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch):
+def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch, remarks=""):
     styles = getSampleStyleSheet()
     style_normal = styles['Normal']
-    
+
     # --- Top Row: Bank Details + Signature ---
     bank_content = Paragraph(
         f"<b>Bank Details:</b><br/>"
         f"Bank: <b>{bank_name}</b><br/>"
-        f"Account #:<b>{bank_acno}</b><br/>"
-        f"IFSC:<b>{bank_ifsc}</b><br/>"
-        f"Branch:<b>{bank_branch}</b><br/>",
+        f"Account #: <b>{bank_acno}</b><br/>"
+        f"IFSC: <b>{bank_ifsc}</b><br/>"
+        f"Branch: <b>{bank_branch}</b><br/>",
         style_normal
     )
-    
+
     signature_content = Paragraph(
-        "<br/><br/><br/>"  # Spacer for alignment
-        "<b>Authorized Signature</b>",
+        # "<br/><br/><br/><b>Authorized Signature</b>",
+        "<br/><br/><br/>__________________________<br/>"
+        "<b>Authorised Signatory</b>",
         style_normal
     )
     
-    # --- Bottom Row: Notes + Terms ---
-    notes_content = Paragraph(
-        "<b>Notes:</b><br/>"
-        "Thank you for the Business",
-        style_normal
-    )
-    
+    # --- Initialize Notes block ---
+    notes_html = ""  # start empty
+
+    # --- Add Remarks first (if available) ---
+    if remarks and remarks.strip() != "":
+        notes_html += f"<b>Remarks:</b> {remarks}<br/><br/>"
+
+    # --- Add Notes ---
+    notes_html += "<b>Notes:</b><br/>Thank you for the Business"
+
+    # --- Convert to paragraph ---
+    notes_content = Paragraph(notes_html, style_normal)
+
+
+    # --- Terms block ---
     terms_content = Paragraph(
         "<b>Terms and Conditions:</b><br/>"
         "1. Goods once sold cannot be taken back<br/>"
@@ -1080,43 +1072,44 @@ def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch):
         "4. Subject to local Jurisdiction",
         style_normal
     )
-    
+
     # Column widths (equal columns)
-    col_widths = [6.1*inch, 3.9*inch]
-    
+    col_widths = [7 * inch, 3 * inch]
+
     # Create the table structure
     table_data = [
-        [bank_content, signature_content],  # Row 1
-        [notes_content, terms_content]      # Row 2
+        [bank_content, signature_content],   # Row 1
+        [notes_content, terms_content]       # Row 2
     ]
-    
-    table = Table(table_data, colWidths=col_widths, rowHeights=[2*inch, 1.2*inch])
-    
+
+    table = Table(table_data, colWidths=col_widths, rowHeights=[2 * inch, 1.4 * inch])
+
     table.setStyle(TableStyle([
-        # Basic styling
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        
+
         # Borders
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),  # Outer border
-        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),  # Vertical line
-        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Horizontal after bank
-        
-        # Alignment
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+
+        # Alignments
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, 0), 'CENTER'),  # Center signature
+
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
         ('VALIGN', (1, 0), (1, 0), 'BOTTOM'),
-        
+
         # Padding
         ('LEFTPADDING', (0, 0), (-1, -1), 10),
         ('RIGHTPADDING', (0, 0), (-1, -1), 10),
         ('TOPPADDING', (0, 0), (-1, -1), 8),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
     ]))
-    
+
     return table
+
 
 # Sale returns logic ...
 
@@ -1174,134 +1167,68 @@ def return_doc_details(cust_bill_dtl, sno_lbl, sno, sdate_lbl, sdate):
     ]))
     return table
 
-def return_customer_details(cust_name, billing_address, phone, city):
-    styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
-    
-    content = Paragraph(
-        f"<b>{cust_name}</b><br/>"
-        f"{billing_address}<br/>"
-        f"Phone: {phone}<br/>"
-        f"Destination: {city}", 
-        style_normal
-    )
-    
-    table_data = [[content]]
-    table = Table(table_data, colWidths=[10*inch])
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-    ]))
-    return table
-
-# def return_product_details(data):
+# def return_customer_details(cust_name, billing_address, phone, city):
 #     styles = getSampleStyleSheet()
 #     style_normal = styles['Normal']
     
-#     # Column widths (match financial section)
-#     col_widths = [4.5*inch, 1.5*inch, 1.5*inch, 2.5*inch]
+#     content = Paragraph(
+#         f"<b>{cust_name}</b><br/>"
+#         f"{billing_address}<br/>"
+#         f"Phone: {phone}<br/>"
+#         f"Destination: {city}", 
+#         style_normal
+#     )
     
-#     # Table data with headers and products
-#     table_data = [
-#         [Paragraph("<b>Description</b>", style_normal),
-#          Paragraph("<b>Qty</b>", style_normal),
-#          Paragraph("<b>MRP</b>", style_normal),
-#          Paragraph("<b>Amount</b>", style_normal)]
-#     ]
-    
-#     # Add product rows
-#     for item in data:
-#         table_data.append([
-#             Paragraph(str(item[1])),  # Description
-#             Paragraph(format_numeric(item[2])),  # Qty
-#             Paragraph(format_numeric(item[4])),  # MRP
-#             Paragraph(format_numeric(item[5]))   # Amount
-#         ])
-    
-#     # Add empty rows for spacing (optional)
-#     for _ in range(4 - len(data)):
-#         table_data.append(["", "", "", ""])
-    
-#     return table_data
-
-# def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
-#                           total_cgst, total_sgst, total_igst, round_0ff, bill_total,
-#                           amount_in_words, show_gst=None):
-#     styles = getSampleStyleSheet()
-#     normal_style = styles['Normal']
-
-#     # Column widths
-#     col_widths = [4.5 * inch, 1.5 * inch, 1.5 * inch, 1.5 * inch, 1 * inch]
-
-#     # Table data with headers
-#     table_data = [
-#         [
-#             Paragraph("<b>Description</b>", normal_style),
-#             Paragraph("<b>Qty</b>", normal_style),
-#             Paragraph("<b>MRP</b>", normal_style),
-#             Paragraph("<b>Amount</b>", normal_style),
-#             Paragraph("<b>Discount</b>", normal_style)
-#         ]
-#     ]
-
-#     # Add product rows
-#     for item in data:
-#         table_data.append([
-#             Paragraph(str(item[1])),                # Description
-#             Paragraph(format_numeric(item[3])),     # Qty
-#             Paragraph(format_numeric(item[5])),     # MRP
-#             Paragraph(format_numeric(item[6])),     # Amount
-#             Paragraph(format_numeric(item[8]))      # Discount
-#         ])
-
-#     # Add empty rows if less than 4 products
-#     while len(table_data) < 5:
-#         table_data.append(["", "", "", "", ""])
-
-#     # Add financial summary rows
-#     table_data.extend([
-#         ["Total Quantity", "", "", "", total_qty],
-#         ["Sub Total", "", "", "", sub_total],
-#         ["Total Discount", "", "", "", f"-{discount_amt}"],
-#         ["Cess Amt", "", "", "", f"{cess_amount}"]
-#     ])
-
-#     # Conditionally add tax rows based on tax_type
-#     if show_gst == 'cnl-ex-sale-order':
-#         if float(total_igst) > 0:
-#             table_data.append(["IGST", "", "", "", f"{total_igst}"])
-#         else:
-#             if float(total_cgst) > 0:
-#                 table_data.append(["CGST", "", "", "", f"{total_cgst}"])
-#             if float(total_sgst) > 0:
-#                 table_data.append(["SGST", "", "", "", f"{total_sgst}"])
-
-#     # Continue with remaining rows
-#     table_data.extend([
-#         ["Round Off", "", "", "", round_0ff],
-#         ["Bill Total", "", "", "", bill_total],
-#         [Paragraph(f"<b>Amount in Words:</b> {amount_in_words}", normal_style), "", "", "", ""]
-#     ])
-
-#     # Create table
-#     table = Table(table_data, colWidths=col_widths)
-
-#     # Apply styling
+#     table_data = [[content]]
+#     table = Table(table_data, colWidths=[10*inch])
 #     table.setStyle(TableStyle([
-#         ('BOX', (0, 0), (-1, -1), 1, colors.black),
-#         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
-#         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-#         ('LINEABOVE', (0, len(data)+1), (-1, len(data)+1), 1, colors.black),  # Above Total
-#         ('LINEABOVE', (0, -3), (-1, -3), 1, colors.black),                    # Above Bill Total
-#         ('LINEABOVE', (0, -2), (-1, -2), 0.5, colors.grey),                   # Above Amount in Words
-#         ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
-#         ('SPAN', (0, -1), (-1, -1)),  # Amount in words
-#         ('FONTNAME', (0, -2), (-1, -2), 'Helvetica-Bold'),
-#         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold')
+#         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+#         ('GRID', (0, 0), (-1, -1), 1, colors.black),
+#         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
 #     ]))
-
 #     return table
+
+def return_customer_details_with_reason(cust_name, billing_address, phone, city, return_reason):
+    styles = getSampleStyleSheet()
+    style_normal = styles['Normal']
+
+    # Left content: customer details
+    left_content = Paragraph(
+        f"<b>{cust_name}</b><br/>"
+        f"{billing_address}<br/>"
+        f"Phone: {phone}<br/>"
+        f"Destination: {city}",
+        style_normal
+    )
+
+    # Right content: return reason
+    right_content = Paragraph(
+        f"<b>Return Reason:</b> {return_reason}",
+        style_normal
+    )
+
+    # Table data: two columns
+    table_data = [[left_content, right_content]]
+
+    # Column widths: roughly 60% left, 40% right (adjust as needed)
+    col_widths = [6.1*inch, 3.9*inch]
+
+    table = Table(table_data, colWidths=col_widths)
+
+    # Styling with vertical grid line between columns
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),       # Outer border
+        ('GRID', (1, 0), (1, 0), 1, colors.black),         # Vertical divider between columns
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'LEFT'),
+    ]))
+
+    return table
+
+
+
 
 def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
                           total_cgst, total_sgst, total_igst, round_0ff, bill_total,
@@ -1833,7 +1760,7 @@ def payment_details_table(payment_data):
     style_normal = getSampleStyleSheet()['Normal']
     
     # Column widths similar to sale order
-    col_widths = [1.5*inch, 3*inch, 1.5*inch, 2*inch, 2*inch]
+    col_widths = [1.5*inch, 1.5*inch, 1.5*inch, 2*inch, 2*inch, 1.5*inch]
     
     # Table headers
     table_data = [
@@ -1842,7 +1769,8 @@ def payment_details_table(payment_data):
             Paragraph("<b>Invoice Date</b>", style_normal),
             Paragraph("<b>Payment Method</b>", style_normal),
             Paragraph("<b>Reference No.</b>", style_normal),
-            Paragraph("<b>Amount Paid</b>", style_normal)
+            Paragraph("<b>Amount Paid</b>", style_normal),
+            Paragraph("<b>Total Amount</b>", style_normal)
         ]
     ]
     
@@ -1853,13 +1781,14 @@ def payment_details_table(payment_data):
             Paragraph(payment['invoice_date'], style_normal),
             Paragraph(payment['payment_method'], style_normal),
             Paragraph(payment.get('cheque_no', 'N/A'), style_normal),
-            Paragraph(format_numeric(payment['amount']), style_normal)
+            Paragraph(format_numeric(payment['amount']), style_normal),
+            Paragraph(format_numeric(payment['total']), style_normal)
         ]
         table_data.append(row)
     
     # Ensure minimum rows for spacing
-    while len(table_data) < 6:
-        table_data.append([" "] * 5)
+    while len(table_data) < 7:
+        table_data.append([" "] * 6)
     
     table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([
@@ -1867,7 +1796,7 @@ def payment_details_table(payment_data):
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (4, 1), (4, -1), 'RIGHT'),  # Amount right-aligned
+        ('ALIGN', (5, 1), (5, -1), 'RIGHT'),  # Amount right-aligned
         
         # Vertical lines between all columns
         ('LINEBEFORE', (0, 0), (0, -1), 1, colors.black),  # First column
@@ -1875,7 +1804,10 @@ def payment_details_table(payment_data):
         ('LINEBEFORE', (2, 0), (2, -1), 1, colors.black),  # Third column
         ('LINEBEFORE', (3, 0), (3, -1), 1, colors.black),  # Fourth column
         ('LINEBEFORE', (4, 0), (4, -1), 1, colors.black),  # Fifth column
-        ('LINEAFTER', (4, 0), (4, -1), 1, colors.black),
+        ('LINEBEFORE', (5, 0), (5, -1), 1, colors.black),  # Fifth column
+        ('LINEAFTER', (5, 0), (5, -1), 1, colors.black),
+        
+        ('LINEABOVE', (0,0), (-1,0), 1, colors.black),
         
         # Horizontal line only below header and above last row
         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Below header
@@ -1898,7 +1830,7 @@ def payment_amount_summary(outstanding, amount_in_words):
     
     # Amount in words
     amount_paragraph = Paragraph(
-        f"<b>Amount in Words:</b> {amount_in_words}",
+        f"<b>Paid Amount in Words:</b> {amount_in_words}",
         normal_style
     )
 
@@ -1918,3 +1850,142 @@ def payment_amount_summary(outstanding, amount_in_words):
     ]))
     
     return combined
+
+from reportlab.platypus import Table, TableStyle, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+
+
+def ledger_details_table(ledger_data):
+    styles = getSampleStyleSheet()
+    normal = styles['Normal']
+    bold = styles['Heading4']
+
+    # Table header
+    table_data = [[
+        Paragraph("<b>Date</b>", bold),
+        Paragraph("<b>Voucher No</b>", bold),
+        Paragraph("<b>Description</b>", bold),
+        Paragraph("<b>Debit</b>", bold),
+        Paragraph("<b>Credit</b>", bold),
+        Paragraph("<b>Balance</b>", bold),
+    ]]
+
+    # Table rows
+    for row in ledger_data:
+        table_data.append([
+            Paragraph(row.get('date', ''), normal),
+            Paragraph(row.get('voucher_no', ''), normal),
+            Paragraph(row.get('description', ''), normal),
+            Paragraph(f"{row.get('debit', 0):,.2f}", normal),
+            Paragraph(f"{row.get('credit', 0):,.2f}", normal),
+            Paragraph(f"{row.get('balance', 0):,.2f}", normal),
+        ])
+
+    table = Table(
+        table_data,
+        colWidths=[1.2*inch, 1.4*inch, 3.5*inch, 1.2*inch, 1.2*inch, 1.5*inch]
+    )
+
+    table.setStyle(TableStyle([
+        # Header background
+        ('BACKGROUND', (0, 0), (-1, 0), colors.whitesmoke),
+
+        # ✅ Vertical lines for entire table
+        ('LINEBEFORE', (0, 0), (-1, -1), 0.8, colors.black),
+        ('LINEAFTER', (0, 0), (-1, -1), 0.8, colors.black),
+
+        # ✅ Header horizontal borders ONLY
+        ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+
+        # ❌ No horizontal lines for data rows (intentionally omitted)
+
+        # Alignment
+        ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+
+        # Padding
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]))
+
+
+    return table
+
+def ledger_amount_summary(total_debit, total_credit, closing_balance, balance_in_words):
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+
+    debit_para = Paragraph(
+        f"<b>Total Debit:</b> {total_debit:,.2f}",
+        normal_style
+    )
+
+    credit_para = Paragraph(
+        f"<b>Total Credit:</b> {total_credit:,.2f}",
+        normal_style
+    )
+
+    balance_para = Paragraph(
+        f"<b>Closing Balance:</b> {closing_balance:,.2f}",
+        normal_style
+    )
+
+    words_para = Paragraph(
+        f"<b>Balance in Words:</b> {balance_in_words}",
+        normal_style
+    )
+
+    summary_table = Table([
+        [debit_para, credit_para],
+        [balance_para, words_para]
+    ], colWidths=[5*inch, 5*inch])
+
+    summary_table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('PADDING', (0, 0), (-1, -1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+
+    return summary_table
+
+def ledger_period_details(from_date, to_date):
+    styles = getSampleStyleSheet()
+    style = ParagraphStyle(
+        'PeriodStyle',
+        parent=styles['Normal'],
+        fontSize=10,
+        alignment=1,  # Center
+        spaceAfter=10
+    )
+
+    if from_date and to_date: #Ledger From : 01-04-2025 To : 22-12-2025
+        text = f"<b>Period : {from_date} &nbsp; to &nbsp; {to_date} </b>"
+    else:
+        text = "<b>Period:</b> All Dates"
+
+    return Paragraph(text, style)
+
+def ledger_doc_details(ledgername, ledger_name, number_lbl, date_lbl, doc_date): 
+    col_widths = [5*inch, 5*inch]
+    table_data_1 = [
+        [f'{ledger_name} : {number_lbl}', f'{date_lbl} : {doc_date}'],
+    ]
+    
+    table = Table(table_data_1, colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+        ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
+        ('VALIGN', (0, 1), (-1, -1), 'TOP'),
+        ('GRID', (0, 0), (-1, 0), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+    ]))
+    return table

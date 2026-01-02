@@ -6,6 +6,8 @@ from apps.company.models import Companies
 from apps.company.serializers import CompaniesSerializer
 from apps.customer.models import Customer
 from apps.customer.serializers import CustomerSerializer
+from apps.finance.models import JournalEntryLines
+from apps.finance.serializers import JournalEntryLinesSerializer
 from apps.purchase.models import BillPaymentTransactions, PurchaseOrders, PurchaseorderItems
 from apps.purchase.serializers import BillPaymentTransactionSerializer, PurchaseReturnOrdersSerializer
 from apps.purchase.models import PurchaseReturnOrders, PurchaseReturnItems
@@ -65,12 +67,12 @@ doc_data = {
                 "Related_Serializer": OrderShipmentsSerializer,
                 "Related_filter_field": "order_id",
                 
-                "number_lbl": "Invoice No",
-                "date_lbl": "Invoice Date",
+                "number_lbl": "Return No",
+                "date_lbl": "Return Date",
                 "Doc_Header": "BILL OF SUPPLY",
                 "net_lbl": "Bill Total",
-                "number_value": "sale_invoice_id",  # Field name in your model
-                "date_value": "sale_invoice_id"  # Field name in your model
+                "number_value": "return_no",          # Invoice number from related invoice
+                "date_value": "return_date"
             },
             'purchase_order': {
                 'Model': PurchaseOrders,
@@ -124,6 +126,7 @@ doc_data = {
                 "date_lbl": "Receipt Date",
                 "Doc_Header": "RECEIPT VOUCHER",
                 "net_lbl": "Net Amount",
+                'total': 'total_amount',
                 
                 "number_value": "payment_receipt_no",
                 "date_value": "payment_date",
@@ -145,7 +148,26 @@ doc_data = {
                 
                 "number_value": "payment_receipt_no",
                 "date_value": "payment_date",
+            },
+            "account_ledger": {
+                "Model": JournalEntryLines,
+                "Serializer": JournalEntryLinesSerializer,
+                "Item_Model": None,
+                "Items_Serializer": None,
+                "Item_Model_PK": None,
+                "Related_Model": None,
+                "Related_Serializer": None,
+                "Related_filter_field": None,
+
+                "number_lbl": "Ledger",
+                "date_lbl": "As On",
+                "Doc_Header": "ACCOUNT LEDGER",
+                "net_lbl": "Closing Balance",
+
+                "number_value": None,
+                "date_value": "created_at",
             }
+
         }
 
 

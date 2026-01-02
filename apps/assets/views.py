@@ -15,6 +15,12 @@ class AssetStatusesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetStatusesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Asset Statuses"
+    log_pk_field = "asset_status_id"
+    log_display_field = "status_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, AssetStatuses,*args, **kwargs)
@@ -35,6 +41,12 @@ class AssetCategoriesViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetCategoriesFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Asset Categories"
+    log_pk_field = "asset_category_id"
+    log_display_field = "category_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, AssetCategories,*args, **kwargs)
@@ -55,6 +67,12 @@ class LocationsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LocationsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Locations"
+    log_pk_field = "location_id"
+    log_display_field = "location_name"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, Locations,*args, **kwargs)
@@ -75,6 +93,12 @@ class AssetsViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetsFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Assets"
+    log_pk_field = "asset_id"
+    log_display_field = "name"
 
 
     def list(self, request, *args, **kwargs):
@@ -96,6 +120,12 @@ class AssetMaintenanceViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = AssetMaintenanceFilter
     ordering_fields = ['created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Asset Maintenance"
+    log_pk_field = "asset_maintenance_id"
+    log_display_field = "asset_maintenance_id"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, AssetMaintenance,*args, **kwargs)

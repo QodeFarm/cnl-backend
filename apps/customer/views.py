@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, render
 from requests import request
 from rest_framework import viewsets, generics, mixins as mi
 from apps import customer
+from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import CustomerCreditLimitReportFilter, CustomerOrderHistoryReportFilter, CustomerSummaryReportFilter, LedgerAccountsFilters, CustomerFilters, CustomerAddressesFilters, CustomerAttachmentsFilters, CustomerLedgerReportFilter, CustomerOutstandingReportFilter
 from apps.customfields.models import CustomField, CustomFieldValue
 from apps.customfields.serializers import CustomFieldSerializer, CustomFieldValueSerializer
@@ -55,6 +56,12 @@ class LedgerAccountsViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = LedgerAccountsFilters
     ordering_fields = ['name', 'created_at', 'updated_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Ledger Accounts"
+    log_pk_field = "ledger_account_id"
+    log_display_field = "code"
 
     def list(self, request, *args, **kwargs):
         return list_filtered_objects(self, request, LedgerAccounts, *args, **kwargs)
@@ -812,6 +819,17 @@ class CustomerCreateViews(APIView):
             {"customer_addresses": addresses_data},
             {"custom_field_values": custom_fields_data}
         ]
+        
+        customer_name = customer_data.get("name")
+        
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Customers",
+            customer_id,
+            f"{customer_name} - Customer record created by {request.user.username}"
+        )
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
@@ -919,6 +937,16 @@ class CustomerCreateViews(APIView):
                 {"customer_addresses":addresses_data if addresses_data else []},
                 {"custom_field_values": custom_field_values_data if custom_field_values_data else []}  # Add custom field values to response
             ]
+            
+            # customername = customer_data.get("name")
+            # log_user_action(
+            #     set_db('default'),
+            #     request.user,
+            #     "UPDATE",
+            #     "Customers",
+            #     pk,
+            #     f"{customername} - Customer record Updated by {request.user.username}"
+            # )
 
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
         
