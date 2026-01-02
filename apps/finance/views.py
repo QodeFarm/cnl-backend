@@ -326,8 +326,9 @@ class JournalEntryLinesAPIView(APIView):
         # ---------------------------
         # STEP 5: PAGINATION (ALWAYS APPLIED)
         # ---------------------------
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        page = max(int(request.query_params.get('page', 1)), 1)
+        limit = max(int(request.query_params.get('limit', 10)), 1)
+
 
         start = (page - 1) * limit
         end = start + limit

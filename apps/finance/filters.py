@@ -333,8 +333,8 @@ class JournalEntryLinesListFilter(filters.FilterSet):
     # Standard filter methods
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
-    page = filters.NumberFilter(method='filter_by_page', label="Page")
-    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    # page = filters.NumberFilter(method='filter_by_page', label="Page")
+    # limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
@@ -374,15 +374,15 @@ class JournalEntryLinesListFilter(filters.FilterSet):
     def filter_by_sort(self, queryset, name, value):
         return filter_by_sort(self, queryset, value)
 
-    def filter_by_page(self, queryset, name, value):
-        return filter_by_page(self, queryset, value)
+    # def filter_by_page(self, queryset, name, value):
+    #     return filter_by_page(self, queryset, value)
 
-    def filter_by_limit(self, queryset, name, value):
-        return filter_by_limit(self, queryset, value)
+    # def filter_by_limit(self, queryset, name, value):
+    #     return filter_by_limit(self, queryset, value)
     
     class Meta:
         model = JournalEntryLines
-        fields = ['ledger_account_id', 'ledger_account',  'voucher_no', 'debit', 'credit', 'description', 'balance', 'created_at', 'city',  's', 'sort', 'page', 'limit']
+        fields = ['ledger_account_id', 'ledger_account',  'voucher_no', 'debit', 'credit', 'description', 'balance', 'created_at', 'city',  's', 'sort'] #, 'page', 'limit']
 
 class TrialBalanceReportFilter(filters.FilterSet):
     start_date = filters.DateFilter(field_name='journal_entry_lines__journal_entry_id__entry_date', lookup_expr='gte')
