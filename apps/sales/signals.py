@@ -40,7 +40,7 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
 
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
-            account_id=sale_account,  
+            ledger_account_id=sale_account,  
             debit=instance.total_amount,
             voucher_no = instance.invoice_no,
             credit=0.00,
@@ -95,7 +95,7 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
 
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
-            account_id=sale_account,  
+            ledger_account_id=sale_account,  
             debit=0.00,
             voucher_no = instance.credit_note_number,
             credit=instance.total_amount,
@@ -126,7 +126,7 @@ def update_balance_after_return(sender, instance, created, **kwargs):
 
             # Step 3: Creating JournalEntryLines record
             JournalEntryLines.objects.create(
-                account_id=sale_account,  
+                ledger_account_id=sale_account,  
                 debit=instance.total_amount,
                 voucher_no = instance.return_no,
                 credit=0.00,
