@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration
+from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, PaymentTransaction, TaxConfiguration, JournalVoucher, JournalVoucherLine, JournalVoucherAttachment
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
@@ -694,5 +694,87 @@ class ExpenseItemFilter(filters.FilterSet):
                  'expense_claim_id','status','payment_method','budget_id','is_taxable','is_recurring',
                  'recurring_frequency','created_at','period_name','s','sort','page','limit']
 
-        
-        
+
+# ======================================
+# JOURNAL VOUCHER FILTERS
+# ======================================
+
+class JournalVoucherFilter(filters.FilterSet):
+    """Filter for Journal Voucher listing"""
+    journal_voucher_id = filters.CharFilter(method=filter_uuid)
+    voucher_no = filters.CharFilter(lookup_expr='icontains')
+    voucher_date = filters.DateFromToRangeFilter()
+    voucher_type = filters.ChoiceFilter(choices=JournalVoucher.VOUCHER_TYPE_CHOICES)
+    reference_no = filters.CharFilter(lookup_expr='icontains')
+    narration = filters.CharFilter(lookup_expr='icontains')
+    expense_claim_id = filters.CharFilter(method=filter_uuid)
+    is_posted = filters.BooleanFilter()
+    total_debit = filters.RangeFilter()
+    total_credit = filters.RangeFilter()
+    created_at = filters.DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = JournalVoucher
+        # voucher_no should be at 0th index for summary ordering
+        fields = ['voucher_no', 'voucher_date', 'voucher_type', 'reference_no', 'narration', 
+                  'expense_claim_id', 'is_posted', 'total_debit', 'total_credit', 
+                  'created_at', 'period_name', 's', 'sort', 'page', 'limit']
+
+
+class JournalVoucherLineFilter(filters.FilterSet):
+    """Filter for Journal Voucher Line items"""
+    journal_voucher_line_id = filters.CharFilter(method=filter_uuid)
+    journal_voucher_id = filters.CharFilter(method=filter_uuid)
+    ledger_account_id = filters.CharFilter(method=filter_uuid)
+    customer_id = filters.CharFilter(method=filter_uuid)
+    vendor_id = filters.CharFilter(method=filter_uuid)
+    employee_id = filters.CharFilter(method=filter_uuid)
+    entry_type = filters.ChoiceFilter(choices=JournalVoucherLine.ENTRY_TYPE_CHOICES)
+    amount = filters.RangeFilter()
+    tds_applicable = filters.BooleanFilter()
+    is_panel = filters.BooleanFilter()
+    is_investment = filters.BooleanFilter()
+    remark = filters.CharFilter(lookup_expr='icontains')
+    created_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = JournalVoucherLine
+        fields = ['journal_voucher_id', 'ledger_account_id', 'customer_id', 'vendor_id', 
+                  'employee_id', 'entry_type', 'amount', 'tds_applicable', 'is_panel',
+                  'is_investment', 'remark', 'created_at', 's', 'sort', 'page', 'limit']

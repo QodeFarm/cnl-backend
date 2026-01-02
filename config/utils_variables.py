@@ -199,6 +199,9 @@ chartofaccounts = 'chart_of_accounts'
 bankaccounts = 'bank_accounts'
 journal = 'journal'
 journaldetail = 'journal_details'
+journalvouchers = 'journal_vouchers'
+journalvoucherlines = 'journal_voucher_lines'
+journalvoucherattachments = 'journal_voucher_attachments'
 
 #custom db tables
 customfields = 'custom_fields'

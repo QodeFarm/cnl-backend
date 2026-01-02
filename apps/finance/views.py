@@ -5,7 +5,7 @@ from django.forms import IntegerField
 from requests import request
 from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
-from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter
+from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter
 from apps.sales.models import SaleInvoiceOrders
 from config.utils_db_router import set_db
 from .models import *
@@ -1541,3 +1541,523 @@ class JournalDetailRetrieveUpdateDeleteAPIView(APIView):
         journal_detail.delete()
         return build_response(0, "Records Deleted successfully", "", status.HTTP_204_NO_CONTENT)
 
+
+# ======================================
+# JOURNAL VOUCHER VIEWS
+# ======================================
+"""
+Journal Voucher API Views
+--------------------------
+Real-time Use Cases:
+
+1. INTER-ACCOUNT ADJUSTMENTS (Most Common)
+   - Person A owes Person B, but Person C pays on behalf of A
+   - Dr: Person A Account | Cr: Person C Account
+   
+2. EMPLOYEE EXPENSE ADJUSTMENTS
+   - Employee A's expense paid by Employee B
+   - Dr: Employee A | Cr: Employee B
+   
+3. BRANCH/HEAD OFFICE ADJUSTMENTS
+   - Branch vendor bill paid by Head Office
+   - Dr: Branch Account | Cr: Head Office Account
+   
+4. CUSTOMER TO CUSTOMER ADJUSTMENTS
+   - Customer A advance adjusts Customer B invoice
+   - Dr: Customer A | Cr: Customer B
+   
+5. CONTRA ENTRIES (Cash to Bank)
+   - Cash deposited to bank
+   - Dr: Bank Account | Cr: Cash Account
+   
+6. DEPRECIATION ENTRIES
+   - Monthly/yearly depreciation
+   - Dr: Depreciation Expense | Cr: Accumulated Depreciation
+   
+7. OPENING BALANCE ENTRIES
+   - New financial year opening balances
+   
+8. PROVISION ENTRIES
+   - Bad debt provision, expense provisions
+   
+Key Rule: Total Debit = Total Credit (Always balanced)
+"""
+
+
+class JournalVoucherView(APIView):
+    """
+    API View for handling Journal Voucher CRUD operations.
+    Follows MaterialIssueView / SaleOrderViewSet pattern.
+    
+    Supports:
+    - GET: List all vouchers or retrieve single voucher with lines & attachments
+    - POST: Create voucher with lines and attachments
+    - PUT: Update voucher with lines and attachments
+    - DELETE: Soft delete voucher
+    """
+    
+    # Log actions for audit trail
+    log_actions = True
+    log_module_name = "Journal Voucher"
+    log_pk_field = "journal_voucher_id"
+    log_display_field = "voucher_no"
+
+    def get_object(self, pk):
+        """Get single JournalVoucher object or None"""
+        try:
+            return JournalVoucher.objects.get(pk=pk)
+        except JournalVoucher.DoesNotExist:
+            return None
+
+    def get(self, request, *args, **kwargs):
+        """
+        GET Handler:
+        - With pk: Returns single voucher with lines and attachments
+        - Without pk: Returns paginated list of vouchers
+        """
+        pk = kwargs.get('pk')
+        if pk:
+            result = validate_input_pk(self, pk)
+            if result:
+                return result
+            return self.retrieve(request, pk)
+        
+        # List all vouchers with pagination
+        page = int(request.query_params.get("page", 1))
+        limit = int(request.query_params.get("limit", 10))
+
+        queryset = JournalVoucher.objects.filter(is_deleted=False).order_by('-created_at')
+        
+        # Apply filters
+        if request.query_params:
+            filterset = JournalVoucherFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+        
+        serializer = JournalVoucherSerializer(queryset, many=True)
+        return filter_response(queryset.count(), "Success", serializer.data, page, limit, queryset.count(), status.HTTP_200_OK)
+
+    def retrieve(self, request, pk):
+        """
+        Retrieve single voucher with related lines and attachments.
+        Returns structured response like MaterialIssue.
+        """
+        try:
+            journal_voucher = get_object_or_404(JournalVoucher, pk=pk)
+            serializer = JournalVoucherSerializer(journal_voucher)
+            
+            # Get related voucher lines and attachments
+            lines = get_related_data(JournalVoucherLine, JournalVoucherLineSerializer, 'journal_voucher_id', pk)
+            attachments = get_related_data(JournalVoucherAttachment, JournalVoucherAttachmentSerializer, 'journal_voucher_id', pk)
+            
+            custom_data = {
+                "journal_voucher": serializer.data,
+                "voucher_lines": lines if lines else [],
+                "attachments": attachments if attachments else [],
+            }
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+        except Http404:
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error retrieving Journal Voucher: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        """POST Handler - Create new Journal Voucher"""
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """
+        Create Journal Voucher with lines and attachments.
+        
+        Expected payload:
+        {
+            "journal_voucher": { voucher_date, voucher_type, narration, ... },
+            "voucher_lines": [ { ledger_account_id, entry_type, amount, ... }, ... ],
+            "attachments": [ { attachment_name, attachment_path }, ... ]
+        }
+        
+        Validates:
+        - Voucher header data
+        - Line items (at least 2 lines required for balanced entry)
+        - Total Debit = Total Credit
+        """
+        given_data = request.data
+        errors = {}
+
+        # Extract and validate Journal Voucher data
+        journal_voucher_data = given_data.pop('journal_voucher', None)
+        if not journal_voucher_data:
+            return build_response(0, "journal_voucher data is mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+        voucher_error = validate_payload_data(self, journal_voucher_data, JournalVoucherSerializer)
+        if voucher_error:
+            errors["journal_voucher"] = voucher_error
+
+        # Extract and validate voucher lines
+        lines_data = given_data.pop('voucher_lines', [])
+        
+        # ---------------- CLEAN EMPTY VOUCHER LINES ---------------- #
+        # Remove blank/empty payloads created by frontend (5-10 default rows)
+        # Similar to Sale Order pattern - filter out lines without ledger_account_id or amount
+        if lines_data:
+            lines_data = [
+                line for line in lines_data
+                if line.get("ledger_account_id") and line.get("amount") and Decimal(str(line.get("amount", 0))) > 0
+            ]
+        # ---------------------------------------------------------- #
+        
+        if not lines_data or len(lines_data) < 2:
+            errors["voucher_lines"] = "At least 2 line items are required for a balanced journal entry"
+        else:
+            lines_error = validate_multiple_data(self, lines_data, JournalVoucherLineSerializer, ['journal_voucher_id'])
+            if lines_error:
+                errors["voucher_lines"] = lines_error
+
+        # Validate Debit = Credit (Golden Rule of Accounting)
+        if lines_data and not errors.get("voucher_lines"):
+            total_debit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Debit')
+            total_credit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Credit')
+            
+            if total_debit != total_credit:
+                errors["balance"] = f"Total Debit (₹{total_debit}) must equal Total Credit (₹{total_credit})"
+
+        # Extract and validate attachments
+        attachments_data = given_data.pop('attachments', [])
+        if attachments_data:
+            attachments_error = validate_multiple_data(self, attachments_data, JournalVoucherAttachmentSerializer, ['journal_voucher_id'])
+            if attachments_error:
+                errors["attachments"] = attachments_error
+
+        # Return validation errors if any
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Calculate totals
+        total_debit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Debit')
+        total_credit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Credit')
+        
+        # Set totals in voucher data
+        journal_voucher_data['total_debit'] = total_debit
+        journal_voucher_data['total_credit'] = total_credit
+
+        # Create Journal Voucher
+        new_voucher = generic_data_creation(self, [journal_voucher_data], JournalVoucherSerializer)[0]
+        voucher_id = new_voucher.get("journal_voucher_id", None)
+
+        # Create voucher lines
+        new_lines = []
+        if lines_data:
+            new_lines = generic_data_creation(self, lines_data, JournalVoucherLineSerializer, {'journal_voucher_id': voucher_id})
+
+        # Create attachments
+        new_attachments = []
+        if attachments_data:
+            new_attachments = generic_data_creation(self, attachments_data, JournalVoucherAttachmentSerializer, {'journal_voucher_id': voucher_id})
+
+        custom_data = {
+            "journal_voucher": new_voucher,
+            "voucher_lines": new_lines,
+            "attachments": new_attachments,
+        }
+        
+        logger.info(f"Journal Voucher created: {new_voucher.get('voucher_no')}")
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
+    @transaction.atomic
+    def put(self, request, pk, *args, **kwargs):
+        """PUT Handler - Update existing Journal Voucher"""
+        return self.update(request, pk, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+        """
+        Update Journal Voucher with lines and attachments.
+        
+        Expected payload same as POST.
+        Supports partial updates of lines (add/update/delete).
+        """
+        given_data = request.data
+        errors = {}
+
+        # Validate Journal Voucher data
+        journal_voucher_data = given_data.pop('journal_voucher', None)
+        if journal_voucher_data:
+            journal_voucher_data['journal_voucher_id'] = pk
+            instance = JournalVoucher.objects.get(pk=pk)
+            serializer = JournalVoucherSerializer(instance, data=journal_voucher_data, partial=False)
+            if not serializer.is_valid():
+                errors["journal_voucher"] = serializer.errors
+        else:
+            return build_response(0, "journal_voucher data is required", [], status.HTTP_400_BAD_REQUEST)
+
+        # Validate voucher lines
+        lines_data = given_data.pop('voucher_lines', [])
+        
+        # ---------------- CLEAN EMPTY VOUCHER LINES ---------------- #
+        # Remove blank/empty payloads created by frontend (5-10 default rows)
+        # Similar to Sale Order pattern - filter out lines without ledger_account_id or amount
+        if lines_data:
+            lines_data = [
+                line for line in lines_data
+                if line.get("ledger_account_id") and line.get("amount") and Decimal(str(line.get("amount", 0))) > 0
+            ]
+        # ---------------------------------------------------------- #
+        
+        if lines_data:
+            lines_error = validate_multiple_data(self, lines_data, JournalVoucherLineSerializer, [])
+            if lines_error:
+                errors["voucher_lines"] = lines_error
+
+        # Validate Debit = Credit
+        if lines_data and not errors.get("voucher_lines"):
+            total_debit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Debit')
+            total_credit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Credit')
+            
+            if total_debit != total_credit:
+                errors["balance"] = f"Total Debit (₹{total_debit}) must equal Total Credit (₹{total_credit})"
+
+        # Validate attachments
+        attachments_data = given_data.pop('attachments', [])
+        if attachments_data:
+            attachments_error = validate_multiple_data(self, attachments_data, JournalVoucherAttachmentSerializer, [])
+            if attachments_error:
+                errors["attachments"] = attachments_error
+
+        # Return validation errors if any
+        if errors:
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+
+        # Update totals
+        if lines_data:
+            total_debit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Debit')
+            total_credit = sum(Decimal(str(line.get('amount', 0))) for line in lines_data if line.get('entry_type') == 'Credit')
+            journal_voucher_data['total_debit'] = total_debit
+            journal_voucher_data['total_credit'] = total_credit
+
+        # Update Journal Voucher
+        updated_voucher = update_multi_instances(
+            self, pk, [journal_voucher_data], JournalVoucher, JournalVoucherSerializer, [],
+            main_model_related_field='journal_voucher_id', current_model_pk_field='journal_voucher_id'
+        )[0]
+
+        # Update voucher lines
+        updated_lines = []
+        if lines_data:
+            updated_lines = update_multi_instances(
+                self, pk, lines_data, JournalVoucherLine, JournalVoucherLineSerializer,
+                {'journal_voucher_id': pk},
+                main_model_related_field='journal_voucher_id', current_model_pk_field='journal_voucher_line_id'
+            )
+
+        # Update attachments
+        updated_attachments = []
+        if attachments_data:
+            updated_attachments = update_multi_instances(
+                self, pk, attachments_data, JournalVoucherAttachment, JournalVoucherAttachmentSerializer,
+                {'journal_voucher_id': pk},
+                main_model_related_field='journal_voucher_id', current_model_pk_field='attachment_id'
+            )
+
+        custom_data = {
+            "journal_voucher": updated_voucher,
+            "voucher_lines": updated_lines,
+            "attachments": updated_attachments,
+        }
+        
+        logger.info(f"Journal Voucher updated: {updated_voucher.get('voucher_no')}")
+        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        """
+        Soft delete Journal Voucher.
+        Sets is_deleted = True instead of hard delete.
+        Also soft-deletes corresponding JournalEntryLines (Account Ledger entries).
+        """
+        try:
+            instance = self.get_object(pk)
+            if instance is None:
+                return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+            
+            # Check if voucher is already posted to ledger
+            if instance.is_posted:
+                return build_response(0, "Cannot delete a posted voucher. Please reverse it first.", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Soft delete the voucher (signal will handle JournalEntryLines deletion)
+            instance.is_deleted = True
+            instance.save()
+            
+            # Explicitly soft-delete corresponding JournalEntryLines for safety
+            # This ensures Account Ledger entries are marked as deleted
+            from apps.finance.signals import delete_ledger_entries_for_voucher
+            deleted_count = delete_ledger_entries_for_voucher(instance.voucher_no)
+            
+            logger.info(f"Journal Voucher deleted: {instance.voucher_no}, Ledger entries deleted: {deleted_count}")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error deleting Journal Voucher: {str(e)}")
+            return build_response(0, f"Error deleting record: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+
+
+
+class JournalVoucherLineViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for individual Journal Voucher Line operations.
+    Useful for getting lines by voucher_id or individual line operations.
+    """
+    queryset = JournalVoucherLine.objects.all().order_by('-created_at')
+    serializer_class = JournalVoucherLineSerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = JournalVoucherLineFilter
+    ordering_fields = ['created_at', 'entry_type', 'amount']
+    
+    # Log actions
+    log_actions = True
+    log_module_name = "Journal Voucher Lines"
+    log_pk_field = "journal_voucher_line_id"
+    log_display_field = "remark"
+
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, JournalVoucherLine, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return build_response(1, "Record deleted successfully", [], status.HTTP_200_OK)
+
+
+class JournalVoucherPostView(APIView):
+    """
+    Post Journal Voucher to Ledger.
+    Creates corresponding JournalEntryLines for ledger reports.
+    
+    This is called when user clicks "Post" to make the voucher final.
+    """
+    
+    @transaction.atomic
+    def post(self, request, pk, *args, **kwargs):
+        """
+        Post voucher to ledger - creates JournalEntryLines
+        """
+        try:
+            voucher = JournalVoucher.objects.get(pk=pk)
+            
+            if voucher.is_posted:
+                return build_response(0, "Voucher already posted", [], status.HTTP_400_BAD_REQUEST)
+            
+            if voucher.is_deleted:
+                return build_response(0, "Cannot post a deleted voucher", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Get voucher lines
+            voucher_lines = JournalVoucherLine.objects.filter(journal_voucher_id=pk)
+            
+            if not voucher_lines.exists():
+                return build_response(0, "No line items found in voucher", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Create JournalEntry for this voucher
+            journal_entry = JournalEntry.objects.create(
+                entry_date=voucher.voucher_date,
+                voucher_type='CommonVoucher',
+                reference=voucher.reference_no,
+                description=voucher.narration
+            )
+            
+            # Create JournalEntryLines for each voucher line
+            for line in voucher_lines:
+                JournalEntryLines.objects.create(
+                    journal_entry_id=journal_entry,
+                    ledger_account_id=line.ledger_account_id,
+                    voucher_no=voucher.voucher_no,
+                    debit=line.amount if line.entry_type == 'Debit' else Decimal('0.00'),
+                    credit=line.amount if line.entry_type == 'Credit' else Decimal('0.00'),
+                    description=line.remark or voucher.narration,
+                    customer_id=line.customer_id,
+                    vendor_id=line.vendor_id
+                )
+            
+            # Mark voucher as posted
+            voucher.is_posted = True
+            voucher.save()
+            
+            logger.info(f"Journal Voucher posted to ledger: {voucher.voucher_no}")
+            return build_response(1, "Voucher posted to ledger successfully", {"voucher_no": voucher.voucher_no, "journal_entry_id": str(journal_entry.journal_entry_id)}, status.HTTP_200_OK)
+            
+        except JournalVoucher.DoesNotExist:
+            return build_response(0, "Voucher not found", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error posting voucher: {str(e)}")
+            return build_response(0, f"Error posting voucher: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PullFromExpenseClaimView(APIView):
+    """
+    Pull expense claim data to populate Journal Voucher.
+    Used for "Pull from Expense Claim" feature in UI.
+    """
+    
+    def get(self, request, expense_claim_id, *args, **kwargs):
+        """
+        Get expense claim data formatted for Journal Voucher creation.
+        Returns pre-populated voucher lines.
+        """
+        try:
+            expense_claim = ExpenseClaim.objects.get(pk=expense_claim_id)
+            
+            if expense_claim.status != 'Approved':
+                return build_response(0, "Only approved expense claims can be pulled", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Get expense items for this claim
+            expense_items = ExpenseItem.objects.filter(expense_claim_id=expense_claim_id)
+            
+            # Prepare voucher lines
+            voucher_lines = []
+            total_amount = Decimal('0.00')
+            
+            for item in expense_items:
+                voucher_lines.append({
+                    "ledger_account_id": str(item.ledger_account_id_id) if item.ledger_account_id else None,
+                    "entry_type": "Debit",
+                    "amount": str(item.amount),
+                    "remark": item.description,
+                    "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None
+                })
+                total_amount += item.amount
+            
+            # Add credit entry for employee reimbursement
+            voucher_lines.append({
+                "ledger_account_id": None,  # To be selected by user (Cash/Bank account)
+                "entry_type": "Credit",
+                "amount": str(total_amount),
+                "remark": f"Reimbursement for expense claim",
+                "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None
+            })
+            
+            response_data = {
+                "expense_claim": {
+                    "expense_claim_id": str(expense_claim.expense_claim_id),
+                    "employee_id": str(expense_claim.employee_id_id) if expense_claim.employee_id else None,
+                    "claim_date": str(expense_claim.claim_date),
+                    "total_amount": str(expense_claim.total_amount),
+                    "description": expense_claim.description
+                },
+                "suggested_voucher_lines": voucher_lines,
+                "total_debit": str(total_amount),
+                "total_credit": str(total_amount)
+            }
+            
+            return build_response(1, "Expense claim data retrieved", response_data, status.HTTP_200_OK)
+            
+        except ExpenseClaim.DoesNotExist:
+            return build_response(0, "Expense claim not found", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error pulling expense claim: {str(e)}")
+            return build_response(0, f"Error: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
