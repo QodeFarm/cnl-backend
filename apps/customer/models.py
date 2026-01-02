@@ -87,7 +87,7 @@ class Customer(models.Model):
     ]
     customer_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
-    print_name = models.CharField(max_length=255)
+    print_name = models.CharField(max_length=255, null=True,)
     identification = models.CharField(max_length=255, null=True, default=None)
     code = models.CharField(max_length=50,null=True)
     ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, null=True, db_column='ledger_account_id')

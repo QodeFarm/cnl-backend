@@ -227,7 +227,7 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
         fields = [
             'product_id', 'code', 'name', 'barcode', 'print_name', 'product_group', 'category',
             'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 
-            'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 
+            'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'physical_balance', 'balance_diff',
             'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
             'pack_unit', 'pack_vs_stock', 'g_pack_unit',  
             'g_pack_vs_pack', 'type', 'is_deleted'

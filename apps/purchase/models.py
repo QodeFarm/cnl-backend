@@ -129,7 +129,30 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
         ('Exclusive', 'Exclusive'),
         ('Inclusive', 'Inclusive')
     ]
-    tax = models.CharField(max_length=20, choices=TAX_CHOICES, blank=True, null=True)    
+    tax = models.CharField(max_length=20, choices=TAX_CHOICES, blank=True, null=True)  
+    VOUCHER_CHOICES = [
+    ('GST_Purchase', 'GST_Purchase'),
+    ('Purchase', 'Purchase'),
+    ]
+
+    voucher = models.CharField(
+        max_length=20,
+        choices=VOUCHER_CHOICES,
+        null=True,
+        blank=True
+    )
+    
+    TAX_CODE_CHOICES = [
+    ('Local', 'Local'),
+    ('Exempted', 'Exempted'),
+    ]
+
+    tax_code = models.CharField(
+        max_length=20,
+        choices=TAX_CODE_CHOICES,
+        null=True,
+        blank=True
+    )  
     vendor_address_id = models.ForeignKey(VendorAddress, on_delete=models.PROTECT, null=True, default=None, db_column = 'vendor_address_id')
     remarks = models.CharField(max_length=1024, blank=True, null=True)
     payment_term_id = models.ForeignKey(VendorPaymentTerms, on_delete=models.PROTECT, null=True, default=None, db_column = 'payment_term_id')

@@ -1492,8 +1492,9 @@ def update_product_stock(parent_model, child_model, data, operation, using='defa
                 #         defaults={'quantity': return_qty if operation == 'add' else -return_qty}
                 #     )
                 # --- Always update variation stock (even if size/color are None) ---
+                # Use product_instance (model instance) instead of product_id (string UUID)
                 variation, created = child_model.objects.using(using).get_or_create(
-                    product_id=product_id,
+                    product_id=product_instance,
                     size_id=size_id,     # may be None
                     color_id=color_id,   # may be None
                     defaults={'quantity': return_qty if operation == 'add' else -return_qty}
@@ -1642,6 +1643,107 @@ def send_whatsapp_message_via_wati(to_number, file_url):
     else:
         result = response_data.get('info')
         return result
+    
+# from apps.customers.models import Customer
+# from apps.vendors.models import Vendor
+
+
+
+import urllib.parse
+from django.conf import settings
+
+
+def resolve_phone_from_document(document_type, pk, city_id=None):
+    """
+    Resolve phone number based on document & city
+    """
+    
+    from apps.customer.models import CustomerAddresses
+    from apps.vendor.models import VendorAddress
+    from apps.sales.models import SaleOrder, SaleInvoiceOrders, SaleReturnOrders, PaymentTransactions
+    from apps.purchase.models import PurchaseOrders, PurchaseReturnOrders, BillPaymentTransactions
+
+    # SALE ORDER → CUSTOMER PHONE
+    if document_type == "sale_order":
+        sale = SaleOrder.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+
+    # ACCOUNT LEDGER / CUSTOMER
+    if document_type == "sale_invoice": #, "payment_receipt"]
+        sale = SaleInvoiceOrders.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+    
+    # ACCOUNT LEDGER / CUSTOMER
+    if document_type == "sale_return": #, "payment_receipt"]
+        sale = SaleReturnOrders.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+    
+    # ACCOUNT LEDGER / CUSTOMER
+    if document_type == "payment_receipt": #, "payment_receipt"]
+        sale = PaymentTransactions.objects.filter(pk=pk).first()
+        if not sale:
+            return None
+        qs = CustomerAddresses.objects.filter(customer_id=sale.customer)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+
+    # VENDOR DOCUMENTS
+    if document_type in ["purchase_order", "purchase_return", "bill_receipt"]:
+        if document_type == 'purchase_order':
+            purchase = PurchaseOrders.objects.filter(pk=pk).first()
+            if not purchase:
+                return None
+            
+        if document_type == 'purchase_return':
+            purchase = PurchaseReturnOrders.objects.filter(pk=pk).first()
+            if not purchase:
+                return None
+            
+        if document_type == 'bill_receipt':
+            purchase = BillPaymentTransactions.objects.filter(pk=pk).first()
+            if not purchase:
+                return None
+        
+        qs = VendorAddress.objects.filter(vendor_id=purchase.vendor_id)
+        if city_id:
+            qs = qs.filter(city_id=city_id)
+
+        addr = qs.first()
+        return addr.phone if addr else None
+
+    return None
+
+
+def build_whatsapp_click_url(phone, message):
+    encoded = urllib.parse.quote(message)
+    return f"https://wa.me/{phone}?text={encoded}"
+
+
 
 def convert_amount_to_words(amount):
     '''

@@ -2,7 +2,7 @@ from django.db import models
 import uuid
 from apps.hrms.models import Employees
 from config.utils_methods import OrderNumberMixin, generate_order_number
-from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal, expenseitems
+from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal, expenseitems, journalvouchers, journalvoucherlines, journalvoucherattachments
 from apps.customer.models import Customer, LedgerAccounts
 from apps.vendor.models import Vendor
 
@@ -396,4 +396,163 @@ class ExpenseItem(models.Model):
 
     def __str__(self):
         return f"Expense {self.expense_item_id} - {self.amount} on {self.expense_date}"
+
+
+# ======================================
+# JOURNAL VOUCHER MODELS
+# ======================================
+"""
+Journal Voucher - Used for recording accounting entries in the general ledger.
+Real-time scenarios:
+1. Expense Recording - Recording business expenses (rent, utilities, salaries)
+2. Adjusting Entries - Month-end/year-end adjustments
+3. Inter-Account Transfers - Transfer between ledger accounts
+4. Depreciation Entries - Record asset depreciation
+5. Reversing Entries - Correct previous accounting entries
+6. Contra Entries - Cash to bank or bank to cash transfers
+7. Opening Balance Entries - Record opening balances for new financial year
+8. Advance Receipts/Payments - Recording advances from customers or to vendors
+9. TDS/Tax Adjustments - Recording tax deductions and adjustments
+10. Provisions - Creating provisions for expenses or bad debts
+"""
+
+class JournalVoucher(OrderNumberMixin):
+    """
+    Main Journal Voucher model - Header information
+    Similar to MaterialIssue / SaleOrder pattern
+    """
+    journal_voucher_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    voucher_no = models.CharField(max_length=20, unique=True, default='')
+    order_no_prefix = 'JV'
+    order_no_field = 'voucher_no'
+    voucher_date = models.DateField()
     
+    # Voucher Type for categorization
+    VOUCHER_TYPE_CHOICES = [
+        ('Journal', 'Journal'),
+        ('Contra', 'Contra'),
+        ('Receipt', 'Receipt'),
+        ('Payment', 'Payment'),
+        ('DebitNote', 'Debit Note'),
+        ('CreditNote', 'Credit Note'),
+    ]
+    voucher_type = models.CharField(max_length=20, choices=VOUCHER_TYPE_CHOICES, default='Journal')
+    
+    # Reference fields
+    reference_no = models.CharField(max_length=50, null=True, default=None)
+    reference_date = models.DateField(null=True, default=None)
+    
+    # Pull from Expense Claim (as shown in screenshot)
+    expense_claim_id = models.ForeignKey(ExpenseClaim, on_delete=models.PROTECT, null=True, default=None, db_column='expense_claim_id')
+    
+    # Narration/Description
+    narration = models.TextField(null=True, default=None)
+    
+    # Total amounts
+    total_debit = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    total_credit = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    
+    # Status tracking
+    is_posted = models.BooleanField(default=False)  # Whether posted to ledger
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = journalvouchers
+
+    def __str__(self):
+        return f"{self.voucher_no} - {self.voucher_date}"
+    
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        
+        # Determine if this is a new record
+        is_new_record = self._state.adding
+        
+        # Only generate voucher number for new records
+        if is_new_record and not self.voucher_no:
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=JournalVoucher,
+                field_name='voucher_no'
+            )
+            self.voucher_no = order_number
+            
+            # Save the record
+            super().save(*args, **kwargs)
+            
+            # After saving, increment the order number sequence
+            increment_order_number(self.order_no_prefix)
+        else:
+            super().save(*args, **kwargs)
+
+
+class JournalVoucherLine(models.Model):
+    """
+    Journal Voucher Line Items - Individual debit/credit entries
+    Similar to MaterialIssueItem / SaleOrderItems pattern
+    """
+    journal_voucher_line_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    journal_voucher_id = models.ForeignKey(JournalVoucher, on_delete=models.CASCADE, related_name='voucher_lines', db_column='journal_voucher_id')
+    
+    # Ledger Account (main account for the entry)
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, db_column='ledger_account_id')
+    
+    # Party details (Customer/Vendor for sub-ledger entries)
+    customer_id = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, default=None, db_column='customer_id')
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, default=None, db_column='vendor_id')
+    employee_id = models.ForeignKey(Employees, on_delete=models.PROTECT, null=True, default=None, db_column='employee_id')
+    
+    # Debit/Credit Type and Amount
+    ENTRY_TYPE_CHOICES = [
+        ('Debit', 'Debit'),
+        ('Credit', 'Credit'),
+    ]
+    entry_type = models.CharField(max_length=10, choices=ENTRY_TYPE_CHOICES, default='Debit')
+    amount = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    
+    # Bill Adjustment fields
+    bill_no = models.CharField(max_length=50, null=True, default=None)
+    bill_date = models.DateField(null=True, default=None)
+    bill_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    
+    # TDS fields
+    tds_applicable = models.BooleanField(default=False)
+    tds_rate = models.DecimalField(max_digits=5, decimal_places=2, null=True, default=None)
+    tds_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    
+    # Investment/Panel flags (as shown in screenshot)
+    is_panel = models.BooleanField(default=False)
+    is_investment = models.BooleanField(default=False)
+    
+    # Remark for line item
+    remark = models.CharField(max_length=255, null=True, default=None)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = journalvoucherlines
+
+    def __str__(self):
+        return f"{self.entry_type} - {self.amount} - {self.ledger_account_id}"
+
+
+class JournalVoucherAttachment(models.Model):
+    """
+    Attachments for Journal Voucher
+    Similar to MaterialIssueAttachment pattern
+    """
+    attachment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    journal_voucher_id = models.ForeignKey(JournalVoucher, on_delete=models.CASCADE, related_name='attachments', db_column='journal_voucher_id')
+    attachment_name = models.CharField(max_length=255)
+    attachment_path = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = journalvoucherattachments
+
+    def __str__(self):
+        return self.attachment_name

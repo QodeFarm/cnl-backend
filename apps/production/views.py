@@ -1325,6 +1325,17 @@ class MaterialIssueView(APIView):
 
         # Validate items
         items_data = given_data.pop('items', [])
+        
+        # ---------------- CLEAN EMPTY MATERIAL ISSUE ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5-10 default rows)
+        # Similar to Sale Order pattern - filter out items without product_id or quantity
+        if items_data:
+            items_data = [
+                item for item in items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        # ------------------------------------------------------------------ #
+        
         items_error = validate_multiple_data(self, items_data, MaterialIssueItemSerializer, ['material_issue_id']) if items_data else None
         if items_error:
             errors["items"] = items_error
@@ -1410,6 +1421,17 @@ class MaterialIssueView(APIView):
             updated_issue = None
         # Validate items
         items_data = given_data.pop('items', [])
+        
+        # ---------------- CLEAN EMPTY MATERIAL ISSUE ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5-10 default rows)
+        # Similar to Sale Order pattern - filter out items without product_id or quantity
+        if items_data:
+            items_data = [
+                item for item in items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        # ------------------------------------------------------------------ #
+        
         items_error = validate_multiple_data(self, items_data, MaterialIssueItemSerializer, []) if items_data else None
         if items_error:
             errors["items"] = items_error
@@ -1578,6 +1600,17 @@ class MaterialReceivedView(APIView):
 
         # Validate items
         items_data = given_data.pop('items', [])
+        
+        # ---------------- CLEAN EMPTY MATERIAL RECEIVED ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5-10 default rows)
+        # Similar to Sale Order pattern - filter out items without product_id or quantity
+        if items_data:
+            items_data = [
+                item for item in items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        # --------------------------------------------------------------------- #
+        
         items_error = validate_multiple_data(self, items_data, MaterialReceivedItemSerializer, ['material_received_id']) if items_data else None
         if items_error:
             errors["items"] = items_error
@@ -1658,6 +1691,17 @@ class MaterialReceivedView(APIView):
 
         # Validate items
         items_data = given_data.pop('items', [])
+        
+        # ---------------- CLEAN EMPTY MATERIAL RECEIVED ITEMS ---------------- #
+        # Remove blank/empty payloads created by frontend (5-10 default rows)
+        # Similar to Sale Order pattern - filter out items without product_id or quantity
+        if items_data:
+            items_data = [
+                item for item in items_data
+                if item.get("product_id") and item.get("quantity")
+            ]
+        # --------------------------------------------------------------------- #
+        
         items_error = validate_multiple_data(self, items_data, MaterialReceivedItemSerializer, []) if items_data else None
         if items_error:
             errors["items"] = items_error
@@ -1783,7 +1827,7 @@ class StockSummaryAPIView(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs
             
-            total_count = queryset.count()
+            total_count = StockSummary.objects.all().count()
             serializer = StockSummarySerializer(queryset, many=True)
             
             return filter_response(
