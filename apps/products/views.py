@@ -546,9 +546,10 @@ class ProductViewSet(APIView):
             summary = request.query_params.get('summary', 'false').lower() == 'true' + '&' 
             view_type = request.query_params.get('view', '')
             
+            # Start with base queryset
             queryset = Products.objects.all().order_by('is_deleted', '-created_at')
             
-            # Filter by product mode
+            # Filter by product mode based on view type
             if view_type:
                 mode_map = {
                     "inventory": "Inventory",
@@ -562,28 +563,25 @@ class ProductViewSet(APIView):
                         queryset = queryset.filter(product_mode_id=item_mode)
                         logger.info(f"Filtering products to show only {mode_name} mode items")
 
+            # Apply additional filters from query params
+            if request.query_params:
+                filterset = ProductsFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+
             if summary:
-                product = Products.objects.all().order_by('is_deleted', '-created_at')	
-                data = ProductOptionsSerializer.get_product_summary(product)
+                data = ProductOptionsSerializer.get_product_summary(queryset)
                 return build_response(len(data), "Success", data, status.HTTP_200_OK)
             else:
-                logger.info("Retrieving all products")
-                queryset = Products.objects.all().order_by('is_deleted', '-created_at')	
+                logger.info("Retrieving products")
 
-                page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-                limit = int(request.query_params.get('limit', 10)) 
-                total_count = Products.objects.count()
-
-                # Apply filters manuallys
-                if request.query_params:
-                    filterset = ProductsFilter(request.GET, queryset=queryset)
-                    if filterset.is_valid():
-                        queryset = filterset.qs 
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
+                total_count = Products.objects.all().count()
 
                 serializer = ProductOptionsSerializer(queryset, many=True)
-                logger.info("product data retrieved successfully.")
-                # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-                return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+                logger.info("Product data retrieved successfully.")
+                return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")

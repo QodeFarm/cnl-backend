@@ -1492,8 +1492,9 @@ def update_product_stock(parent_model, child_model, data, operation, using='defa
                 #         defaults={'quantity': return_qty if operation == 'add' else -return_qty}
                 #     )
                 # --- Always update variation stock (even if size/color are None) ---
+                # Use product_instance (model instance) instead of product_id (string UUID)
                 variation, created = child_model.objects.using(using).get_or_create(
-                    product_id=product_id,
+                    product_id=product_instance,
                     size_id=size_id,     # may be None
                     color_id=color_id,   # may be None
                     defaults={'quantity': return_qty if operation == 'add' else -return_qty}
