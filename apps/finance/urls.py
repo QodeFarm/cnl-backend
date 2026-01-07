@@ -50,5 +50,6 @@ urlpatterns = [
     # Pull from expense claim
     # path('journal_vouchers/pull_expense_claim/<str:expense_claim_id>/', PullFromExpenseClaimView.as_view(), name='journal_vouchers-pull-expense-claim'),
     
-    path('account-cities/', AccountCityListAPIView.as_view())
+    path('account-cities/', AccountCityListAPIView.as_view()),
+    path('journal_book_report/', JournalBookReportView.as_view(), name='journal_book_report'),
 ]
