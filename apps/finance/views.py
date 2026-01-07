@@ -6,7 +6,7 @@ from requests import request
 from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
 from apps.customer.models import CustomerAddresses
-from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter
+from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter, JournalBookReportFilter
 from apps.sales.models import SaleInvoiceOrders
 from apps.vendor.models import VendorAddress
 from config.utils_db_router import set_db
@@ -2329,3 +2329,214 @@ class AccountCityListAPIView(APIView):
                 for c in cities
             ]
         })        
+
+
+# ======================================
+# JOURNAL BOOK REPORT VIEW
+# ======================================
+
+class JournalBookReportView(APIView):
+    """
+    This report displays all journal vouchers with their line items in a format
+    similar to a traditional journal book/day book.
+    """
+    
+    def get(self, request, *args, **kwargs):
+        """
+        GET Handler - Returns Journal Book Report with all vouchers and lines.
+        """
+        try:
+            # Get pagination parameters
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 100))
+            
+            # Get date range parameters
+            from_date = request.query_params.get('voucher_date_after', None)
+            to_date = request.query_params.get('voucher_date_before', None)
+            
+            # Base queryset - only non-deleted vouchers, ordered by date desc then voucher_no
+            queryset = JournalVoucher.objects.filter(
+                is_deleted=False
+            ).order_by('-voucher_date', '-voucher_no')
+            
+            # Apply filters using JournalBookReportFilter
+            if request.query_params:
+                filterset = JournalBookReportFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+            
+            # Get total count before pagination
+            total_count = queryset.count()
+            
+            # Calculate grand totals from all filtered records
+            totals = queryset.aggregate(
+                grand_total_debit=Coalesce(Sum('total_debit'), Decimal('0.00')),
+                grand_total_credit=Coalesce(Sum('total_credit'), Decimal('0.00'))
+            )
+            
+            # Apply pagination
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            paginated_queryset = queryset[start_index:end_index]
+            
+            # Build response data
+            report_data = []
+            
+            for voucher in paginated_queryset:
+                # Get all lines for this voucher
+                voucher_lines = JournalVoucherLine.objects.filter(
+                    journal_voucher_id=voucher.journal_voucher_id
+                ).select_related(
+                    'ledger_account_id', 
+                    'customer_id', 
+                    'vendor_id',
+                    'employee_id'
+                ).order_by('entry_type', 'created_at')
+                
+                # Build line data
+                lines_data = []
+                for line in voucher_lines:
+                    # Get ledger account details
+                    ledger_name = ''
+                    ledger_group = ''
+                    if line.ledger_account_id:
+                        ledger_name = line.ledger_account_id.name or ''
+                        # Get account group if available
+                        if hasattr(line.ledger_account_id, 'account_group_id') and line.ledger_account_id.account_group_id:
+                            ledger_group = line.ledger_account_id.account_group_id.group_name or ''
+                        elif hasattr(line.ledger_account_id, 'account_type'):
+                            ledger_group = line.ledger_account_id.account_type or ''
+                    
+                    # Get party name (customer, vendor, or employee)
+                    party_name = None
+                    if line.customer_id:
+                        party_name = line.customer_id.name or ''
+                    elif line.vendor_id:
+                        party_name = line.vendor_id.name or ''
+                    elif line.employee_id:
+                        party_name = f"{line.employee_id.first_name or ''} {line.employee_id.last_name or ''}".strip()
+                    
+                    line_data = {
+                        'ledger_account_name': ledger_name,
+                        'ledger_group': ledger_group,
+                        'party_name': party_name,
+                        'entry_type': line.entry_type,
+                        'debit': line.amount if line.entry_type == 'Debit' else Decimal('0.00'),
+                        'credit': line.amount if line.entry_type == 'Credit' else Decimal('0.00'),
+                        'remark': line.remark,
+                        'bill_no': line.bill_no,
+                        'tds_applicable': line.tds_applicable,
+                        'tds_amount': line.tds_amount,
+                    }
+                    lines_data.append(line_data)
+                
+                # Build particulars text (similar to AlignBooks format)
+                particulars = self._build_particulars(lines_data, voucher.narration)
+                
+                voucher_data = {
+                    'journal_voucher_id': str(voucher.journal_voucher_id),
+                    'voucher_no': voucher.voucher_no,
+                    'voucher_date': voucher.voucher_date,
+                    'voucher_type': voucher.voucher_type,
+                    'narration': voucher.narration,
+                    'reference_no': voucher.reference_no,
+                    'is_posted': voucher.is_posted,
+                    'total_debit': voucher.total_debit,
+                    'total_credit': voucher.total_credit,
+                    'lines': lines_data,
+                    'particulars': particulars,
+                }
+                report_data.append(voucher_data)
+            
+            # Build summary
+            summary = {
+                'total_vouchers': total_count,
+                'grand_total_debit': totals['grand_total_debit'],
+                'grand_total_credit': totals['grand_total_credit'],
+                'from_date': from_date,
+                'to_date': to_date,
+                'page': page,
+                'limit': limit,
+                'total_pages': (total_count + limit - 1) // limit if limit > 0 else 1
+            }
+            
+            response_data = {
+                'count': len(report_data),
+                'message': 'Success',
+                'data': report_data,
+                'summary': summary,
+                'page': page,
+                'limit': limit,
+                'totalCount': total_count
+            }
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error generating Journal Book Report: {str(e)}")
+            return build_response(0, f"Error generating report: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _build_particulars(self, lines_data, narration):
+        """
+        Format for each line:
+        Ledger Group
+        Ledger Name [Party Name]
+        (Being Journal Entry details)
+        """
+        particulars_list = []
+        
+        for line in lines_data:
+            ledger_group = line.get('ledger_group', '') or ''
+            ledger_name = line.get('ledger_account_name', '') or ''
+            party_name = line.get('party_name', '')
+            entry_type = line.get('entry_type', '')
+            amount = line.get('debit', 0) if entry_type == 'Debit' else line.get('credit', 0)
+            
+            # Build display text - handle empty ledger_group gracefully
+            if ledger_group:
+                if party_name:
+                    display_text = f"{ledger_group}\n{ledger_name} [ {party_name}]"
+                else:
+                    display_text = f"{ledger_group}\n{ledger_name}"
+            else:
+                if party_name:
+                    display_text = f"{ledger_name} [ {party_name}]"
+                else:
+                    display_text = ledger_name
+            
+            particulars_list.append({
+                'text': display_text,
+                'entry_type': entry_type,
+                'amount': float(amount) if amount else 0,
+                'ledger_group': ledger_group,
+                'ledger_name': ledger_name,
+                'party_name': party_name
+            })
+        
+        # Add narration if present
+        if narration:
+            # Build detailed narration like AlignBooks
+            narration_parts = []
+            for line in lines_data:
+                ledger_name = line.get('ledger_account_name', '') or ''
+                party_name = line.get('party_name', '')
+                entry_type = line.get('entry_type', '')
+                amount = line.get('debit', 0) if entry_type == 'Debit' else line.get('credit', 0)
+                
+                if party_name:
+                    narration_parts.append(f"{ledger_name} [ {party_name}]## {entry_type} ₹{amount}")
+                elif ledger_name:
+                    narration_parts.append(f"{ledger_name}## {entry_type} ₹{amount}")
+            
+            full_narration = f"(Being Journal Entry {' '.join(narration_parts)})"
+            if narration != full_narration:
+                full_narration = f"({narration})"
+            
+            particulars_list.append({
+                'text': full_narration,
+                'entry_type': 'narration',
+                'amount': 0,
+                'is_narration': True
+            })
+        
+        return particulars_list

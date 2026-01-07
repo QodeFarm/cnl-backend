@@ -253,3 +253,106 @@ class JournalVoucherAttachmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = JournalVoucherAttachment
         fields = '__all__'
+
+
+# ======================================
+# JOURNAL BOOK REPORT SERIALIZERS
+# ======================================
+
+class JournalBookLineSerializer(serializers.Serializer):
+    """
+    Serializer for individual journal book line items (debit/credit entries).
+    Used within JournalBookReportSerializer for nested line data.
+    """
+    ledger_account_name = serializers.CharField()
+    ledger_group = serializers.CharField(allow_null=True)
+    party_name = serializers.CharField(allow_null=True)
+    entry_type = serializers.CharField()  # 'Debit' or 'Credit'
+    debit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    credit = serializers.DecimalField(max_digits=18, decimal_places=2)
+
+
+class JournalBookReportSerializer(serializers.Serializer):
+    """
+    Groups journal entries by voucher with all line details.
+    
+    - Voucher No
+    - Date
+    - Particulars (ledger account name, party details, narration)
+    - Debit Amount
+    - Credit Amount
+    """
+    voucher_no = serializers.CharField()
+    voucher_date = serializers.DateField()
+    voucher_type = serializers.CharField()
+    narration = serializers.CharField(allow_null=True, allow_blank=True)
+    particulars = serializers.SerializerMethodField()
+    lines = JournalBookLineSerializer(many=True)
+    total_debit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_credit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    journal_voucher_id = serializers.UUIDField()
+    is_posted = serializers.BooleanField()
+
+    def get_particulars(self, obj):
+        """
+        'Ledger Group\nParty Name\n(Being Journal Entry narration with details)'
+        """
+        lines = obj.get('lines', [])
+        narration = obj.get('narration', '')
+        
+        particulars_list = []
+        for line in lines:
+            ledger_group = line.get('ledger_group', '')
+            ledger_name = line.get('ledger_account_name', '')
+            party_name = line.get('party_name', '')
+            entry_type = line.get('entry_type', '')
+            amount = line.get('debit', 0) if entry_type == 'Debit' else line.get('credit', 0)
+            
+            # Build line text
+            line_text = f"{ledger_group}"
+            if party_name:
+                line_text += f"\n{ledger_name} [ {party_name}]"
+            else:
+                line_text += f"\n{ledger_name}"
+            
+            particulars_list.append({
+                'text': line_text,
+                'entry_type': entry_type,
+                'amount': amount
+            })
+        
+        # Add narration
+        if narration:
+            # Format narration with all line details
+            narration_parts = []
+            for line in lines:
+                ledger_name = line.get('ledger_account_name', '')
+                party_name = line.get('party_name', '')
+                entry_type = line.get('entry_type', '')
+                amount = line.get('debit', 0) if entry_type == 'Debit' else line.get('credit', 0)
+                
+                if party_name:
+                    narration_parts.append(f"{ledger_name} [ {party_name}]## {entry_type} ₹{amount}")
+                else:
+                    narration_parts.append(f"{ledger_name}## {entry_type} ₹{amount}")
+            
+            full_narration = f"(Being Journal Entry {' '.join(narration_parts)})"
+            particulars_list.append({
+                'text': full_narration,
+                'entry_type': 'narration',
+                'amount': 0
+            })
+        
+        return particulars_list
+
+
+class JournalBookSummarySerializer(serializers.Serializer):
+    """
+    Summary serializer for Journal Book Report totals.
+    Shows grand total of all debits and credits.
+    """
+    total_debit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_credit = serializers.DecimalField(max_digits=18, decimal_places=2)
+    total_vouchers = serializers.IntegerField()
+    from_date = serializers.DateField()
+    to_date = serializers.DateField()

@@ -811,3 +811,56 @@ class JournalVoucherLineFilter(filters.FilterSet):
         fields = ['journal_voucher_id', 'ledger_account_id', 'customer_id', 'vendor_id', 
                   'employee_id', 'entry_type', 'amount', 'tds_applicable', 'is_panel',
                   'is_investment', 'remark', 'created_at', 's', 'sort', 'page', 'limit']
+
+
+# ======================================
+# JOURNAL BOOK REPORT FILTER
+# ======================================
+
+class JournalBookReportFilter(filters.FilterSet):
+    voucher_no = filters.CharFilter(lookup_expr='icontains')
+    voucher_date = filters.DateFromToRangeFilter()
+    voucher_type = filters.ChoiceFilter(choices=JournalVoucher.VOUCHER_TYPE_CHOICES)
+    narration = filters.CharFilter(lookup_expr='icontains')
+    is_posted = filters.BooleanFilter()
+    ledger_account_id = filters.CharFilter(method='filter_by_ledger_account')
+    customer_id = filters.CharFilter(method='filter_by_customer')
+    vendor_id = filters.CharFilter(method='filter_by_vendor')
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    created_at = filters.DateFromToRangeFilter()
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_ledger_account(self, queryset, name, value):
+        """
+        Filter vouchers that contain lines with the specified ledger account.
+        Returns vouchers where at least one line has this ledger_account_id.
+        """
+        if value:
+            # Get voucher IDs that have lines with the specified ledger account
+            voucher_ids = JournalVoucherLine.objects.filter(
+                ledger_account_id=value
+            ).values_list('journal_voucher_id', flat=True).distinct()
+            return queryset.filter(journal_voucher_id__in=voucher_ids)
+        return queryset
+
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = JournalVoucher
+        fields = ['voucher_no', 'voucher_date', 'voucher_type', 'narration', 'is_posted',
+                  'ledger_account_id', 'customer_id', 'vendor_id', 'period_name','created_at',
+                  's', 'sort', 'page', 'limit']
