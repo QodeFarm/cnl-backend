@@ -11,4 +11,5 @@ router.register(r'blocked_inventory', BlockedInventoryViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('stock_forecast_report/', StockForecastReportView.as_view(), name='stock-forecast-report'),
 ]
