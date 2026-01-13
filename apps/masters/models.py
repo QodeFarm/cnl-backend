@@ -68,6 +68,13 @@ class Statuses(models.Model):
 
 
 class LedgerGroups(models.Model):
+    NATURE_CHOICES = [
+        ('Asset', 'Asset'),
+        ('Liability', 'Liability'),
+        ('Income', 'Income'),
+        ('Expense', 'Expense'),
+    ]
+    
     ledger_group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, null=True, default=None)
@@ -75,7 +82,7 @@ class LedgerGroups(models.Model):
     under_group_id = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, 
                                       default=None, related_name='child_groups', 
                                       db_column='under_group_id')
-    nature = models.CharField(max_length=255, null=True, default=None)
+    nature = models.CharField(max_length=50, choices=NATURE_CHOICES, default='Asset')
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
