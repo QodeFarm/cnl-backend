@@ -12,7 +12,7 @@ from django.http import Http404
 from django.db import transaction
 from apps.auditlogs.utils import log_user_action
 from apps.masters.filters import ItemMasterFilter
-from apps.masters.models import City, Country, State
+from apps.masters.models import City, Country, State, ItemMaster
 from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from config.utils_variables import *
@@ -879,6 +879,9 @@ class ProductExcelImport(BaseExcelImportExport):
         "packet_barcode": "packet_barcode",
         "status": "status",
         
+        # Product Mode (INVENTORY, NON_INVENTORY, SERVICE)
+        "product_mode": ("product_mode_id", ItemMaster, "mode_name"),
+        
         # Foreign Keys - Primary Classifications
         "product_group": ("product_group_id", ProductGroups, "group_name"),
         "category": ("category_id", ProductCategories, "category_name"),
@@ -1245,6 +1248,19 @@ class ProductExcelImport(BaseExcelImportExport):
         wb = super().generate_template(extra_columns)
         ws = wb.active
 
+        # Add data validation for product_mode (Inventory, Non-Inventory, Service)
+        if 'product_mode' in cls.FIELD_MAP:
+            mode_col = list(cls.FIELD_MAP.keys()).index('product_mode') + 1
+            # Add dropdown validation with allowed values
+            dv = DataValidation(type="list", formula1='"Inventory,Non Inventory,Service"', allow_blank=True)
+            dv.add(f"{get_column_letter(mode_col)}2:{get_column_letter(mode_col)}1000")
+            ws.add_data_validation(dv)
+            
+            # Add a comment explaining valid values
+            mode_cell = ws.cell(row=1, column=mode_col)
+            comment = Comment('Valid values: Inventory, Non Inventory, Service', 'System')
+            mode_cell.comment = comment
+
         # Add data validation for GST classification type
         if 'gst_classification' in cls.FIELD_MAP:
             gst_col = list(cls.FIELD_MAP.keys()).index('gst_classification') + 1
@@ -1258,16 +1274,20 @@ class ProductExcelImport(BaseExcelImportExport):
             comment = Comment('Valid values: HSN, SAC, Both', 'System')
             gst_cell.comment = comment
         
+        # Style for additional fields - Light blue (same as optional fields)
+        extra_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        extra_font = Font(bold=True, color="000000")
+        
         # Add variation headers after the main product fields
         variation_headers = cls.VARIATION_HEADERS
         
-        # Get the last column and append variation headers with same color as main fields
+        # Get the last column and append variation headers
         for col_num, header in enumerate(variation_headers, 1 + len(list(cls.FIELD_MAP.keys()))):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header
-            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")  # Light blue color
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
+            cell.fill = extra_fill
+            cell.font = extra_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
             ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
             
         # Add a helper note in row 2 for the quantity_code field
@@ -1277,7 +1297,7 @@ class ProductExcelImport(BaseExcelImportExport):
             note_cell.font = Font(italic=True, color="666666")
             note_cell.alignment = Alignment(horizontal="center")
         
-        # Add warehouse headers after the variation fields with same color
+        # Add warehouse headers after the variation fields
         warehouse_headers = ["warehouse_name", "location_name", "location_quantity"]
         
         last_col = len(list(cls.FIELD_MAP.keys())) + len(cls.VARIATION_HEADERS)
@@ -1285,9 +1305,9 @@ class ProductExcelImport(BaseExcelImportExport):
         for col_num, header in enumerate(warehouse_headers, 1 + last_col):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header
-            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")  # Light blue color
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
+            cell.fill = extra_fill
+            cell.font = extra_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
             ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
         
         # Return statement should be outside of the loop

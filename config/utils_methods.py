@@ -1962,7 +1962,8 @@ class BaseExcelImportExport:
     @classmethod
     def generate_template(cls, extra_columns=None):
         """
-        Generate an Excel template for the model
+        Generate an Excel template for the model with professional styling.
+        Required fields are highlighted with red background and asterisk (*).
         
         Args:
             extra_columns: Additional columns to include in the template
@@ -1981,26 +1982,41 @@ class BaseExcelImportExport:
         if extra_columns:
             headers.extend(extra_columns)
         
-        # Add headers to worksheet
-        ws.append(headers)
+        # Style definitions
+        # Required fields - Red background with white bold text
+        required_fill = PatternFill(start_color="DC3545", end_color="DC3545", fill_type="solid")  # Red
+        required_font = Font(bold=True, color="FFFFFF")  # White bold text
         
-        # Style headers
-        header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
-        font_bold = Font(bold=True)
-        align_center = Alignment(horizontal="center")
+        # Optional fields - Light blue background with dark text
+        optional_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")  # Light blue
+        optional_font = Font(bold=True, color="000000")  # Black bold text
         
+        align_center = Alignment(horizontal="center", vertical="center")
+        
+        # Add headers with styling
         for col_num, column_title in enumerate(headers, 1):
             cell = ws.cell(row=1, column=col_num)
-            cell.fill = header_fill
-            cell.font = font_bold
             cell.alignment = align_center
             
-            # Mark required fields
+            # Check if this is a required field
             if column_title in cls.REQUIRED_COLUMNS:
-                cell.comment = Comment("This field is required", "System")
+                # Required field - Red with asterisk (*)
+                cell.value = f"{column_title} *"
+                cell.fill = required_fill
+                cell.font = required_font
+                cell.comment = Comment("⚠️ REQUIRED - This field must be filled", "System")
+            else:
+                # Optional field - Light blue
+                cell.value = column_title
+                cell.fill = optional_fill
+                cell.font = optional_font
             
             # Set column width
-            ws.column_dimensions[get_column_letter(col_num)].width = len(str(column_title)) + 4
+            col_width = len(str(column_title)) + 6
+            ws.column_dimensions[get_column_letter(col_num)].width = col_width
+        
+        # Freeze the header row
+        ws.freeze_panes = 'A2'
         
         return wb
         
@@ -2057,8 +2073,10 @@ class BaseExcelImportExport:
             wb = openpyxl.load_workbook(file_path)
             sheet = wb.active
             
-            # Get headers from first row
-            headers = [str(cell.value).lower() if cell.value else "" for cell in sheet[1]]
+            # Get headers from first row - strip asterisk (*) from required field headers
+            raw_headers = [str(cell.value).lower().strip() if cell.value else "" for cell in sheet[1]]
+            # Remove " *" suffix that marks required fields in template
+            headers = [h.replace(' *', '').strip() for h in raw_headers]
             
             # Validate required columns
             missing_columns = []
@@ -2287,51 +2305,6 @@ class BaseExcelImportExport:
         # Standard case - just create with the name field
         return model.objects.create(**{field: value})
     
-    @classmethod
-    def generate_template(cls, extra_columns=None):
-        """
-        Generate an Excel template for the model
-        
-        Args:
-            extra_columns: Additional columns to include in the template
-            
-        Returns:
-            Openpyxl workbook object
-        """
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "ImportTemplate"
-        
-        # Get all fields from FIELD_MAP
-        headers = list(cls.FIELD_MAP.keys())
-        
-        # Add extra columns if provided
-        if extra_columns:
-            headers.extend(extra_columns)
-        
-        # Add headers to worksheet
-        ws.append(headers)
-        
-        # Style headers
-        header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
-        font_bold = Font(bold=True)
-        align_center = Alignment(horizontal="center")
-        
-        for col_num, column_title in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col_num)
-            cell.fill = header_fill
-            cell.font = font_bold
-            cell.alignment = align_center
-            
-            # Mark required fields
-            if column_title in cls.REQUIRED_COLUMNS:
-                cell.comment = Comment("This field is required", "System")
-            
-            # Set column width
-            ws.column_dimensions[get_column_letter(col_num)].width = len(str(column_title)) + 4
-        
-        return wb
-        
     @classmethod
     def get_template_response(cls, request, extra_columns=None):
         """
