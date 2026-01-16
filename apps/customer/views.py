@@ -1381,7 +1381,7 @@ class CustomerExcelImport(BaseExcelImportExport):
             comment = Comment('Valid values: Inclusive, Exclusive, Both', 'System')
             tax_type_cell.comment = comment
         
-        # Add address fields
+        # Add address fields with same styling as optional fields
         address_headers = []
         
         # Billing address fields
@@ -1400,14 +1400,18 @@ class CustomerExcelImport(BaseExcelImportExport):
         ]
         address_headers.extend(shipping_fields)
         
+        # Style for address fields - Light blue (same as optional fields)
+        address_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        address_font = Font(bold=True, color="000000")
+        
         # Get the last row and append the address headers
         last_row = ws.max_row
         for col_num, header in enumerate(address_headers, 1 + len(list(cls.FIELD_MAP.keys()))):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header
-            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
+            cell.fill = address_fill
+            cell.font = address_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
             ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
             
         return wb

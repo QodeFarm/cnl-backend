@@ -980,7 +980,8 @@ class VendorExcelImport(BaseExcelImportExport):
                     ledger_group = LedgerGroups.objects.filter(name__iexact=ledger_group_name).first()
                     if not ledger_group:
                         logger.info(f"Creating LedgerGroup with name='{ledger_group_name}'")
-                        ledger_group = LedgerGroups.objects.create(name=ledger_group_name)
+                        # nature is required in DB - default to 'Liability' for vendor groups
+                        ledger_group = LedgerGroups.objects.create(name=ledger_group_name, nature='')
                         
                     # Now get or create ledger account with the right group
                     ledger_account = LedgerAccounts.objects.filter(name__iexact=ledger_account_name).first()
@@ -1037,46 +1038,65 @@ class VendorExcelImport(BaseExcelImportExport):
             # Create the vendor record
             vendor = Vendor.objects.create(**vendor_data)
             
-            # 2. Create billing address
-            country = cls.get_or_create_country(row_data.get("billing_country"))
-            state = cls.get_or_create_state(row_data.get("billing_state"), country) if country else None
-            city = cls.get_or_create_city(row_data.get("billing_city"), state) if state else None
+            # 2. Create billing address - check if any billing field has data
+            billing_fields = ['billing_address', 'billing_country', 'billing_state', 'billing_city', 
+                            'billing_pin_code', 'billing_phone', 'billing_email', 
+                            'billing_longitude', 'billing_latitude']
+            has_billing_data = any(row_data.get(field) for field in billing_fields)
             
-            VendorAddress.objects.create(
-                vendor_id=vendor,
-                address_type="Billing",
-                address=row_data.get("billing_address"),
-                city_id=city,
-                state_id=state,
-                country_id=country,
-                pin_code=str(row_data.get("billing_pin_code")) if row_data.get("billing_pin_code") is not None else None,
-                phone=str(row_data.get("billing_phone")) if row_data.get("billing_phone") is not None else None,
-                email=row_data.get("billing_email"),
-                longitude=row_data.get("billing_longitude"),
-                latitude=row_data.get("billing_latitude")
-            )
-            
-            # 3. Create shipping address only if explicitly provided
-            # No automatic copy from billing address, only create shipping if data is provided
-            if row_data.get("shipping_address"):
-                # Create new shipping address
-                s_country = cls.get_or_create_country(row_data.get("shipping_country"))
-                s_state = cls.get_or_create_state(row_data.get("shipping_state"), s_country) if s_country else None
-                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state) if s_state else None
+            if has_billing_data:
+                # Get or create location fields INDEPENDENTLY
+                country = cls.get_or_create_country(row_data.get("billing_country"))
+                state = cls.get_or_create_state(row_data.get("billing_state"), country)
+                city = cls.get_or_create_city(row_data.get("billing_city"), state)
                 
-                VendorAddress.objects.create(
-                    vendor_id=vendor,
-                    address_type="Shipping",
-                    address=row_data.get("shipping_address"),
-                    city_id=s_city,
-                    state_id=s_state,
-                    country_id=s_country,
-                    pin_code=row_data.get("shipping_pin_code"),
-                    phone=row_data.get("shipping_phone"),
-                    email=row_data.get("shipping_email"),
-                    longitude=row_data.get("shipping_longitude"),
-                    latitude=row_data.get("shipping_latitude")
-                )
+                try:
+                    VendorAddress.objects.create(
+                        vendor_id=vendor,
+                        address_type="Billing",
+                        address=row_data.get("billing_address") or None,
+                        city_id=city,
+                        state_id=state,
+                        country_id=country,
+                        pin_code=str(row_data.get("billing_pin_code")) if row_data.get("billing_pin_code") else None,
+                        phone=str(row_data.get("billing_phone")) if row_data.get("billing_phone") else None,
+                        email=row_data.get("billing_email") or None,
+                        longitude=row_data.get("billing_longitude") or None,
+                        latitude=row_data.get("billing_latitude") or None
+                    )
+                    logger.info(f"Created billing address for vendor {vendor.name}")
+                except Exception as e:
+                    logger.warning(f"Could not create billing address for vendor {vendor.name}: {e}")
+            
+            # 3. Create shipping address - check if any shipping field has data
+            shipping_fields = ['shipping_address', 'shipping_country', 'shipping_state', 'shipping_city',
+                             'shipping_pin_code', 'shipping_phone', 'shipping_email',
+                             'shipping_longitude', 'shipping_latitude']
+            has_shipping_data = any(row_data.get(field) for field in shipping_fields)
+            
+            if has_shipping_data:
+                # Get or create location fields INDEPENDENTLY
+                s_country = cls.get_or_create_country(row_data.get("shipping_country"))
+                s_state = cls.get_or_create_state(row_data.get("shipping_state"), s_country)
+                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state)
+                
+                try:
+                    VendorAddress.objects.create(
+                        vendor_id=vendor,
+                        address_type="Shipping",
+                        address=row_data.get("shipping_address") or None,
+                        city_id=s_city,
+                        state_id=s_state,
+                        country_id=s_country,
+                        pin_code=row_data.get("shipping_pin_code") or None,
+                        phone=row_data.get("shipping_phone") or None,
+                        email=row_data.get("shipping_email") or None,
+                        longitude=row_data.get("shipping_longitude") or None,
+                        latitude=row_data.get("shipping_latitude") or None
+                    )
+                    logger.info(f"Created shipping address for vendor {vendor.name}")
+                except Exception as e:
+                    logger.warning(f"Could not create shipping address for vendor {vendor.name}: {e}")
                 
             return vendor
 
@@ -1099,7 +1119,7 @@ class VendorExcelImport(BaseExcelImportExport):
             comment = Comment('Valid values: Inclusive, Exclusive', 'System')
             tax_type_cell.comment = comment
         
-        # Add address fields
+        # Add address fields with same styling as optional fields
         address_headers = []
         
         # Billing address fields
@@ -1118,14 +1138,18 @@ class VendorExcelImport(BaseExcelImportExport):
         ]
         address_headers.extend(shipping_fields)
         
+        # Style for address fields - Light blue (same as optional fields)
+        address_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        address_font = Font(bold=True, color="000000")
+        
         # Get the last row and append the address headers
         last_row = ws.max_row
         for col_num, header in enumerate(address_headers, 1 + len(list(cls.FIELD_MAP.keys()))):
             cell = ws.cell(row=1, column=col_num)
             cell.value = header
-            cell.fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
-            cell.font = Font(bold=True)
-            cell.alignment = Alignment(horizontal="center")
+            cell.fill = address_fill
+            cell.font = address_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
             ws.column_dimensions[get_column_letter(col_num)].width = len(str(header)) + 4
             
         return wb
@@ -1146,43 +1170,59 @@ class VendorExcelImport(BaseExcelImportExport):
         return country
         
     @classmethod
-    def get_or_create_state(cls, name, country):
-        """Get or create a state linked to country"""
-        if not name or not country:
+    def get_or_create_state(cls, name, country=None):
+        """Get or create a state - country is optional for lookup but required for creation"""
+        if not name:
+            return None
+        
+        # First try to find existing state by name
+        state = State.objects.filter(state_name__iexact=name).first()
+        if state:
+            # Update country if provided and state doesn't have one
+            if country and not state.country_id:
+                state.country_id = country
+                state.save()
+            return state
+        
+        # Need to create new state - requires country due to DB constraint
+        if not country:
+            logger.warning(f"Cannot create State '{name}' without country - state will be None")
             return None
             
-        state = State.objects.filter(state_name__iexact=name).first()
-        if not state:
-            logger.info(f"Creating State with state_name='{name}'")
-            state = State.objects.create(
-                state_name=name,
-                state_code=name[:3].upper(),
-                country_id=country
-            )
-        elif not state.country_id:
-            # Ensure state has country_id
-            state.country_id = country
-            state.save()
+        logger.info(f"Creating State with state_name='{name}'")
+        state = State.objects.create(
+            state_name=name,
+            state_code=name[:3].upper(),
+            country_id=country
+        )
         return state
         
     @classmethod
-    def get_or_create_city(cls, name, state):
-        """Get or create a city linked to state"""
-        if not name or not state:
+    def get_or_create_city(cls, name, state=None):
+        """Get or create a city - state is optional for lookup but required for creation"""
+        if not name:
+            return None
+        
+        # First try to find existing city by name
+        city = City.objects.filter(city_name__iexact=name).first()
+        if city:
+            # Update state if provided and city doesn't have one
+            if state and not city.state_id:
+                city.state_id = state
+                city.save()
+            return city
+        
+        # Need to create new city - requires state due to DB constraint
+        if not state:
+            logger.warning(f"Cannot create City '{name}' without state - city will be None")
             return None
             
-        city = City.objects.filter(city_name__iexact=name).first()
-        if not city:
-            logger.info(f"Creating City with city_name='{name}'")   
-            city = City.objects.create(
-                city_name=name,
-                city_code=name[:3].upper(),
-                state_id=state
-            )
-        elif not city.state_id:
-            # Ensure city has state_id
-            city.state_id = state
-            city.save()
+        logger.info(f"Creating City with city_name='{name}'")
+        city = City.objects.create(
+            city_name=name,
+            city_code=name[:3].upper(),
+            state_id=state
+        )
         return city
     
 
