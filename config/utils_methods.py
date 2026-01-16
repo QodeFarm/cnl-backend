@@ -2103,25 +2103,65 @@ class BaseExcelImportExport:
                     "missing_expected_columns": missing_expected_columns,
                 }, status.HTTP_400_BAD_REQUEST
             
-            # Extract data rows
+            # Extract data rows - improved to skip truly empty rows
             data_rows = []
-            for row in list(sheet.iter_rows(min_row=2, values_only=True)):
-                if any(cell is not None for cell in row):
-                    data_rows.append(row)
+            row_number_map = []  # Track actual Excel row numbers
+            
+            # Get indices of required columns for faster checking
+            required_col_indices = []
+            for req_col in cls.REQUIRED_COLUMNS:
+                if req_col.lower() in headers:
+                    required_col_indices.append(headers.index(req_col.lower()))
+            
+            for excel_row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                # Normalize cell values - strip whitespace from strings
+                normalized_row = []
+                for cell in row:
+                    if cell is not None:
+                        if isinstance(cell, str):
+                            cell = cell.strip()
+                            # Convert empty strings to None
+                            cell = cell if cell else None
+                    normalized_row.append(cell)
+                
+                # Check if row has actual data in at least one required column
+                # This prevents rows with only formatting/invisible data from being processed
+                has_required_data = False
+                for col_idx in required_col_indices:
+                    if col_idx < len(normalized_row) and normalized_row[col_idx] is not None:
+                        has_required_data = True
+                        break
+                
+                # Also check if ANY cell has actual data (for rows without required data but with other data)
+                has_any_data = any(cell is not None for cell in normalized_row)
+                
+                # Only include rows that have at least one required field filled
+                # Skip completely empty rows or rows with only non-required data
+                if has_required_data:
+                    data_rows.append(tuple(normalized_row))
+                    row_number_map.append(excel_row_idx)
+                elif has_any_data:
+                    # Log warning for rows with data but missing all required fields
+                    logger.warning(f"Row {excel_row_idx} has data but no required fields - skipping")
             
             # Check for missing required data
             missing_data_rows = []
-            for idx, row in enumerate(data_rows, start=2):
+            for idx, row in enumerate(data_rows):
+                actual_row_number = row_number_map[idx]
                 row_data = dict(zip(headers, row))
                 missing_fields = []
                 
                 for field in cls.REQUIRED_COLUMNS:
-                    if field.lower() in headers and not row_data.get(field.lower()):
-                        missing_fields.append(field)
+                    field_lower = field.lower()
+                    if field_lower in headers:
+                        value = row_data.get(field_lower)
+                        # Check for None, empty string, or whitespace-only string
+                        if value is None or (isinstance(value, str) and not value.strip()):
+                            missing_fields.append(field)
                 
                 if missing_fields:
                     missing_data_rows.append({
-                        "row": idx,
+                        "row": actual_row_number,
                         "missing_fields": missing_fields
                     })
             
@@ -2132,7 +2172,7 @@ class BaseExcelImportExport:
                 }, status.HTTP_400_BAD_REQUEST
             
             # Process valid rows
-            results = cls.process_rows(headers, data_rows, create_record_func, get_or_create_funcs)
+            results = cls.process_rows(headers, data_rows, create_record_func, get_or_create_funcs, row_number_map)
             return results, status.HTTP_200_OK
             
         except Exception as e:
@@ -2140,23 +2180,32 @@ class BaseExcelImportExport:
             return {"error": f"Error processing Excel file: {str(e)}"}, status.HTTP_400_BAD_REQUEST
     
     @classmethod
-    def process_rows(cls, headers, data_rows, create_record_func, get_or_create_funcs=None):
+    def process_rows(cls, headers, data_rows, create_record_func, get_or_create_funcs=None, row_number_map=None):
         """Process all rows from Excel file"""
         success = 0
         failed = []
         
-        for idx, row in enumerate(data_rows, start=2):
+        for idx, row in enumerate(data_rows):
+            # Get actual Excel row number for error reporting
+            actual_row_number = row_number_map[idx] if row_number_map else idx + 2
             row_data = dict(zip(headers, row))
             
-            # Check all required fields
+            # Normalize row_data values - strip whitespace from strings
+            for key, value in row_data.items():
+                if isinstance(value, str):
+                    row_data[key] = value.strip() if value else None
+            
+            # Check all required fields (case-insensitive lookup)
             missing_fields = []
             for field in cls.REQUIRED_COLUMNS:
-                if not row_data.get(field):
+                field_lower = field.lower()
+                value = row_data.get(field_lower)
+                if value is None or (isinstance(value, str) and not value.strip()):
                     missing_fields.append(field)
             
             if missing_fields:
                 failed.append({
-                    "row": idx, 
+                    "row": actual_row_number, 
                     "error": f"Missing required fields: {', '.join(missing_fields)}"
                 })
                 continue

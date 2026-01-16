@@ -1285,46 +1285,67 @@ class CustomerExcelImport(BaseExcelImportExport):
             # Create the customer record
             customer = Customer.objects.create(**customer_data)
             
-            # 2. Create billing address
-            country = cls.get_or_create_country(row_data.get("billing_country"))
-            state = cls.get_or_create_state(row_data.get("billing_state"), country) if country else None
-            city = cls.get_or_create_city(row_data.get("billing_city"), state) if state else None
+            # 2. Create billing address - check if any billing field has data
+            billing_fields = ['billing_address', 'billing_country', 'billing_state', 'billing_city', 
+                            'billing_pin_code', 'billing_phone', 'billing_email', 
+                            'billing_longitude', 'billing_latitude']
+            has_billing_data = any(row_data.get(field) for field in billing_fields)
             
-            CustomerAddresses.objects.create(
-                customer_id=customer,
-                address_type="Billing",
-                address=row_data.get("billing_address"),
-                city_id=city,
-                state_id=state,
-                country_id=country,
-                pin_code=row_data.get("billing_pin_code"),
-                phone=row_data.get("billing_phone"),
-                email=row_data.get("billing_email"),
-                longitude=row_data.get("billing_longitude"),
-                latitude=row_data.get("billing_latitude")
-            )
-            
-            # 3. Create shipping address only if explicitly provided
-            # No automatic copy from billing address, only create shipping if data is provided
-            if row_data.get("shipping_address"):
-                # Create new shipping address
-                s_country = cls.get_or_create_country(row_data.get("shipping_country"))
-                s_state = cls.get_or_create_state(row_data.get("shipping_state"), s_country) if s_country else None
-                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state) if s_state else None
+            if has_billing_data:
+                # Get or create location fields INDEPENDENTLY
+                # Each field is saved regardless of whether others exist
+                country = cls.get_or_create_country(row_data.get("billing_country"))
+                state = cls.get_or_create_state(row_data.get("billing_state"), country)
+                city = cls.get_or_create_city(row_data.get("billing_city"), state)
                 
-                CustomerAddresses.objects.create(
-                    customer_id=customer,
-                    address_type="Shipping",
-                    address=row_data.get("shipping_address"),
-                    city_id=s_city,
-                    state_id=s_state,
-                    country_id=s_country,
-                    pin_code=row_data.get("shipping_pin_code"),
-                    phone=row_data.get("shipping_phone"),
-                    email=row_data.get("shipping_email"),
-                    longitude=row_data.get("shipping_longitude"),
-                    latitude=row_data.get("shipping_latitude")
-                )
+                try:
+                    CustomerAddresses.objects.create(
+                        customer_id=customer,
+                        address_type="Billing",
+                        address=row_data.get("billing_address") or None,
+                        city_id=city,
+                        state_id=state,
+                        country_id=country,
+                        pin_code=row_data.get("billing_pin_code") or None,
+                        phone=row_data.get("billing_phone") or None,
+                        email=row_data.get("billing_email") or None,
+                        longitude=row_data.get("billing_longitude") or None,
+                        latitude=row_data.get("billing_latitude") or None
+                    )
+                    logger.info(f"Created billing address for customer {customer.name}")
+                except Exception as e:
+                    logger.warning(f"Could not create billing address for customer {customer.name}: {e}")
+            
+            # 3. Create shipping address - check if any shipping field has data
+            shipping_fields = ['shipping_address', 'shipping_country', 'shipping_state', 'shipping_city',
+                             'shipping_pin_code', 'shipping_phone', 'shipping_email',
+                             'shipping_longitude', 'shipping_latitude']
+            has_shipping_data = any(row_data.get(field) for field in shipping_fields)
+            
+            if has_shipping_data:
+                # Get or create location fields INDEPENDENTLY
+                # Each field is saved regardless of whether others exist
+                s_country = cls.get_or_create_country(row_data.get("shipping_country"))
+                s_state = cls.get_or_create_state(row_data.get("shipping_state"), s_country)
+                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state)
+                
+                try:
+                    CustomerAddresses.objects.create(
+                        customer_id=customer,
+                        address_type="Shipping",
+                        address=row_data.get("shipping_address") or None,
+                        city_id=s_city,
+                        state_id=s_state,
+                        country_id=s_country,
+                        pin_code=row_data.get("shipping_pin_code") or None,
+                        phone=row_data.get("shipping_phone") or None,
+                        email=row_data.get("shipping_email") or None,
+                        longitude=row_data.get("shipping_longitude") or None,
+                        latitude=row_data.get("shipping_latitude") or None
+                    )
+                    logger.info(f"Created shipping address for customer {customer.name}")
+                except Exception as e:
+                    logger.warning(f"Could not create shipping address for customer {customer.name}: {e}")
                 
             return customer
 
@@ -1407,43 +1428,59 @@ class CustomerExcelImport(BaseExcelImportExport):
         return country
         
     @classmethod
-    def get_or_create_state(cls, name, country):
-        """Get or create a state linked to country"""
-        if not name or not country:
+    def get_or_create_state(cls, name, country=None):
+        """Get or create a state - country is optional for lookup but required for creation"""
+        if not name:
+            return None
+        
+        # First try to find existing state by name
+        state = State.objects.filter(state_name__iexact=name).first()
+        if state:
+            # Update country if provided and state doesn't have one
+            if country and not state.country_id:
+                state.country_id = country
+                state.save()
+            return state
+        
+        # Need to create new state - requires country due to DB constraint
+        if not country:
+            logger.warning(f"Cannot create State '{name}' without country - state will be None")
             return None
             
-        state = State.objects.filter(state_name__iexact=name).first()
-        if not state:
-            logger.info(f"Creating State with state_name='{name}'")
-            state = State.objects.create(
-                state_name=name,
-                state_code=name[:3].upper(),
-                country_id=country
-            )
-        elif not state.country_id:
-            # Ensure state has country_id
-            state.country_id = country
-            state.save()
+        logger.info(f"Creating State with state_name='{name}'")
+        state = State.objects.create(
+            state_name=name,
+            state_code=name[:3].upper(),
+            country_id=country
+        )
         return state
         
     @classmethod
-    def get_or_create_city(cls, name, state):
-        """Get or create a city linked to state"""
-        if not name or not state:
+    def get_or_create_city(cls, name, state=None):
+        """Get or create a city - state is optional for lookup but required for creation"""
+        if not name:
+            return None
+        
+        # First try to find existing city by name
+        city = City.objects.filter(city_name__iexact=name).first()
+        if city:
+            # Update state if provided and city doesn't have one
+            if state and not city.state_id:
+                city.state_id = state
+                city.save()
+            return city
+        
+        # Need to create new city - requires state due to DB constraint
+        if not state:
+            logger.warning(f"Cannot create City '{name}' without state - city will be None")
             return None
             
-        city = City.objects.filter(city_name__iexact=name).first()
-        if not city:
-            logger.info(f"Creating City with city_name='{name}'")   
-            city = City.objects.create(
-                city_name=name,
-                city_code=name[:3].upper(),
-                state_id=state
-            )
-        elif not city.state_id:
-            # Ensure city has state_id
-            city.state_id = state
-            city.save()
+        logger.info(f"Creating City with city_name='{name}'")
+        city = City.objects.create(
+            city_name=name,
+            city_code=name[:3].upper(),
+            state_id=state
+        )
         return city
 
 

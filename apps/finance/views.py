@@ -2337,8 +2337,9 @@ class AccountCityListAPIView(APIView):
 
 class JournalBookReportView(APIView):
     """
+    Journal Book Report AP
     This report displays all journal vouchers with their line items in a format
-    similar to a traditional journal book/day book.
+    similar to a 
     """
     
     def get(self, request, *args, **kwargs):
@@ -2478,13 +2479,41 @@ class JournalBookReportView(APIView):
     
     def _build_particulars(self, lines_data, narration):
         """
+        Build particulars text similar to AlignBooks format.
+        
         Format for each line:
-        Ledger Group
-        Ledger Name [Party Name]
-        (Being Journal Entry details)
+        Ledger Group (Bold)
+        Account/Party Name
+        (Being Journal Entry LEDGER## Type ₹Amount LEDGER## Type ₹Amount)
         """
         particulars_list = []
         
+        # First, build the narration string that will be added to each line
+        narration_parts = []
+        for line in lines_data:
+            ledger_name = line.get('ledger_account_name', '') or ''
+            party_name = line.get('party_name', '')
+            entry_type = line.get('entry_type', '')
+            amount = line.get('debit', 0) if entry_type == 'Debit' else line.get('credit', 0)
+            
+            # Format amount with commas
+            formatted_amount = f"₹{amount:,.2f}"
+            
+            if party_name:
+                narration_parts.append(f"{ledger_name} [ {party_name}]## {entry_type} {formatted_amount}")
+            elif ledger_name:
+                narration_parts.append(f"{ledger_name}## {entry_type} {formatted_amount}")
+        
+        # Build the common narration text for all lines
+        auto_narration = f"(Being Journal Entry {' '.join(narration_parts)})"
+        
+        # If user provided custom narration, use it; otherwise use auto-generated
+        if narration and narration.strip():
+            full_narration = f"(Being Journal Entry {narration})"
+        else:
+            full_narration = auto_narration
+        
+        # Now build each line's particulars with narration included
         for line in lines_data:
             ledger_group = line.get('ledger_group', '') or ''
             ledger_name = line.get('ledger_account_name', '') or ''
@@ -2492,17 +2521,27 @@ class JournalBookReportView(APIView):
             entry_type = line.get('entry_type', '')
             amount = line.get('debit', 0) if entry_type == 'Debit' else line.get('credit', 0)
             
-            # Build display text - handle empty ledger_group gracefully
+            # Build display text in AlignBooks format:
+            # Line 1: Ledger Group (if exists)
+            # Line 2: Account Name [Party Name]
+            # Line 3: (Being Journal Entry...)
+            
+            display_lines = []
+            
+            # Add ledger group if exists
             if ledger_group:
-                if party_name:
-                    display_text = f"{ledger_group}\n{ledger_name} [ {party_name}]"
-                else:
-                    display_text = f"{ledger_group}\n{ledger_name}"
+                display_lines.append(ledger_group)
+            
+            # Add account/party name
+            if party_name:
+                display_lines.append(f"{ledger_name} [ {party_name}]")
             else:
-                if party_name:
-                    display_text = f"{ledger_name} [ {party_name}]"
-                else:
-                    display_text = ledger_name
+                display_lines.append(ledger_name)
+            
+            # Add narration
+            display_lines.append(full_narration)
+            
+            display_text = '\n'.join(display_lines)
             
             particulars_list.append({
                 'text': display_text,
@@ -2510,33 +2549,8 @@ class JournalBookReportView(APIView):
                 'amount': float(amount) if amount else 0,
                 'ledger_group': ledger_group,
                 'ledger_name': ledger_name,
-                'party_name': party_name
-            })
-        
-        # Add narration if present
-        if narration:
-            # Build detailed narration like AlignBooks
-            narration_parts = []
-            for line in lines_data:
-                ledger_name = line.get('ledger_account_name', '') or ''
-                party_name = line.get('party_name', '')
-                entry_type = line.get('entry_type', '')
-                amount = line.get('debit', 0) if entry_type == 'Debit' else line.get('credit', 0)
-                
-                if party_name:
-                    narration_parts.append(f"{ledger_name} [ {party_name}]## {entry_type} ₹{amount}")
-                elif ledger_name:
-                    narration_parts.append(f"{ledger_name}## {entry_type} ₹{amount}")
-            
-            full_narration = f"(Being Journal Entry {' '.join(narration_parts)})"
-            if narration != full_narration:
-                full_narration = f"({narration})"
-            
-            particulars_list.append({
-                'text': full_narration,
-                'entry_type': 'narration',
-                'amount': 0,
-                'is_narration': True
+                'party_name': party_name,
+                'narration': full_narration
             })
         
         return particulars_list
