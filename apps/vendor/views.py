@@ -1048,7 +1048,8 @@ class VendorExcelImport(BaseExcelImportExport):
                 # Get or create location fields INDEPENDENTLY
                 country = cls.get_or_create_country(row_data.get("billing_country"))
                 state = cls.get_or_create_state(row_data.get("billing_state"), country)
-                city = cls.get_or_create_city(row_data.get("billing_city"), state)
+                # Pass country as fallback for city creation when state is missing
+                city = cls.get_or_create_city(row_data.get("billing_city"), state, country)
                 
                 try:
                     VendorAddress.objects.create(
@@ -1078,7 +1079,8 @@ class VendorExcelImport(BaseExcelImportExport):
                 # Get or create location fields INDEPENDENTLY
                 s_country = cls.get_or_create_country(row_data.get("shipping_country"))
                 s_state = cls.get_or_create_state(row_data.get("shipping_state"), s_country)
-                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state)
+                # Pass country as fallback for city creation when state is missing
+                s_city = cls.get_or_create_city(row_data.get("shipping_city"), s_state, s_country)
                 
                 try:
                     VendorAddress.objects.create(
@@ -1198,26 +1200,66 @@ class VendorExcelImport(BaseExcelImportExport):
         return state
         
     @classmethod
-    def get_or_create_city(cls, name, state=None):
-        """Get or create a city - state is optional for lookup but required for creation"""
+    def get_or_create_city(cls, name, state=None, country=None):
+        """
+        Get or create a city DYNAMICALLY.
+        
+        Priority:
+        1. If state provided → find city in THAT specific state (or create new)
+        2. If no state but country provided → create default state, then city
+        3. If nothing provided → use India as default country
+        
+        This handles duplicate city names (e.g., KOTA in Rajasthan vs KOTA in AP)
+        """
         if not name:
             return None
         
-        # First try to find existing city by name
-        city = City.objects.filter(city_name__iexact=name).first()
-        if city:
-            # Update state if provided and city doesn't have one
-            if state and not city.state_id:
-                city.state_id = state
-                city.save()
+        name = str(name).strip()
+        
+        # CASE 1: State IS provided - look for city in THAT specific state
+        if state:
+            city = City.objects.filter(city_name__iexact=name, state_id=state).first()
+            if city:
+                logger.info(f"Found existing city '{city.city_name}' in state '{state.state_name}'")
+                return city
+            # City doesn't exist in this state - create it
+            logger.info(f"Creating City '{name}' in state '{state.state_name}'")
+            city = City.objects.create(
+                city_name=name,
+                city_code=name[:3].upper(),
+                state_id=state
+            )
             return city
         
-        # Need to create new city - requires state due to DB constraint
+        # CASE 2: No state provided - try to find any existing city with this name
+        city = City.objects.filter(city_name__iexact=name).first()
+        if city:
+            logger.info(f"Found existing city '{city.city_name}' in state '{city.state_id.state_name if city.state_id else 'None'}'")
+            return city
+        
+        # CASE 3: City doesn't exist and no state - need to create with default
+        # Use India as default country if nothing provided (for Indian ERP context)
+        if not country:
+            country = Country.objects.filter(country_name__iexact='India').first()
+            if not country:
+                country = Country.objects.create(
+                    country_name='India',
+                    country_code='IND'
+                )
+                logger.info("Created default country 'India'")
+        
+        # Create default state using country name
+        default_state_name = country.country_name
+        state = State.objects.filter(state_name__iexact=default_state_name, country_id=country).first()
         if not state:
-            logger.warning(f"Cannot create City '{name}' without state - city will be None")
-            return None
+            state = State.objects.create(
+                state_name=default_state_name,
+                state_code=default_state_name[:3].upper(),
+                country_id=country
+            )
+            logger.info(f"Created default state '{default_state_name}' for country '{country.country_name}'")
             
-        logger.info(f"Creating City with city_name='{name}'")
+        logger.info(f"Creating City '{name}' in default state '{state.state_name}'")
         city = City.objects.create(
             city_name=name,
             city_code=name[:3].upper(),
