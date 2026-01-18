@@ -1326,10 +1326,16 @@ class ProductTemplateAPIView(APIView):
 class ProductExcelUploadAPIView(APIView):
     """
     API for importing products from Excel files.
+    
+    Supports large imports (4000+ records) through batch processing.
+    Each batch is processed in its own transaction for reliability.
     """
     parser_classes = (MultiPartParser, FormParser)
     
     def post(self, request, *args, **kwargs):
+        import time
+        start_time = time.time()
+        
         try:
             # Upload and validate file
             file_path, status_code = ProductExcelImport.upload_file(request)
@@ -1337,17 +1343,21 @@ class ProductExcelUploadAPIView(APIView):
             # If there was an error with the file
             if status_code != status.HTTP_200_OK:
                 return build_response(0, file_path.get("error", "Unknown error"), [], status_code)
+            
+            # Reset class-level counters for fresh import
+            ProductExcelImport._last_product_num = 0
+            ProductExcelImport._row_index = 0
                 
-            # Process the Excel file
+            # Process the Excel file with batch processing
             result, status_code = ProductExcelImport.process_excel_file(
                 request.FILES.get('file'),
                 ProductExcelImport.create_record
             )
             
-            # # Check for validation errors
-            # if status_code != status.HTTP_200_OK:
-            #     return build_response(0, result.get("error", "Import failed"), [], status_code)
-            # Check for validation errors
+            # Calculate elapsed time
+            elapsed_time = round(time.time() - start_time, 2)
+            
+            # Check for validation errors (format/structure issues)
             if status_code != status.HTTP_200_OK:
                 error_msg = result.get("error", "Import failed")
                 error_details = {}
@@ -1364,24 +1374,55 @@ class ProductExcelUploadAPIView(APIView):
                     
                 return build_response(0, error_msg, error_details, status_code)
             
-                
-            # Check for processing errors
+            # Get detailed results
             success_count = result.get("success", 0)
             errors = result.get("errors", [])
+            total_count = result.get("total", success_count + len(errors))
             
-            if errors:
-                # Return the first error as the main message
+            # Build response based on results
+            if success_count == 0 and errors:
+                # Complete failure - no records imported
                 first_error = errors[0]["error"] if errors else "Unknown error during import"
-                return build_response(0,f"Import failed: {first_error}",{"errors": errors},status.HTTP_400_BAD_REQUEST)
-            else:
-                # Success response
+                return build_response(
+                    0,
+                    f"Import failed: {first_error}",
+                    {
+                        "errors": errors[:20],  # Limit to first 20 errors
+                        "total_errors": len(errors),
+                        "elapsed_time": f"{elapsed_time}s"
+                    },
+                    status.HTTP_400_BAD_REQUEST
+                )
+            elif errors:
+                # Partial success - some records imported, some failed
                 return build_response(
                     success_count,
-                    result.get("message", f"{success_count} products imported successfully."),
-                    [],
+                    f"Partial import: {success_count} of {total_count} products imported successfully. {len(errors)} failed.",
+                    {
+                        "success_count": success_count,
+                        "failed_count": len(errors),
+                        "total_count": total_count,
+                        "errors": errors[:20],  # Limit to first 20 errors for response size
+                        "total_errors": len(errors),
+                        "elapsed_time": f"{elapsed_time}s"
+                    },
+                    status.HTTP_200_OK  # 200 because some records were imported
+                )
+            else:
+                # Complete success - all records imported
+                return build_response(
+                    success_count,
+                    f"{success_count} products imported successfully in {elapsed_time}s.",
+                    {
+                        "success_count": success_count,
+                        "total_count": total_count,
+                        "elapsed_time": f"{elapsed_time}s"
+                    },
                     status.HTTP_200_OK
                 )
             
         except Exception as e:
             logger.error(f"Error in product Excel import: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
