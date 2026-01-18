@@ -357,4 +357,23 @@ CORS_ALLOW_HEADERS = ["*"]
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
 
+# =============================================================================
+# EXCEL IMPORT SETTINGS
+# =============================================================================
+# Batch size for Excel imports - controls how many records are processed per batch
+# Smaller batches = more reliable but slower
+# Larger batches = faster but may hit timeout limits
+# Recommended: 50-100 for production, 200-500 for local development
+EXCEL_IMPORT_BATCH_SIZE = 50 if not DEBUG else 200
 
+# =============================================================================
+# DATA UPLOAD SETTINGS (for large Excel files)
+# =============================================================================
+# Maximum size (in bytes) of a request body before a SuspiciousOperation is raised
+DATA_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB (default is 2.5 MB)
+
+# Maximum number of GET/POST parameters that will be read before a SuspiciousOperation is raised
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # Default is 1000
+
+# File upload settings
+FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
