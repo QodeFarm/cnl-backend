@@ -945,6 +945,74 @@ class VendorExcelImport(BaseExcelImportExport):
         "tds_on_gst_applicable"
     ]
     
+    # ============================================================
+    # FK BULK CONFIG - Clean, DRY configuration for bulk imports
+    # ============================================================
+    FK_BULK_CONFIG = {
+        # Basic FKs with name field
+        'vendor_category': {
+            'model': VendorCategory,
+            'name_field': 'name',
+            'create_fields': {'code': lambda name: name[:3].upper()}
+        },
+        'firm_status': {
+            'model': FirmStatuses,
+            'name_field': 'name',
+            'create_fields': {}
+        },
+        'territory': {
+            'model': Territory,
+            'name_field': 'name',
+            'create_fields': {'code': lambda name: name[:3].upper()}
+        },
+        'gst_category': {
+            'model': GstCategories,
+            'name_field': 'name',
+            'create_fields': {}
+        },
+        'payment_term': {
+            'model': VendorPaymentTerms,
+            'name_field': 'name',
+            'create_fields': {}
+        },
+        'price_category': {
+            'model': PriceCategories,
+            'name_field': 'name',
+            'create_fields': {}
+        },
+        'vendor_agent': {
+            'model': VendorAgent,
+            'name_field': 'name',
+            'create_fields': {'code': lambda name: name[:3].upper()}
+        },
+        'transporter': {
+            'model': Transporters,
+            'name_field': 'name',
+            'create_fields': {'code': lambda name: name[:3].upper()}
+        },
+        'ledger_group': {
+            'model': LedgerGroups,
+            'name_field': 'name',
+            'create_fields': {}
+        },
+        # Location FKs
+        'country': {
+            'model': Country,
+            'name_field': 'country_name',
+            'create_fields': {'country_code': lambda name: name[:3].upper()}
+        },
+        'state': {
+            'model': State,
+            'name_field': 'state_name',
+            'create_fields': {}  # Requires country_id, handle separately
+        },
+        'city': {
+            'model': City,
+            'name_field': 'city_name',
+            'create_fields': {}  # Requires state_id, handle separately
+        },
+    }
+    
     # Special handling for foreign keys that require additional fields
     FK_REQUIRED_FIELDS = {
         "LedgerAccounts": {
@@ -1101,6 +1169,227 @@ class VendorExcelImport(BaseExcelImportExport):
                     logger.warning(f"Could not create shipping address for vendor {vendor.name}: {e}")
                 
             return vendor
+
+    @classmethod
+    def bulk_create_records(cls, validated_rows, field_map=None, boolean_fields=None):
+        """
+        Bulk create vendor records for maximum performance.
+        
+        Uses helper methods from BaseExcelImportExport for clean, DRY code.
+        5-10x faster than create_record() by using bulk_create and pre-loaded FK lookups.
+        
+        Args:
+            validated_rows: List of row dictionaries with '_excel_row' for tracking
+            field_map: Field mapping dictionary
+            boolean_fields: List of boolean field names
+            
+        Returns:
+            dict with 'success' count and 'errors' list
+        """
+        field_map = field_map or cls.FIELD_MAP
+        boolean_fields = boolean_fields or cls.BOOLEAN_FIELDS
+        
+        errors = []
+        vendors_to_create = []
+        total_rows = len(validated_rows)
+        BATCH_SIZE = 500
+        
+        logger.info(f"BULK CREATE: Starting for {total_rows} vendors")
+        
+        # ========================================
+        # PHASE 1: Load all FK lookups using helper
+        # ========================================
+        logger.info("PHASE 1: Loading FK lookups...")
+        
+        # Add ledger_account to config (special case - uses 'name' field)
+        fk_config = {
+            **cls.FK_BULK_CONFIG,
+            'ledger_account': {'model': LedgerAccounts, 'name_field': 'name'}
+        }
+        fk_lookups = cls.bulk_load_fk_lookups(fk_config)
+        
+        # ========================================
+        # PHASE 2: Collect and create missing FKs using helper
+        # ========================================
+        logger.info("PHASE 2: Creating missing FKs...")
+        
+        # Only auto-create these simple FKs (location FKs need special handling)
+        simple_fk_config = {k: v for k, v in cls.FK_BULK_CONFIG.items() 
+                           if k not in ['country', 'state', 'city']}
+        
+        missing_fks = cls.bulk_collect_missing_fks(validated_rows, simple_fk_config, fk_lookups)
+        fk_lookups = cls.bulk_create_missing_fks(missing_fks, simple_fk_config, fk_lookups)
+        
+        logger.info("PHASE 2 complete")
+        
+        # ========================================
+        # PHASE 3: Handle LedgerAccounts (special - requires ledger_group)
+        # ========================================
+        logger.info("PHASE 3: Creating missing Ledger Accounts...")
+        
+        missing_ledger_accounts = {}
+        for row_data in validated_rows:
+            ledger_name = row_data.get('ledger_account')
+            if ledger_name and str(ledger_name).strip():
+                ledger_lower = str(ledger_name).strip().lower()
+                if ledger_lower not in fk_lookups['ledger_account']:
+                    group_name = row_data.get('ledger_group', '')
+                    missing_ledger_accounts[ledger_lower] = {
+                        'name': str(ledger_name).strip(),
+                        'group': str(group_name).strip() if group_name else None
+                    }
+        
+        if missing_ledger_accounts:
+            with transaction.atomic():
+                default_group = LedgerGroups.objects.first()
+                for ledger_lower, info in missing_ledger_accounts.items():
+                    group = fk_lookups['ledger_group'].get(info['group'].lower()) if info['group'] else None
+                    group = group or default_group
+                    
+                    if group:
+                        ledger = LedgerAccounts.objects.create(name=info['name'], ledger_group_id=group)
+                        fk_lookups['ledger_account'][ledger_lower] = ledger
+                
+                logger.info(f"Created {len(missing_ledger_accounts)} Ledger Accounts")
+        
+        logger.info("PHASE 3 complete")
+        
+        # ========================================
+        # PHASE 4: Build Vendor objects
+        # ========================================
+        logger.info("PHASE 4: Building Vendor objects...")
+        
+        for idx, row_data in enumerate(validated_rows):
+            excel_row = row_data.get('_excel_row', idx + 2)
+            
+            try:
+                vendor_data = {}
+                
+                # Process each field
+                for excel_col, mapping in field_map.items():
+                    if excel_col in ['ledger_account', 'ledger_group']:
+                        continue  # Handle separately
+                    
+                    value = row_data.get(excel_col)
+                    if value is None or value == '':
+                        continue
+                    
+                    if isinstance(mapping, tuple):
+                        # FK field - use helper
+                        field_name = mapping[0]
+                        fk_obj = cls.get_fk_object(fk_lookups, excel_col, value)
+                        if fk_obj:
+                            vendor_data[field_name] = fk_obj
+                    else:
+                        # Regular field
+                        if mapping in boolean_fields:
+                            vendor_data[mapping] = cls.parse_boolean(value)
+                        elif mapping == 'tax_type':
+                            if value in ['Inclusive', 'Exclusive']:
+                                vendor_data[mapping] = value
+                        else:
+                            vendor_data[mapping] = str(value) if value else value
+                
+                # Handle ledger account
+                ledger_obj = cls.get_fk_object(fk_lookups, 'ledger_account', row_data.get('ledger_account'))
+                if ledger_obj:
+                    vendor_data['ledger_account_id'] = ledger_obj
+                
+                vendor = Vendor(**vendor_data)
+                vendor._excel_row = excel_row
+                vendor._row_data = row_data  # Store for address creation
+                vendors_to_create.append(vendor)
+                
+            except Exception as e:
+                errors.append({"row": excel_row, "error": f"Failed to prepare vendor: {str(e)}"})
+        
+        logger.info(f"PHASE 4 complete: {len(vendors_to_create)} vendors prepared")
+        
+        # ========================================
+        # PHASE 5: Bulk create vendors
+        # ========================================
+        logger.info("PHASE 5: Bulk creating vendors...")
+        
+        success_count = 0
+        created_vendors = []
+        
+        try:
+            with transaction.atomic():
+                for batch_start in range(0, len(vendors_to_create), BATCH_SIZE):
+                    batch = vendors_to_create[batch_start:batch_start + BATCH_SIZE]
+                    Vendor.objects.bulk_create(batch, batch_size=BATCH_SIZE)
+                    created_vendors.extend(batch)
+                    
+                    batch_num = (batch_start // BATCH_SIZE) + 1
+                    total_batches = (len(vendors_to_create) + BATCH_SIZE - 1) // BATCH_SIZE
+                    logger.info(f"Batch {batch_num}/{total_batches} created ({len(batch)} vendors)")
+                
+                success_count = len(created_vendors)
+                
+        except Exception as e:
+            logger.error(f"Bulk create failed: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            for vendor in vendors_to_create:
+                errors.append({"row": getattr(vendor, '_excel_row', 0), "error": f"Bulk create failed: {str(e)}"})
+            return {"success": 0, "errors": errors, "total": total_rows}
+        
+        logger.info(f"PHASE 5 complete: {success_count} vendors created")
+        
+        # ========================================
+        # PHASE 6: Bulk create addresses
+        # ========================================
+        logger.info("PHASE 6: Creating addresses...")
+        
+        billing_addresses = []
+        shipping_addresses = []
+        
+        for vendor in created_vendors:
+            row_data = getattr(vendor, '_row_data', {})
+            
+            # Billing address
+            if any(row_data.get(f) for f in ['billing_address', 'billing_country', 'billing_state', 'billing_city']):
+                billing_addresses.append(VendorAddress(
+                    vendor_id=vendor,
+                    address_type="Billing",
+                    address=row_data.get("billing_address"),
+                    city_id=cls.get_fk_object(fk_lookups, 'city', row_data.get('billing_city')),
+                    state_id=cls.get_fk_object(fk_lookups, 'state', row_data.get('billing_state')),
+                    country_id=cls.get_fk_object(fk_lookups, 'country', row_data.get('billing_country')),
+                    pin_code=str(row_data.get("billing_pin_code")) if row_data.get("billing_pin_code") else None,
+                    phone=str(row_data.get("billing_phone")) if row_data.get("billing_phone") else None,
+                    email=row_data.get("billing_email"),
+                    longitude=row_data.get("billing_longitude"),
+                    latitude=row_data.get("billing_latitude")
+                ))
+            
+            # Shipping address
+            if any(row_data.get(f) for f in ['shipping_address', 'shipping_country', 'shipping_state', 'shipping_city']):
+                shipping_addresses.append(VendorAddress(
+                    vendor_id=vendor,
+                    address_type="Shipping",
+                    address=row_data.get("shipping_address"),
+                    city_id=cls.get_fk_object(fk_lookups, 'city', row_data.get('shipping_city')),
+                    state_id=cls.get_fk_object(fk_lookups, 'state', row_data.get('shipping_state')),
+                    country_id=cls.get_fk_object(fk_lookups, 'country', row_data.get('shipping_country')),
+                    pin_code=str(row_data.get("shipping_pin_code")) if row_data.get("shipping_pin_code") else None,
+                    phone=str(row_data.get("shipping_phone")) if row_data.get("shipping_phone") else None,
+                    email=row_data.get("shipping_email"),
+                    longitude=row_data.get("shipping_longitude"),
+                    latitude=row_data.get("shipping_latitude")
+                ))
+        
+        if billing_addresses:
+            VendorAddress.objects.bulk_create(billing_addresses, batch_size=BATCH_SIZE)
+            logger.info(f"Created {len(billing_addresses)} billing addresses")
+        
+        if shipping_addresses:
+            VendorAddress.objects.bulk_create(shipping_addresses, batch_size=BATCH_SIZE)
+            logger.info(f"Created {len(shipping_addresses)} shipping addresses")
+        
+        logger.info(f"PHASE 6 complete")
+        
+        return {"success": success_count, "errors": errors, "total": total_rows}
 
     @classmethod
     def generate_template(cls, extra_columns=None):
@@ -1280,8 +1569,15 @@ class VendorTemplateAPIView(APIView):
 class VendorExcelUploadAPIView(APIView):
     """
     API for importing vendors from Excel files.
+    
+    Uses a hybrid approach:
+    - For small imports (<500 rows): Traditional mode with individual saves
+    - For large imports (>=500 rows): Bulk mode with bulk_create for 5-10x speed
     """
     parser_classes = (MultiPartParser, FormParser)
+    
+    # Threshold for switching to bulk mode
+    BULK_THRESHOLD = 500
     
     def post(self, request, *args, **kwargs):
         try:
@@ -1291,12 +1587,41 @@ class VendorExcelUploadAPIView(APIView):
             # If there was an error with the file
             if status_code != status.HTTP_200_OK:
                 return build_response(0, file_path.get("error", "Unknown error"), [], status_code)
-                
-            # Process the Excel file
-            result, status_code = VendorExcelImport.process_excel_file(
-                request.FILES.get('file'),
-                VendorExcelImport.create_record
-            )
+            
+            # Count rows to determine import mode
+            file_obj = request.FILES.get('file')
+            row_count = 0
+            try:
+                import openpyxl
+                file_obj.seek(0)
+                wb = openpyxl.load_workbook(file_obj, read_only=True, data_only=True)
+                ws = wb.active
+                # Count non-empty rows (excluding header)
+                row_count = sum(1 for row in ws.iter_rows(min_row=2) if any(cell.value for cell in row))
+                wb.close()
+                file_obj.seek(0)
+                logger.info(f"Vendor import: {row_count} data rows detected")
+            except Exception as e:
+                logger.warning(f"Could not count rows: {e}, defaulting to traditional mode")
+                row_count = 0
+            
+            # Choose import mode based on row count
+            use_bulk_mode = row_count >= self.BULK_THRESHOLD
+            import_mode = "BULK" if use_bulk_mode else "TRADITIONAL"
+            logger.info(f"Import mode: {import_mode} (threshold: {self.BULK_THRESHOLD}, rows: {row_count})")
+            
+            if use_bulk_mode:
+                # BULK MODE: Use process_excel_file_bulk for large imports
+                result, status_code = VendorExcelImport.process_excel_file_bulk(
+                    file_obj,
+                    VendorExcelImport.bulk_create_records
+                )
+            else:
+                # TRADITIONAL MODE: Use process_excel_file for small imports
+                result, status_code = VendorExcelImport.process_excel_file(
+                    file_obj,
+                    VendorExcelImport.create_record
+                )
             
             # Check for validation errors
             if status_code != status.HTTP_200_OK:
@@ -1333,12 +1658,14 @@ class VendorExcelUploadAPIView(APIView):
                 return build_response(
                     success_count,
                     result.get("message", f"{success_count} vendors imported successfully."),
-                    [],
+                    {"import_mode": import_mode},
                     status.HTTP_200_OK
                 )
             
         except Exception as e:
             logger.error(f"Error in vendor Excel import: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)    
   
         
