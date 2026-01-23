@@ -176,6 +176,8 @@ class productsSerializer(serializers.ModelSerializer):
     
     warehouse_locations = serializers.SerializerMethodField()
 
+
+
     class Meta:
         model = Products
         fields = '__all__'
@@ -196,6 +198,23 @@ class productsSerializer(serializers.ModelSerializer):
         # from warehouse.serializers import ModWarehouseLocationsSerializer
         locations = WarehouseLocations.objects.filter(location_id__in=location_ids)
         return ModWarehouseLocationsSerializer(locations, many=True).data
+    
+    def validate(self, data):
+        barcode = data.get("barcode")
+        packet_barcode = data.get("packet_barcode")
+
+        if barcode and packet_barcode and barcode == packet_barcode:
+            raise serializers.ValidationError(
+                "Barcode and Packet Barcode must be different."
+            )
+
+        return data
+    
+    # def get_barcode_image(self, obj):
+    #     if obj.barcode:
+    #         return f"/media/barcodes/{obj.barcode}.png"
+    #     return None
+
 
 class ProductItemBalanceSerializer(serializers.ModelSerializer):
     product = ModproductsSerializer(source='product_id',read_only=True)
@@ -221,6 +240,8 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
     type = ProductTypesSerializer(source='type_id', read_only=True)
     pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)
     g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True)
+    
+    # barcode_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Products
@@ -257,6 +278,11 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
 
         return data
 
+
+    # def get_barcode_image(self, obj):
+    #     if obj.barcode:
+    #         return f"/media/barcodes/{obj.barcode}.png"
+    #     return None
 
 class SizeSerializer(serializers.ModelSerializer):
     class Meta:

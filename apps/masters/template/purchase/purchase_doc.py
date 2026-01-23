@@ -122,10 +122,10 @@ def purchase_data(pk, document_type, format_value=None):
 
         return {
                 'cust_bill_dtl' : 'Vendor Name & Address',
-                'comp_name' : comp_data[0].get('name'),
-                'comp_address' : comp_data[0].get('address'),
-                'comp_phone' : comp_data[0].get('phone'),
-                'comp_email' : comp_data[0].get('email'),
+                'comp_name' : comp_data[0].get('name') or '',
+                'comp_address' : comp_data[0].get('address') or '',
+                'comp_phone' : comp_data[0].get('phone') or '',
+                'comp_email' : comp_data[0].get('email') or '',
 
                 'number_lbl' : model_data.get('number_lbl'),
                 'date_lbl' : model_data.get('date_lbl'),

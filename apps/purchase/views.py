@@ -2396,3 +2396,23 @@ class FetchPurchaseInvoicesForPaymentReceiptTable(APIView):
             # return filter_response(len(serializer.data), "Purchase Invoices", sorted_data, status.HTTP_200_OK)
         except Exception as e:
             return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+#Barcode - logic --------------- 
+
+from rest_framework.decorators import api_view
+from rest_framework import status
+# from apps.products.utils.barcode_utils import get_product_by_barcode
+from apps.products.serializers import ProductOptionsSerializer
+# from apps.common.utils import build_response
+
+@api_view(['GET'])
+def scan_purchase_barcode(request):
+    barcode_value = request.query_params.get("barcode")
+
+    product = get_product_by_barcode(barcode_value, mode="IN")
+    if not product:
+        return build_response(0, "Invalid entry barcode", [], status.HTTP_404_NOT_FOUND)
+
+    serializer = ProductOptionsSerializer(product)
+    return build_response(1, "Product fetched successfully", serializer.data, status.HTTP_200_OK)

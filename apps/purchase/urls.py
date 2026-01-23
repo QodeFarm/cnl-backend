@@ -33,4 +33,5 @@ urlpatterns = [
     
     
     path('data_for_payment_receipt_table/<str:vendor_id>/', FetchPurchaseInvoicesForPaymentReceiptTable.as_view(), name='purchase-Invoice-data-for-payment-receipt-table-by-customer-ID'),
+    path('scan_barcode/', scan_purchase_barcode),
 ]

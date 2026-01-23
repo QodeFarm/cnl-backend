@@ -1,6 +1,6 @@
 from apps.auditlogs.utils import log_user_action
 from apps.production.models import WorkOrder
-from config.utils_methods import update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import get_product_by_barcode, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from apps.finance.models import JournalEntryLines, PaymentTransaction
@@ -6314,3 +6314,22 @@ def replicate_sale_order_to_mstcnl(sale_order_id):
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
+
+
+#Barcode -logic --------------------- 
+from rest_framework.decorators import api_view
+from rest_framework import status
+# from apps.products.utils.barcode_utils import get_product_by_barcode
+from apps.products.serializers import ProductOptionsSerializer
+# from apps.common.utils import build_response
+
+@api_view(['GET'])
+def scan_sales_barcode(request):
+    barcode_value = request.query_params.get("barcode")
+
+    product = get_product_by_barcode(barcode_value, mode="OUT")
+    if not product:
+        return build_response(0, "Invalid sales barcode", [], status.HTTP_404_NOT_FOUND)
+
+    serializer = ProductOptionsSerializer(product)
+    return build_response(1, "Product fetched successfully", serializer.data, status.HTTP_200_OK)

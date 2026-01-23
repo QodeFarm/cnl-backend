@@ -784,6 +784,12 @@ class ProductViewSet(APIView):
             }
 
         try:
+            if products_data is not None:
+                existing_product = Products.objects.get(product_id=pk)
+
+                if 'balance' not in products_data:
+                    products_data['balance'] = existing_product.balance
+
             # update 'Products'
             product_data = update_multi_instances(self, pk, products_data, Products, productsSerializer, [], main_model_related_field='product_id', current_model_pk_field='product_id')
             product_data = product_data[0] if len(product_data)==1 else product_data
@@ -792,8 +798,23 @@ class ProductViewSet(APIView):
             update_fields = {'product_id':pk}
 
             # update 'product_variations'
-            variations_data = update_multi_instances(self, pk, product_variations_data, ProductVariation, ProductVariationSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_variation_id')
+            # variations_data = update_multi_instances(self, pk, product_variations_data, ProductVariation, ProductVariationSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_variation_id')
+            # custom_data['product_variations'] = variations_data
+            variations_data = []
+            if product_variations_data is not None:
+                variations_data = update_multi_instances(
+                    self,
+                    pk,
+                    product_variations_data,
+                    ProductVariation,
+                    ProductVariationSerializer,
+                    update_fields,
+                    main_model_related_field='product_id',
+                    current_model_pk_field='product_variation_id'
+                )
+
             custom_data['product_variations'] = variations_data
+
 
             # update 'product_item_balance'
             item_bal_data = update_multi_instances(self, pk, product_balance_data, ProductItemBalance, ProductItemBalanceSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_item_balance_id')
@@ -1365,3 +1386,57 @@ class ProductExcelUploadAPIView(APIView):
         except Exception as e:
             logger.error(f"Error in product Excel import: {str(e)}")
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+        
+#Barcode scanner code logic ....
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.db import transaction
+
+class BarcodeScanAPIView(APIView):
+
+    @transaction.atomic
+    def post(self, request):
+        barcode = request.data.get("barcode")
+        mode = request.data.get("mode")
+        qty = int(request.data.get("qty", 1))  # ✅ DEFAULT = 1
+
+        if not barcode or mode not in ["IN", "OUT"] or qty <= 0:
+            return Response(
+                {"error": "Invalid barcode, mode, or quantity"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            product = Products.objects.select_for_update().get(barcode=barcode)
+        except Products.DoesNotExist:
+            return Response(
+                {"error": "Product not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # ✅ IN → PLUS
+        if mode == "IN":
+            product.balance += qty
+
+        # ✅ OUT → MINUS
+        elif mode == "OUT":
+            if product.balance < qty:
+                return Response(
+                    {"error": "Insufficient stock"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            product.balance -= qty
+
+        product.save()
+
+        return Response({
+            "status": "success",
+            "mode": mode,
+            "product_name": product.name,
+            "product_code": product.code,
+            "barcode": product.barcode,
+            "qty": qty,
+            "current_balance": product.balance
+        })
+

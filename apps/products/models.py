@@ -269,7 +269,7 @@ class Products(OrderNumberMixin):
                 order_number = generate_order_number(self.order_no_prefix)
                 setattr(self, self.order_no_field, order_number)
                 
-        # ✅ AUTO CALCULATE BALANCE DIFF
+        # AUTO CALCULATE BALANCE DIFF
         self.balance_diff = (self.physical_balance or 0) - (self.balance or 0)
 
         # Save the record

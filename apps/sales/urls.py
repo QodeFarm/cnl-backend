@@ -53,4 +53,5 @@ urlpatterns = [
     # path('payment_transactions/<uuid:transaction_id>/', PaymentTransactionAPIView.as_view(), name='payment-transaction-Update-API'),
     path('payment_transactions/transaction/<str:transaction_id>/', PaymentTransactionAPIView.as_view(),name='payment-transaction-Update-API'),
     path('data_for_payment_receipt_table/<str:customer_id>/', FetchSalesInvoicesForPaymentReceiptTable.as_view(), name='sale-Invoice-data-for-payment-receipt-table-by-customer-ID'),
+    path('scan-barcode/', scan_sales_barcode),
 ]      
