@@ -220,12 +220,13 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                 'final_invoiceDate' : final_invoiceDate,
                 'return_no': final_return,
                 #Company details
-                'company_logo': company_logo,
-                'company_name': company_name,
-                'company_gst': company_gst,
-                'company_address': company_address,
-                'company_phone': company_phone,
-                'company_email': company_email,
+                'company_logo': company_logo or '',
+                'company_name': company_name or '',
+                'company_gst': company_gst or '',
+                'company_address': company_address or '',
+                'company_phone': company_phone or '',
+                'company_email': company_email or '',
+                
                 
                 #Bank details 
                 'bank_name': bank_name,
