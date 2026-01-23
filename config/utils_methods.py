@@ -1821,7 +1821,8 @@ def extract_product_data(data, tax_type=None):
         rate = float(item['rate'])
         amount = float(quantity * rate)
         discount_percent = item['discount']
-        discount = quantity * rate * float(discount_percent) / 100      
+        # discount = quantity * rate * float(discount_percent) / 100 
+        discount = quantity * rate * (float(discount_percent) if discount_percent is not None else 0) / 100     
         total_amount = float(item['amount'])
 
         cgst = float(item['cgst'])
