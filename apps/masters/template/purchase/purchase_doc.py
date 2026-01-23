@@ -1,4 +1,5 @@
 from apps.company.models import Companies
+from apps.masters.template.sales.sales_doc import num_val
 from apps.vendor.models import VendorAddress
 from django.shortcuts import get_object_or_404
 from apps.masters.template.table_defination import *
@@ -92,7 +93,12 @@ def purchase_data(pk, document_type, format_value=None):
                 print("total_igst : ", total_igst)
                 print("-"*20)
 
-            total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
+            #total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
+            total_disc_amt += (
+                    num_val(item.get('quantity')) *
+                    num_val(item.get('rate')) *
+                    num_val(item.get('discount'))
+                ) / 100
 
 
 
