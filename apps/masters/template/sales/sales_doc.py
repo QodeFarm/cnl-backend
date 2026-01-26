@@ -41,15 +41,17 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             # Get the invoice OrderedDict
             InvoiceNo = customer_data_for_cust_data.get('sale_invoice')
             
-            ReturnNo = customer_data_for_cust_data.get('sale_return')
+            ReturnNo = customer_data_for_cust_data.get('return_no')
+            print("customer_data_for_cust_data.get('sale_return') : ", customer_data_for_cust_data.get('sale_return'))
+            print("customer_data_for_cust_data.get('return_no') : ", customer_data_for_cust_data.get('return_no'))
             print("ReturnNo : ", ReturnNo)
 
             # Extract invoice_no and invoice_date
             final_invoice = InvoiceNo.get('invoice_no') if InvoiceNo else None
             final_invoiceDate = InvoiceNo.get('invoice_date') if InvoiceNo else None
             
-            final_return = ReturnNo.get('return_no') if ReturnNo else None
-            final_returnDate = ReturnNo.get('return_date') if ReturnNo else None
+            final_return = ReturnNo if ReturnNo else None
+            # final_returnDate = ReturnNo.get('return_date') if ReturnNo else None
             
             obj = get_object_or_404(model, pk=pk)
             is_estimate = getattr(obj, 'sale_estimate', 'No') == 'Yes'  # Safely get the attribute
