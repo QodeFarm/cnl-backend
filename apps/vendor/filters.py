@@ -27,6 +27,7 @@ class VendorFilter(FilterSet): #verified
     email = filters.CharFilter(field_name='vendoraddress__email', lookup_expr='icontains', label="Email")
     phone = filters.CharFilter(field_name='vendoraddress__phone', lookup_expr='icontains', label="Phone")
     city_id = filters.CharFilter(field_name='vendoraddress__city_id__city_name', lookup_expr='icontains', label="City")
+    is_deleted = filters.BooleanFilter()
     
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
@@ -46,7 +47,7 @@ class VendorFilter(FilterSet): #verified
     class Meta:
         model = Vendor
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account','created_at', 'city_id','email', 'phone','period_name','s','sort','page','limit']
+        fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account', 'is_deleted','created_at', 'city_id','email', 'phone','period_name','s','sort','page','limit']
 
 class VendorAgentFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')

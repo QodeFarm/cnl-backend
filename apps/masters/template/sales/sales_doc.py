@@ -41,15 +41,17 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             # Get the invoice OrderedDict
             InvoiceNo = customer_data_for_cust_data.get('sale_invoice')
             
-            ReturnNo = customer_data_for_cust_data.get('sale_return')
+            ReturnNo = customer_data_for_cust_data.get('return_no')
+            print("customer_data_for_cust_data.get('sale_return') : ", customer_data_for_cust_data.get('sale_return'))
+            print("customer_data_for_cust_data.get('return_no') : ", customer_data_for_cust_data.get('return_no'))
             print("ReturnNo : ", ReturnNo)
 
             # Extract invoice_no and invoice_date
             final_invoice = InvoiceNo.get('invoice_no') if InvoiceNo else None
             final_invoiceDate = InvoiceNo.get('invoice_date') if InvoiceNo else None
             
-            final_return = ReturnNo.get('return_no') if ReturnNo else None
-            final_returnDate = ReturnNo.get('return_date') if ReturnNo else None
+            final_return = ReturnNo if ReturnNo else None
+            # final_returnDate = ReturnNo.get('return_date') if ReturnNo else None
             
             obj = get_object_or_404(model, pk=pk)
             is_estimate = getattr(obj, 'sale_estimate', 'No') == 'Yes'  # Safely get the attribute
@@ -133,17 +135,18 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             
 
             filter_kwargs = {"customer_id": customer_id[0], "address_type": "Billing"}
-            city = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].city_id)
-            country = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].country_id)
-            phone_number = str(list(CustomerAddresses.objects.filter(**filter_kwargs))[0].phone)
-            phone = format_phone_number(phone_number)
+            billing_addr = CustomerAddresses.objects.filter(**filter_kwargs).first()
+
+            city = str(billing_addr.city_id) if billing_addr and billing_addr.city_id else 'N/A'
+            country = str(billing_addr.country_id) if billing_addr and billing_addr.country_id else 'N/A'
+
+            phone_number = str(billing_addr.phone) if billing_addr and billing_addr.phone else 'N/A'
+            phone = format_phone_number(phone_number) if phone_number != 'N/A' else 'N/A'
             dest = str(related_data.get('destination', 'N/A'))
-            email = (list(CustomerAddresses.objects.filter(**filter_kwargs))[0].email) #customer_data_for_cust_data['email']
-            
-            billing_state = list(CustomerAddresses.objects.filter(**filter_kwargs))[0].state_id
-            print("billing_state : ", billing_state)
-            
-            print("Items data : ", items_data)
+
+            email = billing_addr.email if billing_addr and billing_addr.email else 'N/A'
+            billing_state = billing_addr.state_id if billing_addr and billing_addr.state_id else 'N/A'
+
 
             total_amt = total_qty = cgst = sgst = igst = total_cgst = total_sgst= total_igst = cessAmt = total_disc_amt = round_0ff = party_old_balance = net_value = 0.0
             # Assuming cgst and sgst are not being mixed
@@ -167,7 +170,12 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                     print("total_igst : ", total_igst)
                     print("-"*20)
 
-                total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
+                # total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
+                total_disc_amt += (
+                    num_val(item.get('quantity')) *
+                    num_val(item.get('rate')) *
+                    num_val(item.get('discount'))
+                ) / 100
 
 
 
@@ -220,12 +228,13 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                 'final_invoiceDate' : final_invoiceDate,
                 'return_no': final_return,
                 #Company details
-                'company_logo': company_logo,
-                'company_name': company_name,
-                'company_gst': company_gst,
-                'company_address': company_address,
-                'company_phone': company_phone,
-                'company_email': company_email,
+                'company_logo': company_logo or '',
+                'company_name': company_name or '',
+                'company_gst': company_gst or '',
+                'company_address': company_address or '',
+                'company_phone': company_phone or '',
+                'company_email': company_email or '',
+                
                 
                 #Bank details 
                 'bank_name': bank_name,
@@ -419,3 +428,17 @@ def sale_return_doc(
     
     # 5. Build PDF
     doc.build(elements)
+    
+
+#Helpers 
+def num_val(value):
+    """Return safe numeric value"""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def str_val(value):
+    """Return safe string value"""
+    return str(value) if value not in [None, '', []] else 'N/A'

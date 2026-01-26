@@ -1,4 +1,5 @@
 from apps.company.models import Companies
+from apps.masters.template.sales.sales_doc import num_val
 from apps.vendor.models import VendorAddress
 from django.shortcuts import get_object_or_404
 from apps.masters.template.table_defination import *
@@ -92,7 +93,12 @@ def purchase_data(pk, document_type, format_value=None):
                 print("total_igst : ", total_igst)
                 print("-"*20)
 
-            total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
+            #total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
+            total_disc_amt += (
+                    num_val(item.get('quantity')) *
+                    num_val(item.get('rate')) *
+                    num_val(item.get('discount'))
+                ) / 100
 
 
 
@@ -122,10 +128,10 @@ def purchase_data(pk, document_type, format_value=None):
 
         return {
                 'cust_bill_dtl' : 'Vendor Name & Address',
-                'comp_name' : comp_data[0].get('name'),
-                'comp_address' : comp_data[0].get('address'),
-                'comp_phone' : comp_data[0].get('phone'),
-                'comp_email' : comp_data[0].get('email'),
+                'comp_name' : comp_data[0].get('name') or '',
+                'comp_address' : comp_data[0].get('address') or '',
+                'comp_phone' : comp_data[0].get('phone') or '',
+                'comp_email' : comp_data[0].get('email') or '',
 
                 'number_lbl' : model_data.get('number_lbl'),
                 'date_lbl' : model_data.get('date_lbl'),
