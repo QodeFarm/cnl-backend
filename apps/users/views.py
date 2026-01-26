@@ -1,4 +1,4 @@
-from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer
+from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, ActivateAndSetPasswordSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles, License
 from config.utils_methods import IsAdminRoles, build_response, list_all_objects, soft_delete, create_instance, update_instance, validate_uuid
 from config.utils_filter_methods import filter_response, list_filtered_objects
@@ -28,6 +28,7 @@ from .backends import MstcnlBackend
 from rest_framework import status
 from django.utils import timezone
 from urllib.parse import urlparse
+from django.contrib.auth.tokens import default_token_generator
 import uuid
 import logging
 
@@ -322,12 +323,30 @@ class UserLoginView(APIView):
             # Check if user exists in the default DB
             user = User.objects.using('default').filter(username__iexact=username).first()
             if user:
+                # Check if user account is disabled/inactive
+                if not user.is_active:
+                    return Response({
+                        'count': '0', 
+                        'msg': 'Your account has been disabled. Please contact your administrator.', 
+                        'data': [],
+                        'error_code': 'ACCOUNT_DISABLED'
+                    }, status=status.HTTP_403_FORBIDDEN)
+                
                 auth_user = authenticate(username=username, password=password)
                 if auth_user:
                     auth_user.last_login = timezone.now()
                     auth_user.save(update_fields=["last_login"])
                     token = get_tokens_for_user(auth_user, False, subdomain, client_domain)
-                    return Response({'count': '1', 'msg': 'Login Success,' , 'data': [token]}, status=status.HTTP_200_OK)
+                    
+                    # Check if user must change password on first login
+                    force_change = getattr(auth_user, 'force_password_change', False)
+                    
+                    return Response({
+                        'count': '1', 
+                        'msg': 'Login Success', 
+                        'data': [token],
+                        'force_password_change': force_change
+                    }, status=status.HTTP_200_OK)
                 else:
                     return Response({'count': '1', 'msg': 'Invalid credentials', 'data': []}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -368,6 +387,44 @@ class UserChangePasswordView(APIView):
         serializer.is_valid(raise_exception=True)
         return Response({'count': '1', 'msg': 'Password Changed Successfully', 'data': []}, status=status.HTTP_200_OK)
 
+
+#===================================FORCE-CHANGE-PASSWORD-VIEW (First Login)==============================================
+class ForceChangePasswordView(APIView):
+    """
+    API endpoint for first-time login password change.
+    
+    Used when:
+    - User was created without email (given temp password by admin)
+    - User logs in for the first time and must set their own password
+    
+    Does NOT require old password since the temp password was given by admin.
+    """
+    renderer_classes = [UserRenderer]
+
+    def post(self, request, format=None):
+        from apps.users.serializers import ForceChangePasswordSerializer
+        
+        # Check if user needs to change password
+        if not request.user.force_password_change:
+            return Response({
+                'count': '0', 
+                'msg': 'Password change is not required for this account.', 
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = ForceChangePasswordSerializer(
+            data=request.data, 
+            context={'user': request.user}
+        )
+        serializer.is_valid(raise_exception=True)
+        
+        return Response({
+            'count': '1', 
+            'msg': 'Password Changed Successfully. You can now use the application.', 
+            'data': []
+        }, status=status.HTTP_200_OK)
+
+
 #====================================USER-FORGET-PASSWD-VIEW=============================================================
 @permission_classes([AllowAny])
 class SendPasswordResetEmailView(APIView):
@@ -393,42 +450,131 @@ class UserPasswordResetView(APIView):
 
 # ============================= #USER-CREATE   &    USER-UPDATE#==========================================================
 class CustomUserCreateViewSet(DjoserUserViewSet):
+    """
+    Custom ViewSet for user management.
+    
+    Permissions:
+    - create: AllowAny (admin creates users, auth handled separately)
+    - destroy: IsAuthenticated + Admin role check
+    - update: IsAuthenticated
+    - other actions: IsAuthenticated
+    """
+    
+    def get_permissions(self):
+        """
+        Return appropriate permission classes based on action.
+        
+        - 'create' action: AllowAny (admin auth is handled in create method)
+        - 'destroy' action: IsAuthenticated (admin check is done in destroy method)
+        - other actions: IsAuthenticated
+        """
+        from rest_framework.permissions import IsAuthenticated
+        
+        if self.action == 'create':
+            # User creation - handled by admin, auth checked separately
+            permission_classes = [AllowAny]
+        else:
+            # All other actions (destroy, update, retrieve, etc.) need authentication
+            permission_classes = [IsAuthenticated]
+        
+        return [permission() for permission in permission_classes]
+    
     def perform_create(self, serializer):
         user = serializer.save()
-        # Send custom activation email
-        send_activation_email(user, self.request)
+        # Only send activation email if user has email
+        if user.email:
+            send_activation_email(user, self.request)
+        else:
+            # User without email - activate immediately and set force_password_change
+            user.is_active = True
+            user.force_password_change = True
+            user.save()
 
     def create(self, request, *args, **kwargs):
+        from apps.users.utils import generate_temp_password, send_activation_email
+        from django.db import IntegrityError
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # Validate profile_picture_url
         if 'profile_picture_url' in request.data and isinstance(request.data['profile_picture_url'], list):
             attachment_data_list = request.data['profile_picture_url']
             if attachment_data_list:
-                # Ensure all items in the list have the required fields
                 for attachment in attachment_data_list:
                     if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
                         return build_response(0, "Missing required fields in some profile_picture_url data.", [], status.HTTP_400_BAD_REQUEST)
-               
-                # Set the profile_picture_url field in request data as a list of objects
                 request.data['profile_picture_url'] = attachment_data_list
             else:
-                # Handle case where 'profile_picture_url' list is empty
                 return build_response(0, "'profile_picture_url' list is empty.", [], status.HTTP_400_BAD_REQUEST)
         else:
-            # Handle the case where 'profile_picture_url' is not provided or not a list
             return build_response(0, "'profile_picture_url' field is required and should be a list.", [], status.HTTP_400_BAD_REQUEST)
- 
-        # Proceed with creating the instance
+        
+        # Check if user has email - determines the flow
+        user_email = request.data.get('email', None)
+        has_email = user_email and user_email.strip() != ''
+        
+        # Generate temp password for users WITHOUT email
+        # (Users with email will set their own password during activation)
+        temp_password = None
+        if not has_email:
+            temp_password = generate_temp_password()
+            request.data['password'] = temp_password
+            request.data['re_password'] = temp_password
+        
+        # Create user via serializer
         try:
-            response = super().create(request, *args, **kwargs)
-           
-            # Format the response to include the profile_picture_url data
-            if isinstance(response.data, dict):
-                picture_data = response.data.get('profile_picture_url')
-                if picture_data:
-                    response.data['profile_picture_url'] = picture_data
-            return build_response(1, "User Created Successfully.", response.data, status.HTTP_201_CREATED)
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                logger.error(f"Serializer validation errors: {serializer.errors}")
+                return build_response(0, "Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                user = serializer.save()
+            except IntegrityError as ie:
+                error_msg = str(ie).lower()
+                if 'username' in error_msg:
+                    return build_response(0, "Username already exists.", {"username": ["A user with this username already exists."]}, status.HTTP_400_BAD_REQUEST)
+                elif 'email' in error_msg:
+                    return build_response(0, "Email already exists.", {"email": ["A user with this email already exists."]}, status.HTTP_400_BAD_REQUEST)
+                elif 'mobile' in error_msg:
+                    return build_response(0, "Mobile number already exists.", {"mobile": ["A user with this mobile number already exists."]}, status.HTTP_400_BAD_REQUEST)
+                else:
+                    return build_response(0, f"Database error: {str(ie)}", [], status.HTTP_400_BAD_REQUEST)
+            
+            # Post-creation actions based on email availability
+            if has_email:
+                # User WITH email: Send activation email (user will set password during activation)
+                try:
+                    send_activation_email(user, request)
+                    logger.info(f"Activation email sent to {user.email}")
+                except Exception as e:
+                    logger.error(f"Failed to send activation email: {str(e)}")
+                    # Don't fail user creation if email fails
+                
+                return build_response(
+                    1, 
+                    "User Created Successfully. Activation email has been sent to set password.", 
+                    serializer.data, 
+                    status.HTTP_201_CREATED
+                )
+            else:
+                # User WITHOUT email: Return temp password (shown once to admin)
+                return build_response(
+                    1, 
+                    "User Created Successfully. Please share the temporary password with the user.", 
+                    {
+                        **serializer.data,
+                        'temp_password': temp_password,
+                        'password_note': 'This password is shown only once. User must change it on first login.'
+                    }, 
+                    status.HTTP_201_CREATED
+                )
        
         except ValidationError as e:
-            return build_response(1, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, "Creation failed due to validation errors.", e.detail, status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"User creation failed: {str(e)}")
+            return build_response(0, f"User creation failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
         
 
  #=============================================================UPDATE USER BY ADMIN ONLY &&& UPDATE PROFILE=====================================================   
@@ -685,6 +831,170 @@ class CustomUserActivationViewSet(DjoserUserViewSet):
                     'isActive': False
                 }
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+#====================================ACTIVATE-AND-SET-PASSWORD-VIEW (Combined Flow)===========================================
+class ActivateAndSetPasswordView(APIView):
+    """
+    Combined activation + password setup endpoint.
+    
+    Flow:
+    1. User clicks activation link from email
+    2. Frontend shows "Set Password" form
+    3. User submits uid, token, password, confirm_password
+    4. This endpoint validates token, sets password, activates account
+    5. Sends confirmation email with login credentials
+    
+    This is the most secure approach as password is never sent via email.
+    """
+    permission_classes = [AllowAny]
+    renderer_classes = [UserRenderer]
+    
+    def post(self, request, *args, **kwargs):
+        serializer = ActivateAndSetPasswordSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return Response({
+                'count': '0',
+                'msg': 'Validation failed.',
+                'data': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        uid = serializer.validated_data.get('uid')
+        token = serializer.validated_data.get('token')
+        password = serializer.validated_data.get('password')
+        
+        try:
+            # Decode uid to get user
+            user_id = smart_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(user_id=user_id)
+            
+            # Check if already active
+            if user.is_active:
+                return Response({
+                    'count': '1',
+                    'msg': 'Account is already activated. Please login.',
+                    'data': {
+                        'redirect_url': '/login',
+                        'status': 'info',
+                        'isActive': True
+                    }
+                }, status=status.HTTP_200_OK)
+            
+            # Validate token
+            if not default_token_generator.check_token(user, token):
+                return Response({
+                    'count': '0',
+                    'msg': 'Invalid or expired activation link. Please request a new one.',
+                    'data': {
+                        'status': 'error',
+                        'isActive': False
+                    }
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Set password and activate
+            user.set_password(password)
+            user.is_active = True
+            user.force_password_change = False  # User set their own password
+            user.save()
+            
+            # Send confirmation email
+            from apps.users.emails import CustomConfirmationEmail
+            try:
+                email = CustomConfirmationEmail(request, {'user': user})
+                email.send([user.email])
+            except Exception as e:
+                # Log but don't fail - activation was successful
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to send confirmation email: {str(e)}")
+            
+            return Response({
+                'count': '1',
+                'msg': 'Account activated successfully! You can now login.',
+                'data': {
+                    'redirect_url': '/login',
+                    'status': 'success',
+                    'isActive': True,
+                    'username': user.username
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({
+                'count': '0',
+                'msg': 'Invalid activation link.',
+                'data': {
+                    'status': 'error',
+                    'isActive': False
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Activation error: {str(e)}")
+            return Response({
+                'count': '0',
+                'msg': 'An error occurred during activation.',
+                'data': {
+                    'status': 'error',
+                    'error': str(e)
+                }
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get(self, request, uid=None, token=None, *args, **kwargs):
+        """
+        GET endpoint to validate token before showing password form.
+        Frontend calls this to check if token is valid before showing the form.
+        """
+        if not uid or not token:
+            return Response({
+                'count': '0',
+                'msg': 'Missing uid or token.',
+                'data': {'status': 'error', 'valid': False}
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user_id = smart_str(urlsafe_base64_decode(uid))
+            user = User.objects.get(user_id=user_id)
+            
+            if user.is_active:
+                return Response({
+                    'count': '1',
+                    'msg': 'Account is already activated.',
+                    'data': {
+                        'status': 'info',
+                        'valid': False,
+                        'already_active': True,
+                        'redirect_url': '/login'
+                    }
+                }, status=status.HTTP_200_OK)
+            
+            if not default_token_generator.check_token(user, token):
+                return Response({
+                    'count': '0',
+                    'msg': 'Invalid or expired activation link.',
+                    'data': {'status': 'error', 'valid': False}
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response({
+                'count': '1',
+                'msg': 'Token is valid. Please set your password.',
+                'data': {
+                    'status': 'success',
+                    'valid': True,
+                    'username': user.username,
+                    'email': user.email
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+            return Response({
+                'count': '0',
+                'msg': 'Invalid activation link.',
+                'data': {'status': 'error', 'valid': False}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         
 #====================================CODE with GET, POST, UPDATE, DELETE Methods:========+++++++++++++++++++++++++++++++++++++++
 class RolePermissionsCreateView(APIView):

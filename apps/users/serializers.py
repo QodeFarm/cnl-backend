@@ -4,6 +4,7 @@ from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer,
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from apps.company.serializers import ModBranchesSerializer
 from apps.masters.serializers import ModStatusesSerializer
+from apps.masters.models import Statuses
 from rest_framework import serializers
 from .utils import Utils
 from .passwdgen import *
@@ -163,10 +164,107 @@ class GetUserDataSerializer(serializers.ModelSerializer):
 
 #====================================USER-CREATE-SERIALIZER=============================================================
 class CustomUserCreateSerializer(BaseUserCreateSerializer):
+    """
+    Custom user creation serializer.
+    
+    Password is OPTIONAL because:
+    - Users WITH email: Will set password during activation (activate-set-password flow)
+    - Users WITHOUT email: Backend auto-generates temp password
+    
+    This supports the new secure onboarding flow where users set their own passwords.
+    """
+    email = serializers.EmailField(required=False, allow_blank=True, allow_null=True)
+    status_id = serializers.PrimaryKeyRelatedField(queryset=Statuses.objects.all(), required=False, allow_null=True)
+    # Make password fields optional - will be auto-generated if not provided
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    re_password = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    
     class Meta(BaseUserCreateSerializer.Meta):
         profile_picture_url = PictureSerializer(many=True)
         model = User
         fields = '__all__'
+        extra_kwargs = {
+            'email': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'status_id': {'required': False, 'allow_null': True},
+            'password': {'required': False, 'allow_blank': True},
+        }
+    
+    def validate(self, attrs):
+        """
+        Custom validation to handle password logic:
+        - If password provided: validate it matches re_password
+        - If password not provided: auto-generate a secure temp password
+        
+        NOTE: We skip Djoser's parent validate to avoid re_password handling issues.
+        """
+        from apps.users.utils import generate_temp_password
+        
+        password = attrs.get('password', None)
+        re_password = attrs.pop('re_password', None)  # Remove immediately
+        email = attrs.get('email', None)
+        
+        # If no password provided, generate a temp password
+        if not password or password.strip() == '':
+            temp_password = generate_temp_password()
+            attrs['password'] = temp_password
+            # Store flag to indicate this was auto-generated (for response)
+            self.context['temp_password_generated'] = temp_password
+        else:
+            # Password was provided - validate it matches
+            if re_password and password != re_password:
+                raise serializers.ValidationError({"re_password": "Password fields didn't match."})
+        
+        # Skip Djoser's validate - we handle password ourselves
+        # Just call the base ModelSerializer validate
+        return attrs
+    
+    def create(self, validated_data):
+        """
+        Create user with proper password handling.
+        
+        Auto-sets:
+        - status_id: Default to "Active" status if not provided (for create mode without status field)
+        - is_active: False if email provided (requires activation), True if no email
+        - force_password_change: True if no email (temp password flow)
+        """
+        from apps.masters.models import Statuses
+        
+        # Remove re_password if it somehow got through
+        validated_data.pop('re_password', None)
+        
+        # Set default status_id if not provided (since Status field is hidden in Create mode)
+        if 'status_id' not in validated_data or validated_data.get('status_id') is None:
+            # Try to get "Active" status, fallback to first available status
+            default_status = Statuses.objects.filter(status_name__iexact='Active').first()
+            if not default_status:
+                default_status = Statuses.objects.first()
+            if default_status:
+                validated_data['status_id'] = default_status
+            else:
+                raise serializers.ValidationError({"status_id": "No status found in database. Please create at least one status."})
+        
+        # Get email to determine activation flow
+        email = validated_data.get('email', None)
+        
+        # Set is_active based on email presence
+        if email and email.strip() != '':
+            # User with email - requires activation
+            validated_data['is_active'] = False
+            validated_data['force_password_change'] = False  # Will set own password during activation
+        else:
+            # User without email - active immediately, must change temp password
+            validated_data['is_active'] = True
+            validated_data['force_password_change'] = True
+        
+        # Get password before creating user (need to hash it)
+        password = validated_data.pop('password', None)
+        
+        # Create user directly (bypass Djoser's create to avoid re_password issues)
+        user = User(**validated_data)
+        if password:
+            user.set_password(password)
+        user.save()
+        return user
 
 #====================================USER-UPDATE-SERIALIZER=============================================================
 class CustomUserUpdateSerializer(DjoserUserSerializer):
@@ -211,8 +309,88 @@ class UserChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("Password and confirm password doesn't match")
         
         user.set_password(password)
+        # Reset force_password_change flag after user changes password
+        user.force_password_change = False
         user.save()
         return attrs
+
+
+#====================================FIRST-LOGIN-FORCE-CHANGE-PASSWORD-SERIALIZER=============================================================
+class ForceChangePasswordSerializer(serializers.Serializer):
+    """
+    Serializer for first-time login password change.
+    Used when user logs in with temporary password and must set their own password.
+    Does NOT require old password (since it's a temp password given by admin).
+    """
+    password = serializers.CharField(max_length=255, style={'input_type': 'password'}, write_only=True)
+    confirm_password = serializers.CharField(max_length=255, style={'input_type': 'password'}, write_only=True)
+
+    class Meta:
+        fields = ['password', 'confirm_password']
+    
+    def validate(self, attrs):
+        password = attrs.get('password')
+        confirm_password = attrs.get('confirm_password')
+        user = self.context.get('user')
+
+        # Check if user actually needs to change password
+        if not user.force_password_change:
+            raise serializers.ValidationError("Password change is not required for this account.")
+
+        if password != confirm_password:
+            raise serializers.ValidationError("Password and confirm password doesn't match")
+        
+        # Validate password strength (optional - add your rules)
+        if len(password) < 8:
+            raise serializers.ValidationError("Password must be at least 8 characters long")
+        
+        user.set_password(password)
+        user.force_password_change = False  # Reset the flag
+        user.save()
+        return attrs
+
+
+#====================================ACTIVATE-AND-SET-PASSWORD-SERIALIZER=============================================================
+class ActivateAndSetPasswordSerializer(serializers.Serializer):
+    """
+    Serializer for combined activation + password setup flow.
+    User clicks activation link → Sets their own password → Account activated.
+    
+    This is the most secure approach as:
+    - No password is sent via email
+    - User creates their own memorable password
+    - Password meets your security requirements
+    """
+    uid = serializers.CharField()
+    token = serializers.CharField()
+    password = serializers.CharField(max_length=255, style={'input_type': 'password'}, write_only=True)
+    confirm_password = serializers.CharField(max_length=255, style={'input_type': 'password'}, write_only=True)
+
+    class Meta:
+        fields = ['uid', 'token', 'password', 'confirm_password']
+    
+    def validate(self, attrs):
+        password = attrs.get('password')
+        confirm_password = attrs.get('confirm_password')
+
+        if password != confirm_password:
+            raise serializers.ValidationError({"confirm_password": "Password and confirm password don't match"})
+        
+        # Validate password strength
+        if len(password) < 8:
+            raise serializers.ValidationError({"password": "Password must be at least 8 characters long"})
+        
+        # Check for at least one uppercase, one lowercase, one digit
+        import re
+        if not re.search(r'[A-Z]', password):
+            raise serializers.ValidationError({"password": "Password must contain at least one uppercase letter"})
+        if not re.search(r'[a-z]', password):
+            raise serializers.ValidationError({"password": "Password must contain at least one lowercase letter"})
+        if not re.search(r'[0-9]', password):
+            raise serializers.ValidationError({"password": "Password must contain at least one digit"})
+        
+        return attrs
+
 
 #====================================USER-FORGET-PASSWD-SERIALIZER=============================================================
 # class SendPasswordResetEmailSerializer(serializers.Serializer):
