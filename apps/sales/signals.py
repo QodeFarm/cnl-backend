@@ -1,3 +1,4 @@
+from apps.customer.models import LedgerAccounts
 from .models import SaleCreditNotes, SaleInvoiceOrders, PaymentTransactions, SaleReturnOrders
 from apps.finance.models import JournalEntryLines, ChartOfAccounts
 from django.core.exceptions import ObjectDoesNotExist
@@ -21,6 +22,7 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
     Signal to update pending_amount with total_amount when a new SaleInvoiceOrders record is created.
     """
     if created:  # Ensuring it's a new record
+        print("instance : ", instance)
         instance.pending_amount = instance.total_amount  # Copy total_amount to pending_amount
         instance.save(update_fields=['pending_amount'])  # Save only the pending_amount field
 
@@ -34,15 +36,22 @@ def update_balance_after_invoice(sender, instance, created, **kwargs):
 
         # Step 3: Get "sale account" from ChartOfAccounts
         try:
-            sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
-        except ChartOfAccounts.DoesNotExist:
-            sale_account = None  
+            sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
+            invoice_no = SaleInvoiceOrders.objects.get(sale_invoice_id=instance.sale_invoice_id).invoice_no
+        except LedgerAccounts.DoesNotExist:
+            sale_account = None 
+            invoice_no = None
+            
+        print("Invoce no : ",invoice_no)
+        print("sale_account: ",sale_account) 
+            
+        print("instance.invoice_no: ",instance.invoice_no)
 
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
             ledger_account_id=sale_account,  
             debit=instance.total_amount,
-            voucher_no = instance.invoice_no,
+            voucher_no = invoice_no,
             credit=0.00,
             description=f"Goods sold to {instance.customer_id.name}",
             customer_id=instance.customer_id,
@@ -86,9 +95,9 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
                 .first()                                   # grab the first result
             )or Decimal('0.00')
             bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
-            sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
+            sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
         
-        except ChartOfAccounts.DoesNotExist:
+        except LedgerAccounts.DoesNotExist:
             sale_account = None  
         except (InvalidOperation, TypeError, ValueError) as e:
             return Decimal('0.00')              
@@ -118,8 +127,8 @@ def update_balance_after_return(sender, instance, created, **kwargs):
                                                                                 .values_list('balance', flat=True)         # get only the balance field
                                                                                 .first() ) or Decimal('0.00')          
                 bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
-                sale_account = ChartOfAccounts.objects.get(account_name__iexact="Sale Account", is_active=True)
-            except ChartOfAccounts.DoesNotExist:
+                sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
+            except LedgerAccounts.DoesNotExist:
                 sale_account = None  
             except (InvalidOperation, TypeError, ValueError) as e:
                 return Decimal('0.00')          
@@ -128,7 +137,7 @@ def update_balance_after_return(sender, instance, created, **kwargs):
             JournalEntryLines.objects.create(
                 ledger_account_id=sale_account,  
                 debit=instance.total_amount,
-                voucher_no = instance.return_no,
+                voucher_no = (instance.return_no),
                 credit=0.00,
                 description= f"Return gives to {instance.customer_id.name} ({instance.return_reason})",
                 customer_id=instance.customer_id,
