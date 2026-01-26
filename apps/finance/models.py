@@ -116,7 +116,7 @@ class JournalEntry(OrderNumberMixin):
 class JournalEntryLines(models.Model):
     journal_entry_line_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, null=True, related_name='journal_entry_lines', db_column='ledger_account_id')
-    voucher_no = models.CharField(max_length=20 ,default='')
+    voucher_no = models.CharField(max_length=20)
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     description = models.CharField(max_length=1024, default=None, null=True)

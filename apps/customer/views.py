@@ -938,15 +938,16 @@ class CustomerCreateViews(APIView):
                 {"custom_field_values": custom_field_values_data if custom_field_values_data else []}  # Add custom field values to response
             ]
             
-            # customername = customer_data.get("name")
-            # log_user_action(
-            #     set_db('default'),
-            #     request.user,
-            #     "UPDATE",
-            #     "Customers",
-            #     pk,
-            #     f"{customername} - Customer record Updated by {request.user.username}"
-            # )
+            customername = customer_data[0].get("name") if customer_data else None
+
+            log_user_action(
+                set_db('default'),
+                request.user,
+                "UPDATE",
+                "Customers",
+                pk,
+                f"{customername} - Customer record Updated by {request.user.username}"
+            )
 
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
         
