@@ -232,6 +232,14 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
             'pack_unit', 'pack_vs_stock', 'g_pack_unit',  
             'g_pack_vs_pack', 'type', 'is_deleted'
         ]
+        
+    @staticmethod
+    def get_product_summary(queryset):
+        """
+        Used when summary=true
+        Returns FULL filtered data without pagination
+        """
+        return ProductOptionsSerializer(queryset, many=True).data
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
