@@ -113,7 +113,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -296,9 +296,11 @@ SIMPLE_JWT = {
 #DJOSER SETTINGS
 DJOSER = {
     'LOGIN_FIELD': 'username',
-    'USER_CREATE_PASSWORD_RETYPE': True,
-    'ACTIVATION_URL': 'api/v1/users/activation/{uid}/{token}',
-    'SEND_ACTIVATION_EMAIL': True,
+    # Password fields are now OPTIONAL during user creation (handled by CustomUserCreateSerializer)
+    'USER_CREATE_PASSWORD_RETYPE': False,  # Changed: password is optional, auto-generated if not provided
+    # Updated: Points to frontend set-password page (user sets own password during activation)
+    'ACTIVATION_URL': 'set-password/{uid}/{token}',
+    'SEND_ACTIVATION_EMAIL': False,  # We handle activation email manually in the view
     'SEND_CONFIRMATION_EMAIL': True,
     'PASSWORD_CHANGED_EMAIL_CONFIRMATION':True,
     'PASSWORD_RESET_CONFIRM_URL': 'password_reset/{uid}/{token}',
@@ -313,12 +315,10 @@ DJOSER = {
     'VIEWSETS': {
         'user': 'apps.users.views.CustomUserViewSet',
     },
-    # 'EMAIL': {
-    #     'activation': 'users.email.ActivationEmail',
-    #     'confirmation': 'users.email.ConfirmationEmail',
-    #     'password_reset': 'users.email.PasswordResetEmail',
-    #     'password_changed_confirmation': 'users.email.PasswordChangedConfirmationEmail',
-    # },
+    # Custom email classes for branded emails (fixes apicore.cnlerp.com issue)
+    'EMAIL': {
+        'confirmation': 'apps.users.emails.CustomConfirmationEmail',
+    },
 }
 
 CACHES = {
