@@ -1,0 +1,22 @@
+Your {{ company_name }} Account Is Ready!
+
+Hello {{ username }},
+
+Great news! Your {{ company_name }} account has been successfully activated and is ready to use.
+
+Your Login Details:
+- Login URL: {{ login_url }}
+- Username: {{ username }}
+- Password: Use the password you created during activation
+
+You can now log in and start using all the features available to you.
+
+Tip: Bookmark the login URL for quick access in the future.
+
+If you have any questions or need assistance, please contact our support team at {{ support_email|default:"support@cnlerp.com" }}.
+
+Best regards,
+The {{ company_name }} Team
+
+---
+This is an automated message. Please do not reply directly to this email.

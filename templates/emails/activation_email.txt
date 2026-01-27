@@ -1,0 +1,29 @@
+Welcome to {{ company_name }} - Set Up Your Account
+===================================================
+
+Hello {{ username }},
+
+An account has been created for you to access the {{ company_name }} system.
+
+Click the link below to SET YOUR PASSWORD and activate your account:
+
+{{ activation_link }}
+
+------------------------------------------------------------
+📧 YOUR LOGIN DETAILS
+------------------------------------------------------------
+Username:   {{ username }}
+Email:      {{ user_email }}
+Password:   You will set this when you click the link above
+------------------------------------------------------------
+
+Note: This link will expire in 24 hours for security reasons.
+
+If you were not expecting this email, please contact your {{ company_name }} administrator{% if support_email %} at {{ support_email }}{% endif %}.
+
+Thank you,
+{{ company_name }} Team
+{{ site_url }}
+
+---
+This is an automated message from {{ company_name }}. Please do not reply to this email.
