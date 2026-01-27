@@ -74,21 +74,23 @@ class ModuleSections(models.Model):
 
 class UserManager(BaseUserManager):
     '''Creating User'''
-    def create_user(self, email, username, password = None, **extra_fields):
-        if not email:
-            raise ValueError("The Email Field Must be set")        
-        email = self.normalize_email(email)
+    def create_user(self, username, password=None, email=None, **extra_fields):
+        # Email is now optional for factory workers without email
+        if email:
+            email = self.normalize_email(email)
+        
         user = self.model(
-        email = email,
-        username = username,
-        **extra_fields)
+            email=email,
+            username=username,
+            **extra_fields
+        )
         user.set_password(password)
         user.save(using=self._db)
         return user
     
     def create_superuser(self, username, email, password=None, **extra_fields):
         # Set any required flags for superusers here if needed
-        user = self.create_user(username, email, password, **extra_fields)
+        user = self.create_user(username=username, password=password, email=email, **extra_fields)
         # You can set specific flags or permissions for superusers here
         return user
 
@@ -105,7 +107,7 @@ class User(AbstractBaseUser):
     timezone = models.CharField(max_length=100, null= True, default=None)
     language = models.CharField(max_length=10, null= True, default=None)
     date_of_birth = models.DateField(null= True, default=None)
-    email = models.EmailField(max_length=255, unique=True)
+    email = models.EmailField(max_length=255, unique=True, null=True, blank=True, default=None)
     otp_required = models.BooleanField(default=False)
     # is_superuser = models.BooleanField(default=False) #New field
     mobile= models.CharField(max_length=20, unique=True)
@@ -117,6 +119,7 @@ class User(AbstractBaseUser):
     company_created_user = models.BooleanField(default= False)
     last_login = models.DateTimeField(null=True, default=None)
     is_deleted = models.BooleanField(default=False)
+    force_password_change = models.BooleanField(default=False, help_text="If True, user must change password on first login. Only set True for temp password users.")
     branch_id  = models.ForeignKey(Branches, on_delete=models.PROTECT, db_column='branch_id', null= True)
     status_id  = models.ForeignKey(Statuses, on_delete=models.PROTECT, db_column='status_id')
     role_id    = models.ForeignKey(Roles, on_delete=models.PROTECT,  db_column = 'role_id')
