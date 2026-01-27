@@ -203,7 +203,11 @@ class ProductsFilter(FilterSet):
     dis_amount = filters.RangeFilter()
     hsn_code = filters.CharFilter(lookup_expr='icontains')
     print_name = filters.CharFilter(lookup_expr='icontains')
-    balance = filters.NumberFilter()
+    # balance = filters.NumberFilter()
+    balance = filters.NumberFilter(
+        field_name='productitembalance__balance',
+        lookup_expr='exact'
+    )
     unit_options_id = filters.CharFilter(method=filter_uuid)
     unit_options = filters.CharFilter(field_name='unit_options_id__unit_name', lookup_expr='icontains')
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
