@@ -1289,7 +1289,8 @@ class DocumentGeneratorView(APIView):
                 phone = resolve_phone_from_document(
                     document_type=document_type,
                     pk=pk,
-                    city_id=city_id
+                    city_id=city_id,
+                    request=request   # REQUIRED FOR LEDGER
                 )
 
                 if not phone:
@@ -1304,8 +1305,8 @@ class DocumentGeneratorView(APIView):
 
                     return Response({
                         "status": 1,
-                        "message": result,
                         "mode": "wati",
+                        "message": result,                        
                         "phone": phone
                     })
 
