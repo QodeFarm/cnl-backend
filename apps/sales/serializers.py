@@ -252,6 +252,57 @@ class SaleInvoiceOrderOptionsSerializer(serializers.ModelSerializer):
         serializer = SaleInvoiceOrderOptionsSerializer(sale_invoice_order, many=True)
         return serializer.data
 
+
+# ===================== SALE REGISTER SERIALIZER =====================
+class SaleRegisterSerializer(serializers.ModelSerializer):
+    """
+    Sale Register Serializer for ERP-style reporting.
+    """
+    customer_name = serializers.CharField(source='customer_id.name', read_only=True)
+    city = serializers.SerializerMethodField()
+    gross_amount = serializers.DecimalField(source='item_value', max_digits=18, decimal_places=2, read_only=True)
+    round_off = serializers.DecimalField(max_digits=18, decimal_places=2, read_only=True)
+    amount = serializers.DecimalField(source='total_amount', max_digits=18, decimal_places=2, read_only=True)
+    voucher_type = serializers.CharField(source='bill_type', read_only=True)
+    attachment_count = serializers.SerializerMethodField()
+    order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
+
+    class Meta:
+        model = SaleInvoiceOrders
+        fields = [
+            'sale_invoice_id', 'invoice_no', 'invoice_date', 'customer_name', 'city',
+            'gross_amount', 'dis_amt', 'tax_amount', 'round_off', 'amount',
+            'voucher_type', 'attachment_count', 'order_status', 'remarks'
+        ]
+
+    def get_city(self, obj):
+        """Get city from customer's primary address or billing address."""
+        try:
+            if obj.customer_address_id and obj.customer_address_id.city_id:
+                return obj.customer_address_id.city_id.city_name
+            elif obj.customer_id:
+                # Try to get from customer's default/primary address
+                from apps.customer.models import CustomerAddresses
+                address = CustomerAddresses.objects.filter(
+                    customer_id=obj.customer_id
+                ).first()
+                if address and address.city_id:
+                    return address.city_id.city_name
+        except Exception:
+            pass
+        return None
+
+    def get_attachment_count(self, obj):
+        """Get count of attachments for this invoice."""
+        try:
+            from apps.sales.models import OrderAttachments
+            return OrderAttachments.objects.filter(
+                order_id=str(obj.sale_invoice_id),
+                is_deleted=False
+            ).count()
+        except Exception:
+            return 0
+
 class SaleReturnOrdersOptionsSerializer(serializers.ModelSerializer):
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)

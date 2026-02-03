@@ -5,7 +5,7 @@ from apps.customer.models import Customer, LedgerAccounts
 from apps.sales.models import SaleInvoiceOrders
 from apps.finance.models import JournalEntryLines, PaymentTransaction
 from config.utils_methods import filter_uuid
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit, filter_by_simple_search
 import logging
 logger = logging.getLogger(__name__)
 
@@ -56,6 +56,7 @@ class CustomerFilters(filters.FilterSet):
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
+    search = filters.CharFilter(method='filter_by_search_dropdown', label="Simple Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
@@ -71,6 +72,10 @@ class CustomerFilters(filters.FilterSet):
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value).distinct()
 
+    def filter_by_search_dropdown(self, queryset, name, value):
+        """Simple search for dropdown - searches name, print_name, code"""
+        return filter_by_simple_search(queryset, value, ['name', 'print_name', 'code'])
+
     def filter_by_sort(self, queryset, name, value):
         return filter_by_sort(self, queryset, value)
 
@@ -83,7 +88,7 @@ class CustomerFilters(filters.FilterSet):
     class Meta:
         model = Customer
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name', 'is_deleted', 's','sort','page','limit']
+        fields = ['name','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name', 'is_deleted', 's','search','sort','page','limit']
 
     
 class CustomerAttachmentsFilters(filters.FilterSet):

@@ -146,6 +146,91 @@ class SaleInvoiceOrdersFilter(filters.FilterSet):
         #do not change "invoice_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
         fields =['invoice_no','customer_id','customer','sale_order_id','invoice_date','total_amount','tax_amount','advance_amount','remarks','order_status_id','status_name', 'created_at','period_name','s','sort','page','limit']
 
+
+# ===================== SALE REGISTER FILTER =====================
+REGISTER_TYPE_CHOICES = [
+    ('general', 'General Register'),
+    ('detailed', 'Detailed Register'),
+    ('tax_wise', 'Columnar (Tax Wise)'),
+    ('unprinted', 'Un-Printed Voucher List'),
+    ('cancelled', 'Cancelled Voucher List'),
+    ('product_group_wise', 'Columnar (Product Group Wise)'),
+    ('product_category_wise', 'Columnar (Product Category Wise)'),
+    ('product_brand_wise', 'Columnar (Product Brand Wise)'),
+    ('commodity_code_wise', 'Columnar (Commodity Code Wise)'),
+    ('hsn_wise', 'Columnar (HSN Code Wise)'),
+    ('tender_summary', 'Columnar (Tender Summary)'),
+    ('daily_sales_summary', 'Daily Sales Summary'),
+    ('daily_payment_summary', 'Daily Payment Summary'),
+    ('daily_tax_analysis', 'Daily Tax Analysis'),
+    ('daily_hourly_summary', 'Daily Hourly Summary'),
+    ('monthly_sales_summary', 'Monthly Sales Summary'),
+    ('monthly_payment_summary', 'Monthly Payment Summary'),
+]
+
+class SaleRegisterFilter(filters.FilterSet):
+    """
+    Professional Sale Register Filter for ERP-style date range and voucher type filtering.
+    """
+    # Date range filters
+    from_date = filters.DateFilter(field_name='invoice_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='invoice_date', lookup_expr='lte')
+    invoice_date = filters.DateFilter()
+    invoice_date_range = filters.DateFromToRangeFilter(field_name='invoice_date')
+    
+    # Voucher type filter (bill_type: CASH, CREDIT, OTHERS)
+    voucher_type = filters.CharFilter(field_name='bill_type', lookup_expr='iexact')
+    bill_type = filters.CharFilter(lookup_expr='iexact')
+    
+    # Register type for different report formats
+    register_type = filters.ChoiceFilter(choices=REGISTER_TYPE_CHOICES, method='filter_by_register_type')
+    
+    # Customer filters
+    customer_id = filters.CharFilter(method=filter_uuid)
+    customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    city = filters.CharFilter(field_name='customer_address_id__city_id__city_name', lookup_expr='icontains')
+    
+    # Amount filters
+    invoice_no = filters.CharFilter(lookup_expr='icontains')
+    total_amount = filters.RangeFilter()
+    total_amount_min = filters.NumberFilter(field_name='total_amount', lookup_expr='gte')
+    total_amount_max = filters.NumberFilter(field_name='total_amount', lookup_expr='lte')
+    
+    # Status filters
+    order_status_id = filters.CharFilter(method=filter_uuid)
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
+    
+    # Period filter
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    created_at = filters.DateFromToRangeFilter()
+    # Search & Sort
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+
+    def filter_by_register_type(self, queryset, name, value):
+        """Register type affects the grouping/format, not the queryset filtering."""
+        # This is handled in the view for response formatting
+        return queryset
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+    
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+    
+    class Meta:
+        model = SaleInvoiceOrders
+        fields = [
+            'from_date', 'to_date', 'invoice_date', 'invoice_date_range',
+            'voucher_type', 'bill_type', 'register_type',
+            'customer_id', 'customer', 'city', 'invoice_no',
+            'total_amount', 'total_amount_min', 'total_amount_max',
+            'order_status_id', 'status_name', 'period_name', 'created_at','s', 'sort'
+        ]
+
 class SaleReturnOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')

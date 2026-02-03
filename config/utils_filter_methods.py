@@ -171,6 +171,34 @@ def filter_by_search(queryset, filter_set, value):
     
     return search_queryset(queryset, search_params, filter_set)
 
+def filter_by_simple_search(queryset, value, search_fields):
+    """
+    Global simple text search utility for dropdown/autocomplete use-cases.
+    Searches across multiple fields using OR logic with icontains.
+    
+    Args:
+        queryset: The queryset to filter
+        value: The search text
+        search_fields: List of field names to search in (e.g., ['name', 'print_name', 'code'])
+    
+    Returns:
+        Filtered queryset
+    
+    Usage in FilterSet:
+        search = filters.CharFilter(method='filter_by_search_dropdown', label="Search")
+        
+        def filter_by_search_dropdown(self, queryset, name, value):
+            return filter_by_simple_search(queryset, value, ['name', 'print_name', 'code'])
+    """
+    if not value or not search_fields:
+        return queryset
+    
+    search_query = Q()
+    for field in search_fields:
+        search_query |= Q(**{f"{field}__icontains": value})
+    
+    return queryset.filter(search_query)
+
 def filter_by_sort(filter_set, queryset, value):
     return apply_sorting(filter_set, queryset)
 
