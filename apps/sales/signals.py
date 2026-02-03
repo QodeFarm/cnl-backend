@@ -1,5 +1,5 @@
 from apps.customer.models import LedgerAccounts
-from .models import SaleCreditNotes, SaleInvoiceOrders, PaymentTransactions, SaleReturnOrders
+from .models import SaleCreditNotes, SaleInvoiceItems, SaleInvoiceOrders, PaymentTransactions, SaleReturnOrders
 from apps.finance.models import JournalEntryLines, ChartOfAccounts
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models.signals import post_save
@@ -16,47 +16,105 @@ logging.basicConfig(level=logging.INFO,
 # Create a logger object
 logger = logging.getLogger(__name__)
 
-@receiver(post_save, sender=SaleInvoiceOrders)
-def update_balance_after_invoice(sender, instance, created, **kwargs):
-    """
-    Signal to update pending_amount with total_amount when a new SaleInvoiceOrders record is created.
-    """
-    if created:  # Ensuring it's a new record
-        print("instance : ", instance)
-        instance.pending_amount = instance.total_amount  # Copy total_amount to pending_amount
-        instance.save(update_fields=['pending_amount'])  # Save only the pending_amount field
+# @receiver(post_save, sender=SaleInvoiceOrders)
+# def update_balance_after_invoice(sender, instance, created, **kwargs):
+#     """
+#     Signal to update pending_amount with total_amount when a new SaleInvoiceOrders record is created.
+#     """
+#     if created:  # Ensuring it's a new record
+#         print("instance : ", instance)
+#         instance.pending_amount = instance.total_amount  # Copy total_amount to pending_amount
+#         instance.save(update_fields=['pending_amount'])  # Save only the pending_amount field
 
-        # Step 2: Calculating total pending (balance_amount) for that customer
-        # total_pending = SaleInvoiceOrders.objects.filter(customer_id=instance.customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
-        existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
-                                                                            .order_by('is_deleted', '-created_at')                   # most recent entry first
-                                                                            .values_list('balance', flat=True)         # get only the balance field
-                                                                            .first()) or Decimal('0.00')               # grab the first result
-        new_balance =  Decimal(instance.total_amount) + Decimal(existing_balance)
+#         # Step 2: Calculating total pending (balance_amount) for that customer
+#         # total_pending = SaleInvoiceOrders.objects.filter(customer_id=instance.customer_id).aggregate(total_pending=Sum('pending_amount'))['total_pending'] or 0.00
+#         existing_balance = (JournalEntryLines.objects.filter(customer_id=instance.customer_id)
+#                                                                             .order_by('is_deleted', '-created_at')                   # most recent entry first
+#                                                                             .values_list('balance', flat=True)         # get only the balance field
+#                                                                             .first()) or Decimal('0.00')               # grab the first result
+#         new_balance =  Decimal(instance.total_amount) + Decimal(existing_balance)
 
-        # Step 3: Get "sale account" from ChartOfAccounts
-        try:
-            sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
-            invoice_no = SaleInvoiceOrders.objects.get(sale_invoice_id=instance.sale_invoice_id).invoice_no
-        except LedgerAccounts.DoesNotExist:
-            sale_account = None 
-            invoice_no = None
+#         # Step 3: Get "sale account" from ChartOfAccounts
+#         try:
+#             sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
+#             invoice_no = SaleInvoiceOrders.objects.get(sale_invoice_id=instance.sale_invoice_id).invoice_no
+#         except LedgerAccounts.DoesNotExist:
+#             sale_account = None 
+#             invoice_no = None
             
-        print("Invoce no : ",invoice_no)
-        print("sale_account: ",sale_account) 
+#         print("Invoce no : ",invoice_no)
+#         print("sale_account: ",sale_account) 
             
-        print("instance.invoice_no: ",instance.invoice_no)
+#         print("instance.invoice_no: ",instance.invoice_no)
 
-        # Step 3: Creating JournalEntryLines record
-        JournalEntryLines.objects.create(
-            ledger_account_id=sale_account,  
-            debit=instance.total_amount,
-            voucher_no = invoice_no,
-            credit=0.00,
-            description=f"Goods sold to {instance.customer_id.name}",
-            customer_id=instance.customer_id,
-            balance=new_balance 
-        )
+#         # Step 3: Creating JournalEntryLines record
+#         JournalEntryLines.objects.create(
+#             ledger_account_id=sale_account,  
+#             debit=instance.total_amount,
+#             voucher_no = invoice_no,
+#             credit=0.00,
+#             description=f"Goods sold to {instance.customer_id.name}",
+#             customer_id=instance.customer_id,
+#             balance=new_balance 
+#         )
+
+# @receiver(post_save, sender=SaleInvoiceOrders)
+# def update_balance_after_invoice(sender, instance, created, **kwargs):
+#     if not created:
+#         return
+
+#     instance.pending_amount = instance.total_amount
+#     instance.save(update_fields=['pending_amount'])
+
+#     existing_balance = (
+#         JournalEntryLines.objects
+#         .filter(customer_id=instance.customer_id)
+#         .order_by('is_deleted', '-created_at')
+#         .values_list('balance', flat=True)
+#         .first()
+#     ) or Decimal('0.00')
+
+#     new_balance = Decimal(existing_balance) + Decimal(instance.total_amount)
+
+#     try:
+#         sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
+#         invoice_no = instance.invoice_no
+#     except LedgerAccounts.DoesNotExist:
+#         return
+
+#     # ---- PRODUCT DETAILS ----
+#     product_lines = []
+#     print("insatnce.sale invooice_id : ", instance.sale_invoice_id)
+#     print( " SaleInvoiceItems : ", SaleInvoiceItems.objects.filter(
+#         sale_invoice_id=instance.sale_invoice_id  # this is correct
+#     ))
+
+#     invoice_items = instance.sale_invoice_items.all()
+#     print("invoice items: ", invoice_items)
+
+#     for idx, item in enumerate(invoice_items, start=1):
+#         product_lines.append(
+#             f"{idx}) {item.print_name} – Qty: {item.quantity} @ {item.rate}"
+#         )
+
+#     products_description = "\n".join(product_lines)
+#     print("product description: ", products_description)
+
+#     description = (
+#         f"Goods sold to {instance.customer_id.name}\n"
+#         f"{products_description}"
+#     )
+
+#     JournalEntryLines.objects.create(
+#         ledger_account_id=sale_account,
+#         debit=instance.total_amount,
+#         voucher_no=invoice_no,
+#         credit=0.00,
+#         description=description,
+#         customer_id=instance.customer_id,
+#         balance=new_balance
+#     )
+
 
 
 @receiver(post_save, sender=PaymentTransactions)
