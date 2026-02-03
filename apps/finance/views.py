@@ -7,7 +7,7 @@ from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
 from apps.customer.models import CustomerAddresses
 from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter, JournalBookReportFilter
-from apps.sales.models import SaleInvoiceOrders
+from apps.sales.models import SaleInvoiceItems, SaleInvoiceOrders
 from apps.vendor.models import VendorAddress
 from config.utils_db_router import set_db
 from .models import *
@@ -339,6 +339,51 @@ class JournalEntryLinesAPIView(APIView):
         # STEP 6: SERIALIZATION
         # ---------------------------
         serializer = JournalEntryLinesSerializer(paginated_queryset, many=True)
+        data = serializer.data
+        
+        # Collect invoice numbers from journal entries
+        invoice_nos = [
+            row.get("voucher_no")
+            for row in data
+            if row.get("voucher_no") and "Goods sold to" in (row.get("description") or "")
+            and "\n1)" not in (row.get("description") or "")
+        ]
+
+        # Fetch related invoices in ONE query
+        invoice_map = {
+            inv.invoice_no: inv
+            for inv in SaleInvoiceOrders.objects.filter(invoice_no__in=invoice_nos)
+        }
+
+        # Fetch all items in ONE query
+        items_map = {}
+        invoice_ids = [inv.sale_invoice_id for inv in invoice_map.values()]
+
+        for item in SaleInvoiceItems.objects.filter(sale_invoice_id__in=invoice_ids):
+            items_map.setdefault(item.sale_invoice_id, []).append(item)
+
+        # Inject product lines
+        for row in data:
+            voucher_no = row.get("voucher_no")
+            description = row.get("description") or ""
+
+            if (
+                voucher_no in invoice_map
+                and "\n1)" not in description   # avoid duplicates
+            ):
+                invoice = invoice_map[voucher_no]
+                items = items_map.get(invoice.sale_invoice_id, [])
+
+                product_lines = [
+                    f"{idx}) {item.print_name} – Qty: {item.quantity} @ {item.rate}"
+                    for idx, item in enumerate(items, start=1)
+                ]
+
+                if product_lines:
+                    row["description"] = (
+                        f"Goods sold to {invoice.customer_id.name}\n"
+                        + "\n".join(product_lines)
+                    )
 
         # ---------------------------
         # STEP 7: RESPONSE

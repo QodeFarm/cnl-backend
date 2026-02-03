@@ -1613,40 +1613,138 @@ def send_pdf_via_email(to_email, pdf_relative_path, document_type):
 
     return f"{document_type.replace('_', ' ').title()} PDF sent via Email successfully."
 
+# def send_whatsapp_message_via_wati(to_number, file_url):
+#     """
+#     Send the PDF file as a WhatsApp message using WATI API.
+#     Supports DRY RUN mode for local testing.
+#     """
+
+#     from django.conf import settings
+#     import os, json, requests, logging
+
+#     logger = logging.getLogger(__name__)
+
+#     # -------------------- DRY RUN (LOCAL TESTING) --------------------
+#     if getattr(settings, "WHATSAPP_DRY_RUN", False):
+#         logger.info("🟡 WHATSAPP DRY RUN MODE")
+#         logger.info(f"To Number : {to_number}")
+#         logger.info(f"File URL  : {file_url}")
+
+#         return {
+#             "whatsapp_sent": True,
+#             "mode": "dry_run",
+#             "message": "WhatsApp logic executed successfully (DRY RUN)"
+#         }
+
+#     # -------------------- FILE VALIDATION --------------------
+#     full_file_path = os.path.join(
+#         settings.MEDIA_ROOT,
+#         file_url.replace(settings.MEDIA_URL, '')
+#     )
+
+#     if not os.path.exists(full_file_path):
+#         return {
+#             "whatsapp_sent": False,
+#             "reason": f"File not found: {full_file_path}"
+#         }
+
+#     # -------------------- WATI DISABLED SAFETY --------------------
+#     if not getattr(settings, "ENABLE_WATI", False):
+#         return {
+#             "whatsapp_sent": False,
+#             "reason": "WATI_DISABLED"
+#         }
+
+#     # -------------------- WATI API CALL --------------------
+#     url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
+
+#     headers = {
+#         'accept': '*/*',
+#         'Authorization': f'Bearer {settings.WATI_API_TOKEN}',
+#     }
+
+#     with open(full_file_path, 'rb') as file:
+#         files = {
+#             'file': (os.path.basename(full_file_path), file, 'application/pdf'),
+#         }
+#         response = requests.post(url, headers=headers, files=files)
+
+#     response_data = json.loads(response.text)
+
+#     if response_data.get("result") is True:
+#         return {
+#             "whatsapp_sent": True,
+#             "mode": "wati",
+#             "message": "PDF sent via WhatsApp successfully"
+#         }
+
+#     return {
+#         "whatsapp_sent": False,
+#         "reason": response_data.get("info", "Unknown WATI error")
+#     }
 
 
 def send_whatsapp_message_via_wati(to_number, file_url):
-    """ Send the PDF file as a WhatsApp message using WATI API. """
-    result = ""
-    # Construct the full path to the file using MEDIA_ROOT
-    full_file_path = os.path.join(MEDIA_ROOT, file_url.replace(MEDIA_URL, ''))
-    # Ensure the file exists
-    if not os.path.exists(full_file_path):
-        return (f"File not found: {full_file_path}")            
-    
-    url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
-    
-    headers = {
-    'accept': '*/*',
-    'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlMzMyNWFmNC0wNDE2LTQzYTQtOTcwNi00MGYxZDViZTM0MGQiLCJ1bmlxdWVfbmFtZSI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsIm5hbWVpZCI6InJ1ZGhyYWluZHVzdHJpZXMubmxyQGdtYWlsLmNvbSIsImVtYWlsIjoicnVkaHJhaW5kdXN0cmllcy5ubHJAZ21haWwuY29tIiwiYXV0aF90aW1lIjoiMDgvMjYvMjAyNCAwNjowMzozNSIsImRiX25hbWUiOiJtdC1wcm9kLVRlbmFudHMiLCJ0ZW5hbnRfaWQiOiIzMTIxNzIiLCJodHRwOi8vc2NoZW1hcy5taWNyb3NvZnQuY29tL3dzLzIwMDgvMDYvaWRlbnRpdHkvY2xhaW1zL3JvbGUiOiJBRE1JTklTVFJBVE9SIiwiZXhwIjoyNTM0MDIzMDA4MDAsImlzcyI6IkNsYXJlX0FJIiwiYXVkIjoiQ2xhcmVfQUkifQ.qFA42Ze-itghM2LXR5sZ-P9BJB84iD3oXqk5olG_kX8',
-    }
+    """
+    Best-effort WhatsApp sender (WATI)
+    MUST be silent and non-blocking
+    """
+    try:
+        # Construct full file path
+        full_file_path = os.path.join(MEDIA_ROOT, file_url.replace(MEDIA_URL, ''))
 
-    # Open the file and attach it to the request
-    with open(full_file_path, 'rb') as file:
-        files = {
-            'file': (os.path.basename(full_file_path), file, 'application/pdf'),
+        if not os.path.exists(full_file_path):
+            return {
+                "sent": False,
+                "reason": "FILE_NOT_FOUND"
+            }
+
+        url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
+
+        headers = {
+            'accept': '*/*',
+            'Authorization': 'Bearer YOUR_TOKEN_HERE',
         }
-        response = requests.post(url, headers=headers, files=files)
 
-        # Convert the response text to a Python dictionary
-    response_data = json.loads(response.text) 
+        with open(full_file_path, 'rb') as file:
+            files = {
+                'file': (os.path.basename(full_file_path), file, 'application/pdf'),
+            }
+            response = requests.post(url, headers=headers, files=files, timeout=10)
 
-    if response_data.get("result") == True:
-        result = "PDF sent via WhatsApp successfully."
-        return result
-    else:
-        result = response_data.get('info')
-        return result
+        # ---------------- SAFE RESPONSE HANDLING ----------------
+        if not response.text:
+            return {
+                "sent": False,
+                "reason": "EMPTY_RESPONSE_FROM_WATI"
+            }
+
+        try:
+            response_data = response.json()
+        except ValueError:
+            return {
+                "sent": False,
+                "reason": "NON_JSON_RESPONSE",
+                "raw_response": response.text[:200]
+            }
+
+        if response_data.get("result") is True:
+            return {
+                "sent": True
+            }
+
+        return {
+            "sent": False,
+            "reason": response_data.get("info", "UNKNOWN_WATI_ERROR")
+        }
+
+    except Exception as e:
+        return {
+            "sent": False,
+            "reason": "EXCEPTION",
+            "error": str(e)
+        }
+
     
 # from apps.customers.models import Customer
 # from apps.vendors.models import Vendor
@@ -1657,7 +1755,7 @@ import urllib.parse
 from django.conf import settings
 
 
-def resolve_phone_from_document(document_type, pk, city_id=None):
+def resolve_phone_from_document(document_type, pk, city_id=None, request=None):
     """
     Resolve phone number based on document & city
     """
@@ -1666,6 +1764,32 @@ def resolve_phone_from_document(document_type, pk, city_id=None):
     from apps.vendor.models import VendorAddress
     from apps.sales.models import SaleOrder, SaleInvoiceOrders, SaleReturnOrders, PaymentTransactions
     from apps.purchase.models import PurchaseOrders, PurchaseReturnOrders, BillPaymentTransactions
+    
+    # -------------------------------------------------
+    # 🟢 ACCOUNT LEDGER (SPECIAL CASE)
+    # -------------------------------------------------
+    if document_type == "account_ledger" and request:
+        filter_value = request.GET.get(pk)
+        if not filter_value:
+            return None
+
+        # CUSTOMER LEDGER
+        if pk == "customer_id":
+            qs = CustomerAddresses.objects.filter(customer_id=filter_value)
+            if city_id:
+                qs = qs.filter(city_id=city_id)
+            addr = qs.first()
+            return addr.phone if addr else None
+
+        # VENDOR LEDGER
+        if pk == "vendor_id":
+            qs = VendorAddress.objects.filter(vendor_id=filter_value)
+            if city_id:
+                qs = qs.filter(city_id=city_id)
+            addr = qs.first()
+            return addr.phone if addr else None
+
+        return None
 
     # SALE ORDER → CUSTOMER PHONE
     if document_type == "sale_order":
