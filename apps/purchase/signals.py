@@ -14,45 +14,45 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-@receiver(post_save, sender=PurchaseInvoiceOrders)
-def update_pending_amount_after_invoice_creation(sender, instance, created, **kwargs):
-    """
-    When a new PurchaseInvoiceOrders is created, initialize pending_amount = total_amount.
-    Also create a Journal Entry for purchase expense.
-    """
-    if created:
-        instance.pending_amount = instance.total_amount
-        instance.save(update_fields=['pending_amount'])
+# @receiver(post_save, sender=PurchaseInvoiceOrders)
+# def update_pending_amount_after_invoice_creation(sender, instance, created, **kwargs):
+#     """
+#     When a new PurchaseInvoiceOrders is created, initialize pending_amount = total_amount.
+#     Also create a Journal Entry for purchase expense.
+#     """
+#     if created:
+#         instance.pending_amount = instance.total_amount
+#         instance.save(update_fields=['pending_amount'])
 
-        # Fetch existing balance (most recent)
-        existing_balance = (
-            JournalEntryLines.objects.filter(vendor_id=instance.vendor_id)
-            .order_by('is_deleted', '-created_at')
-            .values_list('balance', flat=True)
-            .first()
-        ) or Decimal('0.00')
+#         # Fetch existing balance (most recent)
+#         existing_balance = (
+#             JournalEntryLines.objects.filter(vendor_id=instance.vendor_id)
+#             .order_by('is_deleted', '-created_at')
+#             .values_list('balance', flat=True)
+#             .first()
+#         ) or Decimal('0.00')
 
-        # Vendor owes us (increase payable)
-        new_balance = Decimal(existing_balance) + Decimal(instance.total_amount)
+#         # Vendor owes us (increase payable)
+#         new_balance = Decimal(existing_balance) + Decimal(instance.total_amount)
 
-        # Fetch Purchase Account
-        try:
-            purchase_account = LedgerAccounts.objects.get(name__iexact="Purchase Account", is_deleted=False)
-        except LedgerAccounts.DoesNotExist:
-            purchase_account = None
+#         # Fetch Purchase Account
+#         try:
+#             purchase_account = LedgerAccounts.objects.get(name__iexact="Purchase Account", is_deleted=False)
+#         except LedgerAccounts.DoesNotExist:
+#             purchase_account = None
 
-        # Create Journal Entry
-        JournalEntryLines.objects.create(
-            ledger_account_id=purchase_account,
-            debit=instance.total_amount,
-            voucher_no=instance.invoice_no,
-            credit=0.00,
-            description=f"Goods purchased from {instance.vendor_id.name}",
-            vendor_id=instance.vendor_id,
-            balance=new_balance
-        )
+#         # Create Journal Entry
+#         JournalEntryLines.objects.create(
+#             ledger_account_id=purchase_account,
+#             debit=instance.total_amount,
+#             voucher_no=instance.invoice_no,
+#             credit=0.00,
+#             description=f"Goods purchased from {instance.vendor_id.name}",
+#             vendor_id=instance.vendor_id,
+#             balance=new_balance
+#         )
 
-        logger.info(f"Pending amount initialized for purchase invoice {instance.invoice_no} = {instance.total_amount}")
+#         logger.info(f"Pending amount initialized for purchase invoice {instance.invoice_no} = {instance.total_amount}")
 
 
 @receiver(post_save, sender=BillPaymentTransactions)

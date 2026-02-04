@@ -442,6 +442,9 @@ class SaleOrderItems(models.Model):
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.IntegerField(null=True, default=None) #changed to Integerfield
+    available_qty = models.IntegerField(null=True, default=0)
+    production_qty = models.IntegerField(null=True, default=0)
+    delivered_qty = models.IntegerField(null=True, default=0)
     total_boxes = models.IntegerField(null=True, default=None)
     rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)

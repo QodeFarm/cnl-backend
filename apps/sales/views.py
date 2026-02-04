@@ -1398,191 +1398,345 @@ class SaleOrderViewSet(APIView):
         return self.create(request, *args, **kwargs)
 #---------------------------------------------------------
 
+    # @transaction.atomic
+    # def create(self, request, *args, **kwargs):
+    #     given_data = request.data
+    #     #print("-" * 30)
+    #     #print("Given data:", given_data)
+    #     #print("-" * 30)
+
+    #     # Extract payload after DB is known
+    #     sale_order_data = given_data.pop('sale_order', None)
+    #     sale_order_items_data = given_data.pop('sale_order_items', None)
+    #     order_attachments_data = given_data.pop('order_attachments', None)
+    #     order_shipments_data = given_data.pop('order_shipments', None)
+    #     custom_fields_data = given_data.pop('custom_field_values', None)
+        
+    #     # ---------------- CLEAN EMPTY SALE ORDER ITEMS ---------------- #
+    #     # Remove blank/empty payloads created by frontend (5 default rows)
+    #     # 👉 ADD THIS BELOW
+    #     sale_order_items_data = [
+    #         item for item in sale_order_items_data
+    #         if item.get("product_id") and item.get("quantity")
+    #     ]
+    #     #----------------------------------------------------------
+
+    #     sale_type_name = sale_order_data.get("sale_type", {}).get("name")
+    #     flow_status_name = sale_order_data.get("flow_status", {}).get("flow_status_name")
+    #     is_mstcnl = sale_type_name == "Other" and flow_status_name == "Completed"
+
+    #     if is_mstcnl:
+    #         try:
+    #             # Flatten FKs
+    #             sale_order_id = sale_order_data.get("sale_order_id")
+    #             order_no = sale_order_data.get("order_no")
+    #             ref_no = sale_order_data.get("ref_no")
+    #             ref_date = sale_order_data.get("ref_date")
+    #             order_date = sale_order_data.get("order_date")
+    #             delivery_date = sale_order_data.get("delivery_date")
+    #             customer_name = sale_order_data.get("customer", {}).get("name")
+    #             sale_type = sale_order_data.get("sale_type", {}).get("name")
+    #             flow_status = sale_order_data.get("flow_status", {}).get("flow_status_name")
+    #             order_status = sale_order_data.get("order_status", {}).get("status_name")
+
+    #             # Optional fields
+    #             remarks = sale_order_data.get("remarks")
+    #             email = sale_order_data.get("email")
+    #             total_amount = sale_order_data.get("total_amount")
+    #             item_value = sale_order_data.get("item_value")
+    #             tax_amount = sale_order_data.get("tax_amount")
+    #             discount = sale_order_data.get("discount")
+    #             tax = sale_order_data.get("tax")
+    #             sale_estimate = sale_order_data.get("sale_estimate")
+    #             use_workflow = sale_order_data.get("use_workflow")
+    #             shipping_address = sale_order_data.get("shipping_address")
+    #             billing_address = sale_order_data.get("billing_address")
+
+    #             # Create the record in mstcnl DB
+    #             MstcnlSaleOrder.objects.using('mstcnl').create(
+    #                 sale_order_id=sale_order_id,
+    #                 order_no=order_no,
+    #                 ref_no=ref_no,
+    #                 ref_date=ref_date,
+    #                 order_date=order_date,
+    #                 delivery_date=delivery_date,
+    #                 customer_id=customer_name,
+    #                 sale_type_id=sale_type,
+    #                 flow_status_id=flow_status,
+    #                 order_status_id=order_status,
+    #                 remarks=remarks,
+    #                 email=email,
+    #                 total_amount=total_amount,
+    #                 item_value=item_value,
+    #                 tax_amount=tax_amount,
+    #                 discount=discount,
+    #                 tax=tax,
+    #                 sale_estimate=sale_estimate,
+    #                 use_workflow=use_workflow,
+    #                 shipping_address=shipping_address,
+    #                 billing_address=billing_address,
+    #                 created_at=timezone.now(),
+    #                 updated_at=timezone.now(),
+    #                 # order_type='sale_order'
+    #             )
+
+    #             logger.info(" SaleOrder created in mstcnl DB")
+    #             # return build_response(1, "Sale Order replicated to mstcnl DB", {"sale_order_id": sale_order_id}, status.HTTP_201_CREATED)
+        
+    #             # STEP 2: Create sale_order_items in mstcnl DB
+    #             for item in sale_order_items_data:
+    #                 try:
+    #                     MstcnlSaleOrderItem.objects.using('mstcnl').create(
+    #                         sale_order_item_id=item.get("sale_order_item_id"),
+    #                         sale_order_id=sale_order_id,
+    #                         product_id=item.get("product", {}).get("name"),
+    #                         # code=item.get("product", {}).get("code"),
+    #                         # print_name=item.get("print_name"),
+    #                         unit_options_id=item.get("unit_options", {}).get("unit_name"),
+    #                         size_id=item.get("size", {}).get("size_name"),
+    #                         color_id=item.get("color", {}).get("color_name"),
+    #                         quantity=item.get("quantity"),
+    #                         rate=item.get("rate"),
+    #                         amount=item.get("amount"),
+    #                         discount=item.get("discount"),
+    #                         tax=item.get("tax"),
+    #                         cgst=item.get("cgst"),
+    #                         sgst=item.get("sgst"),
+    #                         igst=item.get("igst"),
+    #                         invoiced=item.get("invoiced"),
+    #                         work_order_created=item.get("work_order_created"),
+    #                         remarks=item.get("remarks"),
+    #                         created_at=timezone.now(),
+    #                         updated_at=timezone.now(),
+                            
+    #                     )
+    #                     logger.info(" SaleOrder items created in mstcnl DB")
+    #                     # return build_response(1, "Sale Order items replicated to mstcnl DB", {"sale_order_item_id": item.get('sale_order_item_id')}, status.HTTP_201_CREATED)
+    #                 except Exception as e:
+    #                     logger.warning(f"❌ Failed to replicate SaleOrderItem {item.get('sale_order_item_id')} to mstcnl DB: {e}")
+
+    #             #  Attachments: only if present and list
+    #             if order_attachments_data and isinstance(order_attachments_data, list):
+    #                 for attachment in order_attachments_data:
+    #                     try:
+    #                         MstcnlOrderAttachment.objects.using('mstcnl').create(
+    #                             attachment_id=attachment.get("attachment_id"),
+    #                             order_id=sale_order_id,
+    #                             order_type_id=attachment.get("order_type", {}).get("name"),
+    #                             attachment_name=attachment.get("attachment_name"),
+    #                             attachment_path=attachment.get("attachment_path"),
+    #                             # file_size=attachment.get("file_size", 0),
+    #                             created_at=timezone.now(),
+    #                             updated_at=timezone.now(),
+    #                         )
+    #                         logger.info(" Order Attachments items created in mstcnl DB")
+    #                     except Exception as e:
+    #                         logger.warning(f"❌ Failed to replicate OrderAttachment to mstcnl DB: {e}")
+
+    #             #  Shipments: only if present and has shipment_id
+    #             if order_shipments_data and isinstance(order_shipments_data, dict) and order_shipments_data.get("shipment_id"):
+    #                 try:
+    #                     MstcnlOrderShipment.objects.using('mstcnl').create(
+    #                         shipment_id=order_shipments_data.get("shipment_id"),
+    #                         order_id=sale_order_id,
+    #                         order_type_id=order_shipments_data.get("order_type", {}).get("name"),
+    #                         shipping_mode_id=order_shipments_data.get("shipping_mode"),
+    #                         shipping_company_id=order_shipments_data.get("shipping_company"),
+    #                         shipping_tracking_no=order_shipments_data.get("shipping_tracking_no"),
+    #                         shipping_date=order_shipments_data.get("shipping_date"),
+    #                         # expected_delivery_date=None,  # Not in payload
+    #                         destination=order_shipments_data.get("destination"),
+    #                         created_at=timezone.now(),
+    #                         updated_at=timezone.now(),
+    #                     )
+    #                     logger.info(" Order Shipments items created in mstcnl DB")
+    #                 except Exception as e:
+    #                     logger.warning(f"❌ Failed to replicate OrderShipment to mstcnl DB: {e}")
+                        
+    #             # Add a 2-second delay before deletion
+    #             time.sleep(3)
+
+    #             #  Delete from default DB
+    #             try:
+    #                 set_db('default')
+    #                 using_db = 'default'
+
+    #                 # Delete sale order from default DB if exists
+    #                 #print("We are in the delete mode...")
+    #                 SaleOrderItems.objects.using('default').filter(sale_order_id=sale_order_id).delete()
+    #                 OrderAttachments.objects.using('default').filter(order_id=sale_order_id).delete()
+    #                 OrderShipments.objects.using('default').filter(order_id=sale_order_id).delete()
+    #                 SaleOrder.objects.using('default').filter(sale_order_id=sale_order_id).delete()
+    #                 #print("After delete mode...")
+
+    #             except Exception as delete_error:
+    #                 logger.warning(f"⚠️ Failed to delete original records from default DB: {delete_error}")
+
+    #             return build_response(1, "Sale Order and related data replicated to mstcnl DB", {}, status.HTTP_201_CREATED)
+    #         except Exception as e:
+    #             logger.error(f"❌ Failed to replicate SaleOrder to mstcnl DB: {e}")
+    #             return build_response(0, "Replication failed", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    #     # ---------------------- VALIDATION ----------------------------------#
+        
+      
+    #     set_db('default')
+    #     using_db = 'default'
+    #     order_error, item_error, attachment_error, shipments_error, custom_error = [], [], [], [], []
+
+    #     if sale_order_data:
+    #         order_error = validate_payload_data(self, sale_order_data, SaleOrderSerializer, using=using_db)
+    #         validate_order_type(sale_order_data, order_error, OrderTypes, look_up='order_type')
+
+    #     if sale_order_items_data:
+    #         item_error = validate_multiple_data(self, sale_order_items_data, SaleOrderItemsSerializer, ['sale_order_id'], using_db=using_db)
+
+    #     if order_attachments_data:
+    #         attachment_error = validate_multiple_data(self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+
+    #     if order_shipments_data:
+    #         if len(order_shipments_data) > 1:
+    #             shipments_error = validate_multiple_data(self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+    #         else:
+    #             order_shipments_data = {}
+    #             shipments_error = []
+
+    #     if custom_fields_data:
+    #         if len(custom_fields_data) > 1:
+    #             custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
+    #         else:
+    #             custom_error = []
+            
+    #     if not sale_order_data or not sale_order_items_data:
+    #         logger.error("Sale order and sale order items and CustomFields are mandatory but not provided.")
+    #         return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+    #     errors = {}
+    #     if order_error: errors["sale_order"] = order_error
+    #     if item_error: errors["sale_order_items"] = item_error
+    #     if attachment_error: errors["order_attachments"] = attachment_error
+    #     if shipments_error: errors["order_shipments"] = shipments_error
+    #     if custom_error: errors["custom_field_values"] = custom_error
+
+    #     if errors:
+    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+    #     # ---------------------- D A T A   C R E A T I O N ----------------------------#
+    #     new_sale_order_data = generic_data_creation(self, [sale_order_data], SaleOrderSerializer, using=using_db)[0]
+    #     sale_order_id = new_sale_order_data.get("sale_order_id", None)
+    #     logger.info(f'SaleOrder - created in {using_db} DB')
+
+    #     if sale_order_id:
+    #         update_fields = {'sale_order_id': sale_order_id}
+    #         items_data = generic_data_creation(self, sale_order_items_data, SaleOrderItemsSerializer, update_fields, using=using_db)
+    #         logger.info(f'SaleOrderItems - created in {using_db} DB')
+
+    #     order_type_val = sale_order_data.get('order_type')
+    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
+    #     type_id = order_type.order_type_id
+
+    #     update_fields = {'order_id': sale_order_id, 'order_type_id': type_id}
+    #     if order_attachments_data:
+    #         order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields, using=using_db)
+    #         logger.info(f'OrderAttachments - created in {using_db} DB')
+    #     else:
+    #         order_attachments = []
+
+    #     if order_shipments_data:
+    #         order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields, using=using_db)
+    #         logger.info(f'OrderShipments - created in {using_db} DB')
+    #     else:
+    #         order_shipments = []
+
+    #     if custom_fields_data:
+    #         update_fields = {'custom_id': sale_order_id}
+    #         custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields, using=using_db)
+    #         logger.info(f'CustomFieldValues - created in {using_db} DB')
+
+    #     # -------------------- Inventory Blocking ----------------------------------
+    #     if sale_order_data.get("sale_estimate", "").lower() != "yes":
+    #         block_duration = InventoryBlockConfig.objects.using(using_db).filter(product_id__isnull=True).first()
+    #         block_duration_hours = getattr(block_duration, 'block_duration_hours', 24)
+    #         expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+
+    #         blocked_inventory_data = []
+    #         for item in sale_order_items_data:
+    #             product_id = item.get("product_id")
+    #             ordered_qty = item.get("quantity")
+    #             product = Products.objects.using(using_db).filter(product_id=product_id).first()
+
+    #             if product:
+    #                 if product.balance >= ordered_qty:
+    #                     product.balance = F('balance') - ordered_qty
+    #                     product.save(using=using_db, update_fields=['balance'])
+
+    #                 blocked_inventory_data.append(BlockedInventory(
+    #                     sale_order_id=SaleOrder.objects.using(using_db).get(sale_order_id=sale_order_id),
+    #                     product_id=Products.objects.using(using_db).get(product_id=product_id),
+    #                     blocked_qty=ordered_qty,
+    #                     expiration_time=expiration_time
+    #                 ))
+    #             else:
+    #                 return build_response(0, f"Product with ID {product_id} not found.", [], status.HTTP_404_NOT_FOUND)
+
+    #         BlockedInventory.objects.using(using_db).bulk_create(blocked_inventory_data, ignore_conflicts=True)
+    #         logger.info("Inventory blocked for sale order %s.", sale_order_id)
+
+    #     # ---------------------- R E S P O N S E ----------------------------#
+    #     # -------------------- AUTO WHATSAPP (NON-BLOCKING) --------------------
+    #     whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id)
+
+    #     custom_data = {
+    #         "sale_order": new_sale_order_data,
+    #         "sale_order_items": items_data,
+    #         "order_attachments": order_attachments,
+    #         "order_shipments": order_shipments,
+    #         "custom_field_values": custom_fields_data,
+    #         "whatsapp": whatsapp_result
+    #     }
+        
+    #     sale_order_no = sale_order_data.get("order_no")
+        
+    #     # Log the Create
+    #     log_user_action(
+    #         using_db,
+    #         request.user,
+    #         "CREATE",
+    #         "Sale Order",
+    #         sale_order_id,
+    #         f"Sale Order Created on {sale_order_no} by {request.user.username}"
+    #     )
+    #     return build_response(1, "Sale Order created successfully", custom_data, status.HTTP_201_CREATED)
+
+
+#--------------------------------------------------------
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         given_data = request.data
-        #print("-" * 30)
-        #print("Given data:", given_data)
-        #print("-" * 30)
 
-        # Extract payload after DB is known
+        # Extract payload
         sale_order_data = given_data.pop('sale_order', None)
         sale_order_items_data = given_data.pop('sale_order_items', None)
         order_attachments_data = given_data.pop('order_attachments', None)
         order_shipments_data = given_data.pop('order_shipments', None)
         custom_fields_data = given_data.pop('custom_field_values', None)
-        
+
         # ---------------- CLEAN EMPTY SALE ORDER ITEMS ---------------- #
-        # Remove blank/empty payloads created by frontend (5 default rows)
-        # 👉 ADD THIS BELOW
         sale_order_items_data = [
             item for item in sale_order_items_data
             if item.get("product_id") and item.get("quantity")
         ]
-        #----------------------------------------------------------
+        # -------------------------------------------------------------- #
 
         sale_type_name = sale_order_data.get("sale_type", {}).get("name")
         flow_status_name = sale_order_data.get("flow_status", {}).get("flow_status_name")
         is_mstcnl = sale_type_name == "Other" and flow_status_name == "Completed"
 
-        if is_mstcnl:
-            try:
-                # Flatten FKs
-                sale_order_id = sale_order_data.get("sale_order_id")
-                order_no = sale_order_data.get("order_no")
-                ref_no = sale_order_data.get("ref_no")
-                ref_date = sale_order_data.get("ref_date")
-                order_date = sale_order_data.get("order_date")
-                delivery_date = sale_order_data.get("delivery_date")
-                customer_name = sale_order_data.get("customer", {}).get("name")
-                sale_type = sale_order_data.get("sale_type", {}).get("name")
-                flow_status = sale_order_data.get("flow_status", {}).get("flow_status_name")
-                order_status = sale_order_data.get("order_status", {}).get("status_name")
-
-                # Optional fields
-                remarks = sale_order_data.get("remarks")
-                email = sale_order_data.get("email")
-                total_amount = sale_order_data.get("total_amount")
-                item_value = sale_order_data.get("item_value")
-                tax_amount = sale_order_data.get("tax_amount")
-                discount = sale_order_data.get("discount")
-                tax = sale_order_data.get("tax")
-                sale_estimate = sale_order_data.get("sale_estimate")
-                use_workflow = sale_order_data.get("use_workflow")
-                shipping_address = sale_order_data.get("shipping_address")
-                billing_address = sale_order_data.get("billing_address")
-
-                # Create the record in mstcnl DB
-                MstcnlSaleOrder.objects.using('mstcnl').create(
-                    sale_order_id=sale_order_id,
-                    order_no=order_no,
-                    ref_no=ref_no,
-                    ref_date=ref_date,
-                    order_date=order_date,
-                    delivery_date=delivery_date,
-                    customer_id=customer_name,
-                    sale_type_id=sale_type,
-                    flow_status_id=flow_status,
-                    order_status_id=order_status,
-                    remarks=remarks,
-                    email=email,
-                    total_amount=total_amount,
-                    item_value=item_value,
-                    tax_amount=tax_amount,
-                    discount=discount,
-                    tax=tax,
-                    sale_estimate=sale_estimate,
-                    use_workflow=use_workflow,
-                    shipping_address=shipping_address,
-                    billing_address=billing_address,
-                    created_at=timezone.now(),
-                    updated_at=timezone.now(),
-                    # order_type='sale_order'
-                )
-
-                logger.info(" SaleOrder created in mstcnl DB")
-                # return build_response(1, "Sale Order replicated to mstcnl DB", {"sale_order_id": sale_order_id}, status.HTTP_201_CREATED)
-        
-                # STEP 2: Create sale_order_items in mstcnl DB
-                for item in sale_order_items_data:
-                    try:
-                        MstcnlSaleOrderItem.objects.using('mstcnl').create(
-                            sale_order_item_id=item.get("sale_order_item_id"),
-                            sale_order_id=sale_order_id,
-                            product_id=item.get("product", {}).get("name"),
-                            # code=item.get("product", {}).get("code"),
-                            # print_name=item.get("print_name"),
-                            unit_options_id=item.get("unit_options", {}).get("unit_name"),
-                            size_id=item.get("size", {}).get("size_name"),
-                            color_id=item.get("color", {}).get("color_name"),
-                            quantity=item.get("quantity"),
-                            rate=item.get("rate"),
-                            amount=item.get("amount"),
-                            discount=item.get("discount"),
-                            tax=item.get("tax"),
-                            cgst=item.get("cgst"),
-                            sgst=item.get("sgst"),
-                            igst=item.get("igst"),
-                            invoiced=item.get("invoiced"),
-                            work_order_created=item.get("work_order_created"),
-                            remarks=item.get("remarks"),
-                            created_at=timezone.now(),
-                            updated_at=timezone.now(),
-                            
-                        )
-                        logger.info(" SaleOrder items created in mstcnl DB")
-                        # return build_response(1, "Sale Order items replicated to mstcnl DB", {"sale_order_item_id": item.get('sale_order_item_id')}, status.HTTP_201_CREATED)
-                    except Exception as e:
-                        logger.warning(f"❌ Failed to replicate SaleOrderItem {item.get('sale_order_item_id')} to mstcnl DB: {e}")
-
-                #  Attachments: only if present and list
-                if order_attachments_data and isinstance(order_attachments_data, list):
-                    for attachment in order_attachments_data:
-                        try:
-                            MstcnlOrderAttachment.objects.using('mstcnl').create(
-                                attachment_id=attachment.get("attachment_id"),
-                                order_id=sale_order_id,
-                                order_type_id=attachment.get("order_type", {}).get("name"),
-                                attachment_name=attachment.get("attachment_name"),
-                                attachment_path=attachment.get("attachment_path"),
-                                # file_size=attachment.get("file_size", 0),
-                                created_at=timezone.now(),
-                                updated_at=timezone.now(),
-                            )
-                            logger.info(" Order Attachments items created in mstcnl DB")
-                        except Exception as e:
-                            logger.warning(f"❌ Failed to replicate OrderAttachment to mstcnl DB: {e}")
-
-                #  Shipments: only if present and has shipment_id
-                if order_shipments_data and isinstance(order_shipments_data, dict) and order_shipments_data.get("shipment_id"):
-                    try:
-                        MstcnlOrderShipment.objects.using('mstcnl').create(
-                            shipment_id=order_shipments_data.get("shipment_id"),
-                            order_id=sale_order_id,
-                            order_type_id=order_shipments_data.get("order_type", {}).get("name"),
-                            shipping_mode_id=order_shipments_data.get("shipping_mode"),
-                            shipping_company_id=order_shipments_data.get("shipping_company"),
-                            shipping_tracking_no=order_shipments_data.get("shipping_tracking_no"),
-                            shipping_date=order_shipments_data.get("shipping_date"),
-                            # expected_delivery_date=None,  # Not in payload
-                            destination=order_shipments_data.get("destination"),
-                            created_at=timezone.now(),
-                            updated_at=timezone.now(),
-                        )
-                        logger.info(" Order Shipments items created in mstcnl DB")
-                    except Exception as e:
-                        logger.warning(f"❌ Failed to replicate OrderShipment to mstcnl DB: {e}")
-                        
-                # Add a 2-second delay before deletion
-                time.sleep(3)
-
-                #  Delete from default DB
-                try:
-                    set_db('default')
-                    using_db = 'default'
-
-                    # Delete sale order from default DB if exists
-                    #print("We are in the delete mode...")
-                    SaleOrderItems.objects.using('default').filter(sale_order_id=sale_order_id).delete()
-                    OrderAttachments.objects.using('default').filter(order_id=sale_order_id).delete()
-                    OrderShipments.objects.using('default').filter(order_id=sale_order_id).delete()
-                    SaleOrder.objects.using('default').filter(sale_order_id=sale_order_id).delete()
-                    #print("After delete mode...")
-
-                except Exception as delete_error:
-                    logger.warning(f"⚠️ Failed to delete original records from default DB: {delete_error}")
-
-                return build_response(1, "Sale Order and related data replicated to mstcnl DB", {}, status.HTTP_201_CREATED)
-            except Exception as e:
-                logger.error(f"❌ Failed to replicate SaleOrder to mstcnl DB: {e}")
-                return build_response(0, "Replication failed", {}, status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
         # ---------------------- VALIDATION ----------------------------------#
-        
-      
         set_db('default')
         using_db = 'default'
+
         order_error, item_error, attachment_error, shipments_error, custom_error = [], [], [], [], []
 
         if sale_order_data:
@@ -1590,27 +1744,47 @@ class SaleOrderViewSet(APIView):
             validate_order_type(sale_order_data, order_error, OrderTypes, look_up='order_type')
 
         if sale_order_items_data:
-            item_error = validate_multiple_data(self, sale_order_items_data, SaleOrderItemsSerializer, ['sale_order_id'], using_db=using_db)
+            item_error = validate_multiple_data(
+                self, sale_order_items_data,
+                SaleOrderItemsSerializer,
+                ['sale_order_id'], using_db=using_db
+            )
 
         if order_attachments_data:
-            attachment_error = validate_multiple_data(self, order_attachments_data, OrderAttachmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+            attachment_error = validate_multiple_data(
+                self, order_attachments_data,
+                OrderAttachmentsSerializer,
+                ['order_id', 'order_type_id'], using_db=using_db
+            )
 
         if order_shipments_data:
             if len(order_shipments_data) > 1:
-                shipments_error = validate_multiple_data(self, [order_shipments_data], OrderShipmentsSerializer, ['order_id', 'order_type_id'], using_db=using_db)
+                shipments_error = validate_multiple_data(
+                    self, [order_shipments_data],
+                    OrderShipmentsSerializer,
+                    ['order_id', 'order_type_id'], using_db=using_db
+                )
             else:
                 order_shipments_data = {}
                 shipments_error = []
 
         if custom_fields_data:
             if len(custom_fields_data) > 1:
-                custom_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=using_db)
+                custom_error = validate_multiple_data(
+                    self, custom_fields_data,
+                    CustomFieldValueSerializer,
+                    ['custom_id'], using_db=using_db
+                )
             else:
                 custom_error = []
-            
+
         if not sale_order_data or not sale_order_items_data:
-            logger.error("Sale order and sale order items and CustomFields are mandatory but not provided.")
-            return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
+            return build_response(
+                0,
+                "Sale order and sale order items & CustomFields are mandatory",
+                [],
+                status.HTTP_400_BAD_REQUEST
+            )
 
         errors = {}
         if order_error: errors["sale_order"] = order_error
@@ -1622,69 +1796,119 @@ class SaleOrderViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
-        # ---------------------- D A T A   C R E A T I O N ----------------------------#
-        new_sale_order_data = generic_data_creation(self, [sale_order_data], SaleOrderSerializer, using=using_db)[0]
-        sale_order_id = new_sale_order_data.get("sale_order_id", None)
+        # ---------------------- DATA CREATION ----------------------------#
+        new_sale_order_data = generic_data_creation(
+            self, [sale_order_data],
+            SaleOrderSerializer,
+            using=using_db
+        )[0]
+
+        sale_order_id = new_sale_order_data.get("sale_order_id")
         logger.info(f'SaleOrder - created in {using_db} DB')
 
         if sale_order_id:
             update_fields = {'sale_order_id': sale_order_id}
-            items_data = generic_data_creation(self, sale_order_items_data, SaleOrderItemsSerializer, update_fields, using=using_db)
+            items_data = generic_data_creation(
+                self,
+                sale_order_items_data,
+                SaleOrderItemsSerializer,
+                update_fields,
+                using=using_db
+            )
             logger.info(f'SaleOrderItems - created in {using_db} DB')
+
+        # ===================== QUANTITY SPLIT LOGIC (ADDED) ===================== #
+        for item in sale_order_items_data:
+            product_id = item.get("product_id")
+            ordered_qty = int(item.get("quantity", 0))
+
+            product = Products.objects.using(using_db).filter(product_id=product_id).first()
+            if not product:
+                continue
+
+            available_qty = min(product.balance or 0, ordered_qty)
+            production_qty = ordered_qty - available_qty
+
+            SaleOrderItems.objects.using(using_db).filter(
+                sale_order_id=sale_order_id,
+                product_id=product_id
+            ).update(
+                available_qty=available_qty,
+                production_qty=production_qty
+            )
+        # ======================================================================= #
 
         order_type_val = sale_order_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
         type_id = order_type.order_type_id
 
         update_fields = {'order_id': sale_order_id, 'order_type_id': type_id}
+
         if order_attachments_data:
-            order_attachments = generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields, using=using_db)
-            logger.info(f'OrderAttachments - created in {using_db} DB')
+            order_attachments = generic_data_creation(
+                self, order_attachments_data,
+                OrderAttachmentsSerializer,
+                update_fields,
+                using=using_db
+            )
         else:
             order_attachments = []
 
         if order_shipments_data:
-            order_shipments = generic_data_creation(self, [order_shipments_data], OrderShipmentsSerializer, update_fields, using=using_db)
-            logger.info(f'OrderShipments - created in {using_db} DB')
+            order_shipments = generic_data_creation(
+                self, [order_shipments_data],
+                OrderShipmentsSerializer,
+                update_fields,
+                using=using_db
+            )
         else:
             order_shipments = []
 
         if custom_fields_data:
             update_fields = {'custom_id': sale_order_id}
-            custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields, using=using_db)
-            logger.info(f'CustomFieldValues - created in {using_db} DB')
+            custom_fields_data = generic_data_creation(
+                self, custom_fields_data,
+                CustomFieldValueSerializer,
+                update_fields,
+                using=using_db
+            )
 
-        # -------------------- Inventory Blocking ----------------------------------
+        # -------------------- Inventory Blocking (UPDATED) --------------------
         if sale_order_data.get("sale_estimate", "").lower() != "yes":
             block_duration = InventoryBlockConfig.objects.using(using_db).filter(product_id__isnull=True).first()
             block_duration_hours = getattr(block_duration, 'block_duration_hours', 24)
             expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
 
             blocked_inventory_data = []
+
             for item in sale_order_items_data:
                 product_id = item.get("product_id")
-                ordered_qty = item.get("quantity")
+
+                ordered_qty = SaleOrderItems.objects.using(using_db).filter(
+                    sale_order_id=sale_order_id,
+                    product_id=product_id
+                ).values_list("available_qty", flat=True).first() or 0
+
                 product = Products.objects.using(using_db).filter(product_id=product_id).first()
+                if not product:
+                    continue
 
-                if product:
-                    if product.balance >= ordered_qty:
-                        product.balance = F('balance') - ordered_qty
-                        product.save(using=using_db, update_fields=['balance'])
+                if ordered_qty > 0:
+                    product.balance = F('balance') - ordered_qty
+                    product.save(using=using_db, update_fields=['balance'])
 
-                    blocked_inventory_data.append(BlockedInventory(
-                        sale_order_id=SaleOrder.objects.using(using_db).get(sale_order_id=sale_order_id),
-                        product_id=Products.objects.using(using_db).get(product_id=product_id),
-                        blocked_qty=ordered_qty,
-                        expiration_time=expiration_time
-                    ))
-                else:
-                    return build_response(0, f"Product with ID {product_id} not found.", [], status.HTTP_404_NOT_FOUND)
+                    blocked_inventory_data.append(
+                        BlockedInventory(
+                            sale_order_id=SaleOrder.objects.using(using_db).get(sale_order_id=sale_order_id),
+                            product_id=Products.objects.using(using_db).get(product_id=product_id),
+                            blocked_qty=ordered_qty,
+                            expiration_time=expiration_time
+                        )
+                    )
 
             BlockedInventory.objects.using(using_db).bulk_create(blocked_inventory_data, ignore_conflicts=True)
-            logger.info("Inventory blocked for sale order %s.", sale_order_id)
 
-        # ---------------------- R E S P O N S E ----------------------------#
-        # -------------------- AUTO WHATSAPP (NON-BLOCKING) --------------------
+        # ---------------------- RESPONSE ----------------------------#
         whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id)
 
         custom_data = {
@@ -1695,10 +1919,9 @@ class SaleOrderViewSet(APIView):
             "custom_field_values": custom_fields_data,
             "whatsapp": whatsapp_result
         }
-        
+
         sale_order_no = sale_order_data.get("order_no")
-        
-        # Log the Create
+
         log_user_action(
             using_db,
             request.user,
@@ -1707,10 +1930,11 @@ class SaleOrderViewSet(APIView):
             sale_order_id,
             f"Sale Order Created on {sale_order_no} by {request.user.username}"
         )
+
         return build_response(1, "Sale Order created successfully", custom_data, status.HTTP_201_CREATED)
 
 
-#--------------------------------------------------------
+#---------------------------------------------------------
 
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
@@ -1978,7 +2202,6 @@ class SaleOrderViewSet(APIView):
             return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
 
         return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
-
 
 #-------------------- Sale Order End ----------------------------------------------------    
 

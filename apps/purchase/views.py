@@ -1196,6 +1196,60 @@ class PurchaseInvoiceOrderViewSet(APIView):
 
         # Update Product Stock
         update_product_stock(Products, ProductVariation, purchase_invoice_items_data, 'subtract')        
+        
+        # ---------------------- J O U R N A L   E N T R Y (VENDOR) ----------------------#
+        from decimal import Decimal
+
+        try:
+            purchase_invoice_obj = PurchaseInvoiceOrders.objects.get(
+                purchase_invoice_id=purchase_invoice_id
+            )
+
+            # Existing vendor balance
+            existing_balance = (
+                JournalEntryLines.objects
+                .filter(vendor_id=purchase_invoice_obj.vendor_id)
+                .order_by('is_deleted', '-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+
+            new_balance = Decimal(existing_balance) + Decimal(purchase_invoice_obj.total_amount)
+
+            # Purchase Account
+            purchase_account = LedgerAccounts.objects.get(name__iexact="Purchase Account")
+
+            # -------- PRODUCT DETAILS --------
+            invoice_items_qs = PurchaseInvoiceItem.objects.filter(
+                purchase_invoice_id=purchase_invoice_id
+            )
+
+            product_lines = []
+            for idx, item in enumerate(invoice_items_qs, start=1):
+                product_lines.append(
+                    f"{idx}) {item.product_id.name} – Qty: {item.quantity} @ {item.rate}"
+                )
+
+            products_description = "\n".join(product_lines)
+
+            description = (
+                f"Goods purchased from {purchase_invoice_obj.vendor_id.name}\n"
+                f"{products_description}"
+            )
+
+            JournalEntryLines.objects.create(
+                ledger_account_id=purchase_account,
+                credit=purchase_invoice_obj.total_amount,
+                debit=Decimal('0.00'),
+                voucher_no=purchase_invoice_obj.invoice_no,
+                description=description,
+                vendor_id=purchase_invoice_obj.vendor_id,
+                balance=new_balance
+            )
+
+        except LedgerAccounts.DoesNotExist:
+            logger.error("Purchase Account not found. Journal entry not created.")
+
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     

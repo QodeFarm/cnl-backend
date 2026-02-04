@@ -284,3 +284,9 @@ class ProductVariationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariation
         fields = '__all__'	
+        
+    def validate(self, data):
+        # DB safety: price cannot be NULL
+        if data.get('price') in [None, '']:
+            data['price'] = 0
+        return data
