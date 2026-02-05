@@ -2526,7 +2526,7 @@ class SaleInvoiceOrdersViewSet(APIView):
                 'customer_address_id', 
                 'customer_address_id__city_id',
                 'order_status_id'
-            ).order_by('invoice_date', 'invoice_no')
+            ).order_by('-created_at')
             
             # Apply filters
             filterset = SaleRegisterFilter(request.GET, queryset=queryset)
