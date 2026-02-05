@@ -171,6 +171,58 @@ def filter_by_search(queryset, filter_set, value):
     
     return search_queryset(queryset, search_params, filter_set)
 
+def filter_by_simple_search(queryset, value, search_fields, filter_set=None):
+    """
+    Global simple text search utility for dropdown/autocomplete use-cases.
+    Searches across multiple fields using OR logic with icontains.
+    
+    Args:
+        queryset: The queryset to filter
+        value: The search text
+        search_fields: List of field names to search in (e.g., ['name', 'print_name', 'code'])
+        filter_set: Optional filter_set instance to store search params for deferred execution
+    
+    Returns:
+        Filtered queryset
+    
+    Usage in FilterSet:
+        search = filters.CharFilter(method='filter_by_search_dropdown', label="Search")
+        
+        def filter_by_search_dropdown(self, queryset, name, value):
+            return filter_by_simple_search(queryset, value, ['name', 'print_name', 'code'], self)
+    """
+    if not value or not search_fields:
+        return queryset
+    
+    # Store search params for deferred execution (before pagination)
+    if filter_set is not None:
+        filter_set._simple_search_value = value
+        filter_set._simple_search_fields = search_fields
+        return queryset  # Don't filter yet, will be applied before pagination
+    
+    # Direct filtering (when no filter_set provided)
+    search_query = Q()
+    for field in search_fields:
+        search_query |= Q(**{f"{field}__icontains": value})
+    
+    return queryset.filter(search_query)
+
+
+def apply_simple_search(filter_set, queryset):
+    """
+    Apply deferred simple search filter before pagination.
+    Called internally by filter_by_limit.
+    """
+    if hasattr(filter_set, '_simple_search_value') and hasattr(filter_set, '_simple_search_fields'):
+        value = filter_set._simple_search_value
+        search_fields = filter_set._simple_search_fields
+        if value and search_fields:
+            search_query = Q()
+            for field in search_fields:
+                search_query |= Q(**{f"{field}__icontains": value})
+            queryset = queryset.filter(search_query)
+    return queryset
+
 def filter_by_sort(filter_set, queryset, value):
     return apply_sorting(filter_set, queryset)
 
@@ -194,6 +246,9 @@ def filter_by_limit(filter_set, queryset, value):
         # Initialize page if not set yet
         if not hasattr(filter_set, 'page_number'):
             filter_set.page_number = 1  # Default page
+        
+        # Apply simple search filter BEFORE pagination (if deferred)
+        queryset = apply_simple_search(filter_set, queryset)
             
         # Apply sorting first
         queryset = apply_sorting(filter_set, queryset)
@@ -205,6 +260,8 @@ def filter_by_limit(filter_set, queryset, value):
     except (ValueError, TypeError) as e:
         logger.error(f"Error parsing limit value: {e}")
         filter_set.limit = 10  # Default to 10 items on error
+        # Apply simple search filter BEFORE pagination (if deferred)
+        queryset = apply_simple_search(filter_set, queryset)
         # Apply default pagination
         paginated_queryset, total_count = filter_by_pagination(queryset, getattr(filter_set, 'page_number', 1), filter_set.limit)
         filter_set.total_count = total_count

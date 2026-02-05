@@ -6,7 +6,7 @@ from apps.vendor.models import Vendor, VendorAgent, VendorCategory, VendorPaymen
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from django_filters import rest_framework as filters
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_simple_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
 
@@ -28,12 +28,17 @@ class VendorFilter(FilterSet): #verified
     phone = filters.CharFilter(field_name='vendoraddress__phone', lookup_expr='icontains', label="Phone")
     city_id = filters.CharFilter(field_name='vendoraddress__city_id__city_name', lookup_expr='icontains', label="City")
     is_deleted = filters.BooleanFilter()
+    search = filters.CharFilter(method='filter_by_search_dropdown', label="Simple Search")
     
     def filter_by_period_name(self, queryset, name, value):
         return filter_by_period_name(self, queryset, self.data, value)
     
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value).distinct()
+
+    def filter_by_search_dropdown(self, queryset, name, value):
+        """Simple search for dropdown - searches name, print_name, code"""
+        return filter_by_simple_search(queryset, value, ['name', 'print_name', 'code'])
 
     def filter_by_sort(self, queryset, name, value):
         return filter_by_sort(self, queryset, value)
@@ -47,7 +52,7 @@ class VendorFilter(FilterSet): #verified
     class Meta:
         model = Vendor
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account', 'is_deleted','created_at', 'city_id','email', 'phone','period_name','s','sort','page','limit']
+        fields = ['name','gst_no','vendor_category_id','ledger_account_id','ledger_account', 'is_deleted','created_at', 'city_id','email', 'phone','period_name','s','search','sort','page','limit']
 
 class VendorAgentFilter(FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
