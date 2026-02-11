@@ -234,6 +234,7 @@ class JournalEntryLinesAPIView(APIView):
     #     )
     
     def get(self, request, input_id):
+        from decimal import Decimal
 
         # ---------------------------
         # STEP 1: UUID CHECK
@@ -245,25 +246,33 @@ class JournalEntryLinesAPIView(APIView):
             is_uuid = False
 
         # ---------------------------
-        # STEP 2: BASE QUERYSET
+        # STEP 2: DETERMINE ACCOUNT TYPE (for balance calculation)
+        # ---------------------------
+        account_type = None  # 'customer', 'vendor', or 'ledger'
+
+        # ---------------------------
+        # STEP 3: BASE QUERYSET (Changed to ASC for proper ledger order)
         # ---------------------------
         if is_uuid and Customer.objects.filter(pk=input_id).exists():
+            account_type = 'customer'
             queryset = JournalEntryLines.objects.filter(
                 customer_id=input_id,
                 is_deleted=False
-            ).order_by('-created_at')
+            ).order_by('created_at')  # ASC: oldest first (chronological)
 
         elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
+            account_type = 'vendor'
             queryset = JournalEntryLines.objects.filter(
                 vendor_id=input_id,
                 is_deleted=False
-            ).order_by('-created_at')
+            ).order_by('created_at')  # ASC: oldest first (chronological)
 
         elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
+            account_type = 'ledger'
             queryset = JournalEntryLines.objects.filter(
                 ledger_account_id=input_id,
                 is_deleted=False
-            ).order_by('-created_at')
+            ).order_by('created_at')  # ASC: oldest first (chronological)
 
         else:
             # ---------------------------
@@ -280,20 +289,22 @@ class JournalEntryLinesAPIView(APIView):
                 )
 
             if input_id == 'customer_id':
+                account_type = 'customer'
                 queryset = JournalEntryLines.objects.filter(
                     customer_id__in=CustomerAddresses.objects.filter(
                         city_id=city_id
                     ).values_list('customer_id', flat=True),
                     is_deleted=False
-                ).order_by('-created_at')
+                ).order_by('created_at')  # ASC: oldest first (chronological)
 
             elif input_id == 'vendor_id':
+                account_type = 'vendor'
                 queryset = JournalEntryLines.objects.filter(
                     vendor_id__in=VendorAddress.objects.filter(
                         city_id=city_id
                     ).values_list('vendor_id', flat=True),
                     is_deleted=False
-                ).order_by('-created_at')
+                ).order_by('created_at')  # ASC: oldest first (chronological)
 
             else:
                 return build_response(
@@ -304,7 +315,7 @@ class JournalEntryLinesAPIView(APIView):
                 )
 
         # ---------------------------
-        # STEP 3: APPLY FILTERS (WITHOUT PAGINATION)
+        # STEP 4: APPLY FILTERS (WITHOUT PAGINATION)
         # ---------------------------
         filter_params = request.GET.copy()
         filter_params.pop('page', None)
@@ -319,27 +330,70 @@ class JournalEntryLinesAPIView(APIView):
         filtered_queryset = filterset.qs if filterset.is_valid() else queryset
 
         # ---------------------------
-        # STEP 4: TOTAL COUNT (FULL FILTERED COUNT)
+        # STEP 5: TOTAL COUNT (FULL FILTERED COUNT)
         # ---------------------------
         total_count = filtered_queryset.count()
 
         # ---------------------------
-        # STEP 5: PAGINATION (ALWAYS APPLIED)
+        # STEP 6: PAGINATION PARAMS
         # ---------------------------
         page = max(int(request.query_params.get('page', 1)), 1)
         limit = max(int(request.query_params.get('limit', 10)), 1)
-
-
         start = (page - 1) * limit
         end = start + limit
 
-        paginated_queryset = filtered_queryset[start:end]
+        # ---------------------------
+        # STEP 7: CALCULATE RUNNING BALANCE
+        # Fetch ALL records, calculate balance, then paginate
+        # ---------------------------
+        all_records = list(filtered_queryset)
+        running_balance = Decimal('0.00')
+        opening_balance = Decimal('0.00')
+        closing_balance = Decimal('0.00')
+
+        # Calculate running balance for ALL records
+        for idx, record in enumerate(all_records):
+            # For Customer: Debit increases balance (they owe us), Credit decreases (they paid)
+            # For Vendor: Credit increases balance (we owe them), Debit decreases (we paid)
+            if account_type == 'vendor':
+                running_balance += Decimal(str(record.credit)) - Decimal(str(record.debit))
+            else:
+                # Customer or Ledger Account
+                running_balance += Decimal(str(record.debit)) - Decimal(str(record.credit))
+            
+            record.running_balance = running_balance
+
+        # Calculate opening balance (balance BEFORE current page starts)
+        if start > 0 and len(all_records) > 0:
+            # Opening balance = running balance of the record just before this page
+            opening_balance = all_records[start - 1].running_balance if start <= len(all_records) else Decimal('0.00')
+        else:
+            opening_balance = Decimal('0.00')
+
+        # Get closing balance (balance at end of current page OR final balance)
+        if len(all_records) > 0:
+            # If this is the last page or beyond, closing = final balance
+            if end >= len(all_records):
+                closing_balance = all_records[-1].running_balance
+            else:
+                closing_balance = all_records[end - 1].running_balance
+        else:
+            closing_balance = Decimal('0.00')
 
         # ---------------------------
-        # STEP 6: SERIALIZATION
+        # STEP 8: PAGINATE AFTER BALANCE CALCULATION
         # ---------------------------
-        serializer = JournalEntryLinesSerializer(paginated_queryset, many=True)
+        paginated_records = all_records[start:end]
+
+        # ---------------------------
+        # STEP 9: SERIALIZATION WITH RUNNING BALANCE
+        # ---------------------------
+        serializer = JournalEntryLinesSerializer(paginated_records, many=True)
         data = serializer.data
+
+        # Inject running_balance into serialized data
+        for idx, row in enumerate(data):
+            row['running_balance'] = str(paginated_records[idx].running_balance)
         
         # Collect invoice numbers from journal entries
         invoice_nos = [
@@ -386,17 +440,18 @@ class JournalEntryLinesAPIView(APIView):
                     )
 
         # ---------------------------
-        # STEP 7: RESPONSE
+        # STEP 10: RESPONSE WITH OPENING & CLOSING BALANCE
         # ---------------------------
-        return filter_response(
-            count=paginated_queryset.count(),   # page-wise count
-            message="Journal Entry Lines data",
-            data=serializer.data,
-            page=page,
-            limit=limit,
-            total_count=total_count,             # full count
-            status_code=status.HTTP_200_OK
-        )
+        return Response({
+            'count': len(paginated_records),
+            'message': "Journal Entry Lines data",
+            'data': data,
+            'page': page,
+            'limit': limit,
+            'totalCount': total_count,
+            'opening_balance': str(opening_balance),
+            'closing_balance': str(closing_balance)
+        }, status=status.HTTP_200_OK)
 
 
 

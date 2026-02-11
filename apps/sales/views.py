@@ -168,7 +168,71 @@ class OrderAttachmentsView(viewsets.ModelViewSet):
         return list_all_objects(self, request, *args, **kwargs)
 
     def create(self, request, *args, **kwargs):
-        return create_instance(self, request, *args, **kwargs)
+        """
+        Custom create for Sale Register - handles file upload and auto-populates order_type_id.
+        
+        Frontend can send:
+        Option 1: multipart/form-data with file
+            - order_id: sale_invoice_id
+            - file: the actual file
+            - attachment_name (optional): custom name, defaults to filename
+            
+        Option 2: JSON with attachment_path
+            - order_id: sale_invoice_id  
+            - attachment_name: name of attachment
+            - attachment_path: path to already uploaded file
+        """
+        import os
+        from uuid import uuid4
+        from django.conf import settings
+        
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        
+        # Handle file upload if file is present
+        uploaded_file = request.FILES.get('file')
+        if uploaded_file:
+            # Create upload directory
+            upload_dir = os.path.join(settings.MEDIA_ROOT, 'order_attachments')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # Generate unique filename
+            file_extension = uploaded_file.name.split('.')[-1] if '.' in uploaded_file.name else ''
+            unique_id = uuid4().hex[:8]
+            safe_filename = f"{unique_id}_{uploaded_file.name}".replace(' ', '_')
+            file_path = os.path.join(upload_dir, safe_filename)
+            
+            # Save file
+            with open(file_path, 'wb+') as destination:
+                for chunk in uploaded_file.chunks():
+                    destination.write(chunk)
+            
+            # Set attachment_path relative to MEDIA_ROOT
+            data['attachment_path'] = f"order_attachments/{safe_filename}"
+            
+            # Set attachment_name if not provided
+            if not data.get('attachment_name'):
+                data['attachment_name'] = uploaded_file.name
+        
+        # Auto-populate order_type_id if not provided (for Sale Register use case)
+        if not data.get('order_type_id'):
+            # Get Sale Invoice order type
+            order_type = get_object_or_none(OrderTypes, name='Sale Invoice')
+            if order_type:
+                data['order_type_id'] = str(order_type.order_type_id)
+            else:
+                # Fallback: try to get any order type
+                order_type = OrderTypes.objects.first()
+                if order_type:
+                    data['order_type_id'] = str(order_type.order_type_id)
+        
+        # Create serializer with modified data
+        serializer = self.get_serializer(data=data)
+        
+        if serializer.is_valid():
+            instance = serializer.save()
+            return build_response(1, "Attachment created successfully", serializer.data, status.HTTP_201_CREATED)
+        else:
+            return build_response(0, "Form validation failed", [], errors=serializer.errors, status_code=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
@@ -2365,6 +2429,13 @@ class SaleInvoiceOrdersViewSet(APIView):
             
             logger.info(f"Fetching records_all: {records_all}")
             
+            # ===================== SALE REGISTER =====================
+            # Handle both ?sale_register and ?sale_register=true
+            sale_register_param = request.query_params.get("sale_register", None)
+            sale_register = sale_register_param is not None and sale_register_param.lower() != "false"
+            if sale_register:
+                return self.get_sale_register(request)
+            
             summary = request.query_params.get("summary", "false").lower() == "true"
 
             if summary:
@@ -2628,6 +2699,384 @@ class SaleInvoiceOrdersViewSet(APIView):
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    # ===================== SALE REGISTER API =====================
+    def get_sale_register(self, request):
+        """
+        Sale Register API for reporting.
+        
+        Query Parameters:
+        - from_date: Start date (YYYY-MM-DD)
+        - to_date: End date (YYYY-MM-DD)
+        - register_type: general | detailed | tax_wise | cancelled | product_group_wise | hsn_wise | daily_sales_summary | monthly_sales_summary
+        - voucher_type: CASH | CREDIT | OTHERS (optional, filters by bill_type)
+        - customer: Customer name search
+        - page, limit: Pagination
+        
+        Response varies based on register_type:
+        - general: Invoice-level summary grouped by voucher type
+        - detailed: Product-level details (Date, Doc No, Product Name, Qty, Unit, Rate, Net Amount, Amount)
+        - cancelled: Only cancelled invoices
+        - daily_sales_summary: Aggregated by date
+        - monthly_sales_summary: Aggregated by month
+        """
+        try:
+            logger.info("Retrieving Sale Register data")
+            
+            # Get pagination parameters
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 10))
+            register_type = request.query_params.get('register_type', 'general')
+            
+            # Get cancelled status IDs
+            canceled_status_ids = list(OrderStatuses.objects.filter(
+                status_name__in=['Cancelled']
+            ).values_list('order_status_id', flat=True))
+            
+            # Base queryset based on register type
+            if register_type == 'cancelled':
+                # Only cancelled invoices
+                queryset = SaleInvoiceOrders.objects.filter(
+                    order_status_id__in=canceled_status_ids
+                )
+            else:
+                # Exclude cancelled
+                queryset = SaleInvoiceOrders.objects.exclude(
+                    order_status_id__in=canceled_status_ids
+                ).exclude(is_deleted=True)
+            
+            queryset = queryset.select_related(
+                'customer_id', 
+                'customer_address_id', 
+                'customer_address_id__city_id',
+                'order_status_id'
+            ).order_by('-created_at')
+            
+            # Apply filters
+            filterset = SaleRegisterFilter(request.GET, queryset=queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+            
+            # Route to appropriate handler based on register_type
+            if register_type == 'detailed':
+                return self._get_detailed_register(request, queryset, page, limit)
+            elif register_type == 'daily_sales_summary':
+                return self._get_daily_sales_summary(request, queryset, page, limit)
+            elif register_type == 'monthly_sales_summary':
+                return self._get_monthly_sales_summary(request, queryset, page, limit)
+            elif register_type in ['product_group_wise', 'product_category_wise', 'product_brand_wise', 'hsn_wise']:
+                return self._get_columnar_register(request, queryset, register_type, page, limit)
+            else:
+                # Default: general, tax_wise, cancelled, unprinted, etc.
+                return self._get_general_register(request, queryset, register_type, page, limit)
+            
+        except Exception as e:
+            logger.error(f"Error in get_sale_register: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return build_response(0, f"An error occurred: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def _get_general_register(self, request, queryset, register_type, page, limit):
+        """General Register - Invoice level with flat data for <ta-table> compatibility"""
+        total_count = queryset.count()
+        
+        # Pagination
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        paginated_queryset = queryset[start_index:end_index]
+        
+        # Build flat records array
+        records = []
+        serial_number = start_index + 1
+        
+        for invoice in paginated_queryset:
+            attachment_count = OrderAttachments.objects.filter(
+                order_id=str(invoice.sale_invoice_id),
+                is_deleted=False
+            ).count()
+            
+            city = self._get_city(invoice)
+            
+            records.append({
+                's_no': serial_number,
+                'sale_invoice_id': str(invoice.sale_invoice_id),
+                'voucher_type': invoice.bill_type,
+                'date': invoice.invoice_date.strftime('%d-%m-%Y') if invoice.invoice_date else None,
+                'invoice_date': str(invoice.invoice_date) if invoice.invoice_date else None,
+                'invoice_no': invoice.invoice_no,
+                'customer_name': invoice.customer_id.name if invoice.customer_id else None,
+                'customer_id': str(invoice.customer_id.customer_id) if invoice.customer_id else None,
+                'city': city,
+                'gross_amount': float(invoice.item_value or 0),
+                'discount': float(invoice.dis_amt or 0),
+                'tax_amount': float(invoice.tax_amount or 0),
+                'round_off': float(invoice.round_off or 0),
+                'amount': float(invoice.total_amount or 0),
+                'attachment_count': attachment_count,
+                'status': invoice.order_status_id.status_name if invoice.order_status_id else None,
+                'order_status_id': str(invoice.order_status_id.order_status_id) if invoice.order_status_id else None
+            })
+            serial_number += 1
+        
+        # Calculate grand totals from full queryset (not paginated)
+        grand_totals = queryset.aggregate(
+            gross_total=Sum('item_value'),
+            discount_total=Sum('dis_amt'),
+            tax_total=Sum('tax_amount'),
+            round_off_total=Sum('round_off'),
+            amount_total=Sum('total_amount')
+        )
+        
+        # Return flat response matching your codebase format
+        return filter_response(
+            count=len(records),
+            message="Success",
+            data=records,
+            page=page,
+            limit=limit,
+            total_count=total_count,
+            status_code=status.HTTP_200_OK
+        )
+
+    def _get_detailed_register(self, request, queryset, page, limit):
+        """Detailed Register - Product level details with flat data for <ta-table> compatibility"""
+        # Get all invoice items for the filtered invoices
+        invoice_ids = list(queryset.values_list('sale_invoice_id', flat=True))
+        
+        items = SaleInvoiceItems.objects.filter(
+            sale_invoice_id__in=invoice_ids
+        ).select_related(
+            'sale_invoice_id',
+            'sale_invoice_id__customer_id',
+            'product_id',
+            'unit_options_id'
+        ).order_by('sale_invoice_id__invoice_date', 'sale_invoice_id__invoice_no')
+        
+        total_count = items.count()
+        
+        # Pagination
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        paginated_items = items[start_index:end_index]
+        
+        records = []
+        serial_number = start_index + 1
+        for item in paginated_items:
+            invoice = item.sale_invoice_id
+            net_amount = (item.quantity or 0) * (item.rate or 0)
+            
+            records.append({
+                's_no': serial_number,
+                'sale_invoice_id': str(invoice.sale_invoice_id) if invoice else None,
+                'sale_invoice_item_id': str(item.sale_invoice_item_id) if item else None,
+                'date': invoice.invoice_date.strftime('%d-%m-%Y') if invoice.invoice_date else None,
+                'invoice_date': str(invoice.invoice_date) if invoice.invoice_date else None,
+                'doc_no': invoice.invoice_no,
+                'customer_name': invoice.customer_id.name if invoice.customer_id else None,
+                'customer_id': str(invoice.customer_id.customer_id) if invoice.customer_id else None,
+                'product_name': item.product_id.name if item.product_id else None,
+                'product_id': str(item.product_id.product_id) if item.product_id else None,
+                'qty': float(item.quantity or 0),
+                'unit_name': item.unit_options_id.unit_name if item.unit_options_id else 'NOS',
+                'rate': float(item.rate or 0),
+                'net_amount': float(net_amount),
+                'amount': float(item.amount or 0)
+            })
+            serial_number += 1
+        
+        # Return flat response matching your codebase format
+        return filter_response(
+            count=len(records),
+            message="Success",
+            data=records,
+            page=page,
+            limit=limit,
+            total_count=total_count,
+            status_code=status.HTTP_200_OK
+        )
+
+    def _get_daily_sales_summary(self, request, queryset, page, limit):
+        """Daily Sales Summary - Aggregated by date with flat data for <ta-table> compatibility"""
+        from django.db.models.functions import TruncDate
+        
+        daily_data = queryset.annotate(
+            sale_date=TruncDate('invoice_date')
+        ).values('sale_date').annotate(
+            invoice_count=Count('sale_invoice_id'),
+            gross_total=Sum('item_value'),
+            discount_total=Sum('dis_amt'),
+            tax_total=Sum('tax_amount'),
+            amount_total=Sum('total_amount')
+        ).order_by('sale_date')
+        
+        total_count = daily_data.count()
+        
+        # Pagination
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        paginated_data = list(daily_data[start_index:end_index])
+        
+        records = []
+        serial_number = start_index + 1
+        for row in paginated_data:
+            records.append({
+                's_no': serial_number,
+                'date': row['sale_date'].strftime('%d-%m-%Y') if row['sale_date'] else None,
+                'sale_date': str(row['sale_date']) if row['sale_date'] else None,
+                'invoice_count': row['invoice_count'],
+                'gross_total': float(row['gross_total'] or 0),
+                'discount_total': float(row['discount_total'] or 0),
+                'tax_total': float(row['tax_total'] or 0),
+                'amount_total': float(row['amount_total'] or 0)
+            })
+            serial_number += 1
+        
+        # Return flat response matching your codebase format
+        return filter_response(
+            count=len(records),
+            message="Success",
+            data=records,
+            page=page,
+            limit=limit,
+            total_count=total_count,
+            status_code=status.HTTP_200_OK
+        )
+
+    def _get_monthly_sales_summary(self, request, queryset, page, limit):
+        """Monthly Sales Summary - Aggregated by month with flat data for <ta-table> compatibility"""
+        from django.db.models.functions import TruncMonth
+        
+        monthly_data = queryset.annotate(
+            sale_month=TruncMonth('invoice_date')
+        ).values('sale_month').annotate(
+            invoice_count=Count('sale_invoice_id'),
+            gross_total=Sum('item_value'),
+            discount_total=Sum('dis_amt'),
+            tax_total=Sum('tax_amount'),
+            amount_total=Sum('total_amount')
+        ).order_by('sale_month')
+        
+        total_count = monthly_data.count()
+        
+        # Pagination
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        paginated_data = list(monthly_data[start_index:end_index])
+        
+        records = []
+        serial_number = start_index + 1
+        for row in paginated_data:
+            records.append({
+                's_no': serial_number,
+                'month': row['sale_month'].strftime('%B %Y') if row['sale_month'] else None,
+                'month_year': row['sale_month'].strftime('%Y-%m') if row['sale_month'] else None,
+                'invoice_count': row['invoice_count'],
+                'gross_total': float(row['gross_total'] or 0),
+                'discount_total': float(row['discount_total'] or 0),
+                'tax_total': float(row['tax_total'] or 0),
+                'amount_total': float(row['amount_total'] or 0)
+            })
+            serial_number += 1
+        
+        # Return flat response matching your codebase format
+        return filter_response(
+            count=len(records),
+            message="Success",
+            data=records,
+            page=page,
+            limit=limit,
+            total_count=total_count,
+            status_code=status.HTTP_200_OK
+        )
+
+    def _get_columnar_register(self, request, queryset, register_type, page, limit):
+        """Columnar Register - Grouped by Product Group/Category/Brand/HSN with flat data for <ta-table> compatibility"""
+        invoice_ids = list(queryset.values_list('sale_invoice_id', flat=True))
+        
+        items = SaleInvoiceItems.objects.filter(
+            sale_invoice_id__in=invoice_ids
+        ).select_related(
+            'sale_invoice_id',
+            'product_id',
+            'product_id__product_group_id',
+            'product_id__brand_id',
+            'unit_options_id'
+        )
+        
+        # Determine grouping field
+        if register_type == 'product_group_wise':
+            group_field = 'product_id__product_group_id__group_name'
+            group_id_field = 'product_id__product_group_id'
+            display_name = 'Product Group'
+        elif register_type == 'product_category_wise':
+            group_field = 'product_id__category_id__category_name'
+            group_id_field = 'product_id__category_id'
+            display_name = 'Product Category'
+        elif register_type == 'product_brand_wise':
+            group_field = 'product_id__brand_id__brand_name'
+            group_id_field = 'product_id__brand_id'
+            display_name = 'Product Brand'
+        elif register_type == 'hsn_wise':
+            group_field = 'product_id__hsn_code'
+            group_id_field = 'product_id__hsn_code'
+            display_name = 'HSN Code'
+        else:
+            group_field = 'product_id__product_group_id__group_name'
+            group_id_field = 'product_id__product_group_id'
+            display_name = 'Product Group'
+        
+        # Aggregate by group
+        grouped_data = items.values(group_field).annotate(
+            qty_total=Sum('quantity'),
+            amount_total=Sum('amount'),
+            item_count=Count('sale_invoice_item_id')
+        ).order_by(group_field)
+        
+        total_count = grouped_data.count()
+        
+        # Pagination
+        start_index = (page - 1) * limit
+        end_index = start_index + limit
+        paginated_data = list(grouped_data[start_index:end_index])
+        
+        records = []
+        serial_number = start_index + 1
+        for row in paginated_data:
+            records.append({
+                's_no': serial_number,
+                'group_name': row[group_field] or 'Uncategorized',
+                'group_type': display_name,
+                'item_count': row['item_count'],
+                'qty_total': float(row['qty_total'] or 0),
+                'amount_total': float(row['amount_total'] or 0)
+            })
+            serial_number += 1
+        
+        # Return flat response matching your codebase format
+        return filter_response(
+            count=len(records),
+            message="Success",
+            data=records,
+            page=page,
+            limit=limit,
+            total_count=total_count,
+            status_code=status.HTTP_200_OK
+        )
+
+    def _get_city(self, invoice):
+        """Helper to get city from invoice"""
+        try:
+            if invoice.customer_address_id and invoice.customer_address_id.city_id:
+                return invoice.customer_address_id.city_id.city_name
+            elif invoice.customer_id:
+                from apps.customer.models import CustomerAddresses
+                address = CustomerAddresses.objects.filter(
+                    customer_id=invoice.customer_id
+                ).first()
+                if address and address.city_id:
+                    return address.city_id.city_name
+        except Exception:
+            pass
+        return None
     
     # def retrieve(self, request, *args, **kwargs):
     #     """
