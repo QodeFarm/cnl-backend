@@ -1786,3 +1786,57 @@ class ProductExcelUploadAPIView(APIView):
             import traceback
             logger.error(traceback.format_exc())
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+        
+        
+#helper method for products
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from django.db import transaction
+
+# from .models import Product
+
+
+class ReduceProductStockAPIView(APIView):
+
+    @transaction.atomic
+    def patch(self, request, product_id):
+        qty = request.data.get('quantity')
+
+        if qty is None:
+            return Response(
+                {"error": "quantity is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if qty <= 0:
+            return Response(
+                {"error": "quantity must be greater than zero"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        product = get_object_or_404(Products, product_id=product_id)
+
+        if product.balance < qty:
+            return Response(
+                {
+                    "error": "Insufficient stock",
+                    "balance": product.balance
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 🔥 Reduce stock
+        product.balance -= qty
+        product.save(update_fields=["balance"])
+
+        return Response(
+            {
+                "message": "Stock updated successfully",
+                "product_id": str(product.product_id),
+                "reduced_qty": qty,
+                "balance": product.balance
+            },
+            status=status.HTTP_200_OK
+        )

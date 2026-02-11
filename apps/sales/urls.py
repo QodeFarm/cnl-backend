@@ -30,6 +30,8 @@ urlpatterns = [
     path('',include(router.urls)),
     path('sale_order/', SaleOrderViewSet.as_view(), name='sales-order-list-create'),
     path('sale_order/<str:pk>/', SaleOrderViewSet.as_view(), name='sales-order-detail-update-delete'),
+    path('pending/', pending_sale_quantities, name='pending-sale-orders'),
+
      # Work order completion
     path('sale_order/<str:pk>/work_order_done/', SaleOrderViewSet.as_view(), name='sale-order-work-order-done'),
     path('sale_invoice_order/', SaleInvoiceOrdersViewSet.as_view(), name='sales-invoice-orders-list-create'),
