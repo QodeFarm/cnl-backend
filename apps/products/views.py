@@ -635,17 +635,6 @@ class ProductViewSet(APIView):
         custom_data["products"] = new_products_data
         product_id = new_products_data.get("product_id", None)  # Fetch product_id from mew instance
         logger.info('Products - created*')
-        
-        product_name = products_data.get("name")
-        # Log the Create
-        log_user_action(
-            set_db('default'),
-            request.user,
-            "CREATE",
-            "Products",
-            product_id,
-            f"{product_name} - Products Record Created by {request.user.username}"
-        )
 
         # Create 'product_variations' data
         if product_variations_data:
@@ -660,6 +649,17 @@ class ProductViewSet(APIView):
             custom_data["product_item_balance"] = product_balance_data
             logger.info('ProductItemBalance - created*') 
 
+        product_name = products_data.get("name")
+        # Log the Create
+        log_user_action(
+            set_db('default'),
+            request.user,
+            "CREATE",
+            "Products",
+            product_id,
+            f"{product_name} - Products Record Created by {request.user.username}"
+        )
+        
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
     def put(self, request, *args, **kwargs):
@@ -726,8 +726,9 @@ class ProductViewSet(APIView):
             update_fields = {'product_id':pk}
 
             # update 'product_variations'
-            variations_data = update_multi_instances(self, pk, product_variations_data, ProductVariation, ProductVariationSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_variation_id')
-            custom_data['product_variations'] = variations_data
+            if product_variations_data:
+                variations_data = update_multi_instances(self, pk, product_variations_data, ProductVariation, ProductVariationSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_variation_id')
+                custom_data['product_variations'] = variations_data
 
             # update 'product_item_balance'
             item_bal_data = update_multi_instances(self, pk, product_balance_data, ProductItemBalance, ProductItemBalanceSerializer, update_fields, main_model_related_field='product_id', current_model_pk_field='product_item_balance_id')
