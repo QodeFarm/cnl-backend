@@ -1314,12 +1314,12 @@ def product_stock_verification(parent_model, child_model, data):
         # Ensure balance is an integer and order_qty is also an integer
         from apps.products.models import Products, Size, Color
         product_name = Products.objects.get(product_id=product).name
-        if balance <= 0:
-            stock_error[f'{product_name}'] = f"Product is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
+        # if balance <= 0:
+        #     stock_error[f'{product_name}'] = f"Product is Out Of Stock. Available: {balance}, Ordered: {order_qty}"
 
-        # Validate if the order_qty is greater than the available stock balance
-        elif int(order_qty) > balance:
-            stock_error[f'{product_name}'] = f'Insufficient stock for this product. Available: {balance}, Ordered: {order_qty}'
+        # # Validate if the order_qty is greater than the available stock balance
+        # elif int(order_qty) > balance:
+        #     stock_error[f'{product_name}'] = f'Insufficient stock for this product. Available: {balance}, Ordered: {order_qty}'
 
         # Product variation verification.
         try:
