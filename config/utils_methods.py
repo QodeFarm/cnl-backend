@@ -419,6 +419,27 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
     date_str = current_date.strftime('%y%m')
     
     prefix = override_prefix if override_prefix else order_type_prefix
+    
+    # 🔹 CUSTOMER → DB-based, no cache
+    if prefix == "CUST":
+        if not model_class or not field_name:
+            return f"{prefix}-00001"
+
+        last_record = (
+            model_class.objects
+            .filter(**{f"{field_name}__startswith": f"{prefix}-"})
+            .order_by(f"-{field_name}")
+            .first()
+        )
+
+        last_number = 0
+        if last_record:
+            try:
+                last_number = int(getattr(last_record, field_name).split('-')[-1])
+            except Exception:
+                last_number = 0
+
+        return f"{prefix}-{last_number + 1:05d}"
 
     if prefix == "PRD":
         if model_class and field_name:
@@ -736,7 +757,7 @@ class OrderNumberMixin(models.Model):
                 return 'SOO-INV'
         
         # Validate existing prefix before returning
-        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD', 'PTR', 'BPR']  # add all that you use
+        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD', 'PTR', 'BPR', 'CUST']  # add all that you use
         if self.order_no_prefix not in valid_prefixes:
             raise ValueError("Invalid prefix")  # <== this will surface clearly
 
@@ -765,6 +786,15 @@ def increment_order_number(order_type_prefix):
     Returns:
         str: The generated order number.
     """
+    
+    if order_type_prefix == "CUST":
+        key = f"{order_type_prefix}"
+        sequence_number = cache.get(key, 0)
+        sequence_number += 1
+        cache.set(key, sequence_number, timeout=None)
+
+        sequence_number_str = f"{sequence_number:05d}"
+        return f"{order_type_prefix}-{sequence_number_str}"
     # Handle prefixes without date-based sequences (e.g., PRD)
     if order_type_prefix == "PRD":
         key = f"{order_type_prefix}"
