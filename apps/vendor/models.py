@@ -3,7 +3,7 @@ from django.forms import JSONField
 from apps.customer.models import LedgerAccounts
 from apps.masters.models import FirmStatuses, GstCategories, PriceCategories, Territory, Transporters
 from config.utils_variables import vendorcategory, vendorpaymentterms, vendoragent, vendor, vendorattachments, vendoraddresses
-from config.utils_methods import custom_upload_to, EncryptedTextField
+from config.utils_methods import custom_upload_to, EncryptedTextField, generate_order_number
 import uuid
 
 # Create your models here.
@@ -77,6 +77,8 @@ class Vendor(models.Model):
     print_name = models.CharField(max_length=255)
     identification = models.CharField(max_length=255, null=True, default=None)
     code = models.CharField(max_length=255,null=True)
+    order_no_prefix = 'VEND'
+    order_no_field = 'code'
     ledger_account_id = models.ForeignKey(LedgerAccounts,null=True, on_delete=models.PROTECT, db_column='ledger_account_id')
     vendor_common_for_sales_purchase = models.BooleanField(null=True, default=None)
     is_sub_vendor = models.BooleanField(null=True, default=None)
@@ -123,6 +125,36 @@ class Vendor(models.Model):
 
     class Meta:
         db_table = vendor
+        
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                # order_number = generate_order_number(self.order_no_prefix)
+                order_number = generate_order_number(
+                    self.order_no_prefix,
+                    model_class=Vendor,
+                    field_name=self.order_no_field
+                )
+                setattr(self, self.order_no_field, order_number)
+                
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
 
 
 class VendorAttachment(models.Model):

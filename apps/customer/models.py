@@ -90,6 +90,8 @@ class Customer(models.Model):
     print_name = models.CharField(max_length=255, null=True,)
     identification = models.CharField(max_length=255, null=True, default=None)
     code = models.CharField(max_length=50,null=True)
+    order_no_prefix = 'CUST'
+    order_no_field = 'code'
     ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, null=True, db_column='ledger_account_id')
     customer_common_for_sales_purchase = models.BooleanField(default=False, null=True)
     is_sub_customer = models.BooleanField(default=False, null=True)
@@ -129,6 +131,37 @@ class Customer(models.Model):
     
     class Meta:
         db_table = customerstable
+        
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        """
+        Override save to ensure the order number is only generated on creation, not on updates.
+        """
+        # Determine if this is a new record based on the `adding` state
+        is_new_record = self._state.adding
+
+        # Only generate and set the order number if this is a new record
+        if is_new_record:
+            # Generate the order number if it's not already set
+            if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
+                # order_number = generate_order_number(self.order_no_prefix)
+                order_number = generate_order_number(
+                    self.order_no_prefix,
+                    model_class=Customer,
+                    field_name=self.order_no_field
+                )
+                setattr(self, self.order_no_field, order_number)
+                
+        # Save the record
+        super().save(*args, **kwargs)
+
+        # After the record is saved, increment the order number sequence only for new records
+        if is_new_record:
+            print("from create", self.pk)
+            increment_order_number(self.order_no_prefix)
+        else:
+            print("from edit", self.pk)
+ 
                     
 class CustomerAttachments(models.Model):
     attachment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

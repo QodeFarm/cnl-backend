@@ -789,8 +789,6 @@ class ProductViewSet(APIView):
         except Exception as e:
             logger.error(f"PATCH error: {str(e)}")
             return build_response(0, f"Error updating product: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
-    
-
 
 
 class ProductExcelImport(BaseExcelImportExport):
@@ -1786,3 +1784,67 @@ class ProductExcelUploadAPIView(APIView):
             import traceback
             logger.error(traceback.format_exc())
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+        
+        
+#updating the balance
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+
+from .models import Products, ProductVariation
+
+
+class UpdateProductBalanceView(APIView):
+
+    def patch(self, request, pk):
+        product = get_object_or_404(Products, pk=pk)
+        balance = request.data.get("balance")
+
+        if balance is None:
+            return Response(
+                {"message": "balance is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 🔹 Check variations from ProductVariation table
+        variations_qs = ProductVariation.objects.filter(product_id=product)
+
+        # ----------------------------------
+        # Case 1: NO variations
+        # ----------------------------------
+        if not variations_qs.exists():
+            product.balance = balance
+            product.save(update_fields=["balance"])
+
+        # ----------------------------------
+        # Case 2: HAS variations
+        # ----------------------------------
+        else:
+            # Update product balance
+            product.balance = balance
+            product.save(update_fields=["balance"])
+
+            # Optional but recommended:
+            # distribute or sync variation quantities
+            per_variation_qty = balance // variations_qs.count()
+
+            for variation in variations_qs:
+                variation.quantity = per_variation_qty
+                variation.save(update_fields=["quantity"])
+
+        return Response(
+            {
+                "message": "Product balance updated successfully",
+                "product_id": str(product.pk),
+                "balance": product.balance,
+                "has_variations": variations_qs.exists()
+            },
+            status=status.HTTP_200_OK
+        )

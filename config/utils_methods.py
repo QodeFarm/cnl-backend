@@ -422,24 +422,35 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
     
     # 🔹 CUSTOMER → DB-based, no cache
     if prefix == "CUST":
-        if not model_class or not field_name:
-            return f"{prefix}-00001"
+        if model_class and field_name:
+            filter_kwargs = {f"{field_name}__startswith": prefix}
+            records = model_class.objects.filter(**filter_kwargs).values_list(field_name, flat=True)
 
-        last_record = (
-            model_class.objects
-            .filter(**{f"{field_name}__startswith": f"{prefix}-"})
-            .order_by(f"-{field_name}")
-            .first()
-        )
+            last_number = 0
+            for code in records:
+                try:
+                    num = int(code.split('-')[-1])
+                    last_number = max(last_number, num)
+                except Exception:
+                    continue
 
-        last_number = 0
-        if last_record:
-            try:
-                last_number = int(getattr(last_record, field_name).split('-')[-1])
-            except Exception:
-                last_number = 0
+            return f"{prefix}-{last_number + 1:05d}"
+        
+    # 🔹 VENDOR → DB-based, no cache
+    if prefix == "VEND":
+        if model_class and field_name:
+            filter_kwargs = {f"{field_name}__startswith": prefix}
+            records = model_class.objects.filter(**filter_kwargs).values_list(field_name, flat=True)
 
-        return f"{prefix}-{last_number + 1:05d}"
+            last_number = 0
+            for code in records:
+                try:
+                    num = int(code.split('-')[-1])
+                    last_number = max(last_number, num)
+                except Exception:
+                    continue
+
+            return f"{prefix}-{last_number + 1:05d}"
 
     if prefix == "PRD":
         if model_class and field_name:
@@ -757,7 +768,7 @@ class OrderNumberMixin(models.Model):
                 return 'SOO-INV'
         
         # Validate existing prefix before returning
-        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD', 'PTR', 'BPR', 'CUST']  # add all that you use
+        valid_prefixes = ['SO', 'SOO', 'PO', 'SO-INV', 'SR', 'PO-INV', 'PR', 'PRD', 'PTR', 'BPR', 'CUST', 'VEND']  # add all that you use
         if self.order_no_prefix not in valid_prefixes:
             raise ValueError("Invalid prefix")  # <== this will surface clearly
 

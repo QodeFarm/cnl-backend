@@ -1695,7 +1695,26 @@ class SaleOrderViewSet(APIView):
             update_fields = {'sale_order_id': sale_order_id}
             items_data = generic_data_creation(self, sale_order_items_data, SaleOrderItemsSerializer, update_fields, using=using_db)
             logger.info(f'SaleOrderItems - created in {using_db} DB')
+        # ===================== QUANTITY SPLIT LOGIC (ADDED) ===================== #
+        for item in sale_order_items_data:
+            product_id = item.get("product_id")
+            ordered_qty = int(item.get("quantity", 0))
 
+            product = Products.objects.using(using_db).filter(product_id=product_id).first()
+            if not product:
+                continue
+
+            available_qty = min(product.balance or 0, ordered_qty)
+            production_qty = ordered_qty - available_qty
+
+            SaleOrderItems.objects.using(using_db).filter(
+                sale_order_id=sale_order_id,
+                product_id=product_id
+            ).update(
+                available_qty=available_qty,
+                production_qty=production_qty
+            )
+        # ======================================================================= #
         order_type_val = sale_order_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
         type_id = order_type.order_type_id
@@ -1717,35 +1736,98 @@ class SaleOrderViewSet(APIView):
             update_fields = {'custom_id': sale_order_id}
             custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, update_fields, using=using_db)
             logger.info(f'CustomFieldValues - created in {using_db} DB')
-
         # -------------------- Inventory Blocking ----------------------------------
+        requires_production = False
         if sale_order_data.get("sale_estimate", "").lower() != "yes":
-            block_duration = InventoryBlockConfig.objects.using(using_db).filter(product_id__isnull=True).first()
-            block_duration_hours = getattr(block_duration, 'block_duration_hours', 24)
+
+            block_config = InventoryBlockConfig.objects.using(using_db).filter(
+                product_id__isnull=True
+            ).first()
+
+            block_duration_hours = getattr(block_config, "block_duration_hours", 24)
             expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
 
             blocked_inventory_data = []
+
             for item in sale_order_items_data:
                 product_id = item.get("product_id")
-                ordered_qty = item.get("quantity")
-                product = Products.objects.using(using_db).filter(product_id=product_id).first()
+                ordered_qty = int(item.get("quantity", 0))
 
-                if product:
-                    if product.balance >= ordered_qty:
-                        product.balance = F('balance') - ordered_qty
-                        product.save(using=using_db, update_fields=['balance'])
+                if not product_id or ordered_qty <= 0:
+                    continue
 
-                    blocked_inventory_data.append(BlockedInventory(
-                        sale_order_id=SaleOrder.objects.using(using_db).get(sale_order_id=sale_order_id),
-                        product_id=Products.objects.using(using_db).get(product_id=product_id),
-                        blocked_qty=ordered_qty,
+                product = Products.objects.using(using_db).select_for_update().filter(
+                    product_id=product_id
+                ).first()
+
+                if not product:
+                    return build_response(
+                        0,
+                        f"Product with ID {product_id} not found.",
+                        [],
+                        status.HTTP_404_NOT_FOUND
+                    )
+
+                # 1️⃣ Calculate available quantity
+                available_qty = min(product.balance or 0, ordered_qty)
+
+                if available_qty <= 0:
+                    continue
+
+                # 2️⃣ Reduce PRODUCT BALANCE
+                product.balance = F('balance') - available_qty
+                product.save(using=using_db, update_fields=['balance'])
+
+                # 3️⃣ Reduce VARIATION QUANTITY (FIFO)
+                remaining_qty = available_qty
+
+                variations = ProductVariation.objects.using(using_db).filter(
+                    product_id=product_id,
+                    quantity__gt=0
+                ).order_by('created_at')  # FIFO
+
+                for variation in variations:
+                    if remaining_qty <= 0:
+                        break
+
+                    deduct_qty = min(variation.quantity, remaining_qty)
+                    variation.quantity = F('quantity') - deduct_qty
+                    variation.save(using=using_db, update_fields=['quantity'])
+
+                    remaining_qty -= deduct_qty
+
+                # Safety check (should NEVER happen)
+                if remaining_qty > 0:
+                    return build_response(
+                        0,
+                        f"Variation quantity mismatch for product {product_id}",
+                        [],
+                        status.HTTP_400_BAD_REQUEST
+                    )
+
+                # 4️⃣ Create blocked inventory record
+                blocked_inventory_data.append(
+                    BlockedInventory(
+                        sale_order_id=SaleOrder.objects.using(using_db).get(
+                            sale_order_id=sale_order_id
+                        ),
+                        product_id=product,
+                        blocked_qty=available_qty,
                         expiration_time=expiration_time
-                    ))
-                else:
-                    return build_response(0, f"Product with ID {product_id} not found.", [], status.HTTP_404_NOT_FOUND)
+                    )
+                )
 
-            BlockedInventory.objects.using(using_db).bulk_create(blocked_inventory_data, ignore_conflicts=True)
-            logger.info("Inventory blocked for sale order %s.", sale_order_id)
+            # 5️⃣ Save blocked inventory
+            if blocked_inventory_data:
+                BlockedInventory.objects.using(using_db).bulk_create(
+                    blocked_inventory_data
+                )
+
+            logger.info(
+                f"Inventory blocked (balance + variations) for Sale Order {sale_order_id}"
+            )
+
+
 
         # ---------------------- R E S P O N S E ----------------------------#
         # -------------------- AUTO WHATSAPP (NON-BLOCKING) --------------------

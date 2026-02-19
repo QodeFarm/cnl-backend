@@ -23,8 +23,17 @@ def product_groups_picture(instance, filename):
 # Create your models here.
 class ProductGroups(models.Model):
     product_group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=50, unique=True)
     group_name = models.CharField(max_length=255)
     description = models.TextField(null=True, default=None)
+    product_mode_id = models.ForeignKey(ItemMaster, on_delete=models.PROTECT, null=True, blank=True, db_column='product_mode_id')
+    under_group_id = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='under_group_id'
+    )
     picture = models.ImageField(max_length=255, null=True, default=None, upload_to=product_groups_picture)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -236,6 +245,7 @@ class Products(OrderNumberMixin):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, null=True, default=None)
     print_name = models.CharField(max_length=255)
     hsn_code= models.CharField(max_length=15, null=True, default=None)
+    has_opening_balance = models.BooleanField(default=False)
     balance = models.IntegerField(default=0)
     physical_balance = models.IntegerField(default=0)
     balance_diff = models.IntegerField(default=0)

@@ -4,7 +4,7 @@ from apps import products
 from apps.finance.models import ChartOfAccounts
 from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions, FlowStatus
-from apps.products.models import Products, Size, Color
+from apps.products.models import ProductStockUnits, Products, Size, Color
 from apps.users.models import ModuleSections
 from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems
 from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id, generate_order_number
@@ -437,11 +437,30 @@ class SaleOrderItems(models.Model):
     sale_order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.PROTECT, db_column='sale_order_id')
     product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
-    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, db_column='unit_options_id')
+    # unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, db_column='unit_options_id')
+    unit_options_id = models.ForeignKey(
+        UnitOptions,
+        on_delete=models.PROTECT,
+        db_column='unit_options_id',
+        null=True,
+        blank=True,          # not required in forms
+        default=None
+    )
+
+    # New required field
+    stock_unit_id = models.ForeignKey(
+        ProductStockUnits,
+        on_delete=models.PROTECT,
+        db_column='stock_unit_id',
+        null=True,          # can be null
+        blank=True 
+    )
     size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)
     quantity = models.IntegerField(null=True, default=None) #changed to Integerfield
+    available_qty = models.IntegerField(null=True, default=0)
+    production_qty = models.IntegerField(null=True, default=0)
     total_boxes = models.IntegerField(null=True, default=None)
     rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
@@ -617,7 +636,25 @@ class SaleInvoiceItems(models.Model): #required fields are updated
     sale_invoice_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.PROTECT, db_column='sale_invoice_id')
     product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
-    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, db_column='unit_options_id')
+    # unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, db_column='unit_options_id')
+    # Existing field → now nullable
+    unit_options_id = models.ForeignKey(
+        UnitOptions,
+        on_delete=models.PROTECT,
+        db_column='unit_options_id',
+        null=True,
+        blank=True,
+        default=None
+    )
+    
+    # New field → nullable foreign key
+    stock_unit_id = models.ForeignKey(
+        ProductStockUnits,
+        on_delete=models.PROTECT,
+        db_column='stock_unit_id',
+        null=True,
+        blank=True
+    )
     size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, db_column='color_id')
     print_name = models.CharField(max_length=255, null=True, default=None)
@@ -729,7 +766,24 @@ class SaleReturnItems(models.Model):
     sale_return_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_return_id = models.ForeignKey(SaleReturnOrders, on_delete=models.CASCADE, db_column='sale_return_id')
     product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
-    unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, db_column='unit_options_id')
+    # unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, db_column='unit_options_id')
+    unit_options_id = models.ForeignKey(
+        UnitOptions,
+        on_delete=models.PROTECT,
+        db_column='unit_options_id',
+        null=True,
+        blank=True,
+        default=None
+    )
+    
+    # New field → nullable foreign key
+    stock_unit_id = models.ForeignKey(
+        ProductStockUnits,
+        on_delete=models.PROTECT,
+        db_column='stock_unit_id',
+        null=True,
+        blank=True
+    )
     size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, db_column='color_id')    
     print_name = models.CharField(max_length=255, null=True, default=None)

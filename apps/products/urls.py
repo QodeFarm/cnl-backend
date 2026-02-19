@@ -23,5 +23,10 @@ urlpatterns = [
     path('products/<str:pk>/', ProductViewSet.as_view(), name='products-detail-update-delete'),
     path('download-template/', ProductTemplateAPIView.as_view(), name='download_product_template'),
     path('upload-excel/', ProductExcelUploadAPIView.as_view(), name='upload_product_excel'),
+    path(
+        "update-balance/<uuid:pk>/",
+        UpdateProductBalanceView.as_view(),
+        name="update-product-balance"
+    ),
 ]
     

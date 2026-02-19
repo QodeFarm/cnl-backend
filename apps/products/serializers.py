@@ -26,6 +26,15 @@ class ModProductGroupsSerializer(serializers.ModelSerializer):
         fields = ['product_group_id','group_name']
 
 class ProductGroupsSerializer(serializers.ModelSerializer):
+    product_mode = ModItemMasterSerializer(
+        source='product_mode_id',
+        read_only=True
+    )
+
+    under_group = ModProductGroupsSerializer(
+        source='under_group_id',
+        read_only=True
+    )
     class Meta:
         model = ProductGroups
         fields = '__all__'
@@ -229,7 +238,7 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
             'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 
             'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'physical_balance', 'balance_diff',
             'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
-            'pack_unit', 'pack_vs_stock', 'g_pack_unit',  
+            'pack_unit', 'pack_vs_stock', 'g_pack_unit', 'has_opening_balance',  
             'g_pack_vs_pack', 'type', 'is_deleted'
         ]
         
