@@ -186,6 +186,20 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         return soft_delete(instance)
+    
+class GSTMasterViewSet(viewsets.ModelViewSet):
+    queryset = GSTMaster.objects.filter(is_active=True)
+    serializer_class = GSTMasterSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, GSTMaster,*args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 
 class productsViewSet(viewsets.ModelViewSet):
     queryset = Products.objects.all().order_by('-created_at')

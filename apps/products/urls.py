@@ -16,6 +16,7 @@ router.register(r'sizes', SizeViewSet)
 router.register(r'colors', ColorViewSet)
 router.register(r'product_variations', ProductVariationViewSet)
 router.register(r'item-master', ItemMasterViewSet)
+router.register(r'gst', GSTMasterViewSet, basename='gst')
 
 urlpatterns = [
     path('',include(router.urls)),

@@ -1541,7 +1541,7 @@ def update_product_stock(parent_model, child_model, data, operation, using='defa
                     # defaults={'quantity': return_qty if operation == 'add' else -return_qty}
                     defaults={
                         'quantity': return_qty if operation == 'add' else -return_qty,
-                        'price': item.get('price') or product_instance.purchase_rate or 0
+                        'price': item.get('price') or 0
                     }
                 )
                     
