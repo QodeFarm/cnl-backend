@@ -2,7 +2,7 @@ from apps.auditlogs.utils import log_user_action
 from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_data, sale_order_sales_invoice_doc
 from apps.masters.template.table_defination import doc_heading
 from apps.production.models import WorkOrder
-from config.utils_methods import build_whatsapp_click_url, path_generate, resolve_phone_from_document, send_whatsapp_message_via_wati, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import build_whatsapp_click_url, check_credit_limit, path_generate, resolve_phone_from_document, send_whatsapp_message_via_wati, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from apps.finance.models import JournalEntryLines, PaymentTransaction
@@ -1686,6 +1686,12 @@ class SaleOrderViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
+        # ---------------------- CREDIT LIMIT CHECK --------------------------------#
+        credit_check = check_credit_limit(request, sale_order_data.get('customer_id'), sale_order_data.get('total_amount'), using_db)
+        if credit_check is not None:
+            return credit_check
+        # --------------------------------------------------------------------------#
+
         # ---------------------- D A T A   C R E A T I O N ----------------------------#
         new_sale_order_data = generic_data_creation(self, [sale_order_data], SaleOrderSerializer, using=using_db)[0]
         sale_order_id = new_sale_order_data.get("sale_order_id", None)
@@ -1883,6 +1889,12 @@ class SaleOrderViewSet(APIView):
             errors['custom_field_values'] = custom_field_values_error
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        # ---------------------- CREDIT LIMIT CHECK --------------------------------#
+        credit_check = check_credit_limit(request, sale_order_data.get('customer_id'), sale_order_data.get('total_amount'), db_to_use)
+        if credit_check is not None:
+            return credit_check
+        # --------------------------------------------------------------------------#
 
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
 

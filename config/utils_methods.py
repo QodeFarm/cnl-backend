@@ -36,6 +36,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
 from django.db import transaction
+from decimal import Decimal
+
 
 from config.utils_filter_methods import filter_response
 logger = logging.getLogger(__name__)
@@ -785,6 +787,131 @@ def increment_order_number(order_type_prefix):
 
     sequence_number_str = f"{sequence_number:05d}"
     return f"{order_type_prefix}-{date_str}-{sequence_number_str}"
+
+
+#=========================== REUSABLE BULK UPDATE VIEW ============================================================
+
+class BaseBulkUpdateView(APIView):
+    """
+    Reusable base class for bulk-updating any model.
+    
+    Subclass this and set:
+        MODEL           = YourModel
+        ALLOWED_FIELDS  = { 'field_name': OptionalFKModel or None, ... }
+        MODULE_NAME     = "Customers"   (for audit log)
+        PK_FIELD        = "customer_id" (primary key field name)
+        MAX_SELECTION   = 100           (optional, default 100)
+    
+    Example:
+        class CustomerBulkUpdateView(BaseBulkUpdateView):
+            MODEL = Customer
+            ALLOWED_FIELDS = {
+                'customer_category_id': CustomerCategories,
+                'territory_id': Territory,
+                'credit_limit': None,  # None = not a FK, just a value field
+            }
+            MODULE_NAME = "Customers"
+            PK_FIELD = "customer_id"
+    """
+
+    # --- Override these in subclass ---
+    MODEL = None
+    ALLOWED_FIELDS = {}     # { 'field_name': FKModel or None }
+    MODULE_NAME = "Record"
+    PK_FIELD = "id"
+    MAX_SELECTION = 100
+
+    @transaction.atomic
+    def patch(self, request, *args, **kwargs):
+        ids = request.data.get('ids', [])
+        update_data = request.data.get('update_data', {})
+
+        # --- Basic validations ---
+        error = self._validate_request(ids, update_data)
+        if error:
+            return error
+
+        # --- Deduplicate IDs ---
+        unique_ids = list(set(ids))
+
+        # --- Filter to only whitelisted fields ---
+        safe_data = {k: v for k, v in update_data.items() if k in self.ALLOWED_FIELDS}
+        if not safe_data:
+            return build_response(0, "No valid fields provided for update", [], status.HTTP_400_BAD_REQUEST)
+
+        # --- Validate FK references ---
+        fk_error = self._validate_foreign_keys(safe_data)
+        if fk_error:
+            return fk_error
+
+        # --- Verify all records exist ---
+        qs_filter = {f"{self.PK_FIELD}__in": unique_ids}
+        if hasattr(self.MODEL, 'is_deleted'):
+            qs_filter["is_deleted"] = False
+        queryset = self.MODEL.objects.filter(**qs_filter)
+        if queryset.count() != len(unique_ids):
+            return build_response(0, "Some IDs are invalid or belong to deleted records", [], status.HTTP_400_BAD_REQUEST)
+
+        # --- Perform bulk update ---
+        updated_count = queryset.update(**safe_data)
+
+        # --- Audit log per record ---
+        self._log_updates(request, unique_ids, safe_data)
+
+        return build_response(
+            updated_count,
+            f"{updated_count} {self.MODULE_NAME} updated successfully",
+            {"updated_count": updated_count, "fields_changed": list(safe_data.keys())},
+            status.HTTP_200_OK
+        )
+
+    # --- Private helpers (keeps patch() clean) ---
+
+    def _validate_request(self, ids, update_data):
+        """Validates the basic structure of the request."""
+        if not ids:
+            return build_response(0, "No records selected", [], status.HTTP_400_BAD_REQUEST)
+        if len(ids) > self.MAX_SELECTION:
+            return build_response(0, f"Maximum {self.MAX_SELECTION} records can be updated at once", [], status.HTTP_400_BAD_REQUEST)
+        if not update_data:
+            return build_response(0, "No fields to update", [], status.HTTP_400_BAD_REQUEST)
+        return None
+
+    def _validate_foreign_keys(self, safe_data):
+        """Validates that all FK values are valid UUIDs and reference existing records."""
+        for field, fk_model in self.ALLOWED_FIELDS.items():
+            if fk_model and field in safe_data and safe_data[field]:
+                # Check if the value is a valid UUID before querying
+                try:
+                    UUID(str(safe_data[field]))
+                except (ValueError, AttributeError):
+                    readable_name = field.replace('_id', '').replace('_', ' ').title()
+                    return build_response(0, f"Invalid {readable_name}: '{safe_data[field]}' is not a valid ID. Please select a valid option.", [], status.HTTP_400_BAD_REQUEST)
+                if not fk_model.objects.filter(pk=safe_data[field]).exists():
+                    readable_name = field.replace('_id', '').replace('_', ' ').title()
+                    return build_response(0, f"Invalid {readable_name}: {safe_data[field]}", [], status.HTTP_400_BAD_REQUEST)
+        return None
+
+    def _log_updates(self, request, ids, safe_data):
+        """Creates audit log entries in BULK (single INSERT instead of N inserts)."""
+        from apps.auditlogs.models import AuditLog
+        from config.utils_db_router import set_db
+
+        changed_fields = ', '.join(safe_data.keys())
+        description = f"Bulk updated [{changed_fields}] by {request.user.username}"
+        db = set_db('default')
+
+        logs = [
+            AuditLog(
+                user_id=request.user,
+                action_type="BULK_UPDATE",
+                module_name=self.MODULE_NAME,
+                record_id=str(record_id),
+                description=description,
+            )
+            for record_id in ids
+        ]
+        AuditLog.objects.using(db).bulk_create(logs)
 
 
 #=========================== BULK DATA VALIDATIONS / CURD OPERATION-REQUIREMENTS ===================================
@@ -2955,6 +3082,71 @@ class BaseExcelImportExport:
             
         # Save and process the file
         return cls.save_upload(file), status.HTTP_200_OK
+    
+    
+
+
+# ===================== CREDIT LIMIT CHECK ===================== #
+def check_credit_limit(request, customer_id_value, order_total, using_db='default'):
+    """
+    Simple credit limit check: order_total vs customer.credit_limit.
+    Returns None if OK to proceed, or a Response if blocked.
+    """
+    from apps.customer.models import Customer
+
+    try:
+        customer = Customer.objects.using(using_db).get(pk=customer_id_value)
+    except Customer.DoesNotExist:
+        logger.warning("Customer not found: id=%s using_db=%s", customer_id_value, using_db)
+        return None
+
+    credit_limit = customer.credit_limit
+    if not credit_limit or credit_limit <= 0:
+        return None
+
+    order_amount = Decimal(str(order_total or 0))
+    if order_amount <= credit_limit:
+        return None
+
+    # --- Credit limit exceeded ---
+    credit_limit_approved = request.data.get('credit_limit_approved', False)
+
+    if not credit_limit_approved:
+        return build_response(
+            0,
+            f"The total amount of {order_amount:.2f} exceeds the credit limit of {credit_limit:.2f}.",
+            {
+                "credit_limit_exceeded": True,
+                "new_total": float(order_amount),
+                "credit_limit": float(credit_limit)
+            },
+            status.HTTP_200_OK
+        )
+
+    # Admin approval check
+    user = request.user
+    is_admin = (
+        user.is_authenticated
+        and hasattr(user, 'role_id')
+        and getattr(user.role_id, 'role_name', '').lower() == 'admin'
+    )
+    if is_admin:
+        logger.info(f"Credit limit override approved by admin '{user.username}' for customer {customer_id_value}")
+        return None
+
+    logger.warning(f"Non-admin user '{user.username}' attempted credit limit override for customer {customer_id_value}")
+    return build_response(
+        0,
+        "Only Admin users can approve credit limit overrides.",
+        {
+            "credit_limit_exceeded": True,
+            "new_total": float(order_amount),
+            "credit_limit": float(credit_limit),
+            "message": "Only Admin users can approve credit limit overrides."
+        },
+        status.HTTP_403_FORBIDDEN
+    )
+# ============================================================== #    
     
 
     
