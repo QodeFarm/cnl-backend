@@ -1601,6 +1601,11 @@ class VendorExcelImport(BaseExcelImportExport):
                     elif mapping == 'tax_type':
                         if value in ['Inclusive', 'Exclusive']:
                             setattr(vendor, mapping, value)
+                        else:
+                            logger.warning(
+                                "Vendor %s: invalid tax_type value '%s'. Must be 'Inclusive' or 'Exclusive'.",
+                                vendor_id, value
+                            )
                     elif mapping in ['credit_limit', 'interest_rate_yearly', 'distance']:
                         try:
                             from decimal import Decimal, InvalidOperation
@@ -1638,6 +1643,12 @@ class VendorExcelImport(BaseExcelImportExport):
                 ledger = LedgerAccounts.objects.filter(name__iexact=ledger_name).first()
                 if not ledger and group:
                     ledger = LedgerAccounts.objects.create(name=ledger_name, ledger_group_id=group)
+                elif not ledger and not group:
+                    logger.warning(
+                        "Vendor %s: cannot create LedgerAccount '%s' — no LedgerGroup exists. "
+                        "Create a LedgerGroup first or specify 'ledger_group' in the Excel.",
+                        vendor_id, ledger_name
+                    )
                 if ledger:
                     vendor.ledger_account_id = ledger
                     updated_fields.append('ledger_account_id')
@@ -1745,11 +1756,18 @@ class VendorExcelImport(BaseExcelImportExport):
         if queryset is None:
             queryset = Vendor.objects.filter(is_deleted=False).order_by('name')
 
+        from django.db.models import Prefetch
         queryset = queryset.select_related(
             'ledger_account_id', 'ledger_account_id__ledger_group_id',
             'firm_status_id', 'territory_id', 'vendor_category_id',
             'gst_category_id', 'payment_term_id', 'price_category_id',
             'vendor_agent_id', 'transporter_id'
+        ).prefetch_related(
+            Prefetch(
+                'vendoraddress_set',
+                queryset=VendorAddress.objects.select_related('city_id', 'state_id', 'country_id'),
+                to_attr='_prefetched_addresses'
+            )
         )
 
         for vendor_obj in queryset:
@@ -1775,13 +1793,10 @@ class VendorExcelImport(BaseExcelImportExport):
                         val = 'Yes' if val else 'No'
                     row.append(val if val is not None else '')
 
-            # Addresses
-            billing = VendorAddress.objects.filter(
-                vendor_id=vendor_obj, address_type='Billing'
-            ).select_related('city_id', 'state_id', 'country_id').first()
-            shipping = VendorAddress.objects.filter(
-                vendor_id=vendor_obj, address_type='Shipping'
-            ).select_related('city_id', 'state_id', 'country_id').first()
+            # Addresses (from prefetched data — no extra queries)
+            prefetched = getattr(vendor_obj, '_prefetched_addresses', [])
+            billing = next((a for a in prefetched if a.address_type == 'Billing'), None)
+            shipping = next((a for a in prefetched if a.address_type == 'Shipping'), None)
 
             for addr in [billing, shipping]:
                 if addr:

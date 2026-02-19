@@ -1675,6 +1675,8 @@ class ProductExcelImport(BaseExcelImportExport):
                         if not lookup_field:
                             if hasattr(model_class, 'name'):
                                 lookup_field = 'name'
+                            elif hasattr(model_class, model_class.__name__.lower() + '_name'):
+                                lookup_field = model_class.__name__.lower() + '_name'
 
                         fk_obj = model_class.objects.filter(**{f"{lookup_field}__iexact": value}).first()
                         if not fk_obj:

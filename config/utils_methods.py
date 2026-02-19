@@ -887,7 +887,10 @@ class BaseBulkUpdateView(APIView):
                 except (ValueError, AttributeError):
                     readable_name = field.replace('_id', '').replace('_', ' ').title()
                     return build_response(0, f"Invalid {readable_name}: '{safe_data[field]}' is not a valid ID. Please select a valid option.", [], status.HTTP_400_BAD_REQUEST)
-                if not fk_model.objects.filter(pk=safe_data[field]).exists():
+                qs = fk_model.objects.filter(pk=safe_data[field])
+                if hasattr(fk_model, 'is_deleted'):
+                    qs = qs.filter(is_deleted=False)
+                if not qs.exists():
                     readable_name = field.replace('_id', '').replace('_', ' ').title()
                     return build_response(0, f"Invalid {readable_name}: {safe_data[field]}", [], status.HTTP_400_BAD_REQUEST)
         return None
@@ -3094,11 +3097,19 @@ def check_credit_limit(request, customer_id_value, order_total, using_db='defaul
     """
     from apps.customer.models import Customer
 
+    if not customer_id_value:
+        return None  # No customer specified — skip credit check
+
     try:
         customer = Customer.objects.using(using_db).get(pk=customer_id_value)
     except Customer.DoesNotExist:
         logger.warning("Customer not found: id=%s using_db=%s", customer_id_value, using_db)
-        return None
+        return build_response(
+            0,
+            f"Customer with ID {customer_id_value} not found. Cannot proceed with credit limit check.",
+            {"customer_not_found": True},
+            status.HTTP_400_BAD_REQUEST
+        )
 
     credit_limit = customer.credit_limit
     if not credit_limit or credit_limit <= 0:
