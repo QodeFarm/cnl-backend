@@ -16,13 +16,15 @@ from apps.vendor.filters import VendorAgentFilter, VendorCategoryFilter, VendorF
 from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorBalance, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
+from apps.masters.models import FirmStatuses, GstCategories, PriceCategories, Territory, Transporters
+from config.utils_methods import BaseBulkUpdateView
 from .serializers import VendorBalanceSerializer, VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer
 from config.utils_methods import delete_multi_instance, soft_delete, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
 
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from urllib.parse import urlencode
 
 # Set up basic configuration for logging
@@ -1555,7 +1557,266 @@ class VendorExcelImport(BaseExcelImportExport):
             state_id=state
         )
         return city
-    
+
+    # ============================================================
+    # UPDATE EXISTING VENDOR FROM EXCEL ROW
+    # ============================================================
+    @classmethod
+    def update_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
+        """
+        Update an existing vendor from Excel row data.
+        Matches by vendor_id column. Only non-empty fields are updated.
+        """
+        field_map = field_map or cls.FIELD_MAP
+        boolean_fields = boolean_fields or cls.BOOLEAN_FIELDS
+
+        vendor_id = row_data.get('vendor_id')
+        if not vendor_id:
+            raise ValueError("vendor_id is required for update mode")
+
+        try:
+            vendor = Vendor.objects.get(pk=vendor_id, is_deleted=False)
+        except Vendor.DoesNotExist:
+            raise ValueError(f"Vendor with ID {vendor_id} not found or is deleted")
+
+        with transaction.atomic():
+            updated_fields = []
+            for excel_col, mapping in field_map.items():
+                if excel_col in ['ledger_account', 'ledger_group']:
+                    continue  # Handle separately below
+
+                value = row_data.get(excel_col)
+                if value is None or value == '':
+                    continue
+
+                if isinstance(mapping, tuple):
+                    field_name, model = mapping
+                    fk_obj = cls.get_or_create_fk(model, value)
+                    if fk_obj:
+                        setattr(vendor, field_name, fk_obj)
+                        updated_fields.append(field_name)
+                else:
+                    if mapping in boolean_fields:
+                        setattr(vendor, mapping, cls.parse_boolean(value))
+                    elif mapping == 'tax_type':
+                        if value in ['Inclusive', 'Exclusive']:
+                            setattr(vendor, mapping, value)
+                        else:
+                            logger.warning(
+                                "Vendor %s: invalid tax_type value '%s'. Must be 'Inclusive' or 'Exclusive'.",
+                                vendor_id, value
+                            )
+                    elif mapping in ['credit_limit', 'interest_rate_yearly', 'distance']:
+                        try:
+                            from decimal import Decimal, InvalidOperation
+                            setattr(vendor, mapping, Decimal(str(value)))
+                        except (InvalidOperation, ValueError, TypeError, ArithmeticError) as e:
+                            logger.warning(
+                                "Vendor %s: failed to convert field '%s' value '%s' to Decimal: %s",
+                                vendor_id, mapping, value, e
+                            )
+                            continue
+                    elif mapping in ['max_credit_days']:
+                        try:
+                            setattr(vendor, mapping, int(float(str(value))))
+                        except (ValueError, TypeError) as e:
+                            logger.warning(
+                                "Vendor %s: failed to convert field '%s' value '%s' to int: %s",
+                                vendor_id, mapping, value, e
+                            )
+                            continue
+                    else:
+                        setattr(vendor, mapping, value)
+                    updated_fields.append(mapping)
+
+            # Handle ledger account with group
+            ledger_name = row_data.get('ledger_account')
+            if ledger_name:
+                group_name = row_data.get('ledger_group')
+                if group_name:
+                    group = LedgerGroups.objects.filter(name__iexact=group_name).first()
+                    if not group:
+                        group = LedgerGroups.objects.create(name=group_name, nature='')
+                else:
+                    group = LedgerGroups.objects.first()
+
+                ledger = LedgerAccounts.objects.filter(name__iexact=ledger_name).first()
+                if not ledger and group:
+                    ledger = LedgerAccounts.objects.create(name=ledger_name, ledger_group_id=group)
+                elif not ledger and not group:
+                    logger.warning(
+                        "Vendor %s: cannot create LedgerAccount '%s' — no LedgerGroup exists. "
+                        "Create a LedgerGroup first or specify 'ledger_group' in the Excel.",
+                        vendor_id, ledger_name
+                    )
+                if ledger:
+                    vendor.ledger_account_id = ledger
+                    updated_fields.append('ledger_account_id')
+
+            if updated_fields:
+                vendor.save()
+                logger.info(f"Updated vendor {vendor.name}: {', '.join(updated_fields)}")
+
+            # Update addresses
+            cls._update_address(vendor, row_data, 'Billing', 'billing')
+            cls._update_address(vendor, row_data, 'Shipping', 'shipping')
+
+        return vendor
+
+    @classmethod
+    def _update_address(cls, vendor, row_data, address_type, prefix):
+        """Update or create a billing/shipping address from row data."""
+        address_fields = [f'{prefix}_address', f'{prefix}_phone', f'{prefix}_email',
+                          f'{prefix}_city', f'{prefix}_state', f'{prefix}_country',
+                          f'{prefix}_pin_code', f'{prefix}_longitude', f'{prefix}_latitude']
+
+        if not any(row_data.get(f) for f in address_fields):
+            return
+
+        address = VendorAddress.objects.filter(
+            vendor_id=vendor, address_type=address_type
+        ).first()
+
+        country = cls.get_or_create_country(row_data.get(f'{prefix}_country'))
+        state = cls.get_or_create_state(row_data.get(f'{prefix}_state'), country)
+        city = cls.get_or_create_city(row_data.get(f'{prefix}_city'), state, country)
+
+        addr_data = {
+            'address': row_data.get(f'{prefix}_address') or (address.address if address else None),
+            'city_id': city or (address.city_id if address else None),
+            'state_id': state or (address.state_id if address else None),
+            'country_id': country or (address.country_id if address else None),
+            'pin_code': str(row_data.get(f'{prefix}_pin_code')) if row_data.get(f'{prefix}_pin_code') else (address.pin_code if address else None),
+            'phone': str(row_data.get(f'{prefix}_phone')) if row_data.get(f'{prefix}_phone') else (address.phone if address else None),
+            'email': row_data.get(f'{prefix}_email') or (address.email if address else None),
+            'longitude': row_data.get(f'{prefix}_longitude') or (address.longitude if address else None),
+            'latitude': row_data.get(f'{prefix}_latitude') or (address.latitude if address else None),
+        }
+
+        if address:
+            for key, val in addr_data.items():
+                setattr(address, key, val)
+            address.save()
+        else:
+            VendorAddress.objects.create(
+                vendor_id=vendor, address_type=address_type, **addr_data
+            )
+
+    # ============================================================
+    # EXPORT EXISTING VENDORS TO EXCEL
+    # ============================================================
+    @classmethod
+    def export_vendors(cls, queryset=None):
+        """
+        Export existing vendors to Excel (with vendor_id for re-import update).
+        Returns an openpyxl Workbook.
+        """
+        wb = cls.generate_template()
+        ws = wb.active
+
+        field_keys = list(cls.FIELD_MAP.keys())
+        address_cols = [
+            'billing_address', 'billing_country', 'billing_state', 'billing_city',
+            'billing_pin_code', 'billing_phone', 'billing_email', 'billing_longitude', 'billing_latitude',
+            'shipping_address', 'shipping_country', 'shipping_state', 'shipping_city',
+            'shipping_pin_code', 'shipping_phone', 'shipping_email', 'shipping_longitude', 'shipping_latitude',
+        ]
+        all_headers = ['vendor_id'] + field_keys + address_cols
+
+        ws.delete_rows(1, ws.max_row)
+        header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        id_fill = PatternFill(start_color="FFD700", end_color="FFD700", fill_type="solid")
+        font_bold = Font(bold=True)
+        align_center = Alignment(horizontal="center")
+
+        for col_num, header in enumerate(all_headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = id_fill if header == 'vendor_id' else header_fill
+            cell.font = font_bold
+            cell.alignment = align_center
+            ws.column_dimensions[get_column_letter(col_num)].width = max(len(header) + 4, 15)
+
+        ws.cell(row=1, column=1).comment = Comment(
+            '\u26a0\ufe0f DO NOT MODIFY this column. Used to match records for update.', 'System'
+        )
+
+        FK_DISPLAY = {
+            'ledger_account': ('ledger_account_id', 'name'),
+            'firm_status':    ('firm_status_id', 'name'),
+            'territory':      ('territory_id', 'name'),
+            'vendor_category': ('vendor_category_id', 'name'),
+            'gst_category':   ('gst_category_id', 'name'),
+            'payment_term':   ('payment_term_id', 'name'),
+            'price_category': ('price_category_id', 'name'),
+            'vendor_agent':   ('vendor_agent_id', 'name'),
+            'transporter':    ('transporter_id', 'name'),
+        }
+
+        if queryset is None:
+            queryset = Vendor.objects.filter(is_deleted=False).order_by('name')
+
+        from django.db.models import Prefetch
+        queryset = queryset.select_related(
+            'ledger_account_id', 'ledger_account_id__ledger_group_id',
+            'firm_status_id', 'territory_id', 'vendor_category_id',
+            'gst_category_id', 'payment_term_id', 'price_category_id',
+            'vendor_agent_id', 'transporter_id'
+        ).prefetch_related(
+            Prefetch(
+                'vendoraddress_set',
+                queryset=VendorAddress.objects.select_related('city_id', 'state_id', 'country_id'),
+                to_attr='_prefetched_addresses'
+            )
+        )
+
+        for vendor_obj in queryset:
+            row = [str(vendor_obj.vendor_id)]
+
+            for excel_col, mapping in cls.FIELD_MAP.items():
+                if excel_col in FK_DISPLAY:
+                    fk_attr, display_field = FK_DISPLAY[excel_col]
+                    fk_obj = getattr(vendor_obj, fk_attr, None)
+                    row.append(getattr(fk_obj, display_field, '') if fk_obj else '')
+                elif excel_col == 'ledger_group':
+                    try:
+                        ledger = getattr(vendor_obj, 'ledger_account_id', None)
+                        group = getattr(ledger, 'ledger_group_id', None) if ledger else None
+                        row.append(getattr(group, 'name', '') if group else '')
+                    except Exception:
+                        row.append('')
+                elif isinstance(mapping, tuple):
+                    row.append('')
+                else:
+                    val = getattr(vendor_obj, mapping, '')
+                    if isinstance(val, bool):
+                        val = 'Yes' if val else 'No'
+                    row.append(val if val is not None else '')
+
+            # Addresses (from prefetched data — no extra queries)
+            prefetched = getattr(vendor_obj, '_prefetched_addresses', [])
+            billing = next((a for a in prefetched if a.address_type == 'Billing'), None)
+            shipping = next((a for a in prefetched if a.address_type == 'Shipping'), None)
+
+            for addr in [billing, shipping]:
+                if addr:
+                    row.extend([
+                        addr.address or '',
+                        addr.country_id.country_name if addr.country_id else '',
+                        addr.state_id.state_name if addr.state_id else '',
+                        addr.city_id.city_name if addr.city_id else '',
+                        addr.pin_code or '', addr.phone or '', addr.email or '',
+                        str(addr.longitude) if addr.longitude else '',
+                        str(addr.latitude) if addr.latitude else '',
+                    ])
+                else:
+                    row.extend([''] * 9)
+
+            ws.append(row)
+
+        ws.freeze_panes = 'B2'
+        return wb
+
 
 # API Views for Vendor Excel import/export
 class VendorTemplateAPIView(APIView):
@@ -1566,9 +1827,43 @@ class VendorTemplateAPIView(APIView):
     def get(self, request, *args, **kwargs):
         return VendorExcelImport.get_template_response(request)
 
+class VendorExportAPIView(APIView):
+    """
+    API for exporting existing vendors to Excel (for re-import update).
+    GET /export-vendors/              -> export all vendors
+    GET /export-vendors/?ids=a,b,c    -> export specific vendors
+    """
+    def get(self, request, *args, **kwargs):
+        try:
+            ids_param = request.query_params.get('ids', '')
+            queryset = Vendor.objects.filter(is_deleted=False).order_by('name')
+
+            if ids_param:
+                id_list = [i.strip() for i in ids_param.split(',') if i.strip()]
+                queryset = queryset.filter(vendor_id__in=id_list)
+                if not queryset.exists():
+                    return build_response(0, "No matching vendors found", [], status.HTTP_404_NOT_FOUND)
+
+            wb = VendorExcelImport.export_vendors(queryset)
+            response = HttpResponse(
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename=Vendor_Export.xlsx'
+            wb.save(response)
+            return response
+
+        except Exception as e:
+            logger.error(f"Error exporting vendors: {str(e)}")
+            return build_response(0, f"Export failed: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class VendorExcelUploadAPIView(APIView):
     """
     API for importing vendors from Excel files.
+    
+    Supports two modes (auto-detected or via ?mode=update):
+    - create (default): Creates new vendors from Excel rows
+    - update: Matches by vendor_id column and updates existing records
     
     Uses a hybrid approach:
     - For small imports (<500 rows): Traditional mode with individual saves
@@ -1580,6 +1875,31 @@ class VendorExcelUploadAPIView(APIView):
     BULK_THRESHOLD = 500
     
     def post(self, request, *args, **kwargs):
+        import time
+        start_time = time.time()
+        import_mode_param = request.query_params.get('mode', 'create').lower()
+
+        # --- AUTO-DETECT UPDATE MODE ---
+        if import_mode_param == 'create':
+            file_obj = request.FILES.get('file')
+            if file_obj:
+                try:
+                    peek_wb = openpyxl.load_workbook(file_obj, read_only=True, data_only=True)
+                    peek_sheet = peek_wb.active
+                    headers = [str(cell.value).strip().lower() for cell in next(peek_sheet.iter_rows(min_row=1, max_row=1)) if cell.value]
+                    peek_wb.close()
+                    file_obj.seek(0)
+                    if 'vendor_id' in headers:
+                        import_mode_param = 'update'
+                        logger.info("Auto-detected update mode (vendor_id column found in Excel)")
+                except Exception:
+                    file_obj.seek(0)
+
+        # --- UPDATE MODE ---
+        if import_mode_param == 'update':
+            return self._handle_update(request, start_time)
+
+        # --- CREATE MODE (existing logic) ---
         try:
             # Upload and validate file
             file_path, status_code = VendorExcelImport.upload_file(request)
@@ -1666,9 +1986,84 @@ class VendorExcelUploadAPIView(APIView):
             logger.error(f"Error in vendor Excel import: {str(e)}")
             import traceback
             logger.error(traceback.format_exc())
-            return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)    
-  
-        
+            return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+
+    def _handle_update(self, request, start_time):
+        """
+        Handle Excel-based bulk update for vendors.
+        Reads uploaded Excel, matches by vendor_id, updates only non-empty fields.
+        """
+        import time
+        try:
+            file = request.FILES.get('file')
+            if not file:
+                return build_response(0, "No file uploaded", [], status.HTTP_400_BAD_REQUEST)
+
+            file_name = file.name.lower()
+            if not (file_name.endswith('.xlsx') or file_name.endswith('.xls')):
+                return build_response(0, "Invalid file format. Only .xlsx or .xls supported.", [], status.HTTP_400_BAD_REQUEST)
+
+            wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+            sheet = wb.active
+
+            raw_headers = [str(cell.value).lower().strip() if cell.value else '' for cell in sheet[1]]
+            headers = [h.replace(' *', '').strip() for h in raw_headers]
+
+            if 'vendor_id' not in headers:
+                return build_response(0, "Excel must have a 'vendor_id' column for update mode. Use the Export file as your template.", [], status.HTTP_400_BAD_REQUEST)
+
+            success = 0
+            failed = []
+            total = 0
+
+            for excel_row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                row_values = list(row)
+                if not any(cell is not None for cell in row_values):
+                    continue
+
+                total += 1
+                row_data = {}
+                for i, header in enumerate(headers):
+                    if i < len(row_values):
+                        val = row_values[i]
+                        if isinstance(val, str):
+                            val = val.strip() if val.strip() else None
+                        row_data[header] = val
+
+                if not row_data.get('vendor_id'):
+                    failed.append({"row": excel_row_idx, "error": "Missing vendor_id"})
+                    continue
+
+                try:
+                    VendorExcelImport.update_record(row_data)
+                    success += 1
+                except Exception as e:
+                    failed.append({"row": excel_row_idx, "error": str(e)})
+
+            wb.close()
+            elapsed = round(time.time() - start_time, 2)
+
+            if success == 0 and failed:
+                return build_response(0, f"Update failed. {len(failed)} errors.",
+                    {"errors": failed[:20], "elapsed_time": f"{elapsed}s"}, status.HTTP_400_BAD_REQUEST)
+            elif failed:
+                return build_response(success,
+                    f"Partial update: {success}/{total} updated in {elapsed}s. {len(failed)} failed.",
+                    {"success_count": success, "failed_count": len(failed), "errors": failed[:20], "elapsed_time": f"{elapsed}s"},
+                    status.HTTP_200_OK)
+            else:
+                return build_response(success,
+                    f"{success} vendors updated successfully in {elapsed}s.",
+                    {"success_count": success, "total_count": total, "elapsed_time": f"{elapsed}s"},
+                    status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error in vendor Excel update: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return build_response(0, f"Update failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+
+
 #-------------------------------------------------------------------------------------
 class VendorBalanceView(APIView):
     def post(self, request, vendor_id, remaining_payment):
@@ -1692,6 +2087,49 @@ class VendorBalanceView(APIView):
             return build_response(1, f"Vendor with ID {vendor_id} does not exist.", str(e), status.HTTP_404_NOT_FOUND)
 
         return build_response(1, "Balance Updated In Vendor Balance Table", [], status.HTTP_201_CREATED)
+
+
+# ========================= VENDOR BULK UPDATE =========================
+class VendorBulkUpdateView(BaseBulkUpdateView):
+    """
+    PATCH /api/v1/vendors/bulk-update/
+
+    Body:
+    {
+        "ids": ["uuid1", "uuid2", ...],
+        "update_data": {
+            "vendor_category_id": "uuid",
+            "territory_id": "uuid",
+            "credit_limit": 50000
+        }
+    }
+
+    Only provided fields are updated. Empty fields are ignored.
+    """
+    MODEL = Vendor
+    PK_FIELD = "vendor_id"
+    MODULE_NAME = "Vendors"
+    MAX_SELECTION = 100
+
+    # Whitelist: field_name → FK Model (None = plain value field)
+    ALLOWED_FIELDS = {
+        'vendor_category_id':     VendorCategory,
+        'territory_id':           Territory,
+        'firm_status_id':         FirmStatuses,
+        'gst_category_id':        GstCategories,
+        'payment_term_id':        VendorPaymentTerms,
+        'price_category_id':      PriceCategories,
+        'vendor_agent_id':        VendorAgent,
+        'transporter_id':         Transporters,
+        'tax_type':               None,
+        'credit_limit':           None,
+        'max_credit_days':        None,
+        'interest_rate_yearly':   None,
+        'tds_applicable':         None,
+        'tds_on_gst_applicable':  None,
+        'gst_suspend':            None,
+    }
+
 
     def get(self, request, pk=None):
         if pk:
