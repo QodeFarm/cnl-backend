@@ -999,6 +999,46 @@ class CustomerCreateViews(APIView):
 
 
 
+class CustomerBulkUpdateView(BaseBulkUpdateView):
+    """
+    PATCH /customers/bulk-update/
+    
+    Body:
+    {
+        "ids": ["uuid1", "uuid2", ...],
+        "update_data": {
+            "customer_category_id": "uuid",
+            "territory_id": "uuid",
+            "credit_limit": 50000
+        }
+    }
+    
+    Only filled fields are updated. Empty fields are ignored.
+    """
+    MODEL = Customer
+    PK_FIELD = "customer_id"
+    MODULE_NAME = "Customers"
+    MAX_SELECTION = 100
+
+    # Whitelist: field_name → FK Model (None = plain value field)
+    ALLOWED_FIELDS = {
+        'customer_category_id': CustomerCategories,
+        'territory_id':         Territory,
+        'firm_status_id':       FirmStatuses,
+        'gst_category_id':      GstCategories,
+        'payment_term_id':      CustomerPaymentTerms,
+        'price_category_id':    PriceCategories,
+        'transporter_id':       Transporters,
+        'tax_type':             None,
+        'credit_limit':         None,
+        'max_credit_days':      None,
+        'interest_rate_yearly':  None,
+        'tds_applicable':       None,
+        'tds_on_gst_applicable': None,
+        'gst_suspend':          None,
+    }
+
+
 class CustomerBalanceView(APIView):
     def post(self, request, customer_id, remaining_payment): 
         '''update_customer_balance_after payment transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''  
@@ -1812,6 +1852,246 @@ class CustomerExcelImport(BaseExcelImportExport):
         return city
 
 
+    # ============================================================
+    # UPDATE RECORD — Used by Excel re-import with mode=update
+    # ============================================================
+    @classmethod
+    def update_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
+        """
+        Update an existing customer from Excel row data.
+        Matches by customer_id column. Only non-empty fields are updated.
+        """
+        field_map = field_map or cls.FIELD_MAP
+        boolean_fields = boolean_fields or cls.BOOLEAN_FIELDS
+
+        customer_id = row_data.get('customer_id')
+        if not customer_id:
+            raise ValueError("customer_id is required for update mode")
+
+        try:
+            customer = Customer.objects.get(pk=customer_id, is_deleted=False)
+        except Customer.DoesNotExist:
+            raise ValueError(f"Customer with ID {customer_id} not found or is deleted")
+
+        with transaction.atomic():
+            # --- Update customer fields ---
+            updated_fields = []
+            for excel_col, mapping in field_map.items():
+                if excel_col in ['ledger_account', 'ledger_group']:
+                    continue  # Handle separately below
+
+                value = row_data.get(excel_col)
+                if value is None or value == '':
+                    continue  # Skip empty = no change
+
+                if isinstance(mapping, tuple):
+                    field_name, model = mapping
+                    fk_obj = cls.get_or_create_fk(model, value)
+                    if fk_obj:
+                        setattr(customer, field_name, fk_obj)
+                        updated_fields.append(field_name)
+                else:
+                    if mapping in boolean_fields:
+                        setattr(customer, mapping, cls.parse_boolean(value))
+                    elif mapping == 'tax_type':
+                        if value in ['Inclusive', 'Exclusive', 'Both']:
+                            setattr(customer, mapping, value)
+                    else:
+                        setattr(customer, mapping, value)
+                    updated_fields.append(mapping)
+
+            # Handle ledger account with group
+            ledger_name = row_data.get('ledger_account')
+            if ledger_name:
+                group_name = row_data.get('ledger_group')
+                if group_name:
+                    group = LedgerGroups.objects.filter(name__iexact=group_name).first()
+                    if not group:
+                        group = LedgerGroups.objects.create(name=group_name)
+                else:
+                    group = LedgerGroups.objects.first()
+
+                ledger = LedgerAccounts.objects.filter(name__iexact=ledger_name).first()
+                if not ledger and group:
+                    ledger = LedgerAccounts.objects.create(name=ledger_name, ledger_group_id=group)
+                if ledger:
+                    customer.ledger_account_id = ledger
+                    updated_fields.append('ledger_account_id')
+
+            if updated_fields:
+                customer.save()
+                logger.info(f"Updated customer {customer.name}: {', '.join(updated_fields)}")
+
+            # --- Update addresses ---
+            cls._update_address(customer, row_data, 'Billing', 'billing')
+            cls._update_address(customer, row_data, 'Shipping', 'shipping')
+
+        return customer
+
+    @classmethod
+    def _update_address(cls, customer, row_data, address_type, prefix):
+        """Update or create a billing/shipping address from row data."""
+        address_fields = [f'{prefix}_address', f'{prefix}_phone', f'{prefix}_email',
+                          f'{prefix}_city', f'{prefix}_state', f'{prefix}_country',
+                          f'{prefix}_pin_code', f'{prefix}_longitude', f'{prefix}_latitude']
+
+        if not any(row_data.get(f) for f in address_fields):
+            return  # No address data provided
+
+        address = CustomerAddresses.objects.filter(
+            customer_id=customer, address_type=address_type
+        ).first()
+
+        country = cls.get_or_create_country(row_data.get(f'{prefix}_country'))
+        state = cls.get_or_create_state(row_data.get(f'{prefix}_state'), country)
+        city = cls.get_or_create_city(row_data.get(f'{prefix}_city'), state, country)
+
+        addr_data = {
+            'address': row_data.get(f'{prefix}_address') or (address.address if address else None),
+            'city_id': city or (address.city_id if address else None),
+            'state_id': state or (address.state_id if address else None),
+            'country_id': country or (address.country_id if address else None),
+            'pin_code': row_data.get(f'{prefix}_pin_code') or (address.pin_code if address else None),
+            'phone': row_data.get(f'{prefix}_phone') or (address.phone if address else None),
+            'email': row_data.get(f'{prefix}_email') or (address.email if address else None),
+            'longitude': row_data.get(f'{prefix}_longitude') or (address.longitude if address else None),
+            'latitude': row_data.get(f'{prefix}_latitude') or (address.latitude if address else None),
+        }
+
+        if address:
+            for key, val in addr_data.items():
+                setattr(address, key, val)
+            address.save()
+        else:
+            CustomerAddresses.objects.create(
+                customer_id=customer, address_type=address_type, **addr_data
+            )
+
+    # ============================================================
+    # EXPORT EXISTING CUSTOMERS TO EXCEL
+    # ============================================================
+    @classmethod
+    def export_customers(cls, queryset=None):
+        """
+        Export existing customers to Excel (with customer_id for re-import update).
+        Returns an openpyxl Workbook.
+        """
+        wb = cls.generate_template()
+        ws = wb.active
+
+        # Prepend customer_id as the first column and add address columns
+        # Rebuild headers: customer_id + FIELD_MAP keys + address columns
+        field_keys = list(cls.FIELD_MAP.keys())
+        address_cols = [
+            'billing_address', 'billing_country', 'billing_state', 'billing_city',
+            'billing_pin_code', 'billing_phone', 'billing_email', 'billing_longitude', 'billing_latitude',
+            'shipping_address', 'shipping_country', 'shipping_state', 'shipping_city',
+            'shipping_pin_code', 'shipping_phone', 'shipping_email', 'shipping_longitude', 'shipping_latitude',
+        ]
+        all_headers = ['customer_id'] + field_keys + address_cols
+
+        # Clear the sheet and rewrite headers
+        ws.delete_rows(1, ws.max_row)
+        header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        id_fill = PatternFill(start_color="FFD700", end_color="FFD700", fill_type="solid")  # Gold for ID
+        font_bold = Font(bold=True)
+        align_center = Alignment(horizontal="center")
+
+        for col_num, header in enumerate(all_headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = id_fill if header == 'customer_id' else header_fill
+            cell.font = font_bold
+            cell.alignment = align_center
+            ws.column_dimensions[get_column_letter(col_num)].width = max(len(header) + 4, 15)
+
+        # Add comment to customer_id column
+        ws.cell(row=1, column=1).comment = Comment(
+            '⚠️ DO NOT MODIFY this column. Used to match records for update.', 'System'
+        )
+
+        # FK field → attribute name mapping for readable export
+        FK_DISPLAY = {
+            'ledger_account': ('ledger_account_id', 'name'),
+            'firm_status': ('firm_status_id', 'name'),
+            'territory': ('territory_id', 'name'),
+            'customer_category': ('customer_category_id', 'name'),
+            'gst_category': ('gst_category_id', 'name'),
+            'payment_term': ('payment_term_id', 'name'),
+            'price_category': ('price_category_id', 'name'),
+            'transporter': ('transporter_id', 'name'),
+        }
+
+        if queryset is None:
+            queryset = Customer.objects.filter(is_deleted=False).order_by('name')
+
+        # Prefetch addresses for performance
+        from django.db.models import Prefetch
+        queryset = queryset.select_related(
+            'ledger_account_id', 'ledger_account_id__ledger_group_id',
+            'firm_status_id', 'territory_id',
+            'customer_category_id', 'gst_category_id', 'payment_term_id',
+            'price_category_id', 'transporter_id'
+        ).prefetch_related(
+            Prefetch(
+                'customeraddresses_set',
+                queryset=CustomerAddresses.objects.select_related('city_id', 'state_id', 'country_id'),
+                to_attr='_prefetched_addresses'
+            )
+        )
+
+        for customer in queryset:
+            row = []
+            # 1. customer_id
+            row.append(str(customer.customer_id))
+
+            # 2. FIELD_MAP columns
+            for excel_col, mapping in cls.FIELD_MAP.items():
+                if excel_col in FK_DISPLAY:
+                    fk_attr, display_field = FK_DISPLAY[excel_col]
+                    fk_obj = getattr(customer, fk_attr, None)
+                    row.append(getattr(fk_obj, display_field, '') if fk_obj else '')
+                elif excel_col == 'ledger_group':
+                    try:
+                        ledger = getattr(customer, 'ledger_account_id', None)
+                        group = getattr(ledger, 'ledger_group_id', None) if ledger else None
+                        row.append(getattr(group, 'name', '') if group else '')
+                    except Exception:
+                        row.append('')
+                elif isinstance(mapping, tuple):
+                    row.append('')  # Unknown FK — leave blank
+                else:
+                    val = getattr(customer, mapping, '')
+                    if isinstance(val, bool):
+                        val = 'Yes' if val else 'No'
+                    row.append(val if val is not None else '')
+
+            # 3. Address columns (from prefetched data — no extra queries)
+            prefetched = getattr(customer, '_prefetched_addresses', [])
+            billing = next((a for a in prefetched if a.address_type == 'Billing'), None)
+            shipping = next((a for a in prefetched if a.address_type == 'Shipping'), None)
+
+            for addr in [billing, shipping]:
+                if addr:
+                    row.extend([
+                        addr.address or '', 
+                        addr.country_id.country_name if addr.country_id else '',
+                        addr.state_id.state_name if addr.state_id else '',
+                        addr.city_id.city_name if addr.city_id else '',
+                        addr.pin_code or '', addr.phone or '', addr.email or '',
+                        str(addr.longitude) if addr.longitude else '',
+                        str(addr.latitude) if addr.latitude else '',
+                    ])
+                else:
+                    row.extend([''] * 9)
+
+            ws.append(row)
+
+        # Freeze header + ID column
+        ws.freeze_panes = 'B2'
+        return wb
+
+
 # API Views for Customer Excel import/export
 class CustomerTemplateAPIView(APIView):
     """
@@ -1821,9 +2101,43 @@ class CustomerTemplateAPIView(APIView):
     def get(self, request, *args, **kwargs):
         return CustomerExcelImport.get_template_response(request)
 
+class CustomerExportAPIView(APIView):
+    """
+    API for exporting existing customers to Excel (for re-import update).
+    GET /export-customers/              → export all customers
+    GET /export-customers/?ids=a,b,c    → export specific customers
+    """
+    def get(self, request, *args, **kwargs):
+        try:
+            ids_param = request.query_params.get('ids', '')
+            queryset = Customer.objects.filter(is_deleted=False).order_by('name')
+
+            if ids_param:
+                id_list = [i.strip() for i in ids_param.split(',') if i.strip()]
+                queryset = queryset.filter(customer_id__in=id_list)
+                if not queryset.exists():
+                    return build_response(0, "No matching customers found", [], status.HTTP_404_NOT_FOUND)
+
+            wb = CustomerExcelImport.export_customers(queryset)
+            response = HttpResponse(
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename=Customer_Export.xlsx'
+            wb.save(response)
+            return response
+
+        except Exception as e:
+            logger.error(f"Error exporting customers: {str(e)}")
+            return build_response(0, f"Export failed: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class CustomerExcelUploadAPIView(APIView):
     """
     API for importing customers from Excel files.
+    
+    Supports two modes (via query param ?mode=create or ?mode=update):
+    - create (default): Creates new customers from Excel rows
+    - update: Matches by customer_id column and updates existing records
     
     OPTIMIZED FOR LARGE IMPORTS:
     - Uses bulk_create for imports > 500 rows (5-10x faster)
@@ -1837,7 +2151,34 @@ class CustomerExcelUploadAPIView(APIView):
     def post(self, request, *args, **kwargs):
         import time
         start_time = time.time()
+        import_mode_param = request.query_params.get('mode', 'create').lower()
         
+        # --- AUTO-DETECT UPDATE MODE ---
+        # If the uploaded Excel has a 'customer_id' column, it's an exported
+        # file meant for re-import as updates — switch to update mode automatically.
+        if import_mode_param == 'create':
+            file = request.FILES.get('file')
+            if file:
+                peek_wb = None
+                try:
+                    peek_wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                    peek_sheet = peek_wb.active
+                    headers = [str(cell.value).strip().lower() for cell in next(peek_sheet.iter_rows(min_row=1, max_row=1)) if cell.value]
+                    if 'customer_id' in headers:
+                        import_mode_param = 'update'
+                        logger.info("Auto-detected update mode (customer_id column found in Excel)")
+                except Exception:
+                    pass
+                finally:
+                    if peek_wb is not None:
+                        peek_wb.close()
+                    file.seek(0)  # reset for downstream processing
+
+        # --- UPDATE MODE ---
+        if import_mode_param == 'update':
+            return self._handle_update(request, start_time)
+        
+        # --- CREATE MODE (existing logic, untouched) ---
         try:
             # Upload and validate file
             file_path, status_code = CustomerExcelImport.upload_file(request)
@@ -1929,3 +2270,80 @@ class CustomerExcelUploadAPIView(APIView):
             import traceback
             logger.error(traceback.format_exc())
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+
+    def _handle_update(self, request, start_time):
+        """
+        Handle Excel-based bulk update.
+        Reads uploaded Excel, matches by customer_id, updates only non-empty fields.
+        """
+        import time
+        try:
+            file = request.FILES.get('file')
+            if not file:
+                return build_response(0, "No file uploaded", [], status.HTTP_400_BAD_REQUEST)
+
+            file_name = file.name.lower()
+            if not (file_name.endswith('.xlsx') or file_name.endswith('.xls')):
+                return build_response(0, "Invalid file format. Only .xlsx or .xls supported.", [], status.HTTP_400_BAD_REQUEST)
+
+            wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+            try:
+                sheet = wb.active
+
+                raw_headers = [str(cell.value).lower().strip() if cell.value else '' for cell in sheet[1]]
+                headers = [h.replace(' *', '').strip() for h in raw_headers]
+
+                if 'customer_id' not in headers:
+                    return build_response(0, "Excel must have a 'customer_id' column for update mode. Use the Export file as your template.", [], status.HTTP_400_BAD_REQUEST)
+
+                success = 0
+                failed = []
+                total = 0
+
+                for excel_row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                    row_values = list(row)
+                    if not any(cell is not None for cell in row_values):
+                        continue  # Skip empty rows
+
+                    total += 1
+                    row_data = {}
+                    for i, header in enumerate(headers):
+                        if i < len(row_values):
+                            val = row_values[i]
+                            if isinstance(val, str):
+                                val = val.strip() if val.strip() else None
+                            row_data[header] = val
+
+                    if not row_data.get('customer_id'):
+                        failed.append({"row": excel_row_idx, "error": "Missing customer_id"})
+                        continue
+
+                    try:
+                        CustomerExcelImport.update_record(row_data)
+                        success += 1
+                    except Exception as e:
+                        failed.append({"row": excel_row_idx, "error": str(e)})
+            finally:
+                wb.close()
+
+            elapsed = round(time.time() - start_time, 2)
+
+            if success == 0 and failed:
+                return build_response(0, f"Update failed. {len(failed)} errors.",
+                    {"errors": failed[:20], "elapsed_time": f"{elapsed}s"}, status.HTTP_400_BAD_REQUEST)
+            elif failed:
+                return build_response(success,
+                    f"Partial update: {success}/{total} updated in {elapsed}s. {len(failed)} failed.",
+                    {"success_count": success, "failed_count": len(failed), "errors": failed[:20], "elapsed_time": f"{elapsed}s"},
+                    status.HTTP_200_OK)
+            else:
+                return build_response(success,
+                    f"{success} customers updated successfully in {elapsed}s.",
+                    {"success_count": success, "total_count": total, "elapsed_time": f"{elapsed}s"},
+                    status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error in customer Excel update: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return build_response(0, f"Update failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)

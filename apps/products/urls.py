@@ -20,9 +20,12 @@ router.register(r'gst', GSTMasterViewSet, basename='gst')
 
 urlpatterns = [
     path('',include(router.urls)),
+    path('bulk-update/', ProductBulkUpdateView.as_view(), name='products-bulk-update'),
     path('products/', ProductViewSet.as_view(), name='products-list-create'),
+    path('products/bulk-update/', ProductBulkUpdateView.as_view(), name='products-bulk-update-alt'),
     path('products/<str:pk>/', ProductViewSet.as_view(), name='products-detail-update-delete'),
     path('download-template/', ProductTemplateAPIView.as_view(), name='download_product_template'),
+    path('export-products/', ProductExportAPIView.as_view(), name='export_products'),
     path('upload-excel/', ProductExcelUploadAPIView.as_view(), name='upload_product_excel'),
     path(
         "update-balance/<uuid:pk>/",

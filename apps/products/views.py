@@ -8,7 +8,7 @@ from rest_framework import viewsets
 from rest_framework import status
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.db import transaction
 from apps.auditlogs.utils import log_user_action
 from apps.masters.filters import ItemMasterFilter
@@ -23,6 +23,7 @@ from .serializers import *
 from .models import *
 from .filters import ColorFilter, ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter, SizeFilter
 from openpyxl.worksheet.datavalidation import DataValidation
+import openpyxl
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -1645,6 +1646,182 @@ class ProductExcelImport(BaseExcelImportExport):
         # Return statement should be outside of the loop
         return wb
 
+    # ============================================================
+    # UPDATE EXISTING PRODUCT FROM EXCEL ROW
+    # ============================================================
+    @classmethod
+    def update_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
+        """
+        Update an existing product from Excel row data.
+        Matches by product_id column. Only non-empty fields are updated.
+        """
+        field_map = field_map or cls.FIELD_MAP
+        boolean_fields = boolean_fields or cls.BOOLEAN_FIELDS
+
+        product_id = row_data.get('product_id')
+        if not product_id:
+            raise ValueError("product_id is required for update mode")
+
+        try:
+            product = Products.objects.get(pk=product_id, is_deleted=False)
+        except Products.DoesNotExist:
+            raise ValueError(f"Product with ID {product_id} not found or is deleted")
+
+        with transaction.atomic():
+            updated_fields = []
+            for excel_col, mapping in field_map.items():
+                value = row_data.get(excel_col)
+                if value is None or value == '':
+                    continue  # Skip empty = no change
+
+                try:
+                    if isinstance(mapping, tuple):
+                        field_name = mapping[0]
+                        model_class = mapping[1]
+                        lookup_field = mapping[2] if len(mapping) > 2 else None
+
+                        # Skip quantity_code — it's not a direct product field
+                        if field_name == 'quantity_code':
+                            continue
+
+                        if not lookup_field:
+                            if hasattr(model_class, 'name'):
+                                lookup_field = 'name'
+                            elif hasattr(model_class, model_class.__name__.lower() + '_name'):
+                                lookup_field = model_class.__name__.lower() + '_name'
+
+                        fk_obj = model_class.objects.filter(**{f"{lookup_field}__iexact": value}).first()
+                        if not fk_obj:
+                            create_kwargs = {lookup_field: value}
+                            if hasattr(model_class, 'code'):
+                                create_kwargs['code'] = value[:3].upper()
+                            fk_obj = model_class.objects.create(**create_kwargs)
+
+                        setattr(product, field_name, fk_obj)
+                        updated_fields.append(field_name)
+                    else:
+                        if mapping in boolean_fields:
+                            setattr(product, mapping, cls.parse_boolean(value))
+                        elif mapping == 'status':
+                            if value in ['Active', 'Inactive']:
+                                setattr(product, mapping, value)
+                        elif mapping in ['mrp', 'minimum_price', 'sales_rate', 'wholesale_rate',
+                                         'dealer_rate', 'rate_factor', 'discount', 'dis_amount',
+                                         'purchase_rate', 'purchase_rate_factor', 'purchase_discount']:
+                            try:
+                                setattr(product, mapping, decimal.Decimal(str(value)))
+                            except (decimal.InvalidOperation, TypeError):
+                                continue
+                        elif mapping in ['minimum_level', 'maximum_level', 'balance',
+                                         'pack_vs_stock', 'g_pack_vs_pack', 'gst_input',
+                                         'purchase_warranty_months', 'sales_warranty_months']:
+                            try:
+                                setattr(product, mapping, int(float(str(value))))
+                            except (ValueError, TypeError):
+                                continue
+                        else:
+                            setattr(product, mapping, value)
+                        updated_fields.append(mapping)
+                except Exception as e:
+                    logger.warning(f"Error updating field {excel_col}: {str(e)}")
+                    continue
+
+            if updated_fields:
+                product.save()
+                logger.info(f"Updated product {product.name}: {', '.join(updated_fields)}")
+
+        return product
+
+    # ============================================================
+    # EXPORT EXISTING PRODUCTS TO EXCEL
+    # ============================================================
+    @classmethod
+    def export_products(cls, queryset=None):
+        """
+        Export existing products to Excel (with product_id for re-import update).
+        Returns an openpyxl Workbook.
+        """
+        wb = cls.generate_template()
+        ws = wb.active
+
+        field_keys = list(cls.FIELD_MAP.keys())
+        all_headers = ['product_id'] + field_keys
+
+        # Clear sheet and rewrite headers
+        ws.delete_rows(1, ws.max_row)
+        header_fill = PatternFill(start_color="ADD8E6", end_color="ADD8E6", fill_type="solid")
+        id_fill = PatternFill(start_color="FFD700", end_color="FFD700", fill_type="solid")
+        font_bold = Font(bold=True)
+        align_center = Alignment(horizontal="center")
+
+        for col_num, header in enumerate(all_headers, 1):
+            cell = ws.cell(row=1, column=col_num)
+            cell.value = header
+            cell.fill = id_fill if header == 'product_id' else header_fill
+            cell.font = font_bold
+            cell.alignment = align_center
+            ws.column_dimensions[get_column_letter(col_num)].width = max(len(header) + 4, 15)
+
+        ws.cell(row=1, column=1).comment = Comment(
+            '\u26a0\ufe0f DO NOT MODIFY this column. Used to match records for update.', 'System'
+        )
+
+        # FK field → (model attr, display field) for readable export
+        FK_DISPLAY = {
+            'product_mode':       ('product_mode_id', 'mode_name'),
+            'product_group':      ('product_group_id', 'group_name'),
+            'category':           ('category_id', 'category_name'),
+            'product_type':       ('type_id', 'type_name'),
+            'brand':              ('brand_id', 'brand_name'),
+            'stock_unit':         ('stock_unit_id', 'stock_unit_name'),
+            'pack_unit':          ('pack_unit_id', 'stock_unit_name'),
+            'g_pack_unit':        ('g_pack_unit_id', 'stock_unit_name'),
+            'unit_options':       ('unit_options_id', 'unit_name'),
+            'item_type':          ('item_type_id', 'item_name'),
+            'drug_type':          ('drug_type_id', 'drug_type_name'),
+            'gst_classification': ('gst_classification_id', 'type'),
+            'sales_gl':           ('sales_gl_id', 'name'),
+            'purchase_gl':        ('purchase_gl_id', 'name'),
+        }
+
+        if queryset is None:
+            queryset = Products.objects.filter(is_deleted=False).order_by('name')
+
+        queryset = queryset.select_related(
+            'product_mode_id', 'product_group_id', 'category_id', 'type_id',
+            'brand_id', 'stock_unit_id', 'pack_unit_id', 'g_pack_unit_id',
+            'unit_options_id', 'item_type_id', 'drug_type_id',
+            'gst_classification_id', 'sales_gl_id', 'purchase_gl_id'
+        )
+
+        for product in queryset:
+            row = [str(product.product_id)]
+
+            for excel_col, mapping in cls.FIELD_MAP.items():
+                if excel_col in FK_DISPLAY:
+                    fk_attr, display_field = FK_DISPLAY[excel_col]
+                    fk_obj = getattr(product, fk_attr, None)
+                    row.append(getattr(fk_obj, display_field, '') if fk_obj else '')
+                elif excel_col == 'quantity_code':
+                    # quantity_code is nested: stock_unit → quantity_code
+                    try:
+                        su = getattr(product, 'stock_unit_id', None)
+                        qc = getattr(su, 'quantity_code_id', None) if su else None
+                        row.append(getattr(qc, 'quantity_code_name', '') if qc else '')
+                    except Exception:
+                        row.append('')
+                elif isinstance(mapping, tuple):
+                    row.append('')  # Unknown FK
+                else:
+                    val = getattr(product, mapping, '')
+                    if isinstance(val, bool):
+                        val = 'Yes' if val else 'No'
+                    row.append(val if val is not None else '')
+
+            ws.append(row)
+
+        ws.freeze_panes = 'B2'
+        return wb
 
 
 class ProductTemplateAPIView(APIView):
@@ -1655,9 +1832,43 @@ class ProductTemplateAPIView(APIView):
     def get(self, request, *args, **kwargs):
         return ProductExcelImport.get_template_response(request)
 
+class ProductExportAPIView(APIView):
+    """
+    API for exporting existing products to Excel (for re-import update).
+    GET /export-products/              → export all products
+    GET /export-products/?ids=a,b,c    → export specific products
+    """
+    def get(self, request, *args, **kwargs):
+        try:
+            ids_param = request.query_params.get('ids', '')
+            queryset = Products.objects.filter(is_deleted=False).order_by('name')
+
+            if ids_param:
+                id_list = [i.strip() for i in ids_param.split(',') if i.strip()]
+                queryset = queryset.filter(product_id__in=id_list)
+                if not queryset.exists():
+                    return build_response(0, "No matching products found", [], status.HTTP_404_NOT_FOUND)
+
+            wb = ProductExcelImport.export_products(queryset)
+            response = HttpResponse(
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            )
+            response['Content-Disposition'] = 'attachment; filename=Product_Export.xlsx'
+            wb.save(response)
+            return response
+
+        except Exception as e:
+            logger.error(f"Error exporting products: {str(e)}")
+            return build_response(0, f"Export failed: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class ProductExcelUploadAPIView(APIView):
     """
     API for importing products from Excel files.
+    
+    Supports two modes (auto-detected or via ?mode=update):
+    - create (default): Creates new products from Excel rows
+    - update: Matches by product_id column and updates existing records
     
     OPTIMIZED FOR LARGE IMPORTS:
     - Uses bulk_create for imports > 500 rows (5-10x faster)
@@ -1674,7 +1885,29 @@ class ProductExcelUploadAPIView(APIView):
     def post(self, request, *args, **kwargs):
         import time
         start_time = time.time()
-        
+        import_mode_param = request.query_params.get('mode', 'create').lower()
+
+        # --- AUTO-DETECT UPDATE MODE ---
+        if import_mode_param == 'create':
+            file = request.FILES.get('file')
+            if file:
+                try:
+                    peek_wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                    peek_sheet = peek_wb.active
+                    headers = [str(cell.value).strip().lower() for cell in next(peek_sheet.iter_rows(min_row=1, max_row=1)) if cell.value]
+                    peek_wb.close()
+                    file.seek(0)
+                    if 'product_id' in headers:
+                        import_mode_param = 'update'
+                        logger.info("Auto-detected update mode (product_id column found in Excel)")
+                except Exception:
+                    file.seek(0)
+
+        # --- UPDATE MODE ---
+        if import_mode_param == 'update':
+            return self._handle_update(request, start_time)
+
+        # --- CREATE MODE (existing logic, untouched) ---
         try:
             # Upload and validate file
             file_path, status_code = ProductExcelImport.upload_file(request)
@@ -1798,8 +2031,136 @@ class ProductExcelUploadAPIView(APIView):
             import traceback
             logger.error(traceback.format_exc())
             return build_response(0, f"Import failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
-        
-        
+
+
+    def _handle_update(self, request, start_time):
+        """
+        Handle Excel-based bulk update for products.
+        Reads uploaded Excel, matches by product_id, updates only non-empty fields.
+        """
+        import time
+        try:
+            file = request.FILES.get('file')
+            if not file:
+                return build_response(0, "No file uploaded", [], status.HTTP_400_BAD_REQUEST)
+
+            file_name = file.name.lower()
+            if not (file_name.endswith('.xlsx') or file_name.endswith('.xls')):
+                return build_response(0, "Invalid file format. Only .xlsx or .xls supported.", [], status.HTTP_400_BAD_REQUEST)
+
+            wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+            try:
+                sheet = wb.active
+
+                raw_headers = [str(cell.value).lower().strip() if cell.value else '' for cell in sheet[1]]
+                headers = [h.replace(' *', '').strip() for h in raw_headers]
+
+                if 'product_id' not in headers:
+                    return build_response(0, "Excel must have a 'product_id' column for update mode. Use the Export file as your template.", [], status.HTTP_400_BAD_REQUEST)
+
+                success = 0
+                failed = []
+                total = 0
+
+                for excel_row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                    row_values = list(row)
+                    if not any(cell is not None for cell in row_values):
+                        continue
+
+                    total += 1
+                    row_data = {}
+                    for i, header in enumerate(headers):
+                        if i < len(row_values):
+                            val = row_values[i]
+                            if isinstance(val, str):
+                                val = val.strip() if val.strip() else None
+                            row_data[header] = val
+
+                    if not row_data.get('product_id'):
+                        failed.append({"row": excel_row_idx, "error": "Missing product_id"})
+                        continue
+
+                    try:
+                        ProductExcelImport.update_record(row_data)
+                        success += 1
+                    except Exception as e:
+                        failed.append({"row": excel_row_idx, "error": str(e)})
+            finally:
+                wb.close()
+
+            elapsed = round(time.time() - start_time, 2)
+
+            if success == 0 and failed:
+                return build_response(0, f"Update failed. {len(failed)} errors.",
+                    {"errors": failed[:20], "elapsed_time": f"{elapsed}s"}, status.HTTP_400_BAD_REQUEST)
+            elif failed:
+                return build_response(success,
+                    f"Partial update: {success}/{total} updated in {elapsed}s. {len(failed)} failed.",
+                    {"success_count": success, "failed_count": len(failed), "errors": failed[:20], "elapsed_time": f"{elapsed}s"},
+                    status.HTTP_200_OK)
+            else:
+                return build_response(success,
+                    f"{success} products updated successfully in {elapsed}s.",
+                    {"success_count": success, "total_count": total, "elapsed_time": f"{elapsed}s"},
+                    status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"Error in product Excel update: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return build_response(0, f"Update failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+
+
+# ========================= PRODUCT BULK UPDATE =========================
+class ProductBulkUpdateView(BaseBulkUpdateView):
+    """
+    PATCH /api/v1/products/bulk-update/
+
+    Body:
+    {
+        "ids": ["uuid1", "uuid2", ...],
+        "update_data": {
+            "product_group_id": "uuid",
+            "category_id": "uuid",
+            "type_id": "uuid",
+            "brand_id": "uuid",
+            "status": "Active"
+        }
+    }
+
+    Only provided fields are updated. Empty fields are ignored.
+    """
+    MODEL = Products
+    PK_FIELD = "product_id"
+    MODULE_NAME = "Products"
+    MAX_SELECTION = 100
+
+    # Whitelist: field_name → FK Model (None = plain value field)
+    ALLOWED_FIELDS = {
+        'product_group_id':       ProductGroups,
+        'category_id':            ProductCategories,
+        'type_id':                ProductTypes,
+        'brand_id':               ProductBrands,
+        'unit_options_id':        UnitOptions,
+        'stock_unit_id':          ProductStockUnits,
+        'gst_classification_id':  ProductGstClassifications,
+        'sales_gl_id':            ProductSalesGl,
+        'purchase_gl_id':         ProductPurchaseGl,
+        'item_type_id':           ProductItemType,
+        'drug_type_id':           ProductDrugTypes,
+        'status':                 None,
+        'gst_input':              None,
+        'print_barcode':          None,
+        'sales_rate':             None,
+        'wholesale_rate':         None,
+        'dealer_rate':            None,
+        'purchase_rate':          None,
+        'discount':               None,
+        'minimum_level':          None,
+        'maximum_level':          None,
+    }
+
+
 #updating the balance
 # views.py
 from rest_framework.views import APIView
