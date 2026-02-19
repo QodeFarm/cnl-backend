@@ -1,3 +1,4 @@
+from apps.customer.models import Customer
 from apps.finance.models import JournalEntry, JournalVoucher
 from apps.masters.template.account_ledger.account_ledger import ledger_document_data, ledger_document_doc
 from apps.masters.template.billpayment_receipt.billpayment_receipt import billpayment_receipt_data, billpayment_receipt_doc
@@ -6,6 +7,7 @@ from apps.production.models import MaterialIssue, MaterialReceived
 from apps.products.models import Products
 from apps.purchase.models import BillPaymentTransactions, PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
 from apps.sales.models import OrderShipments, PaymentTransactions, SaleCreditNotes, SaleDebitNotes, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
+from apps.vendor.models import Vendor
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate, soft_delete
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
@@ -885,6 +887,8 @@ ORDER_MODEL_MAPPING = {
     'DN': (SaleDebitNotes, 'debit_note_number'),
     'SHIP': (OrderShipments, 'shipping_tracking_no'),
     'PRD': (Products, 'code'),
+    'CUST': (Customer, 'code'),
+    'VEND': (Vendor, 'code'),
     'PTR': (PaymentTransactions, 'payment_receipt_no'),
     'BPR': (BillPaymentTransactions, 'payment_receipt_no'),
     'MI' :(MaterialIssue, 'issue_no'),
@@ -1008,6 +1012,12 @@ def get_next_order_number(order_type_prefix):
     Returns:
         str: The next order number.
     """
+    if order_type_prefix == "CUST":
+        key = f"{order_type_prefix}"
+        sequence_number = cache.get(key, 0)
+        sequence_number_str = f"{sequence_number + 1:05d}"
+        return f"{order_type_prefix}-{sequence_number_str}"
+    
     if order_type_prefix == "PRD":
         key = f"{order_type_prefix}"
         sequence_number = cache.get(key, 0)

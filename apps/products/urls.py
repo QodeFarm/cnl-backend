@@ -16,6 +16,7 @@ router.register(r'sizes', SizeViewSet)
 router.register(r'colors', ColorViewSet)
 router.register(r'product_variations', ProductVariationViewSet)
 router.register(r'item-master', ItemMasterViewSet)
+router.register(r'gst', GSTMasterViewSet, basename='gst')
 
 urlpatterns = [
     path('',include(router.urls)),
@@ -26,5 +27,10 @@ urlpatterns = [
     path('download-template/', ProductTemplateAPIView.as_view(), name='download_product_template'),
     path('export-products/', ProductExportAPIView.as_view(), name='export_products'),
     path('upload-excel/', ProductExcelUploadAPIView.as_view(), name='upload_product_excel'),
+    path(
+        "update-balance/<uuid:pk>/",
+        UpdateProductBalanceView.as_view(),
+        name="update-product-balance"
+    ),
 ]
     

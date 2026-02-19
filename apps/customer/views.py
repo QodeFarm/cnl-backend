@@ -190,9 +190,9 @@ class CustomerCreateViews(APIView):
         logger.info("Retrieving all customers")
 
         page, limit = self.get_pagination_params(request)
-        using_db = self.resolve_db_from_request(request)
+        # using_db = self.resolve_db_from_request(request)
 
-        queryset = Customer.objects.using(using_db).all().order_by('is_deleted', '-created_at')
+        queryset = Customer.objects.all().order_by('is_deleted', '-created_at')
 
         if request.query_params:
             filterset = CustomerFilters(request.GET, queryset=queryset)
@@ -202,7 +202,7 @@ class CustomerCreateViews(APIView):
         # ✅ Enforce ordering again after filters
         queryset = queryset.order_by('is_deleted', '-created_at')
 
-        total_count = Customer.objects.using(using_db).count()
+        total_count = Customer.objects.count()
         serializer = CustomerSerializer(queryset, many=True)
 
         return filter_response(queryset.count(), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
@@ -215,10 +215,10 @@ class CustomerCreateViews(APIView):
         page, limit = self.get_pagination_params(request)
         # using_db = self.resolve_db_from_request(request)
 
-        queryset = Customer.objects.all().order_by('is_deleted', '-created_at')
+        queryset = Customer.objects.all().order_by('-created_at')
 
         if request.query_params:
-            filterset = CustomerFilters(request.GET, queryset=queryset.order_by('is_deleted', '-created_at'))
+            filterset = CustomerFilters(request.GET, queryset=queryset.order_by('-created_at'))
             if filterset.is_valid():
                 queryset = filterset.qs
 

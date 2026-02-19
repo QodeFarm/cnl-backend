@@ -187,6 +187,20 @@ class ProductPurchaseGlViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         return soft_delete(instance)
+    
+class GSTMasterViewSet(viewsets.ModelViewSet):
+    queryset = GSTMaster.objects.filter(is_active=True)
+    serializer_class = GSTMasterSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, GSTMaster,*args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
 
 class productsViewSet(viewsets.ModelViewSet):
     queryset = Products.objects.all().order_by('-created_at')
@@ -790,8 +804,6 @@ class ProductViewSet(APIView):
         except Exception as e:
             logger.error(f"PATCH error: {str(e)}")
             return build_response(0, f"Error updating product: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
-    
-
 
 
 class ProductExcelImport(BaseExcelImportExport):
@@ -2147,3 +2159,67 @@ class ProductBulkUpdateView(BaseBulkUpdateView):
         'minimum_level':          None,
         'maximum_level':          None,
     }
+
+
+#updating the balance
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+
+from .models import Products, ProductVariation
+
+
+class UpdateProductBalanceView(APIView):
+
+    def patch(self, request, pk):
+        product = get_object_or_404(Products, pk=pk)
+        balance = request.data.get("balance")
+
+        if balance is None:
+            return Response(
+                {"message": "balance is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 🔹 Check variations from ProductVariation table
+        variations_qs = ProductVariation.objects.filter(product_id=product)
+
+        # ----------------------------------
+        # Case 1: NO variations
+        # ----------------------------------
+        if not variations_qs.exists():
+            product.balance = balance
+            product.save(update_fields=["balance"])
+
+        # ----------------------------------
+        # Case 2: HAS variations
+        # ----------------------------------
+        else:
+            # Update product balance
+            product.balance = balance
+            product.save(update_fields=["balance"])
+
+            # Optional but recommended:
+            # distribute or sync variation quantities
+            per_variation_qty = balance // variations_qs.count()
+
+            for variation in variations_qs:
+                variation.quantity = per_variation_qty
+                variation.save(update_fields=["quantity"])
+
+        return Response(
+            {
+                "message": "Product balance updated successfully",
+                "product_id": str(product.pk),
+                "balance": product.balance,
+                "has_variations": variations_qs.exists()
+            },
+            status=status.HTTP_200_OK
+        )

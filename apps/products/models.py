@@ -23,8 +23,17 @@ def product_groups_picture(instance, filename):
 # Create your models here.
 class ProductGroups(models.Model):
     product_group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=50, unique=True)
     group_name = models.CharField(max_length=255)
     description = models.TextField(null=True, default=None)
+    product_mode_id = models.ForeignKey(ItemMaster, on_delete=models.PROTECT, null=True, blank=True, db_column='product_mode_id')
+    under_group_id = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='under_group_id'
+    )
     picture = models.ImageField(max_length=255, null=True, default=None, upload_to=product_groups_picture)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -174,7 +183,27 @@ class ProductPurchaseGl(models.Model):
 
     def __str__(self):
         return f"{self.purchase_gl_id} {self.name}"
+    
+    
+class GSTMaster(models.Model):
+    gst_id = models.CharField(
+        max_length=36,
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False
+    )
+    gst_name = models.CharField(max_length=50)
+    gst_percentage = models.DecimalField(max_digits=5, decimal_places=2)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        db_table = "gst_master"
+        ordering = ["gst_percentage"]
+
+    def __str__(self):
+        return f"{self.gst_name} ({self.gst_percentage}%)"
 
 def products_picture(instance, filename):
     # Get the file extension
@@ -201,6 +230,13 @@ class Products(OrderNumberMixin):
     barcode = models.CharField(max_length=50, null=True, default=None)
     unit_options_id = models.ForeignKey(UnitOptions, on_delete=models.PROTECT, null=True, default=None, db_column = 'unit_options_id')
     gst_input = models.IntegerField(null=True, default=None)
+    gst_id = models.ForeignKey(
+        GSTMaster,
+        on_delete=models.PROTECT,
+        db_column="gst_id",
+        null=True,
+        blank=True
+    )
     stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.PROTECT, null=True, db_column = 'stock_unit_id')
     print_barcode = models.BooleanField(null=True, default=None)
     gst_classification_id = models.ForeignKey(ProductGstClassifications, on_delete=models.PROTECT, null=True, default=None, db_column = 'gst_classification_id')
@@ -236,6 +272,7 @@ class Products(OrderNumberMixin):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, null=True, default=None)
     print_name = models.CharField(max_length=255)
     hsn_code= models.CharField(max_length=15, null=True, default=None)
+    has_opening_balance = models.BooleanField(default=False)
     balance = models.IntegerField(default=0)
     physical_balance = models.IntegerField(default=0)
     balance_diff = models.IntegerField(default=0)
@@ -268,7 +305,13 @@ class Products(OrderNumberMixin):
             if not getattr(self, self.order_no_field):  # Ensure the order number is not already set
                 order_number = generate_order_number(self.order_no_prefix)
                 setattr(self, self.order_no_field, order_number)
-                
+        # ✅ MAP GST MASTER VALUE TO gst_input
+        if self.gst_id:
+            try:
+                self.gst_input = int(self.gst_id.gst_percentage)
+            except Exception:
+                pass
+            
         # ✅ AUTO CALCULATE BALANCE DIFF
         self.balance_diff = (self.physical_balance or 0) - (self.balance or 0)
 
@@ -322,7 +365,7 @@ class ProductVariation(models.Model):
     size_id = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, default=None, db_column='size_id')
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, default=None, db_column='color_id')
     sku = models.CharField(max_length=100, unique=True,null=True,)
-    price = models.DecimalField(max_digits=10, decimal_places=2, null=True,)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     quantity = models.IntegerField(default=0,null=True,)
     # is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -347,3 +390,4 @@ class ProductItemBalance(models.Model):
 
     def __str__(self):
         return f'{self.warehouse_location_id}'
+

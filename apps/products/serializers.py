@@ -26,6 +26,15 @@ class ModProductGroupsSerializer(serializers.ModelSerializer):
         fields = ['product_group_id','group_name']
 
 class ProductGroupsSerializer(serializers.ModelSerializer):
+    product_mode = ModItemMasterSerializer(
+        source='product_mode_id',
+        read_only=True
+    )
+
+    under_group = ModProductGroupsSerializer(
+        source='under_group_id',
+        read_only=True
+    )
     class Meta:
         model = ProductGroups
         fields = '__all__'
@@ -156,7 +165,11 @@ class PictureSerializer(serializers.Serializer):
     file_size = serializers.IntegerField()
     attachment_path = serializers.CharField(max_length=255)
 #-------------------------------------------------------------------
-
+class GSTMasterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GSTMaster
+        fields = "__all__"
+        
 class productsSerializer(serializers.ModelSerializer):
     product_group = ModProductGroupsSerializer(source='product_group_id',read_only=True)
     category = ModProductCategoriesSerializer(source='category_id',read_only=True)
@@ -173,6 +186,7 @@ class productsSerializer(serializers.ModelSerializer):
     pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)
     g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True)
     product_mode = ModItemMasterSerializer(source='product_mode_id', read_only=True)
+    gst = GSTMasterSerializer(source='gst_id',read_only=True)
     
     warehouse_locations = serializers.SerializerMethodField()
 
@@ -213,6 +227,9 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
 #         model = Products
 #         fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'hsn_code', 'gst_input', 'created_at', 'stock_unit',  'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  'g_pack_vs_pack', 'type' ]
 
+
+        
+        
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
     stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id', read_only=True)
@@ -221,15 +238,16 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
     type = ProductTypesSerializer(source='type_id', read_only=True)
     pack_unit = ModProductStockUnitsSerializer(source='pack_unit_id',read_only=True)
     g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True)
+    gst = GSTMasterSerializer(source='gst_id',read_only=True)
 
     class Meta:
         model = Products
         fields = [
-            'product_id', 'code', 'name', 'barcode', 'print_name', 'product_group', 'category',
+            'product_id', 'code', 'name', 'barcode', 'print_name', 'product_group', 'category', 'gst',
             'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 
             'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'physical_balance', 'balance_diff',
             'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
-            'pack_unit', 'pack_vs_stock', 'g_pack_unit',  
+            'pack_unit', 'pack_vs_stock', 'g_pack_unit', 'has_opening_balance',  
             'g_pack_vs_pack', 'type', 'is_deleted'
         ]
         
@@ -284,3 +302,4 @@ class ProductVariationSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductVariation
         fields = '__all__'	
+        
