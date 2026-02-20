@@ -61,6 +61,17 @@ class ProductGroupsSerializer(serializers.ModelSerializer):
             instance.picture = picture
             instance.save()
         return super().update(instance, validated_data)
+    
+class ModSubProductCategoriesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubProductCategories
+        fields = ['sub_category_id', 'sub_category_name']
+
+class SubProductCategoriesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SubProductCategories
+        fields = '__all__'
+
 
 class ModProductCategoriesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -68,6 +79,10 @@ class ModProductCategoriesSerializer(serializers.ModelSerializer):
         fields = ['category_id','category_name','code']
 
 class ProductCategoriesSerializer(serializers.ModelSerializer):
+    sub_category = serializers.CharField(
+        source='sub_category_id',
+        read_only=True
+    )
     class Meta:
         model = ProductCategories
         fields = '__all__'

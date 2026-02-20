@@ -2108,11 +2108,11 @@ def extract_product_data(data, tax_type=None):
     
     for index, item in enumerate(data, start=1):
         product = item['product']
-        unit_options = item['unit_options']        
+        unit_options = item.get('unit_options') or {}       
         product_name = product['name']
         total_boxes = item['total_boxes']
         quantity = float(item['quantity'])
-        unit_name = unit_options['unit_name']
+        unit_name = unit_options.get('unit_name', '')
         rate = float(item['rate'])
         amount = float(quantity * rate)
         discount_percent = item['discount']

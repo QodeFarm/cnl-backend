@@ -17,6 +17,7 @@ router.register(r'colors', ColorViewSet)
 router.register(r'product_variations', ProductVariationViewSet)
 router.register(r'item-master', ItemMasterViewSet)
 router.register(r'gst', GSTMasterViewSet, basename='gst')
+router.register(r'sub-product-categories',SubProductCategoriesViewSet,basename='sub-product-categories')
 
 urlpatterns = [
     path('',include(router.urls)),
