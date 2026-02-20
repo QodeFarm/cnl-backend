@@ -57,6 +57,32 @@ class ProductGroupsViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         return soft_delete(instance)
+    
+class SubProductCategoriesViewSet(viewsets.ModelViewSet):
+    queryset = SubProductCategories.objects.all().order_by('is_deleted', '-created_at')	
+    serializer_class = SubProductCategoriesSerializer
+    filter_backends = [DjangoFilterBackend,OrderingFilter]
+    ordering_fields = ['sub_category_name','code','created_at']
+    
+    #log actions
+    log_actions = True
+    log_module_name = "Sub Product Categories"
+    log_pk_field = "sub_category_id"
+    log_display_field = "sub_category_name"
+
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, SubProductCategories,*args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+
 
 class ProductCategoriesViewSet(viewsets.ModelViewSet):
     queryset = ProductCategories.objects.all().order_by('is_deleted', '-created_at')	

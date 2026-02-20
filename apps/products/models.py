@@ -54,6 +54,21 @@ class ProductGroups(models.Model):
                 picture_dir = os.path.dirname(file_path)
                 if not os.listdir(picture_dir):
                     os.rmdir(picture_dir)
+                    
+class SubProductCategories(models.Model):
+    sub_category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sub_category_name = models.CharField(max_length=255)
+    code = models.CharField(max_length=50, null=True, default=None)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'sub_product_categories'
+
+    def __str__(self):
+        return self.sub_category_name
+
 
 
 def product_categories_picture(instance, filename):
@@ -71,6 +86,14 @@ def product_categories_picture(instance, filename):
 class ProductCategories(models.Model):
     category_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     category_name = models.CharField(max_length=255)
+    sub_category_id = models.ForeignKey(
+        SubProductCategories,
+        on_delete=models.PROTECT,
+        db_column='sub_category_id',
+        null=True,
+        default=None
+    )
+
     picture = models.ImageField(max_length=255,  null=True, default=None, upload_to=product_categories_picture)
     code = models.CharField(max_length=50, null=True, default=None)
     is_deleted = models.BooleanField(default=False)
