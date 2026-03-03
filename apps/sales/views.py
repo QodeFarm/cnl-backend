@@ -1311,7 +1311,7 @@ class SaleOrderViewSet(APIView):
         Before deleting, checks if the sale order is linked to any transactional data
         such as sale invoices or sale returns.
         """
-        db_to_use = None
+        db_to_use = 'default'
         try:
             # Get the SaleOrder instance
             instance = SaleOrder.objects.using(db_to_use).get(pk=pk)
@@ -2056,6 +2056,33 @@ class SaleOrderViewSet(APIView):
         if flow_status_id:
             try:
                 new_flow_status = FlowStatus.objects.get(pk=flow_status_id)
+
+                # ── Flow-status transition validation ──────────────────────
+                # Allow these statuses to be set directly (from confirmReceipt / order acknowledgement)
+                ALLOWED_DIRECT_STATUSES = {'Completed', 'Partially Delivered'}
+                new_status_name = new_flow_status.flow_status_name
+
+                if new_status_name not in ALLOWED_DIRECT_STATUSES:
+                    current_stage = WorkflowStage.objects.filter(
+                        flow_status_id=sale_order.flow_status_id
+                    ).first()
+                    new_stage = WorkflowStage.objects.filter(
+                        flow_status_id=new_flow_status
+                    ).first()
+
+                    if current_stage and new_stage:
+                        # Only allow forward by exactly 1 step, or reset to stage 1 (admin)
+                        if (new_stage.stage_order != current_stage.stage_order + 1
+                                and new_stage.stage_order != 1):
+                            return build_response(
+                                0,
+                                f"Invalid flow status transition from "
+                                f"'{sale_order.flow_status_id.flow_status_name}' to '{new_status_name}'.",
+                                [],
+                                status.HTTP_400_BAD_REQUEST
+                            )
+                # ── End transition validation ──────────────────────────────
+
                 sale_order.flow_status_id = new_flow_status
             except FlowStatus.DoesNotExist:
                 return build_response(0, "Invalid flow_status_id", [], status.HTTP_400_BAD_REQUEST)
@@ -4833,7 +4860,7 @@ class SaleReceiptCreateViewSet(APIView):
                 if filterset.is_valid():
                     queryset = filterset.qs 
 
-            total_count = SaleInvoiceOrders.objects.count()
+            total_count = queryset.count()
 
             serializer = SaleReceiptSerializer(queryset, many=True)
             logger.info("sale_receipt data retrieved successfully.")
@@ -6017,21 +6044,15 @@ class MoveToNextStageGenericView(APIView):
             if not current_stage:
                 return Response({"error": "Current workflow stage not found."}, status=status.HTTP_404_NOT_FOUND)
 
-            production_stage = WorkflowStage.objects.using(db_used).filter(
+            # BUG FIX: Previously when current stage was 'Production', the code
+            # jumped back to stage_order=1 (the first stage, e.g. 'Review Inventory')
+            # instead of advancing forward. Removed that special case.
+            # After Production the order moves to the next configured workflow stage
+            # (e.g. 'Ready for Invoice'), not back to the beginning.
+            next_stage = WorkflowStage.objects.using(db_used).filter(
                 workflow_id=current_stage.workflow_id_id,
-                flow_status_id__flow_status_name="Production"
-            ).first()
-
-            if current_stage == production_stage:
-                next_stage = WorkflowStage.objects.using(db_used).filter(
-                    workflow_id=current_stage.workflow_id_id,
-                    stage_order=1
-                ).first()
-            else:
-                next_stage = WorkflowStage.objects.using(db_used).filter(
-                    workflow_id=current_stage.workflow_id_id,
-                    stage_order__gt=current_stage.stage_order
-                ).order_by('stage_order').first()
+                stage_order__gt=current_stage.stage_order
+            ).order_by('stage_order').first()
 
             if next_stage:
                 obj.flow_status_id = next_stage.flow_status_id
@@ -6052,7 +6073,9 @@ class MoveToNextStageGenericView(APIView):
     def patch(self, request, module_name, object_id):
         """
         Partially update the object's fields, including setting a specific flow status.
+        Only allows updating whitelisted fields to prevent mass-assignment.
         """
+        ALLOWED_PATCH_FIELDS = {'flow_status_id', 'order_status_id'}
         try:
             # Dynamically load the model based on module_name
             ModelClass = self.get_model_class(module_name)
@@ -6061,20 +6084,20 @@ class MoveToNextStageGenericView(APIView):
 
             # Fetch the object from the appropriate model
             obj = ModelClass.objects.get(pk=object_id)
-            #print(f"Updating fields for: {module_name} with ID {object_id}")
 
-            # Update fields with the data from the request
+            # Update only whitelisted fields from the request
+            updated = {}
             for field, value in request.data.items():
-                if hasattr(obj, field):
+                if field in ALLOWED_PATCH_FIELDS and hasattr(obj, field):
                     setattr(obj, field, value)
-                    #print(f"Updated {field} to {value}")
+                    updated[field] = value
 
             # Save the updated object
             obj.save()
 
             return Response({
                 "message": f"{module_name} partially updated successfully.",
-                "updated_fields": request.data
+                "updated_fields": updated
             }, status=status.HTTP_200_OK)
 
         except ModelClass.DoesNotExist:
