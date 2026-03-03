@@ -61,12 +61,6 @@ class SaleOrderFilter(filters.FilterSet):
         return queryset
 
     
-    # def filter_by_flow_status_name(self, queryset, name, value):
-    #     values = [v.strip() for v in value.split(',')]
-    #     q_filter = Q()
-    #     for val in values:
-    #         q_filter |= Q(flow_status_id__flow_status_name__iexact=val)
-    #     return queryset.filter(q_filter)
     def filter_by_flow_status_name(self, queryset, name, value):
         if not value:
             return queryset  # nothing to filter
@@ -75,7 +69,12 @@ class SaleOrderFilter(filters.FilterSet):
         if not values:
             return queryset
 
-        return queryset.filter(flow_status_id__flow_status_name__in=values)
+        # Use case-insensitive matching to avoid casing mismatches
+        # (e.g. DB has 'Delivery In progress' but UI may send 'Delivery in Progress')
+        q_filter = Q()
+        for val in values:
+            q_filter |= Q(flow_status_id__flow_status_name__iexact=val)
+        return queryset.filter(q_filter)
 
     
     def filter_child_orders(self, queryset, name, value):

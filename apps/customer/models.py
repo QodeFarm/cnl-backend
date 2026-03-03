@@ -182,11 +182,12 @@ class CustomerAttachments(models.Model):
 class CustomerAddresses(models.Model):
     ADDRESS_CHOICE = [
         ('Billing', 'Billing'),
-        ('Shipping', 'Shipping')
+        ('Shipping', 'Shipping'),
+        ('Communication', 'Communication')
     ]
     customer_address_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     customer_id = models.ForeignKey(Customer, on_delete=models.PROTECT, db_column='customer_id')
-    address_type = models.CharField(max_length=10, choices=ADDRESS_CHOICE, null=True, default=None)
+    address_type = models.CharField(max_length=15, choices=ADDRESS_CHOICE, null=True, default=None)
     address = models.CharField(max_length=255, null=True, default=None)
     city_id = models.ForeignKey(City, on_delete=models.PROTECT, null=True,db_column='city_id')
     state_id = models.ForeignKey(State, on_delete=models.PROTECT, null=True,db_column='state_id')
