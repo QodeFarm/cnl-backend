@@ -1098,7 +1098,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'], 
                                    pdf_data['product_data'], 
                                    pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
-                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['round_0ff'], pdf_data['cess_amount'], 
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'], 
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks']
                                 )
                 
@@ -1114,7 +1114,7 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['billing_address'],
                                    pdf_data['product_data'],
                                    pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
-                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'],pdf_data['finalDiscount'], pdf_data['cess_amount'], pdf_data['round_0ff'], #finalDiscount
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'],pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['cess_amount'], pdf_data['round_0ff'], #finalDiscount
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks'],
                                 )
             # Add this in the DocumentGeneratorView class after the sale_invoice condition

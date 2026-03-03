@@ -84,6 +84,18 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             discountAmt = customer_data_for_cust_data.get("dis_amt")
             discountAmt = float(discountAmt) if discountAmt is not None else 0.0  # Convert to float
             
+            # Fetch shipment record
+            shipment_record = related_model.objects.filter(
+                **{related_filter_field: pk}
+            ).first()
+
+            shipping_charges = 0.0
+
+            if shipment_record:
+                shipping_charges = float(getattr(shipment_record, 'shipping_charges', 0) or 0)
+
+            shipping_charges = round(shipping_charges, 2)
+            
             if billing_address and 'Andhra Pradesh' in billing_address:
                 print("Intra-state transaction (CGST + SGST)")
             net_value = customer_data_for_cust_data.get('total_amount')
@@ -198,9 +210,9 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             # net_value = round(raw, 2)
             
             
-            net_value = round(party_old_balance + final_amount - finalDiscount)
+            net_value = round(party_old_balance + final_amount - finalDiscount + shipping_charges)
             
-            round_0ff = round(net_value - (party_old_balance + final_amount - finalDiscount), 2)  # e.g., "+0.00", "-0.01"
+            round_0ff = round(net_value - (party_old_balance + final_amount - finalDiscount + shipping_charges), 2)  # e.g., "+0.00", "-0.01"
             bill_amount_in_words = convert_amount_to_words(net_value)
             
             # ===== Combine Date + Time for Invoice =====
@@ -272,6 +284,7 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                 'total_igst' : round(total_igst, 2),
                 
                 'finalDiscount' : finalDiscount,
+                'shipping_charges' : shipping_charges,
                 # 'total_txbl_amt' : total_txbl_amt,
                 'total_disc_amt' : total_disc_amt,
                 'cess_amount' : cessAmt,
@@ -290,7 +303,7 @@ def sale_order_sales_invoice_doc(
     customer_name, billing_address, phone, city,
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
-    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, round_0ff, cess_amount,
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, shipping_charges, round_0ff, cess_amount,
     party_old_balance, net_lbl, net_value, tax_type, remarks
 ):  
     
@@ -321,7 +334,7 @@ def sale_order_sales_invoice_doc(
     
     # Append product total details in words
     elements.append(product_total_details_inwords(
-        bill_amount_in_words, itemstotal,finalDiscount,
+        bill_amount_in_words, itemstotal,finalDiscount, shipping_charges,
         total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
         party_old_balance, net_lbl, net_value, tax_type=tax_type
     ))
@@ -338,7 +351,7 @@ def sales_invoice_doc(
     customer_name, city, country, phone, dest, shipping_address, billing_address,
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
-    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, cess_amount, round_0ff, 
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount,shipping_charges, cess_amount, round_0ff, 
     party_old_balance, net_lbl, net_value, tax_type, remarks
 ):  
 
@@ -363,7 +376,7 @@ def sales_invoice_doc(
     
     # Append product total details in words
     elements.append(product_total_details_inwords(
-        bill_amount_in_words, itemstotal,finalDiscount,
+        bill_amount_in_words, itemstotal,finalDiscount, shipping_charges,
         total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
         party_old_balance, net_lbl, net_value, tax_type=tax_type
     ))

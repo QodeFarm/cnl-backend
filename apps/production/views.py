@@ -635,28 +635,82 @@ class WorkOrderAPIView(APIView):
     @transaction.atomic
     def patch(self, request, pk, *args, **kwargs):
         """
-        Restores a soft-deleted WorkOrder record (is_deleted=True → is_deleted=False).
+        Handles:
+        1. Restore WorkOrder (soft delete)
+        2. Update dispatch fields (ordered_qty, available_qty, remarks)
         """
+
         try:
             instance = WorkOrder.objects.get(pk=pk)
 
-            if not instance.is_deleted:
-                logger.info(f"WorkOrder with ID {pk} is already active.")
-                return build_response(0, "Record is already active", [], status.HTTP_400_BAD_REQUEST)
+            work_order_data = request.data.get("work_order", {})
 
-            instance.is_deleted = False
+            # ---------------- RESTORE LOGIC ----------------
+            if not work_order_data:
+                if not instance.is_deleted:
+                    logger.info(f"WorkOrder with ID {pk} is already active.")
+                    return build_response(
+                        0,
+                        "Record is already active",
+                        [],
+                        status.HTTP_400_BAD_REQUEST
+                    )
+
+                instance.is_deleted = False
+                instance.save()
+
+                logger.info(f"WorkOrder with ID {pk} restored successfully.")
+                return build_response(
+                    1,
+                    "Record restored successfully",
+                    [],
+                    status.HTTP_200_OK
+                )
+
+            # ---------------- DISPATCH UPDATE LOGIC ----------------
+
+            ordered_qty = work_order_data.get("ordered_qty")
+            available_qty = work_order_data.get("available_qty")
+            remarks = work_order_data.get("remarks")
+
+            if ordered_qty is not None:
+                instance.ordered_qty = ordered_qty
+
+            if available_qty is not None:
+                instance.available_qty = available_qty
+
+            if remarks is not None:
+                instance.remarks = remarks
+
             instance.save()
 
-            logger.info(f"WorkOrder with ID {pk} restored successfully.")
-            return build_response(1, "Record restored successfully", [], status.HTTP_200_OK)
+            logger.info(f"WorkOrder {pk} updated successfully via dispatch.")
+
+            return build_response(
+                1,
+                "Work Order updated successfully",
+                [],
+                status.HTTP_200_OK
+            )
 
         except WorkOrder.DoesNotExist:
             logger.warning(f"WorkOrder with ID {pk} does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+            return build_response(
+                0,
+                "Record does not exist",
+                [],
+                status.HTTP_404_NOT_FOUND
+            )
+
         except Exception as e:
-            logger.error(f"Error restoring WorkOrder with ID {pk}: {str(e)}")
-            return build_response(0, "Record restoration failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+            logger.error(f"Error updating WorkOrder with ID {pk}: {str(e)}")
+            return build_response(
+                0,
+                "Update failed due to an error",
+                [],
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):
         return self.create(request, *args, **kwargs)
