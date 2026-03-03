@@ -1803,13 +1803,13 @@ class SaleOrderViewSet(APIView):
                     remaining_qty -= deduct_qty
 
                 # Safety check (should NEVER happen)
-                if remaining_qty > 0:
-                    return build_response(
-                        0,
-                        f"Variation quantity mismatch for product {product_id}",
-                        [],
-                        status.HTTP_400_BAD_REQUEST
-                    )
+                # if remaining_qty > 0:
+                #     return build_response(
+                #         0,
+                #         f"Variation quantity mismatch for product {product_id}",
+                #         [],
+                #         status.HTTP_400_BAD_REQUEST
+                #     )
 
                 # 4️⃣ Create blocked inventory record
                 blocked_inventory_data.append(
