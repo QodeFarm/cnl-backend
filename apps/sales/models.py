@@ -851,6 +851,13 @@ class OrderShipments(OrderNumberMixin):
     order_no_field = 'shipping_tracking_no'
     shipping_date = models.DateField(null=True, default=None)
     shipping_charges = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
+    shipping_gst = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.00,
+        null=True,
+        blank=True
+    )
     vehicle_vessel = models.CharField(max_length=255, null=True, default=None)
     charge_type = models.CharField(max_length=255, null=True, default=None)
     document_through = models.CharField(max_length=255, null=True, default=None)
