@@ -7,19 +7,41 @@ from .models import MaterialIssue, MaterialReceived, StockJournal, StockSummary
 
 
 class WorkOrderFilter(filters.FilterSet):
+
+    # Product
     product = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
-    product_id = filters.CharFilter(method=filter_uuid)
-    size = filters.CharFilter(field_name='size_id__size_name', lookup_expr='icontains')  # Assuming 'size_name' exists in Size
-    color = filters.CharFilter(field_name='color_id__color_name', lookup_expr='icontains')  # Assuming 'color_name' exists in Color
+
+    # Status
     status = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
-    flow_status = filters.CharFilter(field_name='sale_order_id__flow_status_id__flow_status_name', lookup_expr='iexact')
+    status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
+
+    # Customer
+    customer = filters.CharFilter(field_name='sale_order_id__customer_id__name', lookup_expr='icontains')
+
+    # Order No
+    order_no = filters.CharFilter(field_name='sale_order_id__order_no', lookup_expr='icontains')
+
+    # Size
+    size = filters.CharFilter(field_name='size_id__size_name', lookup_expr='icontains')
+
+    # Color
+    color = filters.CharFilter(field_name='color_id__color_name', lookup_expr='icontains')
+
+    # Flow Status
+    flow_status = filters.CharFilter(
+        field_name='sale_order_id__flow_status_id__flow_status_name',
+        lookup_expr='iexact'
+    )
+
     quantity = filters.RangeFilter()
     completed_qty = filters.RangeFilter()
-    # pending_qty = filters.RangeFilter()
+
     start_date = filters.DateFromToRangeFilter()
     end_date = filters.DateFromToRangeFilter()
     created_at = filters.DateFromToRangeFilter()
+
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
@@ -39,11 +61,49 @@ class WorkOrderFilter(filters.FilterSet):
 
     def filter_by_limit(self, queryset, name, value):
         return filter_by_limit(self, queryset, value)
-    
+
     class Meta:
-        model = WorkOrder 
-        #do not change "product",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['product','size','color','status_id','quantity','completed_qty','product_id','flow_status','start_date','end_date','created_at','period_name','s','sort','page','limit']
+        model = WorkOrder
+        fields = [
+            'product',
+            'status',
+            'status_id',
+            'customer',
+            'order_no',
+            'size',
+            'color',
+            'flow_status',
+            'quantity',
+            'completed_qty',
+            'start_date',
+            'end_date',
+            'created_at',
+            'period_name',
+            's',
+            'sort',
+            'page',
+            'limit'
+        ]
+
+    # def filter_by_period_name(self, queryset, name, value):
+    #     return filter_by_period_name(self, queryset, self.data, value)
+
+    # def filter_by_search(self, queryset, name, value):
+    #     return filter_by_search(queryset, self, value)
+
+    # def filter_by_sort(self, queryset, name, value):
+    #     return filter_by_sort(self, queryset, value)
+
+    # def filter_by_page(self, queryset, name, value):
+    #     return filter_by_page(self, queryset, value)
+
+    # def filter_by_limit(self, queryset, name, value):
+    #     return filter_by_limit(self, queryset, value)
+    
+    # class Meta:
+    #     model = WorkOrder 
+    #     #do not change "product",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
+    #     fields = ['product','size','color','status_id','quantity','completed_qty','product_id','flow_status','start_date','end_date','created_at','period_name','s','sort','page','limit']
 
 class BOMFilter(filters.FilterSet):
     bom_id = filters.CharFilter(method=filter_uuid)

@@ -2059,7 +2059,7 @@ class SaleOrderViewSet(APIView):
 
                 # ── Flow-status transition validation ──────────────────────
                 # Allow these statuses to be set directly (from confirmReceipt / order acknowledgement)
-                ALLOWED_DIRECT_STATUSES = {'Completed', 'Partially Delivered'}
+                ALLOWED_DIRECT_STATUSES = {'Completed', 'Partially Delivered', 'Dispatch', 'Delivery In Progress', 'Ready for Invoice'}
                 new_status_name = new_flow_status.flow_status_name
 
                 if new_status_name not in ALLOWED_DIRECT_STATUSES:

@@ -160,7 +160,7 @@ class WorkOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = WorkOrder
-        fields = ['work_order_id', 'product', 'quantity', 'sale_order_id', 'flow_status', 'status' ,'start_date', 'end_date']
+        fields = ['work_order_id', 'product', 'quantity', 'sale_order_id', 'flow_status', 'status' ,'start_date', 'end_date', 'remarks', 'ordered_qty', 'available_qty']
 
     def get_sale_order_id(self, obj):
         # Assuming there is a related SaleOrder and foreign key on WorkOrder model

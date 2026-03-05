@@ -434,6 +434,10 @@ class SalesPriceList(models.Model): #required fields are updated
         db_table = salespricelist
 
 class SaleOrderItems(models.Model):
+    DISCOUNT_TYPE_CHOICES = (
+        ('percentage', 'Percentage'),
+        ('amount', 'Amount'),
+    )
     sale_order_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.PROTECT, db_column='sale_order_id')
     product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
@@ -464,6 +468,18 @@ class SaleOrderItems(models.Model):
     total_boxes = models.IntegerField(null=True, default=None)
     rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DISCOUNT_TYPE_CHOICES,
+        null=True,
+        blank=True
+    )
+    discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
     discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
     tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
     cgst = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=0.00)
@@ -835,6 +851,13 @@ class OrderShipments(OrderNumberMixin):
     order_no_field = 'shipping_tracking_no'
     shipping_date = models.DateField(null=True, default=None)
     shipping_charges = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
+    shipping_gst = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.00,
+        null=True,
+        blank=True
+    )
     vehicle_vessel = models.CharField(max_length=255, null=True, default=None)
     charge_type = models.CharField(max_length=255, null=True, default=None)
     document_through = models.CharField(max_length=255, null=True, default=None)

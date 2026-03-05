@@ -461,7 +461,7 @@ def product_total_details_purchase(ttl_Qty, final_Amount, total_disc, ttl_Amount
 
 
 def product_total_details_inwords(
-    Bill_Amount_In_Words, SubTotal, Discount_Amt,
+    Bill_Amount_In_Words, SubTotal, Discount_Amt, shipping_charges,
     total_cgst, total_sgst, total_igst, cess_amount,
     round_off, Party_Old_Balance, net_lbl, net_value,
     tax_type='Exclusive'
@@ -472,7 +472,8 @@ def product_total_details_inwords(
 
     financials_data = [
         [Paragraph("<b>Sub Total:</b>", normal_style), Paragraph(f"<b>{SubTotal}</b>", normal_style)],
-        [Paragraph("<b>Total Discount:</b>", normal_style), Paragraph(f"<b>-{Discount_Amt}</b>", normal_style)]
+        [Paragraph("<b>Total Discount:</b>", normal_style), Paragraph(f"<b>-{Discount_Amt}</b>", normal_style)],
+        [Paragraph("<b>Shipping Charges:</b>", normal_style), Paragraph(f"<b>{shipping_charges}</b>", normal_style)]
     ]
 
     # Show only if tax_type is not 'Inclusive'
