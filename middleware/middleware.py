@@ -13,7 +13,7 @@ class DatabaseMiddleware(MiddlewareMixin):
         client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
         subdomain =  client_domain.split('.')[0]
         # Select the database based on the frontend domain
-        db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "cnl_test")  # Default to devcnl if not found
+        db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "devcnl")  # Default to devcnl if not found
 
         # Set the correct database connection
         connections.databases["default"]["NAME"] = db_name
