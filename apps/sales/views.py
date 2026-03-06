@@ -4555,7 +4555,8 @@ class QuickPackCreateViewSet(APIView):
             page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
             limit = int(request.query_params.get('limit', 10))   
 
-            queryset = QuickPacks.objects.all().order_by('is_deleted', '-created_at')	
+            # queryset = QuickPacks.objects.all().order_by('is_deleted', '-created_at')	
+            queryset = QuickPacks.objects.filter(is_deleted=False).order_by('-created_at')
 
             # Apply filters manually
             if request.query_params:

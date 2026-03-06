@@ -20,4 +20,5 @@ urlpatterns = [
     path('download-template/', CustomerTemplateAPIView.as_view(), name='download_customer_template'),
     path('export-customers/', CustomerExportAPIView.as_view(), name='export_customers'),
     path('upload-excel/', CustomerExcelUploadAPIView.as_view(), name='upload_excel'),
+    path('outstanding/<str:customer_id>/', CustomerOutstandingAPIView.as_view(), name='customer-outstanding'),
 ]
