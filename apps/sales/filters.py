@@ -281,6 +281,7 @@ class QuickPacksFilter(filters.FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
     lot_qty = filters.NumberFilter(field_name='lot_qty', lookup_expr='exact')
     description = filters.CharFilter(lookup_expr='icontains')
+    customer_id = filters.UUIDFilter(field_name='customer_id')  # ✅ ADD THIS
     active = filters.ChoiceFilter(field_name='active',choices=[('N', 'No'),('Y', 'Yes')])
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
@@ -307,7 +308,7 @@ class QuickPacksFilter(filters.FilterSet):
     class Meta:
         model = QuickPacks
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','lot_qty','description','active','created_at','period_name','s','sort','page','limit']
+        fields =['name','lot_qty','description', 'customer_id','active','created_at','period_name','s','sort','page','limit']
 
 class SaleReceiptFilter(filters.FilterSet):
     sale_invoice_id = filters.CharFilter(field_name='sale_invoice_id__customer_id__name', lookup_expr='icontains')
@@ -743,7 +744,7 @@ class PaymentTransactionsReportFilter(filters.FilterSet):
     """
     # Customer filters
     customer = filters.CharFilter(field_name='customer__name', lookup_expr='icontains')
-    customer_id = filters.NumberFilter(field_name='customer__customer_id')
+    customer_id = filters.UUIDFilter(field_name='customer__customer_id')
     
     # Receipt filters
     payment_receipt_no = filters.CharFilter(lookup_expr='icontains')

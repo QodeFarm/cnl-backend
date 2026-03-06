@@ -9,7 +9,7 @@ from apps.customer.filters import CustomerCreditLimitReportFilter, CustomerOrder
 from apps.customfields.models import CustomField, CustomFieldValue
 from apps.customfields.serializers import CustomFieldSerializer, CustomFieldValueSerializer
 from apps.sales.filters import SaleOrderFilter
-from apps.sales.models import SaleInvoiceOrders, SaleOrder
+from apps.sales.models import PaymentTransactions, SaleInvoiceOrders, SaleOrder
 from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
@@ -2347,3 +2347,25 @@ class CustomerExcelUploadAPIView(APIView):
             import traceback
             logger.error(traceback.format_exc())
             return build_response(0, f"Update failed: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
+        
+#calcualte the outstanding amount for a customer
+
+from django.db.models import Sum
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class CustomerOutstandingAPIView(APIView):
+
+    def get(self, request, customer_id):
+
+        outstanding = PaymentTransactions.objects.filter(
+            customer=customer_id,
+            outstanding_amount__gt=0
+        ).aggregate(
+            total_outstanding=Sum('outstanding_amount')
+        )['total_outstanding'] or 0
+
+        return Response({
+            "customer_id": customer_id,
+            "outstanding_amount": outstanding
+        })
