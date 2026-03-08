@@ -124,40 +124,85 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
     
+# class JournalEntryLinesAPIView(APIView):
+#     def post(self, customer_id, ledger_account_id, amount, description, balance_amount, invoice_no):
+#         '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
+#         try:
+#             # Use serializer to create journal entry line
+#             print("amount in JournalEntryLinesAPIView", amount)
+#             entry_data = {
+#                 "customer_id": customer_id,
+#                 "ledger_account_id": ledger_account_id,
+#                 "credit": (amount),
+#                 "description": description,
+#                 "balance" : (balance_amount),
+#                 "voucher_no" : invoice_no
+#             }
+#             serializer = JournalEntryLinesSerializer(data=entry_data)
+#             if serializer.is_valid():
+#                 serializer.save() 
+                
+#                 # log_user_action(
+#                 #     set_db('default'),
+#                 #     request.user,
+#                 #     "CREATE",
+#                 #     "Journal Entry Lines",
+#                 #     journal_entry_line_id,
+#                 #     f"{description} - Custom Fields record created by {request.user.username}"
+#                 # )
+#             else:
+#                 raise ValueError(f"serializer validation failed, {serializer.errors}")
+        
+#         except(ValueError, TypeError) as e:
+#             return build_response(1, f"Invalid Data provided For Journal Entry Lines.", str(e), status.HTTP_406_NOT_ACCEPTABLE)
+        
+#         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
+    
 class JournalEntryLinesAPIView(APIView):
-    def post(self, customer_id, ledger_account_id, amount, description, balance_amount, invoice_no):
-        '''load_data_in_journal_entry_line_after_payment_transaction. This is used in the apps.sales.view.PaymentTransactionAPIView class.'''
+
+    def post(self, customer_id, ledger_account_id, amount, description, invoice_no):
+
         try:
-            # Use serializer to create journal entry line
-            print("amount in JournalEntryLinesAPIView", amount)
+            latest_balance = (
+                JournalEntryLines.objects
+                .filter(customer_id=customer_id)
+                .order_by('-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+
+            new_balance = latest_balance + Decimal(amount)
+
             entry_data = {
                 "customer_id": customer_id,
                 "ledger_account_id": ledger_account_id,
-                "credit": (amount),
+                "credit": amount,
                 "description": description,
-                "balance" : (balance_amount),
-                "voucher_no" : invoice_no
+                "balance": new_balance,
+                "voucher_no": invoice_no
             }
+
             serializer = JournalEntryLinesSerializer(data=entry_data)
+
             if serializer.is_valid():
-                serializer.save() 
-                
-                # log_user_action(
-                #     set_db('default'),
-                #     request.user,
-                #     "CREATE",
-                #     "Journal Entry Lines",
-                #     journal_entry_line_id,
-                #     f"{description} - Custom Fields record created by {request.user.username}"
-                # )
+                serializer.save()
             else:
-                raise ValueError(f"serializer validation failed, {serializer.errors}")
-        
-        except(ValueError, TypeError) as e:
-            return build_response(1, f"Invalid Data provided For Journal Entry Lines.", str(e), status.HTTP_406_NOT_ACCEPTABLE)
-        
-        return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
-    
+                raise ValueError(serializer.errors)
+
+        except Exception as e:
+            return build_response(
+                1,
+                "Invalid Data provided For Journal Entry Lines.",
+                str(e),
+                status.HTTP_406_NOT_ACCEPTABLE
+            )
+
+        return build_response(
+            1,
+            "Data Loaded In Journal Entry Lines.",
+            [],
+            status.HTTP_201_CREATED
+        )
     # def get(self, request, input_id):
 
     #     # ADD THIS UUID CHECK (NEW – SMALL & SAFE)

@@ -46,7 +46,7 @@ class JournalEntryLinesSerializer(serializers.ModelSerializer):
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
     # voucher_no = serializers.CharField(source='journal_entry_id.voucher_no', read_only=True)  # <-- FIXED LINE
-    voucher_no = serializers.CharField(read_only=True)
+    # voucher_no = serializers.CharField(read_only=True)
 
     class Meta:
         model = JournalEntryLines
