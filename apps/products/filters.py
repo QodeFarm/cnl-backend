@@ -217,6 +217,7 @@ class ProductsFilter(FilterSet):
     pack_unit_name = filters.CharFilter(field_name='pack_unit_id__stock_unit_name', lookup_expr='icontains') 
     g_pack_unit_id = filters.CharFilter(method=filter_uuid)
     g_pack_unit_name = filters.CharFilter(field_name='g_pack_unit_id__stock_unit_name', lookup_expr='icontains')    
+    status = filters.CharFilter(field_name='status', lookup_expr='exact')
     purchase_rate = filters.RangeFilter()
     wholesale_rate = filters.RangeFilter()
     dealer_rate = filters.RangeFilter()
@@ -267,7 +268,7 @@ class ProductsFilter(FilterSet):
     class Meta:
         model = Products
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['name','code','product_group_id','group_name','category_id','category','type_id','type_name','warehouse_id','location_name','warehouse_name','loction_id','category','stock_unit','wholesale_rate','dealer_rate','purchase_rate','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode', 'updated_at','created_at','period_name','s','sort','page','limit']
+        fields =['name','code','product_group_id','group_name','category_id','category','type_id','type_name','warehouse_id','location_name','warehouse_name','loction_id','category','stock_unit','wholesale_rate','dealer_rate','purchase_rate','balance','unit_options_id','unit_options','sales_rate','mrp','discount','dis_amount','hsn_code','print_name','barcode','status', 'updated_at','created_at','period_name','s','sort','page','limit']
 
 
 class ProductItemBalanceFilter(FilterSet):
