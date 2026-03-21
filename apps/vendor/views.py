@@ -321,58 +321,78 @@ class VendorViewSet(APIView):
     def get_vendor_ledger_report(self, request):
         """
         Fetches all financial transactions with a specific vendor and calculates running balance.
-        This report provides a detailed ledger of all purchases, payments, and other transactions.
+        Provides detailed vendor ledger including purchases, payments, and other financial entries.
         """
+
         logger.info("Retrieving vendor ledger report data")
+
         page, limit = self.get_pagination_params(request)
-        
+
         from apps.finance.models import JournalEntryLines
-        from django.db.models import F, Q, Sum
-        
-        # Get vendor_id filter from request params if provided
-        vendor_id = request.query_params.get('vendor_id')
-        
-        # Start with base queryset filtering only for entries related to vendors
-        queryset = JournalEntryLines.objects.filter(vendor_id__isnull=False).select_related(
-            'journal_entry_id', 'vendor_id'
-        ).order_by('journal_entry_id__entry_date')
-        
-        # Apply vendor filter if provided
+        from apps.vendor.filters import VendorLedgerReportFilter
+        from apps.vendor.serializers import VendorLedgerReportSerializer
+
+        # Get vendor filter
+        vendor_id = request.query_params.get("vendor_id")
+
+        # Base queryset (safe)
+        queryset = JournalEntryLines.objects.filter(
+            vendor_id__isnull=False,
+            journal_entry_id__isnull=False,
+            is_deleted=False
+        ).select_related(
+            "journal_entry_id",
+            "vendor_id"
+        ).order_by(
+            "journal_entry_id__entry_date",
+            "created_at"
+        )
+
+        # Apply vendor filter
         if vendor_id:
             queryset = queryset.filter(vendor_id=vendor_id)
-            
-        # Apply filters from request
+
+        # Apply filterset
         if request.query_params:
-            from apps.vendor.filters import VendorLedgerReportFilter
             filterset = VendorLedgerReportFilter(request.GET, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
-        
-        # Calculate total records before pagination
+
+        # Total count before pagination
         total_count = queryset.count()
-        
-        # Calculate running balance for each transaction
-        # First, get all the records to process
+
+        # Convert to list for running balance calculation
         records = list(queryset)
+
         running_balance = 0
-        
-        # Process each record to calculate running balance
+
         for record in records:
-            # For vendor ledger: credit increases balance, debit decreases (opposite of customer ledger)
+            """
+            Vendor Ledger Logic
+
+            Credit → increases payable
+            Debit  → decreases payable
+            """
             running_balance += record.credit - record.debit
             record.running_balance = running_balance
-        
-        # Apply pagination manually after calculating running balance
+
+        # Manual pagination
         if page and limit:
             start_idx = (page - 1) * limit
             end_idx = start_idx + limit
             records = records[start_idx:end_idx]
-        
-        # Serialize the data with the running balance included
-        from apps.vendor.serializers import VendorLedgerReportSerializer
+
         serializer = VendorLedgerReportSerializer(records, many=True)
-        
-        return filter_response(len(records), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK )
+
+        return filter_response(
+            len(records),
+            "Success",
+            serializer.data,
+            page,
+            limit,
+            total_count,
+            status.HTTP_200_OK
+        )
 
     def get_vendor_outstanding_report(self, request):
         """

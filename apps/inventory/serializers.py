@@ -159,31 +159,37 @@ class ProductStockForecastSerializer(serializers.ModelSerializer):
         current = self.get_current_stock(obj)
         avg = self.get_average_sales(obj)
         diff = current - avg
-        
-        if current <= 0:
-            return "RED"
-        elif avg > 0 and diff < 0:
-            return "RED"
-        elif avg > 0 and diff < avg:
-            return "YELLOW"
-        else:
+
+        # ERP rule: no demand means no forecast risk.
+        if avg <= 0:
             return "GREEN"
+
+        # Critical: no stock or stock below required average demand.
+        if current <= 0 or diff < 0:
+            return "RED"
+
+        # Warning: stock is available but below 2x average monthly demand.
+        if current < (avg * 2):
+            return "YELLOW"
+
+        return "GREEN"
 
     def get_status_message(self, obj):
         """Human readable status message"""
         status = self.get_status(obj)
         current = self.get_current_stock(obj)
         avg = self.get_average_sales(obj)
-        
+
+        if avg <= 0:
+            return "No Demand Data - Monitor Only"
+
         if status == "RED":
             if current <= 0:
                 return "Critical - No Stock"
             return "Critical - Stock Below Average Sales"
         elif status == "YELLOW":
-            return "Warning - Low Stock"
+            return "Warning - Stock Cover Below 2 Months"
         else:
-            if avg == 0:
-                return "In Stock - No Recent Sales"
             return "Healthy Stock"
 
     def get_recommended_action(self, obj):
@@ -191,8 +197,11 @@ class ProductStockForecastSerializer(serializers.ModelSerializer):
         status = self.get_status(obj)
         if status in ["RED", "YELLOW"]:
             return "CREATE_WORK_ORDER"
-        return "CREATE_WORK_ORDER"
+        return "MONITOR"
 
     def get_action_label(self, obj):
         """Button label for frontend"""
-        return "Request"
+        status = self.get_status(obj)
+        if status in ["RED", "YELLOW"]:
+            return "Request"
+        return "View"

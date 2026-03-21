@@ -328,7 +328,13 @@ class CustomerCreateViews(APIView):
         customer_id = request.query_params.get('customer_id')
         
         # Start with base queryset filtering only for entries related to customers
-        queryset = JournalEntryLines.objects.filter(customer_id__isnull=False).select_related(
+        # queryset = JournalEntryLines.objects.filter(customer_id__isnull=False).select_related(
+        #     'journal_entry_id', 'customer_id'
+        # ).order_by('journal_entry_id__entry_date')
+        queryset = JournalEntryLines.objects.filter(
+            customer_id__isnull=False,
+            journal_entry_id__isnull=False
+        ).select_related(
             'journal_entry_id', 'customer_id'
         ).order_by('journal_entry_id__entry_date')
         
