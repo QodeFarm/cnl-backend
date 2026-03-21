@@ -21,6 +21,7 @@ router.register(r'sub-product-categories',SubProductCategoriesViewSet,basename='
 
 urlpatterns = [
     path('',include(router.urls)),
+    path('merge/', ProductMergeView.as_view(), name='product-merge'),
     path('bulk-update/', ProductBulkUpdateView.as_view(), name='products-bulk-update'),
     path('products/', ProductViewSet.as_view(), name='products-list-create'),
     path('products/bulk-update/', ProductBulkUpdateView.as_view(), name='products-bulk-update-alt'),
