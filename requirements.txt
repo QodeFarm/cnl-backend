@@ -54,11 +54,13 @@ PyYAML==6.0.1
 reportlab==4.2.2
 requests==2.31.0
 requests-oauthlib==2.0.0
+scikit-learn>=1.5.0
 setuptools==68.2.2
 six==1.16.0
 social-auth-app-django==5.4.1
 social-auth-core==4.5.4
 sqlparse==0.4.4
+statsmodels>=0.14.0
 tools==0.1.9
 typeguard==4.3.0
 typing_extensions==4.12.2

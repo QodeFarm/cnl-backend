@@ -93,7 +93,8 @@ INSTALLED_APPS = [
     'apps.customfields',
     'apps.reminders',
     'apps.dashboard',
-    'apps.auditlogs'
+    'apps.auditlogs',
+    'apps.ai_features',
 ]
 
 MIDDLEWARE = [
