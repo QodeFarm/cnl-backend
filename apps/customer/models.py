@@ -6,6 +6,8 @@ from django.db.models.signals import pre_delete
 from apps.masters.models import *
 from config.utils_methods import EncryptedTextField
 from config.utils_variables import *
+from django.contrib.auth.hashers import make_password
+from django.utils import timezone
 
 # Create your models here.
 
@@ -125,6 +127,11 @@ class Customer(models.Model):
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    #customer authentication fields
+    username = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    password = models.CharField(max_length=255, null=True, blank=True)  # Store hashed password
+    is_portal_user = models.BooleanField(default=False)
+    last_login = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):   
         return f"{self.name}_{self.customer_id}"
@@ -132,8 +139,30 @@ class Customer(models.Model):
     class Meta:
         db_table = customerstable
         
+    def generate_username(self):
+        """Generate username from firstname.lastname"""
+        # Clean the name and convert to lowercase
+        clean_name = self.name.lower().replace(' ', '.')
+        # Remove special characters if any
+        clean_name = ''.join(e for e in clean_name if e.isalnum() or e == '.')
+        return clean_name
+    
+    def generate_random_password(self, length=10):
+        """Generate random alphanumeric password"""
+        characters = string.ascii_letters + string.digits
+        return ''.join(random.choice(characters) for _ in range(length))
+    
+    def set_random_password(self):
+        """Generate and set hashed password"""
+        plain_password = self.generate_random_password()
+        self.password = make_password(plain_password)
+        return plain_password  # Return plain password for sending to customer
+        
     def save(self, *args, **kwargs):
         from apps.masters.views import increment_order_number
+        # Auto-generate username if not provided and it's a new portal user
+        if self.is_portal_user and not self.username:
+            self.username = self.generate_username()
         """
         Override save to ensure the order number is only generated on creation, not on updates.
         """

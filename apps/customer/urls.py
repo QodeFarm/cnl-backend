@@ -21,4 +21,26 @@ urlpatterns = [
     path('export-customers/', CustomerExportAPIView.as_view(), name='export_customers'),
     path('upload-excel/', CustomerExcelUploadAPIView.as_view(), name='upload_excel'),
     path('outstanding/<str:customer_id>/', CustomerOutstandingAPIView.as_view(), name='customer-outstanding'),
+    # NEW: Customer Portal Management URLs (Admin)
+    path('generate-credentials/<uuid:customer_id>/', 
+         GenerateCustomerCredentialsView.as_view(), 
+         name='generate-customer-credentials'),
+    path('send-credentials/<uuid:customer_id>/', 
+         SendCredentialsView.as_view(), 
+         name='send-customer-credentials'),
+    
+    # NEW: Customer Portal Public URLs (No authentication required)
+    path('portal/login/', 
+         CustomerPortalLoginView.as_view(), 
+         name='customer-portal-login'),
+    path('portal/logout/', 
+         CustomerPortalLogoutView.as_view(), 
+         name='customer-portal-logout'),
+    path('portal/check-auth/', 
+         CheckCustomerAuthView.as_view(), 
+         name='customer-check-auth'),
+    
+    # NEW: Customer Portal Protected URLs (Requires authentication)
+    path('portal/profile/', CustomerProfileView.as_view(), name='customer-portal-profile'),
+    
 ]

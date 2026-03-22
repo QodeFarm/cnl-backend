@@ -106,7 +106,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'middleware.middleware.DatabaseMiddleware',
     'middleware.download_response_middleware.StripDownloadJsonMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -153,7 +155,7 @@ pymysql.install_as_MySQLdb()
 DATABASES = {
     'default': {
         "ENGINE": "django.db.backends.mysql",
-        # "NAME": "rudhra_rd001_prod",
+        # "NAME": "cnl_loc",
         "USER": "root",
         "PASSWORD":"root",
         "HOST": "127.0.0.1",
@@ -331,14 +333,60 @@ CACHES = {
 
 CORS_ALLOW_ALL_ORIGINS = True  # Set to True only for testing
 
-CORS_ALLOWED_ORIGINS = [
-    "https://dev.qodefarm.com",
-    "http://localhost",
-    "http://127.0.0.1",
-    "https://qa.cnlerp.com",
-    "https://apicore.cnlerp.com",  # Replace with your actual domain
+# CORS_ALLOWED_ORIGINS = [
+#     "https://dev.qodefarm.com",
+#     "http://localhost",
+#     "http://127.0.0.1",
+#     "https://qa.cnlerp.com",
+#     "https://apicore.cnlerp.com",  # Replace with your actual domain
 
+# ]
+
+# CORS_ALLOWED_ORIGINS = [
+#     "https://dev.qodefarm.com",
+#     "http://localhost:4200",  # Add port
+#     "http://localhost:8000",   # Add port
+#     "http://127.0.0.1:4200",   # Add port
+#     "http://127.0.0.1:8000",   # Add port
+#     "https://qa.cnlerp.com",
+#     "https://apicore.cnlerp.com",
+# ]
+# settings.py - Add/verify these settings
+
+# Session settings
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_NAME = 'sessionid'
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_COOKIE_DOMAIN = None  # Important for localhost
+SESSION_COOKIE_SECURE = True  # False for development
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_SAVE_EVERY_REQUEST = True
+
+# CORS settings
+# CORS_ALLOW_CREDENTIALS = True
+
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:4200",
+#     "http://127.0.0.1:4200",
+#     "http://localhost:8000",
+#     "http://127.0.0.1:8000",
+# ]
+# Add all your production domains
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:4200",
+    "http://127.0.0.1:4200",
+    "https://prod.cnlerp.com",
+    "https://rudhra.cnlerp.com",
+    "https://apicore.cnlerp.com",
+    "https://qa.cnlerp.com",
+    "https://dev.qodefarm.com",
 ]
+
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SECURE = False
+
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
@@ -351,7 +399,21 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [ "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
 
 # Allow all headers
-CORS_ALLOW_HEADERS = ["*"]
+# CORS_ALLOW_HEADERS = ["*"]
+# settings.py - Update CORS_ALLOW_HEADERS
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-customer-portal',  # Add this explicitly
+]
 
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
