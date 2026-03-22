@@ -270,7 +270,7 @@ class SaleInvoiceOrderOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SaleInvoiceOrders
-        fields = ['sale_invoice_id', 'invoice_no',  'invoice_date', 'tax', 'advance_amount', 'bill_type', 'item_value', 'total_amount', 'dis_amt', 'due_date', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at']
+        fields = ['sale_invoice_id', 'invoice_no',  'invoice_date', 'tax', 'advance_amount', 'bill_type', 'item_value', 'total_amount', 'dis_amt', 'due_date', 'tax_amount', 'customer', 'order_status', 'remarks', 'created_at', 'updated_at', 'pending_amount']
 
     def get_sale_invoice_order_summary(sale_invoice_order):
         serializer = SaleInvoiceOrderOptionsSerializer(sale_invoice_order, many=True)

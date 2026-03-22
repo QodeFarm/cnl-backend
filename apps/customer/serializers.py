@@ -22,21 +22,129 @@ class ModLedgerAccountsSerializers(serializers.ModelSerializer):
         fields = ['ledger_account_id', 'name', 'code']
         
 
+# class CustomerSerializer(serializers.ModelSerializer):
+#     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
+#     firm_status = ModFirmStatusesSerializers(source='firm_status_id', read_only=True)
+#     territory = ModTerritorySerializers(source='territory_id', read_only=True)
+#     # picture = PictureSerializer(many=True)
+#     picture = PictureSerializer(required=False, allow_null=True, many=True)
+
+#     customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
+#     gst_category = GstCategoriesSerializers(source='gst_category_id', read_only=True)
+#     payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
+#     price_category = PriceCategoriesSerializers(source='price_category_id', read_only=True)
+#     transporter = ModTransportersSerializers(source='transporter_id', read_only=True)
+#     class Meta:
+#         model = Customer
+#         fields = '__all__'  
+
 class CustomerSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     firm_status = ModFirmStatusesSerializers(source='firm_status_id', read_only=True)
     territory = ModTerritorySerializers(source='territory_id', read_only=True)
-    # picture = PictureSerializer(many=True)
     picture = PictureSerializer(required=False, allow_null=True, many=True)
-
     customer_category = ModCustomerCategoriesSerializers(source='customer_category_id', read_only=True)
     gst_category = GstCategoriesSerializers(source='gst_category_id', read_only=True)
     payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
     price_category = PriceCategoriesSerializers(source='price_category_id', read_only=True)
     transporter = ModTransportersSerializers(source='transporter_id', read_only=True)
+    
+    # Add new portal fields
+    username = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    password = serializers.CharField(required=False, write_only=True, allow_blank=True, allow_null=True)
+    is_portal_user = serializers.BooleanField(required=False, default=False)
+    last_login = serializers.DateTimeField(read_only=True)
+    
     class Meta:
         model = Customer
-        fields = '__all__'  
+        fields = '__all__'  # This will automatically include the new fields
+        extra_kwargs = {
+            'password': {'write_only': True},  # Ensure password never appears in responses
+            'username': {'read_only': False},  # Username can be written but will be read in responses
+        }
+
+    def create(self, validated_data):
+        # Hash password if provided and it's a portal user
+        if validated_data.get('is_portal_user'):
+            password = validated_data.get('password')
+            if password:
+                from django.contrib.auth.hashers import make_password
+                validated_data['password'] = make_password(password)
+            
+            # Auto-generate username if not provided
+            if not validated_data.get('username'):
+                name = validated_data.get('name', '')
+                validated_data['username'] = self.generate_username_from_name(name)
+        else:
+            # If not portal user, ensure these fields are null/empty
+            validated_data['username'] = None
+            validated_data['password'] = None
+            validated_data['is_portal_user'] = False
+        
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Handle password update
+        if 'password' in validated_data:
+            password = validated_data.get('password')
+            if password:
+                from django.contrib.auth.hashers import make_password
+                validated_data['password'] = make_password(password)
+            else:
+                # If empty password provided, remove it from update (keep existing)
+                validated_data.pop('password')
+        
+        # Handle username auto-generation if needed
+        if validated_data.get('is_portal_user') and not validated_data.get('username'):
+            name = validated_data.get('name', instance.name)
+            validated_data['username'] = self.generate_username_from_name(name)
+        
+        # If turning off portal access, clear credentials
+        if 'is_portal_user' in validated_data and not validated_data['is_portal_user']:
+            validated_data['username'] = None
+            validated_data['password'] = None
+        
+        return super().update(instance, validated_data)
+
+    def generate_username_from_name(self, name):
+        """Generate username from customer name"""
+        if not name:
+            return None
+        import re
+        # Convert to lowercase, replace spaces with dots, remove special chars
+        username = name.lower().replace(' ', '.')
+        username = re.sub(r'[^a-z0-9.]', '', username)
+        
+        # Check for uniqueness and append number if needed
+        original_username = username
+        counter = 1
+        while Customer.objects.filter(username=username).exists():
+            username = f"{original_username}{counter}"
+            counter += 1
+        
+        return username
+
+    def to_representation(self, instance):
+        """Customize the response representation"""
+        data = super().to_representation(instance)
+        
+        # Remove sensitive data
+        if 'password' in data:
+            del data['password']
+        
+        # Add portal info summary
+        if instance.is_portal_user:
+            data['portal_info'] = {
+                'has_access': True,
+                'username': instance.username,
+                'last_login': instance.last_login
+            }
+        else:
+            data['portal_info'] = {
+                'has_access': False
+            }
+        
+        return data
            
         
 class ModCustomersSerializer(serializers.ModelSerializer):
@@ -359,3 +467,40 @@ class CustomerPaymentReportSerializer(serializers.ModelSerializer):
             except Exception:
                 pass
         return "N/A"
+    
+#Customer Authentication Serializer
+# serializers.py
+from rest_framework import serializers
+from .models import Customer
+from django.contrib.auth.hashers import check_password
+
+class CustomerPortalLoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    
+    def validate(self, data):
+        username = data.get('username')
+        password = data.get('password')
+        
+        try:
+            customer = Customer.objects.get(username=username, is_portal_user=True, is_deleted=False)
+            
+            # Check password
+            if not check_password(password, customer.password):
+                raise serializers.ValidationError("Invalid credentials")
+            
+            data['customer'] = customer
+            return data
+            
+        except Customer.DoesNotExist:
+            raise serializers.ValidationError("Invalid credentials or account not activated")
+
+class CustomerProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = [
+            'customer_id', 'name', 'print_name', 'code', 'gst', 'pan',
+            'contact_person', 'website', 'credit_limit', 'max_credit_days',
+            'registration_date', 'username', 'last_login'
+        ]
+        read_only_fields = fields  # Make all fields read-only

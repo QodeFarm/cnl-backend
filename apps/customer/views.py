@@ -585,13 +585,10 @@ class CustomerCreateViews(APIView):
     # Handling POST requests for creating
     def post(self, request, *args, **kwargs):   #To avoid the error this method should be written [error : "detail": "Method \"POST\" not allowed."]
         return self.create(request, *args, **kwargs)
-    
     # def create(self, request, *args, **kwargs):
     #     given_data = request.data
     #     print("Given data:", given_data)
-    #     # db_name = set_db('default')
-        
-    #     # print("Db name : ", db_name)
+    #     # use_db = 'default'
     #     # Extract customer_data from the request
     #     customer_data = given_data.pop('customer_data', None)
 
@@ -606,7 +603,7 @@ class CustomerCreateViews(APIView):
     #             for attachment in picture_data:
     #                 if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
     #                     return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
-            
+
     #         # Validate the rest of customer_data
     #         customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
     #     else:
@@ -615,21 +612,21 @@ class CustomerCreateViews(APIView):
     #     # Validate customer_attachments
     #     attachments_data = given_data.pop('customer_attachments', None)
     #     if attachments_data:
-    #         attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers, ['customer_id'])
+    #         attachment_error = validate_multiple_data(self, attachments_data, CustomerAttachmentsSerializers, ['customer_id'], using_db=set_db('default'))
     #     else:
     #         attachment_error = []
 
     #     # Validate customer_addresses
     #     addresses_data = given_data.pop('customer_addresses', None)
     #     if addresses_data:
-    #         addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers, ['customer_id'])
+    #         addresses_error = validate_multiple_data(self, addresses_data, CustomerAddressesSerializers, ['customer_id'], using_db=set_db('default'))
     #     else:
     #         addresses_error = []
-            
+
     #     # Validate custom_field_values
     #     custom_fields_data = given_data.get('custom_field_values', None)
     #     if custom_fields_data:
-    #         custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'])
+    #         custom_fields_error = validate_multiple_data(self, custom_fields_data, CustomFieldValueSerializer, ['custom_id'], using_db=set_db('default'))
     #     else:
     #         custom_fields_error = []
 
@@ -649,50 +646,93 @@ class CustomerCreateViews(APIView):
     #     if custom_fields_error:
     #         errors['custom_field_values'] = custom_fields_error
     #     if errors:
-    #         return build_response(0, "ValidationError:", errors, status.HTTP_400_BAD_REQUEST)
+    #         return build_response(0, "ValidationError: {errors}", errors, status.HTTP_400_BAD_REQUEST)
 
-    #     # Create Customer Data
-    #     new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer)
+    #     # Step 1: Create Customer Data in devcnl
+    #     new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer, using=set_db('default'))
     #     customer_id = new_customer_data[0].get("customer_id", None)
     #     logger.info('Customer - created*')
 
-    #     # Create CustomerAttachment Data
+    #     # # Step 2: Create entry in mstcnl.customers table
+    #     # from your_app.models import Companies, CustomersMstModel  # Adjust this import based on your project structure
+
+    #     customer_name = new_customer_data[0].get("name")
+    #     phone = new_customer_data[0].get("phone")
+    #     email = new_customer_data[0].get("email")
+    #     company_id = new_customer_data[0].get("company_id")
+
+    #     try:
+    #         company = Companies.objects.first()
+    #         print("-"*20)
+    #         print("company : ", company)
+    #         print("-"*20)
+    #         company_id = company.company_id
+    #         company_name = company.name
+    #         phone = addresses_data[0].get("phone") if addresses_data else None
+    #         print("phone : ", phone)
+    #         email = addresses_data[0].get("email") if addresses_data else None
+    #         print("email : ", email)
+    #         # Create the record in mstcnl DB
+    #         CustomersMstModel.objects.using('mstcnl').create(
+    #             customer_id=customer_id,
+    #             name=customer_name,
+    #             phone=phone,
+    #             email=email,
+    #             company_id=company_id,
+    #             company_name=company_name
+    #         )
+    #         logger.info("Customer also created in mstcnl.customers table")
+
+    #     except Companies.DoesNotExist:
+    #         logger.warning(f"Company with ID {company_id} not found. Skipping mstcnl customer creation.")
+
+    #     # Step 3: Create CustomerAttachment Data
     #     update_fields = {'customer_id': customer_id}
     #     if attachments_data:
-    #         attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields)
+    #         attachments_data = generic_data_creation(self, attachments_data, CustomerAttachmentsSerializers, update_fields, using=set_db('default'))
     #         logger.info('CustomerAttachments - created*')
     #     else:
     #         attachments_data = []
 
-    #     # Create CustomerAddress Data
-    #     addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields)
+    #     # Step 4: Create CustomerAddress Data
+    #     addresses_data = generic_data_creation(self, addresses_data, CustomerAddressesSerializers, update_fields, using=set_db('default'))
     #     logger.info('CustomerAddresses - created*')
 
-    #     # Handle CustomFieldValues
+    #     # Step 5: Handle CustomFieldValues
     #     custom_fields_data = given_data.pop('custom_field_values', None)
     #     if custom_fields_data:
-    #         # Link each custom field value to the new customer
     #         for custom_field in custom_fields_data:
-    #             custom_field['custom_id'] = customer_id  # Set the newly created customer ID
-    #         custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer)
+    #             custom_field['custom_id'] = customer_id
+    #         custom_fields_data = generic_data_creation(self, custom_fields_data, CustomFieldValueSerializer, using=set_db('default'))
     #         logger.info('CustomFieldValues - created*')
     #     else:
     #         custom_fields_data = []
 
-    #     # Build the response with all created data
+    #     # Step 6: Build response
     #     custom_data = [
     #         {"customer_data": new_customer_data[0]},
     #         {"customer_attachments": attachments_data},
     #         {"customer_addresses": addresses_data},
     #         {"custom_field_values": custom_fields_data}
     #     ]
+        
+    #     customer_name = customer_data.get("name")
+        
+    #     log_user_action(
+    #         set_db('default'),
+    #         request.user,
+    #         "CREATE",
+    #         "Customers",
+    #         customer_id,
+    #         f"{customer_name} - Customer record created by {request.user.username}"
+    #     )
 
     #     return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-    
+
     def create(self, request, *args, **kwargs):
         given_data = request.data
         print("Given data:", given_data)
-        # use_db = 'default'
+        
         # Extract customer_data from the request
         customer_data = given_data.pop('customer_data', None)
 
@@ -707,6 +747,20 @@ class CustomerCreateViews(APIView):
                 for attachment in picture_data:
                     if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
                         return build_response(0, "Missing required fields in some picture data.", [], status.HTTP_400_BAD_REQUEST)
+
+            # NEW: Handle portal user creation
+            is_portal_user = customer_data.get('is_portal_user', False)
+            if is_portal_user:
+                # Generate username if not provided
+                if not customer_data.get('username'):
+                    customer_data['username'] = self.generate_username_from_name(customer_data.get('name', ''))
+                
+                # Generate password if not provided (will be hashed in serializer)
+                if not customer_data.get('password'):
+                    customer_data['password'] = self.generate_random_password()
+                
+                # Ensure is_portal_user is set
+                customer_data['is_portal_user'] = True
 
             # Validate the rest of customer_data
             customer_error = validate_payload_data(self, customer_data, CustomerSerializer)
@@ -750,16 +804,17 @@ class CustomerCreateViews(APIView):
         if custom_fields_error:
             errors['custom_field_values'] = custom_fields_error
         if errors:
-            return build_response(0, "ValidationError: {errors}", errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(0, f"ValidationError: {errors}", errors, status.HTTP_400_BAD_REQUEST)
 
         # Step 1: Create Customer Data in devcnl
         new_customer_data = generic_data_creation(self, [customer_data], CustomerSerializer, using=set_db('default'))
         customer_id = new_customer_data[0].get("customer_id", None)
         logger.info('Customer - created*')
 
-        # # Step 2: Create entry in mstcnl.customers table
-        # from your_app.models import Companies, CustomersMstModel  # Adjust this import based on your project structure
+        # NEW: Store plain password temporarily for response if needed
+        plain_password = customer_data.get('password') if is_portal_user else None
 
+        # Step 2: Create entry in mstcnl.customers table
         customer_name = new_customer_data[0].get("name")
         phone = new_customer_data[0].get("phone")
         email = new_customer_data[0].get("email")
@@ -776,6 +831,7 @@ class CustomerCreateViews(APIView):
             print("phone : ", phone)
             email = addresses_data[0].get("email") if addresses_data else None
             print("email : ", email)
+            
             # Create the record in mstcnl DB
             CustomersMstModel.objects.using('mstcnl').create(
                 customer_id=customer_id,
@@ -820,6 +876,14 @@ class CustomerCreateViews(APIView):
             {"custom_field_values": custom_fields_data}
         ]
         
+        # NEW: Add portal credentials to response if it's a portal user
+        if is_portal_user:
+            custom_data[0]["customer_data"]["portal_credentials"] = {
+                "username": customer_data.get('username'),
+                "password": plain_password,  # Only returned once at creation
+                "portal_url": "http://localhost:4200/#/customer_portal_login"
+            }
+        
         customer_name = customer_data.get("name")
         
         log_user_action(
@@ -833,6 +897,23 @@ class CustomerCreateViews(APIView):
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
+    # NEW: Helper methods to add to your view class
+    def generate_username_from_name(self, name):
+        """Generate username from customer name"""
+        if not name:
+            return None
+        import re
+        # Convert to lowercase, replace spaces with dots, remove special chars
+        username = name.lower().replace(' ', '.')
+        username = re.sub(r'[^a-z0-9.]', '', username)
+        return username
+
+    def generate_random_password(self, length=10):
+        """Generate random alphanumeric password"""
+        import random
+        import string
+        characters = string.ascii_letters + string.digits
+        return ''.join(random.choice(characters) for _ in range(length))
 
     
     def put(self, request, pk, *args, **kwargs):
@@ -2369,3 +2450,451 @@ class CustomerOutstandingAPIView(APIView):
             "customer_id": customer_id,
             "outstanding_amount": outstanding
         })
+        
+#Customer login API view
+# views.py
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from django.contrib.auth.hashers import make_password
+from .models import Customer
+from .serializers import CustomerPortalLoginSerializer, CustomerProfileSerializer
+from apps.sales.models import SaleOrder, SaleInvoiceOrders, SaleReturnOrders, SaleCreditNotes
+# from apps.ledger.models import AccountLedger
+import logging
+
+logger = logging.getLogger(__name__)
+
+class GenerateCustomerCredentialsView(APIView):
+    """Generate username and password for customer"""
+    
+    def post(self, request, customer_id):
+        try:
+            customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+            
+            # Generate credentials
+            username = customer.generate_username()
+            plain_password = customer.set_random_password()
+            customer.is_portal_user = True
+            customer.save()
+            
+            return Response({
+                'success': True,
+                'username': username,
+                'password': plain_password,  # Only returned once!
+                'message': 'Credentials generated successfully'
+            }, status=status.HTTP_200_OK)
+            
+        except Customer.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Customer not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error generating credentials: {str(e)}")
+            return Response({
+                'success': False,
+                'message': 'Error generating credentials'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_http_methods
+
+# @method_decorator(csrf_exempt, name='dispatch')
+
+# class CustomerPortalLoginView(APIView):
+#     def post(self, request):
+#         try:
+#             print("="*50)
+#             print("🔐 LOGIN ATTEMPT STARTED")
+#             print("="*50)
+            
+#             serializer = CustomerPortalLoginSerializer(data=request.data)
+            
+#             if serializer.is_valid():
+#                 customer = serializer.validated_data['customer']
+#                 print(f"✅ Customer found: {customer.name}")
+                
+#                 # Update last login
+#                 customer.last_login = timezone.now()
+#                 customer.save()
+                
+#                 # Create session
+#                 request.session.flush()
+#                 request.session.cycle_key()
+                
+#                 # Set session data
+#                 request.session['customer_id'] = str(customer.customer_id)
+#                 request.session['customer_name'] = customer.name
+#                 request.session['username'] = customer.username
+#                 request.session['user_role'] = 'Customer'
+#                 request.session['is_customer_portal'] = True
+                
+#                 # Save session
+#                 request.session.save()
+                
+#                 print(f"✅ Session created: {request.session.session_key}")
+#                 print(f"✅ Session data: {dict(request.session)}")
+                
+#                 # Create response
+#                 response = Response({
+#                     'success': True,
+#                     'message': 'Login successful',
+#                     'customer': {
+#                         'id': str(customer.customer_id),
+#                         'name': customer.name,
+#                         'username': customer.username
+#                     }
+#                 })
+                
+#                 # Set cookie MULTIPLE ways
+#                 print("\n📝 Attempting to set cookie...")
+                
+#                 # Method 1: Django's set_cookie
+#                 response.set_cookie(
+#                     key='sessionid',
+#                     value=request.session.session_key,
+#                     max_age=1209600,
+#                     path='/',
+#                     domain=None,
+#                     secure=False,
+#                     httponly=True,
+#                     samesite='Lax'
+#                 )
+#                 print("✅ Method 1: set_cookie called")
+                
+#                 # Method 2: Direct header
+#                 cookie_value = f"sessionid={request.session.session_key}; Path=/; Max-Age=1209600; HttpOnly; SameSite=Lax"
+#                 response.headers['Set-Cookie'] = cookie_value
+#                 print(f"✅ Method 2: header set: {cookie_value[:50]}...")
+                
+#                 # Method 3: Test cookie
+#                 response.set_cookie('test_cookie', 'working', max_age=3600)
+#                 print("✅ Method 3: test cookie set")
+                
+#                 # Final check
+#                 print(f"\n📋 FINAL RESPONSE HEADERS:")
+#                 for key, value in response.headers.items():
+#                     print(f"  {key}: {value}")
+                
+#                 print(f"\n📋 RESPONSE COOKIES: {response.cookies}")
+#                 print("="*50)
+                
+#                 return response
+            
+#             print(f"❌ Invalid serializer: {serializer.errors}")
+#             return Response(serializer.errors, status=400)
+            
+#         except Exception as e:
+#             print(f"❌ Login error: {str(e)}")
+#             import traceback
+#             traceback.print_exc()
+#             return Response({'success': False, 'message': 'Server error'}, status=500)
+
+class CustomerPortalLoginView(APIView):
+    def post(self, request):
+        try:
+            # Get the origin from request headers
+            origin = request.headers.get('Origin', '')
+            
+            # Check if origin is allowed
+            allowed_origins = [
+                "http://localhost:4200",
+                "https://prod.cnlerp.com",
+                "https://rudhra.cnlerp.com",
+                # Add all your production domains
+            ]
+            
+            # Set the appropriate Access-Control-Allow-Origin
+            if origin in allowed_origins:
+                cors_origin = origin
+            else:
+                cors_origin = "https://prod.cnlerp.com"  # Default
+            
+            print("="*50)
+            print("🔐 LOGIN ATTEMPT STARTED")
+            print(f"📍 Origin: {origin}")
+            print("="*50)
+            
+            serializer = CustomerPortalLoginSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                customer = serializer.validated_data['customer']
+                print(f"✅ Customer found: {customer.name}")
+                
+                # Update last login
+                customer.last_login = timezone.now()
+                customer.save()
+                
+                # Create session
+                request.session.flush()
+                request.session.cycle_key()
+                
+                # Set session data
+                request.session['customer_id'] = str(customer.customer_id)
+                request.session['customer_name'] = customer.name
+                request.session['username'] = customer.username
+                request.session['user_role'] = 'Customer'
+                request.session['is_customer_portal'] = True
+                
+                # Save session
+                request.session.save()
+                
+                print(f"✅ Session created: {request.session.session_key}")
+                
+                # Create response
+                response = Response({
+                    'success': True,
+                    'message': 'Login successful',
+                    'customer': {
+                        'id': str(customer.customer_id),
+                        'name': customer.name,
+                        'username': customer.username
+                    }
+                })
+                
+                # Set cookie with dynamic domain
+                response.set_cookie(
+                    key='sessionid',
+                    value=request.session.session_key,
+                    max_age=1209600,
+                    path='/',
+                    domain=None,  # Let browser handle
+                    secure=not request.is_secure(),  # True for HTTPS
+                    httponly=True,
+                    samesite='Lax'
+                )
+                
+                # Set CORS headers
+                response["Access-Control-Allow-Origin"] = cors_origin
+                response["Access-Control-Allow-Credentials"] = "true"
+                response["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+                
+                return response
+            
+            print(f"❌ Invalid serializer: {serializer.errors}")
+            return Response(serializer.errors, status=400)
+            
+        except Exception as e:
+            print(f"❌ Login error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({'success': False, 'message': 'Server error'}, status=500)
+
+class CheckCustomerAuthView(APIView):
+    """Check if customer is authenticated in portal"""
+    
+    def options(self, request, *args, **kwargs):
+        """Handle OPTIONS requests for CORS preflight"""
+        response = Response()
+        response["Access-Control-Allow-Origin"] = "http://localhost:4200"
+        response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+        response["Access-Control-Allow-Credentials"] = "true"
+        response["Access-Control-Max-Age"] = "3600"
+        return response
+    
+    def get(self, request):
+        logger.info(f"=== CHECK AUTH ===")
+        
+        # Add CORS headers to response
+        response = Response()
+        response["Access-Control-Allow-Origin"] = "http://localhost:4200"
+        response["Access-Control-Allow-Credentials"] = "true"
+        
+        customer_id = request.session.get('customer_id')
+        is_customer = request.session.get('is_customer_portal', False)
+        
+        if customer_id and is_customer:
+            try:
+                customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+                response.data = {
+                    'success': True,
+                    'authenticated': True,
+                    'customer': {
+                        'id': str(customer.customer_id),
+                        'name': customer.name,
+                        'username': customer.username
+                    }
+                }
+                return response
+            except Customer.DoesNotExist:
+                request.session.flush()
+                response.data = {
+                    'success': False,
+                    'authenticated': False,
+                    'message': 'Customer not found'
+                }
+                return response
+        
+        response.data = {
+            'success': False,
+            'authenticated': False,
+            'message': 'Not authenticated'
+        }
+        return response
+
+class CustomerPortalLogoutView(APIView):
+    """Handle customer portal logout"""
+    
+    def post(self, request):
+        # Clear customer session data
+        request.session.flush()
+        
+        # Clear all session data
+        request.session.clear()
+        
+        # Delete the session cookie
+        response = Response({
+            'success': True,
+            'message': 'Logged out successfully',
+            'redirect_url': '/#/customer_portal_login'  # Send redirect URL to frontend
+        })
+        
+        # Delete the session cookie
+        response.delete_cookie('sessionid')
+        
+        # Add CORS headers
+        response["Access-Control-Allow-Origin"] = "http://localhost:4200"
+        response["Access-Control-Allow-Credentials"] = "true"
+        
+        return response
+
+
+# class CustomerProfileView(APIView):
+#     """Get customer profile information"""
+    
+#     def get(self, request):
+#         customer_id = request.session.get('customer_id')
+        
+#         if not customer_id:
+#             return Response({
+#                 'success': False,
+#                 'message': 'Not authenticated'
+#             }, status=status.HTTP_401_UNAUTHORIZED)
+        
+#         try:
+#             customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+#             serializer = CustomerProfileSerializer(customer)
+#             return Response({
+#                 'success': True,
+#                 'data': serializer.data
+#             })
+            
+#         except Customer.DoesNotExist:
+#             return Response({
+#                 'success': False,
+#                 'message': 'Customer not found'
+#             }, status=status.HTTP_404_NOT_FOUND)
+
+class CustomerProfileView(APIView):
+    """Get customer profile information"""
+    
+    def get(self, request):
+        # Add debug logging
+        print("=== PROFILE VIEW ===")
+        print(f"Session Key: {request.session.session_key}")
+        print(f"Session Data: {dict(request.session)}")
+        print(f"Cookies: {request.COOKIES}")
+        print(f"Headers: {request.headers}")
+        
+        # Try to get customer_id from session
+        customer_id = request.session.get('customer_id')
+        print(f"Customer ID from session: {customer_id}")
+        
+        if not customer_id:
+            # Try to get from cookie as fallback
+            session_key = request.COOKIES.get('sessionid')
+            print(f"Session cookie: {session_key}")
+            
+            if session_key:
+                from django.contrib.sessions.models import Session
+                try:
+                    session = Session.objects.get(session_key=session_key)
+                    session_data = session.get_decoded()
+                    customer_id = session_data.get('customer_id')
+                    print(f"Customer ID from session decode: {customer_id}")
+                except Session.DoesNotExist:
+                    print("Session not found in database")
+        
+        if not customer_id:
+            return Response({
+                'success': False,
+                'message': 'Not authenticated'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+        
+        try:
+            customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+            
+            # Use CustomerSerializer to get all customer data including addresses
+            from .serializers import CustomerSerializer
+            serializer = CustomerSerializer(customer)
+            
+            response = Response({
+                'success': True,
+                'data': serializer.data
+            })
+            
+            # Add CORS headers
+            response["Access-Control-Allow-Origin"] = "http://localhost:4200"
+            response["Access-Control-Allow-Credentials"] = "true"
+            
+            return response
+            
+        except Customer.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Customer not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+            
+class SendCredentialsView(APIView):
+    """Send generated credentials to customer"""
+    
+    def post(self, request, customer_id):
+        try:
+            customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+            
+            if not customer.is_portal_user or not customer.username or not customer.password:
+                return Response({
+                    'success': False,
+                    'message': 'Please generate credentials first'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Use CustomerOptionSerializer to get email
+            serializer = CustomerOptionSerializer(customer)
+            customer_email = serializer.data.get('email')
+            
+            if not customer_email:
+                return Response({
+                    'success': False,
+                    'message': 'No email address found for this customer. Please add an email in customer addresses.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Generate new password for security
+            plain_password = customer.generate_random_password()
+            customer.password = make_password(plain_password)
+            customer.save()
+            
+            # Send credentials with request to get correct domain
+            success, message = send_credentials_to_customer(customer, plain_password, customer_email, request)
+            
+            if success:
+                return Response({
+                    'success': True,
+                    'message': f'Credentials sent successfully to {customer_email}'
+                })
+            else:
+                return Response({
+                    'success': False,
+                    'message': message
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+        except Customer.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Customer not found'
+            }, status=status.HTTP_404_NOT_FOUND)
