@@ -243,7 +243,11 @@ class ProductItemBalanceSerializer(serializers.ModelSerializer):
 #         fields = ['product_id', 'code', 'name', 'barcode', 'print_name', 'unit_options', 'sales_rate', 'purchase_rate', 'wholesale_rate', 'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'hsn_code', 'gst_input', 'created_at', 'stock_unit',  'pack_unit_id', 'pack_vs_stock', 'g_pack_unit_id',  'g_pack_vs_pack', 'type' ]
 
 
-        
+class ProductMergeListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Products
+        fields = ['product_id', 'name', 'code', 'print_name', 'balance', 'status']
+
         
 class ProductOptionsSerializer(serializers.ModelSerializer):
     unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
@@ -263,7 +267,7 @@ class ProductOptionsSerializer(serializers.ModelSerializer):
             'dealer_rate', 'mrp', 'dis_amount', 'discount', 'balance', 'physical_balance', 'balance_diff',
             'hsn_code', 'gst_input', 'created_at', 'stock_unit',  
             'pack_unit', 'pack_vs_stock', 'g_pack_unit', 'has_opening_balance',  
-            'g_pack_vs_pack', 'type', 'is_deleted'
+            'g_pack_vs_pack', 'type', 'status', 'is_deleted'
         ]
         
     @staticmethod

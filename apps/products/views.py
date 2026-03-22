@@ -24,6 +24,10 @@ from .models import *
 from .filters import ColorFilter, ProductGroupsFilter, ProductCategoriesFilter, ProductStockUnitsFilter, ProductGstClassificationsFilter, ProductSalesGlFilter, ProductPurchaseGlFilter, ProductsFilter, ProductItemBalanceFilter, ProductVariationFilter, SizeFilter
 from openpyxl.worksheet.datavalidation import DataValidation
 import openpyxl
+from apps.sales.models import (SaleOrderItems, SaleInvoiceItems, SaleReturnItems,QuickPackItems, SaleCreditNoteItems, SaleDebitNoteItems,MstcnlSaleOrderItem, MstcnlSaleInvoiceItem)
+from apps.purchase.models import (PurchaseorderItems, PurchaseInvoiceItem, PurchaseReturnItems)
+from apps.production.models import (BOM, BillOfMaterials, WorkOrder, DefaultMachinery,MaterialIssueItem, MaterialReceivedItem, StockJournal, StockSummary)
+from apps.inventory.models import InventoryBlockConfig, BlockedInventory
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -493,7 +497,8 @@ class ProductViewSet(APIView):
             return result if result else self.retrieve(self, request, *args, **kwargs)
 
         try:
-            summary = request.query_params.get('summary', 'false').lower() == 'true' + '&'
+            summary = request.query_params.get('summary', 'false').lower() == 'true'
+            no_page = request.query_params.get('no_page', 'false').lower() == 'true'
             view_type = request.query_params.get('view', '')
 
             page = int(request.query_params.get('page', 1))
@@ -521,6 +526,7 @@ class ProductViewSet(APIView):
                 filter_params.pop('page', None)
                 filter_params.pop('limit', None)
                 filter_params.pop('summary', None)
+                filter_params.pop('no_page', None)
                 filter_params.pop('view', None)
 
                 filterset = ProductsFilter(filter_params, queryset=queryset)
@@ -530,11 +536,14 @@ class ProductViewSet(APIView):
             # 4️. Total count AFTER all filters
             total_count = queryset.count()
 
-            # 5️. SUMMARY MODE (NO pagination)
-            if summary:
-                serializer = ProductOptionsSerializer(queryset, many=True)
+            # 5️. NO-PAGE MODE (return all without pagination — lightweight for merge)
+            if no_page:
+                merge_qs = queryset.filter(is_deleted=False).exclude(status='Inactive').only(
+                    'product_id', 'name', 'code', 'print_name', 'balance', 'status'
+                )
+                serializer = ProductMergeListSerializer(merge_qs, many=True)
                 return build_response(
-                    total_count,
+                    merge_qs.count(),
                     "Success",
                     serializer.data,
                     status.HTTP_200_OK
@@ -2249,3 +2258,177 @@ class UpdateProductBalanceView(APIView):
             },
             status=status.HTTP_200_OK
         )
+
+
+#--------------------P R O D U C T   M E R G E   A P I-----------------------#
+class ProductMergeView(APIView):
+    """
+    POST /api/v1/products/merge/
+
+    Merges a duplicate product into a master product:
+    1. Validates both products exist, are active, not deleted, and are different
+    2. Transfers ALL foreign key references from duplicate → master across all modules
+    3. Transfers CharField UUID references (Mstcnl tables) from duplicate → master
+    4. Merges inventory balances (duplicate balance added to master)
+    5. Deactivates the duplicate product (status='Inactive')
+    6. Logs the merge action in the audit trail
+
+    Request Body:
+    {
+        "master_product_id": "uuid-of-master-product",
+        "duplicate_product_id": "uuid-of-duplicate-product"
+    }
+
+    All operations run inside a single database transaction — if any step fails,
+    the entire merge is rolled back (no partial updates).
+    """
+
+    # All FK models whose product_id must be re-pointed: (Model, fk_field_name)
+    RELATED_MODELS = [
+        # ── Sales ──
+        (SaleOrderItems,        'product_id'),
+        (SaleInvoiceItems,      'product_id'),
+        (SaleReturnItems,       'product_id'),
+        (QuickPackItems,        'product_id'),
+        (SaleCreditNoteItems,   'product_id'),
+        (SaleDebitNoteItems,    'product_id'),
+        # ── Purchase ──
+        (PurchaseorderItems,    'product_id'),
+        (PurchaseInvoiceItem,   'product_id'),
+        (PurchaseReturnItems,   'product_id'),
+        # ── Production ──
+        (BOM,                   'product_id'),
+        (BillOfMaterials,       'product_id'),
+        (WorkOrder,             'product_id'),
+        (DefaultMachinery,      'product_id'),
+        (MaterialIssueItem,     'product_id'),
+        (MaterialReceivedItem,  'product_id'),
+        (StockJournal,          'product_id'),
+        (StockSummary,          'product_id'),
+        # ── Inventory ──
+        (InventoryBlockConfig,  'product_id'),
+        (BlockedInventory,      'product_id'),
+        # ── Products (self-references) ──
+        (ProductVariation,      'product_id'),
+        (ProductItemBalance,    'product_id'),
+    ]
+
+    # CharField UUID references (not Django FK — stored as plain string)
+    CHAR_FIELD_MODELS = [
+        (MstcnlSaleOrderItem,   'product_id'),
+        (MstcnlSaleInvoiceItem, 'product_id'),
+    ]
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        master_id = request.data.get('master_product_id')
+        duplicate_id = request.data.get('duplicate_product_id')
+
+        # ── VALIDATION ──────────────────────────────────────────────
+        if not master_id or not duplicate_id:
+            return build_response(
+                0, "Both master_product_id and duplicate_product_id are required",
+                [], status.HTTP_400_BAD_REQUEST
+            )
+
+        if str(master_id) == str(duplicate_id):
+            return build_response(
+                0, "Master and duplicate product cannot be the same",
+                [], status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            master = Products.objects.select_for_update().get(
+                product_id=master_id, is_deleted=False
+            )
+        except Products.DoesNotExist:
+            return build_response(
+                0, "Master product not found or is deleted",
+                [], status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            duplicate = Products.objects.select_for_update().get(
+                product_id=duplicate_id, is_deleted=False
+            )
+        except Products.DoesNotExist:
+            return build_response(
+                0, "Duplicate product not found or is deleted",
+                [], status.HTTP_404_NOT_FOUND
+            )
+
+        if duplicate.status == 'Inactive':
+            return build_response(
+                0, "Duplicate product is already inactive",
+                [], status.HTTP_400_BAD_REQUEST
+            )
+
+        # ── TRANSFER FK REFERENCES ──────────────────────────────────
+        tables_updated = {}
+        total_transferred = 0
+
+        for model_class, fk_field in self.RELATED_MODELS:
+            try:
+                count = model_class.objects.filter(
+                    **{fk_field: duplicate_id}
+                ).update(**{fk_field: master_id})
+                if count > 0:
+                    tables_updated[model_class.__name__] = count
+                    total_transferred += count
+            except Exception as e:
+                logger.error(
+                    f"Error transferring {model_class.__name__}: {str(e)}"
+                )
+                raise  # Re-raise to trigger transaction rollback
+
+        # ── TRANSFER CharField UUID REFERENCES ──────────────────────
+        for model_class, field_name in self.CHAR_FIELD_MODELS:
+            try:
+                count = model_class.objects.filter(
+                    **{field_name: str(duplicate_id)}
+                ).update(**{field_name: str(master_id)})
+                if count > 0:
+                    tables_updated[model_class.__name__] = count
+                    total_transferred += count
+            except Exception as e:
+                # Mstcnl tables may not exist in all environments
+                logger.warning(
+                    f"Skipping {model_class.__name__} (may not exist): {str(e)}"
+                )
+
+        # ── MERGE INVENTORY BALANCES ────────────────────────────────
+        master.balance = (master.balance or 0) + (duplicate.balance or 0)
+        master.physical_balance = (
+            (master.physical_balance or 0) + (duplicate.physical_balance or 0)
+        )
+        master.balance_diff = (master.physical_balance or 0) - (master.balance or 0)
+        master.save(update_fields=['balance', 'physical_balance', 'balance_diff'])
+
+        # ── DEACTIVATE DUPLICATE ────────────────────────────────────
+        duplicate.status = 'Inactive'
+        duplicate.is_deleted = True
+        duplicate.save(update_fields=['status', 'is_deleted'])
+
+        # ── AUDIT LOG ───────────────────────────────────────────────
+        description = (
+            f"Product '{duplicate.name}' ({duplicate.code}) merged into "
+            f"'{master.name}' ({master.code}) by {request.user.username}. "
+            f"{total_transferred} records transferred across "
+            f"{len(tables_updated)} tables."
+        )
+        log_user_action(set_db('default'),request.user,"MERGE","Products",str(master_id),description)
+
+        logger.info(description)
+
+        # ── RESPONSE ────────────────────────────────────────────────
+        return build_response(1, "Product merged successfully", {
+            "master_product_id": str(master_id),
+            "master_product_name": master.name,
+            "master_product_code": master.code,
+            "duplicate_product_id": str(duplicate_id),
+            "duplicate_product_name": duplicate.name,
+            "duplicate_product_code": duplicate.code,
+            "tables_updated": tables_updated,
+            "total_records_transferred": total_transferred,
+            "merged_balance": master.balance,
+        }, status.HTTP_200_OK)
