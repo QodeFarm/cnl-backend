@@ -3203,70 +3203,114 @@ def check_credit_limit(request, customer_id_value, order_total, using_db='defaul
 
     
 # services/notification_service.py
-from django.core.mail import send_mail
-from django.conf import settings
+# services/whatsapp_service.py
 import logging
+import os
+import requests
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-def send_credentials_to_customer(customer, plain_password, customer_email, request=None):
-    """Send login credentials to customer"""
-    
+def send_whatsapp_text_message(to_number, message_text):
+    """
+    Send simple text WhatsApp message via WATI
+    """
+    try:
+        url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionMessage/{to_number}'
+        
+        headers = {
+            'accept': '*/*',
+            'Authorization': 'Bearer YOUR_TOKEN_HERE',  # Use your actual token
+            'Content-Type': 'application/json',
+        }
+        
+        payload = {
+            'message': message_text
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            logger.info(f"WhatsApp text sent to {to_number}")
+            return {"sent": True}
+        else:
+            logger.error(f"WhatsApp text failed: {response.status_code} - {response.text}")
+            return {"sent": False, "reason": "WATI_ERROR", "response": response.text}
+            
+    except Exception as e:
+        logger.error(f"Error sending WhatsApp text: {str(e)}")
+        return {"sent": False, "reason": "EXCEPTION", "error": str(e)}
+
+
+# services/whatsapp_service.py
+# services/whatsapp_service.py
+
+# services/whatsapp_service.py
+
+def send_credentials_via_whatsapp(customer, plain_password, phone_number, request=None):
+    """
+    Send login credentials via WhatsApp with clickable link
+    """
     # Get the frontend URL based on the request
     if request:
-        # Get the domain from the request
         host = request.get_host()
         
-        # Determine the frontend URL based on the domain
         if 'localhost' in host or '127.0.0.1' in host:
-            # Local development - frontend runs on port 4200
             portal_url = "http://localhost:4200/#/customer_portal_login"
         elif 'prod' in host:
-            # Production domain
             portal_url = "https://prod.cnlerp.com/#/customer_portal_login"
         elif 'rudhra' in host:
             portal_url = "https://rudhra.cnlerp.com/#/customer_portal_login"
         elif 'qa' in host:
             portal_url = "https://qa.cnlerp.com/#/customer_portal_login"
         else:
-            # Default to the same domain but with frontend port
-            # This handles any custom domain
-            domain = host.split(':')[0]  # Remove port if present
+            domain = host.split(':')[0]
             portal_url = f"https://{domain}/#/customer_portal_login"
     else:
-        # Fallback URL from settings
-        portal_url = getattr(settings, 'CUSTOMER_PORTAL_URL', 'http://localhost:4200/#/customer_portal_login')
+        portal_url = "http://localhost:4200/#/customer_portal_login"
     
     customer_name = customer.print_name or customer.name
     
-    subject = "Your Customer Portal Login Credentials"
-    message = f"""
-    Dear {customer_name},
+    # Clean and simple message format - URL on its own line for clickability
+    message_text = f"""*🎉 Welcome to Customer Portal, {customer_name}!* 🎉
+
+Your account has been successfully created.
+
+*🔐 Login Credentials:*
+*Username:* {customer.username}
+*Password:* {plain_password}
+
+*🌐 Tap here to login:*
+{portal_url}
+
+*⚠️ Important:*
+• Change password after first login
+• Keep credentials secure
+• Contact support for help
+
+*Thank you for choosing us!* 🚀
+
+_Automated message. Please do not reply._"""
+
+    # Clean phone number (remove any non-digits)
+    import re
+    clean_phone = re.sub(r'\D', '', phone_number)
     
-    Your customer portal account has been created. You can now login to view your orders, invoices, and account details.
-    
-    Portal URL: {portal_url}
-    Username: {customer.username}
-    Password: {plain_password}
-    
-    For security reasons, please change your password after first login.
-    
-    Best regards,
-    ERP Team
-    """
-    
-    try:
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [customer_email],
-            fail_silently=False,
-        )
-        
-        logger.info(f"Credentials sent to {customer_email} for customer {customer.customer_id} via {portal_url}")
-        return True, f"Credentials sent successfully to {customer_email}"
-        
-    except Exception as e:
-        logger.error(f"Error sending email to {customer_email}: {str(e)}")
-        return False, f"Error sending email: {str(e)}"
+    # Check if WATI is enabled (production) or use click-to-chat (local)
+    if getattr(settings, 'ENABLE_WATI', False):
+        # Production - send via WATI
+        result = send_whatsapp_text_message(clean_phone, message_text)
+        if result.get("sent"):
+            return True, {"mode": "wati", "sent": True}
+        else:
+            return False, f"Failed to send WhatsApp: {result.get('reason', 'Unknown error')}"
+    else:
+        # Local development - use click-to-chat
+        import urllib.parse
+        encoded_message = urllib.parse.quote(message_text)
+        whatsapp_url = f"https://wa.me/{clean_phone}?text={encoded_message}"
+        return True, {
+            "mode": "click_to_chat",
+            "whatsapp_url": whatsapp_url,
+            "phone": clean_phone
+        }
