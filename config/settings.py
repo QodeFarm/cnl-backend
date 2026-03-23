@@ -35,7 +35,10 @@ ALLOWED_HOSTS = [
     "apicore.cnlerp.com",
     "master.cnlerp.com",
     "dev.cnlerp.com",
-    "demo.cnlerp.com"
+    "demo.cnlerp.com",
+    "prod.cnlerp.com",  # Add frontend domain
+    "rudhra.cnlerp.com",  # Add frontend domain
+    "qa.cnlerp.com",  # Add frontend domain
 ]
 
 # Set DEBUG = False for master and demo
@@ -331,7 +334,7 @@ CACHES = {
     }
 }
 
-CORS_ALLOW_ALL_ORIGINS = True  # Set to True only for testing
+# CORS_ALLOW_ALL_ORIGINS = True  # Set to True only for testing
 
 # CORS_ALLOWED_ORIGINS = [
 #     "https://dev.qodefarm.com",
@@ -357,7 +360,7 @@ CORS_ALLOW_ALL_ORIGINS = True  # Set to True only for testing
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_NAME = 'sessionid'
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
-SESSION_COOKIE_DOMAIN = None  # Important for localhost
+SESSION_COOKIE_DOMAIN = '.cnlerp.com'  # Important: Set domain for production
 SESSION_COOKIE_SECURE = True  # False for development
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -378,19 +381,29 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:4200",
     "https://prod.cnlerp.com",
     "https://rudhra.cnlerp.com",
-    "https://apicore.cnlerp.com",
     "https://qa.cnlerp.com",
     "https://dev.qodefarm.com",
+    # "https://apicore.cnlerp.com",
 ]
 
-CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_HTTPONLY = False
-CSRF_COOKIE_SECURE = False
+# CSRF_COOKIE_SAMESITE = 'Lax'
+# CSRF_COOKIE_HTTPONLY = False
+# CSRF_COOKIE_SECURE = False
+# For production (HTTPS)
+if not DEBUG:
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to read CSRF token
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+else:
+    CSRF_COOKIE_SECURE = False
+    CSRF_COOKIE_HTTPONLY = False
+    CSRF_COOKIE_SAMESITE = 'Lax'
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
-    r"^https://apicore.cnlerp.com\d+$"
+    # r"^https://apicore.cnlerp.com\d+$"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -413,7 +426,11 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
     'x-customer-portal',  # Add this explicitly
+    'x-client-domain', 
 ]
+
+# Preflight max age (cache preflight response)
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24 hours
 
 # from django_safe_settings.patch import patch_all  # type: ignore
 # patch_all()
