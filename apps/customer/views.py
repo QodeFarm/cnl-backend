@@ -2857,6 +2857,11 @@ class CustomerProfileView(APIView):
                 'message': 'Customer not found'
             }, status=status.HTTP_404_NOT_FOUND)
             
+# views.py
+# from services.whatsapp_service import send_credentials_via_whatsapp
+from config.utils_methods import send_credentials_via_whatsapp
+
+# views.py
 class SendCredentialsView(APIView):
     """Send generated credentials to customer"""
     
@@ -2870,14 +2875,14 @@ class SendCredentialsView(APIView):
                     'message': 'Please generate credentials first'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Use CustomerOptionSerializer to get email
+            # Get phone number from customer addresses
             serializer = CustomerOptionSerializer(customer)
-            customer_email = serializer.data.get('email')
+            phone_number = serializer.data.get('phone')
             
-            if not customer_email:
+            if not phone_number:
                 return Response({
                     'success': False,
-                    'message': 'No email address found for this customer. Please add an email in customer addresses.'
+                    'message': 'No phone number found. Please add a phone number in customer addresses.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
             # Generate new password for security
@@ -2885,18 +2890,31 @@ class SendCredentialsView(APIView):
             customer.password = make_password(plain_password)
             customer.save()
             
-            # Send credentials with request to get correct domain
-            success, message = send_credentials_to_customer(customer, plain_password, customer_email, request)
+            # Send credentials via WhatsApp
+            success, result = send_credentials_via_whatsapp(
+                customer, 
+                plain_password, 
+                phone_number, 
+                request
+            )
             
             if success:
-                return Response({
+                # Return structured response
+                response_data = {
                     'success': True,
-                    'message': f'Credentials sent successfully to {customer_email}'
-                })
+                    'message': 'Credentials sent successfully',
+                    'mode': result.get('mode', 'click_to_chat')
+                }
+                
+                # If it's click-to-chat mode, include the URL
+                if result.get('whatsapp_url'):
+                    response_data['whatsapp_url'] = result['whatsapp_url']
+                
+                return Response(response_data)
             else:
                 return Response({
                     'success': False,
-                    'message': message
+                    'message': result
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
                 
         except Customer.DoesNotExist:

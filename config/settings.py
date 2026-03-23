@@ -455,3 +455,10 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000  # Default is 1000
 
 # File upload settings
 FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
+
+# settings.py
+
+# WhatsApp Configuration
+ENABLE_WATI = os.getenv('ENABLE_WATI', True)  # Set to True in production
+WATI_API_URL = os.getenv('WATI_API_URL', 'https://live-mt-server.wati.io/312172/api/v1')
+WATI_TOKEN = os.getenv('WATI_TOKEN', 'YOUR_TOKEN_HERE')
