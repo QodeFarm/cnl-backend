@@ -3407,23 +3407,28 @@ def send_credentials_via_whatsapp(customer, plain_password, phone_number, reques
     print("=" * 50)
     
     # Get frontend URL
+    # 
+    # Get the frontend URL based on the request
     if request:
         host = request.get_host()
-        print(f"Host: {host}")
         
-        if 'localhost' in host or '127.0.0.1' in host:
-            portal_url = "http://localhost:4200/#/customer_portal_login"
-        elif 'prod' in host:
-            portal_url = "https://apicore.cnlerp.com/#/customer_portal_login"
+        # Map backend API domains to frontend domains
+        if 'apicore' in host:
+            # Production API domain → Production frontend
+            portal_url = "https://prod.cnlerp.com/#/customer_portal_login"
         elif 'rudhra' in host:
-            portal_url = "https://apicore.cnlerp.com/#/customer_portal_login"
+            # Rudhra API domain → Rudhra frontend
+            portal_url = "https://rudhra.cnlerp.com/#/customer_portal_login"
         elif 'qa' in host:
             portal_url = "https://qa.cnlerp.com/#/customer_portal_login"
+        elif 'localhost' in host or '127.0.0.1' in host:
+            portal_url = "http://localhost:4200/#/customer_portal_login"
         else:
-            domain = host.split(':')[0]
+            # Fallback - remove 'api' or 'apicore' from domain
+            domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
             portal_url = f"https://{domain}/#/customer_portal_login"
     else:
-        portal_url = "http://localhost:4200/#/customer_portal_login"
+        portal_url = "https://prod.cnlerp.com/#/customer_portal_login"
     
     print(f"Portal URL: {portal_url}")
     
