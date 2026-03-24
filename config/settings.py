@@ -383,7 +383,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://rudhra.cnlerp.com",
     "https://qa.cnlerp.com",
     "https://dev.qodefarm.com",
-    # "https://apicore.cnlerp.com",
+    "https://apicore.cnlerp.com",
 ]
 
 # CSRF_COOKIE_SAMESITE = 'Lax'
