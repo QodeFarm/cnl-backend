@@ -24,6 +24,14 @@ logger = logging.getLogger(__name__)
 #         # Print to logs for debugging
 #         print(f"Using database: {db_name} for client domain: {client_domain}")                                                                          
 
+from django.db import connections
+from django.utils.deprecation import MiddlewareMixin
+from apps.users.models import License
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class DatabaseMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # For portal requests - set database based on domain
@@ -41,46 +49,29 @@ class DatabaseMiddleware(MiddlewareMixin):
             
             print(f"Domain: {client_domain}, Subdomain: {subdomain}")
             
+            # Determine database name
+            db_name = None
+            
             # Special handling for rudhra
             if 'rudhra' in client_domain or subdomain == 'rudhra':
-                db_name = 'rudhra_rd003_prod'  # or whatever your rudhra database is called
+                db_name = 'rudhra_rd003_prod'  # Your rudhra database name
                 print(f"🟢 Using rudhra database: {db_name}")
             else:
                 # Get database name from License table
                 try:
-                    from apps.users.models import License
-                    license = License.objects.using('mstcnl').filter(domain=subdomain).first()
-                    if license and license.database_name:
-                        db_name = license.database_name
+                    license_obj = License.objects.using('mstcnl').filter(domain=subdomain).first()
+                    if license_obj and license_obj.database_name:
+                        db_name = license_obj.database_name
                     else:
                         db_name = "devcnl"
                 except Exception as e:
-                    print(f"Error: {e}")
+                    print(f"Error getting license: {e}")
                     db_name = "devcnl"
             
             # Set the database connection
-            from django.db import connections
             connections.databases["default"]["NAME"] = db_name
             print(f"✅ Portal using database: {db_name}")
             return None
-            
-            # # Get database name from License table
-            # try:
-            #     data = License.objects.using('mstcnl').values_list('domain', 'database_name')
-            #     DOMAIN_DATABASE_MAPPING = dict(data)
-            #     print(f"Domain mapping: {DOMAIN_DATABASE_MAPPING}")
-                
-            #     db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "devcnl")
-            #     print(f"Database found: {db_name}")
-                
-            # except Exception as e:
-            #     print(f"Error getting database: {e}")
-            #     db_name = "devcnl"
-            
-            # # Set the database connection
-            # connections.databases["default"]["NAME"] = db_name
-            # print(f"✅ Portal using database: {db_name}")
-            # return None
             
         # Your existing logic for non-portal requests
         try:
