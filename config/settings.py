@@ -360,8 +360,14 @@ CACHES = {
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_NAME = 'sessionid'
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
-SESSION_COOKIE_DOMAIN = '.cnlerp.com'  # Important: Set domain for production
-SESSION_COOKIE_SECURE = True  # False for development
+# SESSION_COOKIE_DOMAIN = '.cnlerp.com'  # Important: Set domain for production
+# SESSION_COOKIE_SECURE = True  # False for development
+if DEBUG:
+    SESSION_COOKIE_DOMAIN = None
+    SESSION_COOKIE_SECURE = False
+else:
+    SESSION_COOKIE_DOMAIN = '.cnlerp.com'  # This allows cookie across all subdomains
+    SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_SAVE_EVERY_REQUEST = True

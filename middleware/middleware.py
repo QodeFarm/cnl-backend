@@ -28,27 +28,38 @@ class DatabaseMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # For portal requests - set database based on domain
         if request.path.startswith('/api/customers/portal/'):
-            print(f"🟢 Portal request detected: {request.path}")
+            print(f"🟢 Portal request: {request.path}")
             
-            # Get domain from header (same logic as admin)
-            client_domain = request.headers.get("X-Client-Domain", "").replace("https://", "").replace("http://", "").split(":")[0]
+            # Get domain from header
+            client_domain = request.headers.get("X-Client-Domain", "")
+            if not client_domain:
+                client_domain = request.headers.get("Host", "")
+            
+            # Clean domain
+            client_domain = client_domain.replace("https://", "").replace("http://", "").split(":")[0]
             subdomain = client_domain.split('.')[0]
+            
+            print(f"Domain: {client_domain}, Subdomain: {subdomain}")
             
             # Get database name from License table
             try:
                 data = License.objects.using('mstcnl').values_list('domain', 'database_name')
                 DOMAIN_DATABASE_MAPPING = dict(data)
+                print(f"Domain mapping: {DOMAIN_DATABASE_MAPPING}")
+                
                 db_name = DOMAIN_DATABASE_MAPPING.get(subdomain, "devcnl")
+                print(f"Database found: {db_name}")
+                
             except Exception as e:
                 print(f"Error getting database: {e}")
                 db_name = "devcnl"
             
             # Set the database connection
             connections.databases["default"]["NAME"] = db_name
-            print(f"🟢 Portal using database: {db_name} for domain: {client_domain}")
+            print(f"✅ Portal using database: {db_name}")
             return None
             
-        # Your existing database switching logic for non-portal requests
+        # Your existing logic for non-portal requests
         try:
             data = License.objects.using('mstcnl').values_list('domain', 'database_name')   
             DOMAIN_DATABASE_MAPPING = dict(data)
