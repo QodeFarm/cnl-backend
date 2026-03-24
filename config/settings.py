@@ -481,4 +481,4 @@ WATI_CONFIG = {
 }
 
 # For local development, set this to False
-ENABLE_WATI = False  # Local uses click-to-chat
+ENABLE_WATI = True  # Local uses click-to-chat
