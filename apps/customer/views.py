@@ -2603,6 +2603,8 @@ from django.views.decorators.http import require_http_methods
 class CustomerPortalLoginView(APIView):
     def post(self, request):
         try:
+            from django.conf import settings
+            
             # Get the origin from request headers
             origin = request.headers.get('Origin', '')
             
@@ -2611,7 +2613,6 @@ class CustomerPortalLoginView(APIView):
                 "http://localhost:4200",
                 "https://prod.cnlerp.com",
                 "https://rudhra.cnlerp.com",
-                # Add all your production domains
             ]
             
             # Set the appropriate Access-Control-Allow-Origin
@@ -2623,6 +2624,7 @@ class CustomerPortalLoginView(APIView):
             print("="*50)
             print("🔐 LOGIN ATTEMPT STARTED")
             print(f"📍 Origin: {origin}")
+            print(f"📍 DEBUG: {settings.DEBUG}")
             print("="*50)
             
             serializer = CustomerPortalLoginSerializer(data=request.data)
@@ -2662,23 +2664,29 @@ class CustomerPortalLoginView(APIView):
                     }
                 })
                 
-                # Set cookie with dynamic domain
+                # Set cookie with correct domain
+                # Use the same domain as SESSION_COOKIE_DOMAIN
+                cookie_domain = settings.SESSION_COOKIE_DOMAIN if not settings.DEBUG else None
+                
                 response.set_cookie(
                     key='sessionid',
                     value=request.session.session_key,
-                    max_age=1209600,
+                    max_age=settings.SESSION_COOKIE_AGE,
                     path='/',
-                    domain=None,  # Let browser handle
-                    secure=not request.is_secure(),  # True for HTTPS
-                    httponly=True,
-                    samesite='Lax'
+                    domain=cookie_domain,  # Use the domain from settings
+                    secure=settings.SESSION_COOKIE_SECURE,
+                    httponly=settings.SESSION_COOKIE_HTTPONLY,
+                    samesite=settings.SESSION_COOKIE_SAMESITE
                 )
                 
                 # Set CORS headers
                 response["Access-Control-Allow-Origin"] = cors_origin
                 response["Access-Control-Allow-Credentials"] = "true"
                 response["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-                response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization"
+                response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization, X-Client-Domain"
+                
+                print(f"✅ Cookie domain: {cookie_domain}")
+                print(f"✅ Secure: {settings.SESSION_COOKIE_SECURE}")
                 
                 return response
             
