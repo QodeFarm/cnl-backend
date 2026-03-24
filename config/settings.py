@@ -459,6 +459,26 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
 # settings.py
 
 # WhatsApp Configuration
-ENABLE_WATI = os.getenv('ENABLE_WATI', True)  # Set to True in production
-WATI_API_URL = os.getenv('WATI_API_URL', 'https://live-mt-server.wati.io/312172/api/v1')
-WATI_TOKEN = os.getenv('WATI_TOKEN', 'YOUR_TOKEN_HERE')
+# ENABLE_WATI = os.getenv('ENABLE_WATI', True)  # Set to True in production
+# WATI_API_URL = os.getenv('WATI_API_URL', 'https://live-mt-server.wati.io/312172/api/v1')
+# WATI_TOKEN = os.getenv('WATI_TOKEN', 'YOUR_TOKEN_HERE')
+# .env file
+# WATI_BASE_URL= 'https://live-mt-server.wati.io/10114393'
+# WATI_API_TOKEN='Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs'
+# WATI_PHONE_NUMBER=919505024999
+# ENABLE_WATI=True
+# settings.py
+
+# settings.py
+
+# settings.py
+
+WATI_CONFIG = {
+    'BASE_URL': 'https://live-mt-server.wati.io/10114393',
+    'API_TOKEN': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs',
+    'PHONE_NUMBER': '919505024999',
+    'ENABLED': True,  # Set to False for local, True for production
+}
+
+# For local development, set this to False
+ENABLE_WATI = False  # Local uses click-to-chat
