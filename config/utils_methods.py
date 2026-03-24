@@ -3414,9 +3414,9 @@ def send_credentials_via_whatsapp(customer, plain_password, phone_number, reques
         if 'localhost' in host or '127.0.0.1' in host:
             portal_url = "http://localhost:4200/#/customer_portal_login"
         elif 'prod' in host:
-            portal_url = "https://prod.cnlerp.com/#/customer_portal_login"
+            portal_url = "https://apicore.cnlerp.com/#/customer_portal_login"
         elif 'rudhra' in host:
-            portal_url = "https://rudhra.cnlerp.com/#/customer_portal_login"
+            portal_url = "https://apicore.cnlerp.com/#/customer_portal_login"
         elif 'qa' in host:
             portal_url = "https://qa.cnlerp.com/#/customer_portal_login"
         else:
