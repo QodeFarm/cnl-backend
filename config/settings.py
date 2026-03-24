@@ -480,5 +480,6 @@ WATI_CONFIG = {
     'ENABLED': True,  # Set to False for local, True for production
 }
 
-# For local development, set this to False
-ENABLE_WATI = True  # Local uses click-to-chat
+# For local testing
+if DEBUG:
+    WATI_CONFIG['ENABLED'] = False 

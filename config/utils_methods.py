@@ -3340,25 +3340,26 @@ logger = logging.getLogger(__name__)
 
 # services/whatsapp_service.py
 
-def send_whatsapp_text_message(phone_number, message_text, customer_name=None):
+def send_whatsapp_text_message(phone_number, message_text):
     """
     Send WhatsApp message via WATI API
     """
     try:
         import re
         
-        # Clean phone number (remove any non-digits)
-        clean_phone = re.sub(r'\D', '', phone_number)
+        print(f"\n🔵 Sending via WATI API:")
+        print(f"Phone: {phone_number}")
+        print(f"Message length: {len(message_text)}")
         
-        # Add country code if missing (India)
+        # Clean phone number
+        clean_phone = re.sub(r'\D', '', phone_number)
         if not clean_phone.startswith('91'):
             clean_phone = '91' + clean_phone
         
-        # CORRECT URL - Note the /api/v1/ in the path
+        # WATI API endpoint
         url = f"{settings.WATI_CONFIG['BASE_URL']}/api/v1/sendSessionMessage/{clean_phone}"
         
         print(f"URL: {url}")
-        print(f"Phone: {clean_phone}")
         
         headers = {
             'accept': '*/*',
@@ -3366,36 +3367,33 @@ def send_whatsapp_text_message(phone_number, message_text, customer_name=None):
             'Content-Type': 'application/json',
         }
         
+        # CRITICAL: Ensure message is not empty
+        if not message_text or len(message_text.strip()) == 0:
+            print("❌ ERROR: Message text is empty!")
+            return {"sent": False, "reason": "message text is empty"}
+        
         payload = {
             'message': message_text
         }
         
-        logger.info(f"Sending WhatsApp to {clean_phone}")
+        print(f"Payload: {payload}")
+        
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
-        logger.info(f"WATI Response Status: {response.status_code}")
-        logger.info(f"WATI Response: {response.text}")
+        print(f"Response Status: {response.status_code}")
+        print(f"Response: {response.text}")
         
         if response.status_code == 200:
             response_data = response.json()
             if response_data.get('result') is True:
-                logger.info(f"WhatsApp sent successfully to {clean_phone}")
-                return {"sent": True, "message_id": response_data.get('messageId')}
+                return {"sent": True}
             else:
-                return {
-                    "sent": False, 
-                    "reason": response_data.get('info', 'WATI_ERROR'),
-                    "details": response_data
-                }
+                return {"sent": False, "reason": response_data.get('info', 'WATI_ERROR')}
         else:
-            return {
-                "sent": False, 
-                "reason": f"HTTP_{response.status_code}",
-                "response": response.text
-            }
+            return {"sent": False, "reason": f"HTTP_{response.status_code}"}
             
     except Exception as e:
-        logger.error(f"Error sending WhatsApp: {str(e)}")
+        print(f"Exception: {str(e)}")
         return {"sent": False, "reason": str(e)}
 
 # services/whatsapp_service.py
@@ -3404,9 +3402,14 @@ def send_credentials_via_whatsapp(customer, plain_password, phone_number, reques
     """
     Send login credentials via WhatsApp
     """
+    print("=" * 50)
+    print("🔍 DEBUG: Starting send_credentials_via_whatsapp")
+    print("=" * 50)
+    
     # Get frontend URL
     if request:
         host = request.get_host()
+        print(f"Host: {host}")
         
         if 'localhost' in host or '127.0.0.1' in host:
             portal_url = "http://localhost:4200/#/customer_portal_login"
@@ -3422,46 +3425,60 @@ def send_credentials_via_whatsapp(customer, plain_password, phone_number, reques
     else:
         portal_url = "http://localhost:4200/#/customer_portal_login"
     
+    print(f"Portal URL: {portal_url}")
+    
     customer_name = customer.print_name or customer.name
+    print(f"Customer Name: {customer_name}")
+    print(f"Username: {customer.username}")
+    print(f"Password: {plain_password}")
     
     # Format message
-    message_text = f"""*🎉 Welcome to Customer Portal, {customer_name}!* 🎉
+    message_text = f"""🎉 Welcome to Customer Portal, {customer_name}! 🎉
 
 Your account has been successfully created.
 
-*🔐 Login Credentials:*
-*Username:* {customer.username}
-*Password:* {plain_password}
+Login Credentials:
+Username: {customer.username}
+Password: {plain_password}
 
-*🌐 Tap here to login:*
+Click here to login:
 {portal_url}
 
-*⚠️ Important:*
-• Change password after first login
-• Keep credentials secure
-• Contact support for help
+Important:
+- Change password after first login
+- Keep credentials secure
+- Contact support for help
 
-*Thank you for choosing us!* 🚀
+Thank you for choosing us!
 
-_Automated message. Please do not reply._"""
+Automated message. Please do not reply."""
 
+    print(f"\n📝 MESSAGE TEXT:")
+    print("-" * 50)
+    print(message_text)
+    print("-" * 50)
+    print(f"Message length: {len(message_text)}")
+    print("=" * 50)
+    
     # Clean phone number
     import re
     clean_phone = re.sub(r'\D', '', phone_number)
     if not clean_phone.startswith('91'):
         clean_phone = '91' + clean_phone
     
+    print(f"Phone: {clean_phone}")
+    
     # Check if WATI is enabled
     if getattr(settings, 'ENABLE_WATI', False):
-        # Production - send via WATI
-        result = send_whatsapp_text_message(clean_phone, message_text, customer_name)
+        print("🚀 WATI Mode: Sending via API")
+        result = send_whatsapp_text_message(clean_phone, message_text)
         
         if result.get("sent"):
-            return True, {"mode": "wati", "sent": True, "message_id": result.get("message_id")}
+            return True, {"mode": "wati", "sent": True}
         else:
             return False, f"Failed to send WhatsApp: {result.get('reason', 'Unknown error')}"
     else:
-        # Local development - use click-to-chat
+        print("📱 Click-to-Chat Mode: Opening WhatsApp")
         import urllib.parse
         encoded_message = urllib.parse.quote(message_text)
         whatsapp_url = f"https://wa.me/{clean_phone}?text={encoded_message}"
