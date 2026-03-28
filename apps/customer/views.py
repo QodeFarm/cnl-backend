@@ -2870,63 +2870,265 @@ class CustomerProfileView(APIView):
 from config.utils_methods import send_credentials_via_whatsapp
 
 # views.py
+# class SendCredentialsView(APIView):
+#     """Send generated credentials to customer"""
+    
+#     def post(self, request, customer_id):
+#         try:
+#             customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+            
+#             if not customer.is_portal_user or not customer.username or not customer.password:
+#                 return Response({
+#                     'success': False,
+#                     'message': 'Please generate credentials first'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+#             # Get phone number from customer addresses
+#             serializer = CustomerOptionSerializer(customer)
+#             phone_number = serializer.data.get('phone')
+            
+#             if not phone_number:
+#                 return Response({
+#                     'success': False,
+#                     'message': 'No phone number found. Please add a phone number in customer addresses.'
+#                 }, status=status.HTTP_400_BAD_REQUEST)
+            
+#             # Generate new password for security
+#             plain_password = customer.generate_random_password()
+#             customer.password = make_password(plain_password)
+#             customer.save()
+            
+#             # Send credentials via WhatsApp
+#             success, result = send_credentials_via_whatsapp(
+#                 customer, 
+#                 plain_password, 
+#                 phone_number, 
+#                 request
+#             )
+            
+#             if success:
+#                 # Return structured response
+#                 response_data = {
+#                     'success': True,
+#                     'message': 'Credentials sent successfully',
+#                     'mode': result.get('mode', 'click_to_chat')
+#                 }
+                
+#                 # If it's click-to-chat mode, include the URL
+#                 if result.get('whatsapp_url'):
+#                     response_data['whatsapp_url'] = result['whatsapp_url']
+                
+#                 return Response(response_data)
+#             else:
+#                 return Response({
+#                     'success': False,
+#                     'message': result
+#                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                
+#         except Customer.DoesNotExist:
+#             return Response({
+#                 'success': False,
+#                 'message': 'Customer not found'
+#             }, status=status.HTTP_404_NOT_FOUND)
+
 class SendCredentialsView(APIView):
     """Send generated credentials to customer"""
     
     def post(self, request, customer_id):
         try:
+            from apps.customer.models import CustomerAddresses
+            import logging
+            logger = logging.getLogger(__name__)
+            
             customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+            logger.info(f"Processing credentials for customer: {customer.customer_id} - {customer.name}")
             
             if not customer.is_portal_user or not customer.username or not customer.password:
+                logger.warning(f"Customer {customer.customer_id} does not have portal credentials")
                 return Response({
                     'success': False,
                     'message': 'Please generate credentials first'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Get phone number from customer addresses
+            method = request.GET.get('method', 'email')
+            logger.info(f"Selected method: {method}")
+            
+            # Get phone and email from serializer (both come from addresses)
             serializer = CustomerOptionSerializer(customer)
             phone_number = serializer.data.get('phone')
+            customer_email = serializer.data.get('email')
             
-            if not phone_number:
-                return Response({
-                    'success': False,
-                    'message': 'No phone number found. Please add a phone number in customer addresses.'
-                }, status=status.HTTP_400_BAD_REQUEST)
+            logger.info(f"Phone number from serializer: {phone_number}")
+            logger.info(f"Email from serializer: {customer_email}")
             
-            # Generate new password for security
+            # Generate new password
             plain_password = customer.generate_random_password()
             customer.password = make_password(plain_password)
             customer.save()
+            logger.info(f"New password generated for customer: {customer.customer_id}")
             
-            # Send credentials via WhatsApp
-            success, result = send_credentials_via_whatsapp(
-                customer, 
-                plain_password, 
-                phone_number, 
-                request
-            )
+            portal_url = get_portal_url(request)
+            logger.info(f"Portal URL: {portal_url}")
             
-            if success:
-                # Return structured response
-                response_data = {
-                    'success': True,
-                    'message': 'Credentials sent successfully',
-                    'mode': result.get('mode', 'click_to_chat')
-                }
+            if method == 'email':
+                if not customer_email:
+                    logger.error(f"Cannot send email: No email found for customer {customer.customer_id}")
+                    return Response({
+                        'success': False,
+                        'message': 'No email address found. Please add an email in customer addresses (Billing or Shipping).'
+                    }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # If it's click-to-chat mode, include the URL
-                if result.get('whatsapp_url'):
-                    response_data['whatsapp_url'] = result['whatsapp_url']
+                logger.info(f"Sending email to: {customer_email}")
+                success, result = send_credentials_email(
+                    customer, plain_password, portal_url, customer_email, request
+                )
                 
-                return Response(response_data)
-            else:
+                if success:
+                    logger.info(f"Email sent successfully to {customer_email}")
+                    return Response({
+                        'success': True,
+                        'message': 'Credentials sent via email',
+                        'mode': 'email',
+                        'email': customer_email
+                    })
+                else:
+                    logger.error(f"Email failed: {result}")
+                    return Response({
+                        'success': False,
+                        'message': f'Email failed: {result}'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            elif method == 'whatsapp':
+                if not phone_number:
+                    logger.warning(f"No phone number found for customer {customer.customer_id}")
+                    return Response({
+                        'success': False,
+                        'message': 'No phone number found. Please add a phone number in customer addresses.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                logger.info(f"WhatsApp requested but template under construction for {phone_number}")
+                # WhatsApp template is under construction
                 return Response({
                     'success': False,
-                    'message': result
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                
+                    'message': 'WhatsApp template is currently under construction. Please use email to send credentials.',
+                    'mode': 'whatsapp_unavailable'
+                }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
         except Customer.DoesNotExist:
+            logger.error(f"Customer not found: {customer_id}")
             return Response({
                 'success': False,
                 'message': 'Customer not found'
             }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'success': False,
+                'message': f'Error: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+def get_portal_url(request):
+    """Get dynamic portal URL based on environment"""
+    if request:
+        host = request.get_host()
+        
+        if 'apicore' in host:
+            return "https://prod.cnlerp.com/#/customer_portal_login"
+        elif 'rudhra' in host:
+            return "https://rudhra.cnlerp.com/#/customer_portal_login"
+        elif 'qa' in host:
+            return "https://qa.cnlerp.com/#/customer_portal_login"
+        elif 'localhost' in host or '127.0.0.1' in host:
+            return "http://localhost:4200/#/customer_portal_login"
+        else:
+            domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
+            return f"https://{domain}/#/customer_portal_login"
+    return "https://rudhra.cnlerp.com/#/customer_portal_login"
+
+# services/email_service.py
+import logging
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+# services/notification_service.py
+from django.core.mail import send_mail
+from django.conf import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
+def send_credentials_email(customer, plain_password, portal_url, customer_email, request=None):
+    """
+    Send login credentials via email
+    """
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        customer_name = customer.print_name or customer.name
+        username = customer.username
+        password = plain_password
+        
+        company_name = "Rudhra Industries"
+        
+        logger.info(f"Preparing email for {customer_name} to {customer_email}")
+        
+        if not customer_email:
+            logger.error(f"No email provided for customer {customer.customer_id}")
+            return False, "No email address provided"
+        
+        subject = f"Welcome to {company_name} Customer Portal - Your Login Credentials"
+        
+        # Plain text email content
+        email_body = f"""
+Welcome to {company_name} Customer Portal!
+
+Hello {customer_name},
+
+Your customer portal account has been created successfully.
+
+Login Credentials:
+Username: {username}
+Password: {password}
+
+Access your portal here:
+{portal_url}
+
+Important:
+- Change password after first login
+- Keep credentials secure
+- Do not share your password with anyone
+
+For support, contact us at:
+Email: support@rudhra.com
+Phone: +91 95050 24999
+
+Thank you for choosing {company_name}!
+
+---
+This is an automated message. Please do not reply.
+"""
+        
+        logger.info(f"Sending email to {customer_email}")
+        
+        send_mail(
+            subject=subject,
+            message=email_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[customer_email],
+            fail_silently=False
+        )
+        
+        logger.info(f"Credentials email sent successfully to {customer_email} for customer {customer_name}")
+        return True, {"sent": True, "email": customer_email}
+        
+    except Exception as e:
+        logger.error(f"Failed to send credentials email: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False, str(e)

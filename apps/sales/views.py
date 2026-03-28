@@ -1,3 +1,5 @@
+import re
+
 from apps.auditlogs.utils import log_user_action
 from apps.finance.serializers import JournalEntryLinesSerializer
 from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_data, sale_order_sales_invoice_doc
@@ -349,18 +351,409 @@ class SaleDebitNoteItemsViews(viewsets.ModelViewSet):
 from django.db.models import F
 from django.conf import settings
 
+# def try_send_sale_order_whatsapp(request, sale_order_id):
+#     """
+#     Send order confirmation WhatsApp using WATI template
+#     """
+#     try:
+#         # ========== HARDCODED WATI CONFIG ==========
+#         WATI_INSTANCE_ID = "10114393"
+#         WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs"
+        
+#         # ------------------ PHONE RESOLUTION ------------------ #
+#         city_id = request.GET.get('city')
+#         phone = resolve_phone_from_document(
+#             document_type="sale_order",
+#             pk=sale_order_id,
+#             city_id=city_id
+#         )
+
+#         if not phone:
+#             logger.warning(f"No phone found for sale order {sale_order_id}")
+#             return {
+#                 "whatsapp_sent": False,
+#                 "mode": "none",
+#                 "reason": "PHONE_NOT_FOUND"
+#             }
+
+#         # ------------------ FETCH SALE ORDER ------------------ #
+#         from apps.sales.models import SaleOrder
+#         from apps.sales.models import SaleOrderItems
+#         from datetime import datetime
+        
+#         sale_order = SaleOrder.objects.filter(sale_order_id=sale_order_id).first()
+#         if not sale_order:
+#             logger.error(f"Sale order {sale_order_id} not found")
+#             return {
+#                 "whatsapp_sent": False,
+#                 "mode": "error",
+#                 "reason": "ORDER_NOT_FOUND"
+#             }
+        
+#         # Get customer name
+#         customer = sale_order.customer_id
+#         customer_name = customer.name if customer and hasattr(customer, 'name') else "Customer"
+        
+#         # Get order number
+#         order_no = sale_order.order_no
+        
+#         # Get ALL product names (dynamic list)
+#         order_items = SaleOrderItems.objects.filter(sale_order_id=sale_order_id)
+#         product_names = []
+#         for item in order_items:
+#             # Access product through product_id (ForeignKey)
+#             if item.product_id:
+#                 product_name = item.product_id.name if hasattr(item.product_id, 'name') else "Item"
+#                 product_names.append(product_name)
+#             else:
+#                 product_names.append("Item")
+        
+#         # Format product names for the template
+#         # If only 1 product, use just that
+#         # If multiple, combine with commas
+#         if len(product_names) == 1:
+#             product_list = product_names[0]
+#         elif len(product_names) == 2:
+#             product_list = f"{product_names[0]} and {product_names[1]}"
+#         else:
+#             product_list = ", ".join(product_names[:-1]) + f" and {product_names[-1]}"
+        
+#         # For first two products (if template has separate fields)
+#         product1 = product_names[0] if len(product_names) > 0 else "Item"
+#         product2 = product_names[1] if len(product_names) > 1 else ""
+        
+#         # ------------------ DYNAMIC ORDER LINK BASED ON ENVIRONMENT ------------------ #
+#         if request:
+#             host = request.get_host()
+            
+#             if 'apicore' in host:
+#                 order_link = "https://prod.cnlerp.com/#/customer-portal/sales-orders"
+#             elif 'rudhra' in host:
+#                 order_link = "https://rudhra.cnlerp.com/#/customer-portal/sales-orders"
+#             elif 'qa' in host:
+#                 order_link = "https://qa.cnlerp.com/#/customer-portal/sales-orders"
+#             elif 'localhost' in host or '127.0.0.1' in host:
+#                 order_link = "http://localhost:4200/#/customer-portal/sales-orders"
+#             else:
+#                 domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
+#                 order_link = f"https://{domain}/#/customer-portal/sales-orders"
+#         else:
+#             order_link = "https://rudhra.cnlerp.com/#/customer-portal/sales-orders"
+        
+#         # Support method
+#         support_method = "support@rudhra.com or +91 95050 24999"
+        
+#         # Company name
+#         company_name = "Rudhra Industries"
+        
+#         logger.info(f"Sending order confirmation for {order_no} to {phone}")
+#         logger.info(f"Products: {product_names}")
+#         logger.info(f"Product list string: {product_list}")
+#         logger.info(f"Order link: {order_link}")
+
+#         # ------------------ SEND VIA WATI TEMPLATE ------------------ #
+#         import re
+#         import requests
+#         import json
+        
+#         clean_phone = re.sub(r'\D', '', phone)
+#         if not clean_phone.startswith('91'):
+#             clean_phone = '91' + clean_phone
+        
+#         # CORRECT URL: Phone number as query parameter
+#         url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}"
+        
+#         headers = {
+#             'Authorization': WATI_TOKEN,
+#             'Content-Type': 'application/json',
+#         }
+        
+#         # Parameters as objects with names matching template placeholders
+#         parameters = [
+#             {"name": "name", "value": customer_name},
+#             {"name": "Order Number", "value": order_no},
+#             {"name": "Product Name", "value": product1},
+#             {"name": "Product Name 2", "value": product2 if product2 else ""},
+#             {"name": "Link", "value": order_link},
+#             {"name": "support method", "value": support_method},
+#             {"name": "Your Company Name", "value": company_name}
+#         ]
+        
+#         # Broadcast name (required)
+#         broadcast_name = f"order_confirmation_{order_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+#         payload = {
+#             "template_name": "order_confirmation",
+#             "broadcast_name": broadcast_name,
+#             "parameters": parameters
+#         }
+        
+#         # Add buttons if your template has them
+#         payload["buttons"] = [
+#             {
+#                 "type": "url",
+#                 "parameter": {
+#                     "text": "Track Order",
+#                     "url": order_link
+#                 }
+#             },
+#             {
+#                 "type": "quick_reply",
+#                 "parameter": {
+#                     "text": "Need Help?"
+#                 }
+#             }
+#         ]
+        
+#         logger.info(f"Calling WATI API: {url}")
+#         logger.info(f"Payload: {json.dumps(payload, indent=2)}")
+        
+#         response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+#         logger.info(f"WATI Response Status: {response.status_code}")
+#         logger.info(f"WATI Response: {response.text}")
+        
+#         if response.status_code == 200:
+#             response_data = response.json()
+#             if response_data.get('result') is True:
+#                 logger.info(f"WhatsApp order confirmation sent to {phone} for order {order_no}")
+#                 return {
+#                     "whatsapp_sent": True,
+#                     "mode": "wati",
+#                     "phone": phone,
+#                     "message_id": response_data.get('local_message_id'),
+#                     "products": product_names
+#                 }
+#             else:
+#                 logger.error(f"WATI error: {response_data.get('info')}")
+#                 return {
+#                     "whatsapp_sent": False,
+#                     "mode": "error",
+#                     "reason": response_data.get('info', 'WATI_ERROR')
+#                 }
+#         else:
+#             logger.error(f"WATI HTTP error: {response.status_code} - {response.text}")
+#             return {
+#                 "whatsapp_sent": False,
+#                 "mode": "error",
+#                 "reason": f"HTTP_{response.status_code}"
+#             }
+
+#     except Exception as e:
+#         logger.error(f"WhatsApp failed for SaleOrder {sale_order_id}: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return {
+#             "whatsapp_sent": False,
+#             "mode": "error",
+#             "reason": "WHATSAPP_ERROR",
+#             "error": str(e)
+#         }
+
+# def try_send_sale_order_whatsapp(request, sale_order_id):
+#     """
+#     Send order confirmation WhatsApp using WATI template
+#     """
+#     try:
+#         # ========== HARDCODED WATI CONFIG ==========
+#         WATI_INSTANCE_ID = "10114393"
+#         WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs"
+        
+#         # ------------------ PHONE RESOLUTION ------------------ #
+#         city_id = request.GET.get('city')
+#         phone = resolve_phone_from_document(
+#             document_type="sale_order",
+#             pk=sale_order_id,
+#             city_id=city_id
+#         )
+
+#         if not phone:
+#             logger.warning(f"No phone found for sale order {sale_order_id}")
+#             return {
+#                 "whatsapp_sent": False,
+#                 "mode": "none",
+#                 "reason": "PHONE_NOT_FOUND"
+#             }
+
+#         # ------------------ FETCH SALE ORDER ------------------ #
+#         from apps.sales.models import SaleOrder
+#         from apps.sales.models import SaleOrderItems
+#         from datetime import datetime
+        
+#         sale_order = SaleOrder.objects.filter(sale_order_id=sale_order_id).first()
+#         if not sale_order:
+#             logger.error(f"Sale order {sale_order_id} not found")
+#             return {
+#                 "whatsapp_sent": False,
+#                 "mode": "error",
+#                 "reason": "ORDER_NOT_FOUND"
+#             }
+        
+#         # Get customer name
+#         customer = sale_order.customer_id
+#         customer_name = customer.name if customer and hasattr(customer, 'name') else "Customer"
+        
+#         # Get order number
+#         order_no = sale_order.order_no
+        
+#         # Get total amount
+#         total_amount = sale_order.total_amount if hasattr(sale_order, 'total_amount') else 0
+        
+#         # Get ALL products with quantities and prices
+#         order_items = SaleOrderItems.objects.filter(sale_order_id=sale_order_id)
+        
+#         # Create formatted product list with bullet points and details
+#         product_items = []
+#         for item in order_items:
+#             product_name = item.product_id.name if item.product_id and hasattr(item.product_id, 'name') else "Item"
+#             quantity = item.quantity if hasattr(item, 'quantity') else 1
+#             price = item.price if hasattr(item, 'price') else 0
+#             item_total = quantity * price
+#             product_items.append(f"• {product_name} x{quantity} - ₹{item_total:,.2f}")
+        
+#         # Join products with newline for proper formatting
+#         product_list = "\n".join(product_items) if product_items else "• No items"
+        
+#         # ------------------ DYNAMIC ORDER LINK BASED ON ENVIRONMENT ------------------ #
+#         if request:
+#             host = request.get_host()
+            
+#             if 'apicore' in host:
+#                 order_link = "https://prod.cnlerp.com/#/customer-portal/sales-orders"
+#             elif 'rudhra' in host:
+#                 order_link = "https://rudhra.cnlerp.com/#/customer-portal/sales-orders"
+#             elif 'qa' in host:
+#                 order_link = "https://qa.cnlerp.com/#/customer-portal/sales-orders"
+#             elif 'localhost' in host or '127.0.0.1' in host:
+#                 order_link = "http://localhost:4200/#/customer-portal/sales-orders"
+#             else:
+#                 domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
+#                 order_link = f"https://{domain}/#/customer-portal/sales-orders"
+#         else:
+#             order_link = "https://rudhra.cnlerp.com/#/customer-portal/sales-orders"
+        
+#         # Support method
+#         support_method = "support@rudhra.com or +91 95050 24999"
+        
+#         # Company name
+#         company_name = "Rudhra Industries"
+        
+#         logger.info(f"Sending order confirmation for {order_no} to {phone}")
+#         logger.info(f"Products: {product_list}")
+#         logger.info(f"Total Amount: ₹{total_amount:,.2f}")
+#         logger.info(f"Order link: {order_link}")
+
+#         # ------------------ SEND VIA WATI TEMPLATE ------------------ #
+#         import re
+#         import requests
+#         import json
+        
+#         clean_phone = re.sub(r'\D', '', phone)
+#         if not clean_phone.startswith('91'):
+#             clean_phone = '91' + clean_phone
+        
+#         # CORRECT URL: Phone number as query parameter
+#         url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}"
+        
+#         headers = {
+#             'Authorization': WATI_TOKEN,
+#             'Content-Type': 'application/json',
+#         }
+        
+#         # Parameters as numbered objects ({{1}} to {{7}})
+#         parameters = [
+#             {"name": "1", "value": customer_name},           # {{1}} - Customer name
+#             {"name": "2", "value": order_no},                # {{2}} - Order number
+#             {"name": "3", "value": product_list},            # {{3}} - Product list
+#             {"name": "4", "value": f"₹{total_amount:,.2f}"}, # {{4}} - Total amount
+#             {"name": "5", "value": order_link},              # {{5}} - Tracking link
+#             {"name": "6", "value": support_method},          # {{6}} - Support contact
+#             {"name": "7", "value": company_name}             # {{7}} - Company name
+#         ]
+        
+#         # Broadcast name (required)
+#         broadcast_name = f"sale_order_confirmation_{order_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+#         payload = {
+#             "template_name": "sale_order_confirmation",  # Updated template name
+#             "broadcast_name": broadcast_name,
+#             "parameters": parameters
+#         }
+        
+#         # Add buttons
+#         payload["buttons"] = [
+#             {
+#                 "type": "url",
+#                 "parameter": {
+#                     "text": "Track Order",
+#                     "url": order_link
+#                 }
+#             },
+#             {
+#                 "type": "quick_reply",
+#                 "parameter": {
+#                     "text": "Need Help?"
+#                 }
+#             }
+#         ]
+        
+#         logger.info(f"Calling WATI API: {url}")
+#         logger.info(f"Payload: {json.dumps(payload, indent=2)}")
+        
+#         response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+#         logger.info(f"WATI Response Status: {response.status_code}")
+#         logger.info(f"WATI Response: {response.text}")
+        
+#         if response.status_code == 200:
+#             response_data = response.json()
+#             if response_data.get('result') is True:
+#                 logger.info(f"WhatsApp order confirmation sent to {phone} for order {order_no}")
+#                 return {
+#                     "whatsapp_sent": True,
+#                     "mode": "wati",
+#                     "phone": phone,
+#                     "message_id": response_data.get('local_message_id'),
+#                     "products": product_items
+#                 }
+#             else:
+#                 logger.error(f"WATI error: {response_data.get('info')}")
+#                 return {
+#                     "whatsapp_sent": False,
+#                     "mode": "error",
+#                     "reason": response_data.get('info', 'WATI_ERROR')
+#                 }
+#         else:
+#             logger.error(f"WATI HTTP error: {response.status_code} - {response.text}")
+#             return {
+#                 "whatsapp_sent": False,
+#                 "mode": "error",
+#                 "reason": f"HTTP_{response.status_code}"
+#             }
+
+#     except Exception as e:
+#         logger.error(f"WhatsApp failed for SaleOrder {sale_order_id}: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return {
+#             "whatsapp_sent": False,
+#             "mode": "error",
+#             "reason": "WHATSAPP_ERROR",
+#             "error": str(e)
+#         }
+
+
 def try_send_sale_order_whatsapp(request, sale_order_id):
     """
-    Best-effort WhatsApp sender
-    Silent, non-blocking
-    Local = skip but prove working
+    Send order confirmation WhatsApp using WATI template
     """
     try:
-        from django.conf import settings
-
+        # ========== HARDCODED WATI CONFIG ==========
+        WATI_INSTANCE_ID = "10114393"
+        WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs"
+        
         # ------------------ PHONE RESOLUTION ------------------ #
         city_id = request.GET.get('city')
-
         phone = resolve_phone_from_document(
             document_type="sale_order",
             pk=sale_order_id,
@@ -368,6 +761,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         )
 
         if not phone:
+            logger.warning(f"No phone found for sale order {sale_order_id}")
             return {
                 "whatsapp_sent": False,
                 "mode": "none",
@@ -375,54 +769,224 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             }
 
         # ------------------ FETCH SALE ORDER ------------------ #
+        from apps.sales.models import SaleOrder
+        from apps.sales.models import SaleOrderItems
+        from datetime import datetime
+        
         sale_order = SaleOrder.objects.filter(sale_order_id=sale_order_id).first()
-        customer_name = (
-            sale_order.customer.name
-            if sale_order and sale_order.customer
-            else "Customer"
-        )
-
-        # ------------------ MESSAGE CONTENT ------------------ #
-        message_text = (
-            f"Hey {customer_name}, your order has been placed successfully. "
-            f"If you need order details, please contact us."
-        )
-
-        # ------------------ LOCAL / WATI DISABLED ------------------ #
-        if not getattr(settings, 'ENABLE_WATI', False):
-            logger.info("WhatsApp skipped (local / click-to-chat)")
-            logger.info(f"Phone : {phone}")
-            logger.info(f"Message : {message_text}")
-
+        if not sale_order:
+            logger.error(f"Sale order {sale_order_id} not found")
             return {
                 "whatsapp_sent": False,
-                "mode": "click_to_chat",
-                "reason": "WATI_DISABLED",
-                "phone": phone,
-                "message": message_text
+                "mode": "error",
+                "reason": "ORDER_NOT_FOUND"
+            }
+        
+        # Get customer name
+        customer = sale_order.customer_id
+        customer_name = customer.name if customer and hasattr(customer, 'name') else "Customer"
+        
+        # Get order number
+        order_no = sale_order.order_no
+        
+        # Get total amount
+        total_amount = sale_order.total_amount if hasattr(sale_order, 'total_amount') else 0
+        
+        # Get ALL products with quantities and prices
+        order_items = SaleOrderItems.objects.filter(sale_order_id=sale_order_id)
+        
+        # Create formatted product list with bullet points and details
+        
+        # Create formatted product list with prices and discounts
+        # ========== FORMAT PRODUCT LIST (NO NEWLINES) ==========
+        product_items = []
+        for item in order_items:
+            # Get product name
+            product_name = item.product_id.name if item.product_id and hasattr(item.product_id, 'name') and item.product_id.name else "Item"
+            
+            # Get quantity and rate
+            quantity = Decimal(str(item.quantity)) if hasattr(item, 'quantity') and item.quantity else Decimal('1')
+            rate = Decimal(str(item.rate)) if hasattr(item, 'rate') and item.rate else Decimal('0')
+            
+            # Calculate subtotal
+            subtotal = quantity * rate
+            
+            # Process discount
+            discount_amount = Decimal('0')
+            discount_display = ""
+            
+            if hasattr(item, 'discount_type') and item.discount_type and hasattr(item, 'discount') and item.discount:
+                discount_value = Decimal(str(item.discount))
+                discount_type = str(item.discount_type).lower()
+                
+                if discount_type == 'percentage' and discount_value > 0:
+                    discount_amount = (subtotal * discount_value) / Decimal('100')
+                    discount_amount = discount_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                    discount_display = f" {discount_value}% off"
+                elif discount_type == 'amount' and discount_value > 0:
+                    discount_amount = discount_value
+                    discount_display = f" ₹{discount_amount:,.2f} off"
+            
+            # Calculate final total
+            final_total = subtotal - discount_amount
+            final_total = final_total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            
+            # Format product line
+            if discount_amount > 0:
+                product_items.append(f"• {product_name} x{int(quantity)} ₹{subtotal:,.2f} ({discount_display.strip()} → ₹{final_total:,.2f})")
+            else:
+                product_items.append(f"• {product_name} x{int(quantity)} ₹{subtotal:,.2f}")
+
+        # Join with separator (NO newlines!)
+        product_list = " | ".join(product_items) if product_items else "No items"
+        # product_items = []
+        # for item in order_items:
+        #     # Get product name from product_id
+        #     if item.product_id and hasattr(item.product_id, 'name'):
+        #         product_name = item.product_id.name
+        #     else:
+        #         product_name = "Item"
+            
+        #     # Get quantity and price
+        #     quantity = item.quantity if hasattr(item, 'quantity') else 1
+        #     price = item.rate if hasattr(item, 'rate') else 0
+        #     item_total = quantity * price
+            
+        #     # Format: • Product Name xQuantity - ₹Price
+        #     product_items.append(f"• {product_name} x{quantity} - ₹{item_total:,.2f}")
+        
+        # # Join products with newline for proper WhatsApp formatting
+        # product_list = "\n".join(product_items) if product_items else "• No items"
+        
+        # ------------------ DYNAMIC ORDER LINK BASED ON ENVIRONMENT ------------------ #
+        if request:
+            host = request.get_host()
+            
+            if 'apicore' in host:
+                order_link = "https://prod.cnlerp.com/#/customer-portal/sales-orders"
+            elif 'rudhra' in host:
+                order_link = "https://rudhra.cnlerp.com/#/customer-portal/sales-orders"
+            elif 'qa' in host:
+                order_link = "https://qa.cnlerp.com/#/customer-portal/sales-orders"
+            elif 'localhost' in host or '127.0.0.1' in host:
+                order_link = "http://localhost:4200/#/customer-portal/sales-orders"
+            else:
+                domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
+                order_link = f"https://{domain}/#/customer-portal/sales-orders"
+        else:
+            order_link = "https://rudhra.cnlerp.com/#/customer-portal/sales-orders"
+        
+        # Support method
+        support_method = "support@rudhra.com or +91 95050 24999"
+        
+        # Company name
+        company_name = "Rudhra Industries"
+        
+        logger.info(f"Sending order confirmation for {order_no} to {phone}")
+        logger.info(f"Products:\n{product_list}")
+        logger.info(f"Total Amount: ₹{total_amount:,.2f}")
+        logger.info(f"Order link: {order_link}")
+
+        # ------------------ SEND VIA WATI TEMPLATE ------------------ #
+        import re
+        import requests
+        import json
+        
+        clean_phone = re.sub(r'\D', '', phone)
+        if not clean_phone.startswith('91'):
+            clean_phone = '91' + clean_phone
+        
+        # CORRECT URL: Phone number as query parameter
+        url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}"
+        
+        headers = {
+            'Authorization': WATI_TOKEN,
+            'Content-Type': 'application/json',
+        }
+        
+        # Parameters as numbered objects ({{1}} to {{7}})
+        parameters = [
+            {"name": "1", "value": customer_name},           # {{1}} - Customer name
+            {"name": "2", "value": order_no},                # {{2}} - Order number
+            {"name": "3", "value": product_list},            # {{3}} - Product list with bullet points
+            {"name": "4", "value": f"₹{total_amount:,.2f}"}, # {{4}} - Total amount
+            {"name": "5", "value": order_link},              # {{5}} - Tracking link
+            {"name": "6", "value": support_method},          # {{6}} - Support contact
+            {"name": "7", "value": company_name}             # {{7}} - Company name
+        ]
+        
+        # Broadcast name (required)
+        broadcast_name = f"sale_order_confirmation_{order_no}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        payload = {
+            "template_name": "sale_order_confirmation",
+            "broadcast_name": broadcast_name,
+            "parameters": parameters
+        }
+        
+        # Add buttons
+        payload["buttons"] = [
+            {
+                "type": "url",
+                "parameter": {
+                    "text": "Track Order",
+                    "url": order_link
+                }
+            },
+            {
+                "type": "quick_reply",
+                "parameter": {
+                    "text": "Need Help?"
+                }
+            }
+        ]
+        
+        logger.info(f"Calling WATI API: {url}")
+        logger.info(f"Payload: {json.dumps(payload, indent=2)}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        logger.info(f"WATI Response Status: {response.status_code}")
+        logger.info(f"WATI Response: {response.text}")
+        
+        if response.status_code == 200:
+            response_data = response.json()
+            if response_data.get('result') is True:
+                logger.info(f"WhatsApp order confirmation sent to {phone} for order {order_no}")
+                return {
+                    "whatsapp_sent": True,
+                    "mode": "wati",
+                    "phone": phone,
+                    "message_id": response_data.get('local_message_id'),
+                    "products": product_items,
+                    "order_no": order_no,
+                    "total_amount": total_amount
+                }
+            else:
+                logger.error(f"WATI error: {response_data.get('info')}")
+                return {
+                    "whatsapp_sent": False,
+                    "mode": "error",
+                    "reason": response_data.get('info', 'WATI_ERROR')
+                }
+        else:
+            logger.error(f"WATI HTTP error: {response.status_code} - {response.text}")
+            return {
+                "whatsapp_sent": False,
+                "mode": "error",
+                "reason": f"HTTP_{response.status_code}"
             }
 
-        # ------------------ PRODUCTION (WATI) ------------------ #
-        send_whatsapp_message_via_wati(
-            to_number=phone,
-            message_text=message_text
-        )
-
-        return {
-            "whatsapp_sent": True,
-            "mode": "wati",
-            "phone": phone
-        }
-
     except Exception as e:
-        logger.warning(f"WhatsApp failed for SaleOrder {sale_order_id}: {e}")
+        logger.error(f"WhatsApp failed for SaleOrder {sale_order_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             "whatsapp_sent": False,
             "mode": "error",
-            "reason": "WHATSAPP_ERROR"
+            "reason": "WHATSAPP_ERROR",
+            "error": str(e)
         }
-
-
 
 class SaleOrderViewSet(APIView):
     """API ViewSet for handling sale order creation and related data."""

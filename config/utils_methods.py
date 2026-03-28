@@ -1827,7 +1827,7 @@ def send_pdf_via_email(to_email, pdf_relative_path, document_type):
 #         }
 
 #     # -------------------- WATI API CALL --------------------
-#     url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
+#     url = f'https://live-mt-server.wati.io/10114393/api/v1/sendSessionFile/{to_number}'
 
 #     headers = {
 #         'accept': '*/*',
@@ -1855,66 +1855,131 @@ def send_pdf_via_email(to_email, pdf_relative_path, document_type):
 #     }
 
 
-def send_whatsapp_message_via_wati(to_number, file_url):
+# def send_whatsapp_message_via_wati(to_number, file_url):
+#     """
+#     Best-effort WhatsApp sender (WATI)
+#     MUST be silent and non-blocking
+#     """
+#     try:
+#         # Construct full file path
+#         full_file_path = os.path.join(MEDIA_ROOT, file_url.replace(MEDIA_URL, ''))
+
+#         if not os.path.exists(full_file_path):
+#             return {
+#                 "sent": False,
+#                 "reason": "FILE_NOT_FOUND"
+#             }
+
+#         url = f'https://live-mt-server.wati.io/10114393/api/v1/sendSessionFile/{to_number}'
+
+#         headers = {
+#             'accept': '*/*',
+#             'Authorization': 'Bearer YOUR_TOKEN_HERE',
+#         }
+
+#         with open(full_file_path, 'rb') as file:
+#             files = {
+#                 'file': (os.path.basename(full_file_path), file, 'application/pdf'),
+#             }
+#             response = requests.post(url, headers=headers, files=files, timeout=10)
+
+#         # ---------------- SAFE RESPONSE HANDLING ----------------
+#         if not response.text:
+#             return {
+#                 "sent": False,
+#                 "reason": "EMPTY_RESPONSE_FROM_WATI"
+#             }
+
+#         try:
+#             response_data = response.json()
+#         except ValueError:
+#             return {
+#                 "sent": False,
+#                 "reason": "NON_JSON_RESPONSE",
+#                 "raw_response": response.text[:200]
+#             }
+
+#         if response_data.get("result") is True:
+#             return {
+#                 "sent": True
+#             }
+
+#         return {
+#             "sent": False,
+#             "reason": response_data.get("info", "UNKNOWN_WATI_ERROR")
+#         }
+
+#     except Exception as e:
+#         return {
+#             "sent": False,
+#             "reason": "EXCEPTION",
+#             "error": str(e)
+#         }
+
+def send_whatsapp_message_via_wati(to_number, file_url=None, template_name=None, template_params=None):
     """
-    Best-effort WhatsApp sender (WATI)
-    MUST be silent and non-blocking
+    Send WhatsApp message via WATI API – FORCED PRODUCTION MODE
     """
-    try:
-        # Construct full file path
-        full_file_path = os.path.join(MEDIA_ROOT, file_url.replace(MEDIA_URL, ''))
-
-        if not os.path.exists(full_file_path):
-            return {
-                "sent": False,
-                "reason": "FILE_NOT_FOUND"
-            }
-
-        url = f'https://live-mt-server.wati.io/312172/api/v1/sendSessionFile/{to_number}'
-
+    import re
+    import requests
+    
+    # ========== HARDCODED PRODUCTION CONFIG ==========
+    WATI_INSTANCE_ID = "10114393"
+    WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs"
+    
+    # Clean phone number
+    clean_phone = re.sub(r'\D', '', to_number)
+    if not clean_phone.startswith('91'):
+        clean_phone = '91' + clean_phone
+    
+    # If template_name is provided, send template message
+    if template_name and template_params:
+        url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage/{clean_phone}"
         headers = {
-            'accept': '*/*',
-            'Authorization': 'Bearer YOUR_TOKEN_HERE',
+            'Authorization': WATI_TOKEN,
+            'Content-Type': 'application/json',
         }
-
-        with open(full_file_path, 'rb') as file:
-            files = {
-                'file': (os.path.basename(full_file_path), file, 'application/pdf'),
-            }
-            response = requests.post(url, headers=headers, files=files, timeout=10)
-
-        # ---------------- SAFE RESPONSE HANDLING ----------------
-        if not response.text:
-            return {
-                "sent": False,
-                "reason": "EMPTY_RESPONSE_FROM_WATI"
-            }
-
-        try:
-            response_data = response.json()
-        except ValueError:
-            return {
-                "sent": False,
-                "reason": "NON_JSON_RESPONSE",
-                "raw_response": response.text[:200]
-            }
-
-        if response_data.get("result") is True:
-            return {
-                "sent": True
-            }
-
-        return {
-            "sent": False,
-            "reason": response_data.get("info", "UNKNOWN_WATI_ERROR")
+        payload = {
+            'template_name': template_name,
+            'parameters': template_params
         }
-
-    except Exception as e:
-        return {
-            "sent": False,
-            "reason": "EXCEPTION",
-            "error": str(e)
+        
+        print(f"📤 Sending template to {clean_phone}")
+        print(f"URL: {url}")
+        print(f"Payload: {payload}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        print(f"Response status: {response.status_code}")
+        print(f"Response: {response.text}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('result') is True:
+                return {"mode": "wati", "sent": True}
+            else:
+                return {"mode": "error", "reason": result.get('info', 'Unknown error')}
+        else:
+            return {"mode": "error", "reason": f"HTTP_{response.status_code}"}
+    
+    # If file_url is provided, send file
+    elif file_url:
+        url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendSessionFile/{clean_phone}"
+        headers = {
+            'Authorization': WATI_TOKEN,
         }
+        with open(file_url, 'rb') as f:
+            files = {'file': (os.path.basename(file_url), f, 'application/pdf')}
+            response = requests.post(url, headers=headers, files=files, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('result') is True:
+                return {"mode": "wati", "sent": True}
+        return {"mode": "error", "reason": "File send failed"}
+    
+    else:
+        return {"mode": "error", "reason": "No template_name or file_url provided"}
 
     
 # from apps.customers.models import Customer
@@ -3203,292 +3268,614 @@ def check_credit_limit(request, customer_id_value, order_total, using_db='defaul
 
     
 # services/notification_service.py
-# services/whatsapp_service.py
-import logging
-import os
-import requests
-from django.conf import settings
+# # services/whatsapp_service.py
+# import logging
+# import os
+# import requests
+# from django.conf import settings
 
-logger = logging.getLogger(__name__)
-
-# services/whatsapp_service.py
-
-def send_whatsapp_text_message(phone_number, message_text):
-    """
-    Send WhatsApp message via WATI API
-    """
-    try:
-        # Clean phone number
-        import re
-        clean_phone = re.sub(r'\D', '', phone_number)
-        
-        # WATI API endpoint
-        url = f"{settings.WATI_CONFIG['BASE_URL']}/api/v1/sendSessionMessage/{clean_phone}"
-        
-        # Use the token as is (it already has "Bearer " prefix)
-        headers = {
-            'accept': '*/*',
-            'Authorization': settings.WATI_CONFIG['API_TOKEN'],  # Already has "Bearer "
-            'Content-Type': 'application/json',
-        }
-        
-        payload = {
-            'message': message_text
-        }
-        
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        
-        # Log response for debugging
-        logger.info(f"WATI Response Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            response_data = response.json()
-            if response_data.get('result') is True:
-                logger.info(f"WhatsApp sent successfully to {clean_phone}")
-                return {"sent": True}
-            else:
-                logger.error(f"WATI Error: {response_data}")
-                return {"sent": False, "reason": response_data.get('info', 'Unknown error')}
-        else:
-            logger.error(f"WATI HTTP Error: {response.status_code} - {response.text}")
-            return {"sent": False, "reason": f"HTTP_{response.status_code}"}
-            
-    except Exception as e:
-        logger.error(f"WATI Exception: {str(e)}")
-        return {"sent": False, "reason": str(e)}
-
-# services/whatsapp_service.py
-# services/whatsapp_service.py
+# logger = logging.getLogger(__name__)
 
 # # services/whatsapp_service.py
 
+# def send_whatsapp_template_message(phone_number, template_name, parameters):
+#     """
+#     Send WhatsApp template message via WATI API
+#     """
+#     try:
+#         import re
+#         import requests
+#         import json
+#         from datetime import datetime
+        
+#         # Format phone number (without +)
+#         clean_phone = re.sub(r'\D', '', phone_number)
+#         if len(clean_phone) == 10:
+#             clean_phone = '91' + clean_phone
+        
+#         print(f"📱 Phone number: {clean_phone}")
+        
+#         # Phone number goes in URL as query parameter (THIS IS KEY!)
+#         url = f"https://live-mt-server.wati.io/10114393/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}"
+        
+#         headers = {
+#             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjUvMjAyNiAwNTozMToxMSIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.-HlwUtEJ6NVhW2zIgiaH0yLfSKMIxz9spaJzWqexsIE',
+#             'Content-Type': 'application/json',
+#         }
+        
+#         # Format parameters - USE THE EXACT PARAMETER NAMES FROM YOUR TEMPLATE
+#         formatted_parameters = []
+#         # If your template uses {{name}} instead of {{1}}, adjust accordingly
+#         if template_name == "new_chat_v1":
+#             formatted_parameters.append({
+#                 "name": "name",  # Use the actual placeholder name
+#                 "value": parameters[0] if parameters else ""
+#             })
+#         else:
+#             # For templates with numbered parameters ({{1}}, {{2}}, etc.)
+#             for idx, param in enumerate(parameters, 1):
+#                 formatted_parameters.append({
+#                     "name": str(idx),
+#                     "value": param
+#                 })
+        
+#         # Create broadcast name (required)
+#         broadcast_name = f"{template_name}_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+#         # Payload with all required fields
+#         payload = {
+#             "template_name": template_name,
+#             "broadcast_name": broadcast_name,
+#             "parameters": formatted_parameters
+#         }
+        
+#         # Add buttons if the template has them
+#         if template_name == "new_chat_v1":
+#             payload["buttons"] = [
+#                 {
+#                     "type": "quick_reply",
+#                     "parameter": {
+#                         "text": "Tell me more"
+#                     }
+#                 }
+#             ]
+        
+#         print(f"\n📤 Sending template message")
+#         print(f"URL: {url}")
+#         print(f"Payload: {json.dumps(payload, indent=2)}")
+        
+#         response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+#         print(f"\n📥 Response Status: {response.status_code}")
+#         print(f"Response Body: {response.text}")
+        
+#         if response.status_code == 200:
+#             response_data = response.json()
+#             if response_data.get('result') is True:
+#                 return {
+#                     "sent": True, 
+#                     "message_id": response_data.get('local_message_id')
+#                 }
+#             else:
+#                 return {"sent": False, "reason": response_data.get('info', 'Unknown error')}
+#         else:
+#             try:
+#                 error_data = response.json()
+#                 error_msg = error_data.get('info') or error_data.get('error') or f"HTTP {response.status_code}"
+#                 return {"sent": False, "reason": error_msg}
+#             except:
+#                 return {"sent": False, "reason": f"HTTP {response.status_code}: {response.text}"}
+            
+#     except Exception as e:
+#         print(f"Exception: {str(e)}")
+#         import traceback
+#         traceback.print_exc()
+#         return {"sent": False, "reason": str(e)}
+
+# def add_wati_contact(phone_number, name):
+#     """
+#     Add a contact to WATI
+#     """
+#     try:
+#         import re
+#         import requests
+        
+#         # Format phone number (without + for URL)
+#         clean_phone = re.sub(r'\D', '', phone_number)
+#         if len(clean_phone) == 10:
+#             clean_phone = '91' + clean_phone
+        
+#         print(f"📱 Adding contact: {clean_phone}")
+        
+#         # Phone number goes in URL path
+#         url = f"https://live-mt-server.wati.io/10114393/api/v1/addContact/{clean_phone}"
+        
+#         headers = {
+#             'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjUvMjAyNiAwNTozMToxMSIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.-HlwUtEJ6NVhW2zIgiaH0yLfSKMIxz9spaJzWqexsIE',
+#             'Content-Type': 'application/json',
+#         }
+        
+#         payload = {
+#             "name": name,
+#             "customParams": [
+#                 {
+#                     "name": "name",
+#                     "value": name
+#                 },
+#                 {
+#                     "name": "source",
+#                     "value": "customer_portal"
+#                 }
+#             ]
+#         }
+        
+#         print(f"Add Contact URL: {url}")
+#         print(f"Add Contact Payload: {payload}")
+        
+#         response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+#         print(f"Add Contact Response: {response.status_code} - {response.text}")
+        
+#         if response.status_code in [200, 201]:
+#             return True, {"added": True}
+#         else:
+#             return False, f"Failed to add contact: {response.text}"
+            
+#     except Exception as e:
+#         print(f"Exception adding contact: {str(e)}")
+#         return False, str(e)
+
+
 # def send_credentials_via_whatsapp(customer, plain_password, phone_number, request=None):
 #     """
-#     Send login credentials via WhatsApp with clickable link
+#     Send login credentials via WhatsApp using new_chat_v1 template
 #     """
-#     # Get the frontend URL based on the request
+#     print("=" * 50)
+#     print("🔍 DEBUG: Starting send_credentials_via_whatsapp")
+#     print("=" * 50)
+    
+#     # Get frontend URL
 #     if request:
 #         host = request.get_host()
         
-#         if 'localhost' in host or '127.0.0.1' in host:
-#             portal_url = "http://localhost:4200/#/customer_portal_login"
-#         elif 'prod' in host:
+#         if 'apicore' in host:
 #             portal_url = "https://prod.cnlerp.com/#/customer_portal_login"
 #         elif 'rudhra' in host:
 #             portal_url = "https://rudhra.cnlerp.com/#/customer_portal_login"
 #         elif 'qa' in host:
 #             portal_url = "https://qa.cnlerp.com/#/customer_portal_login"
+#         elif 'localhost' in host or '127.0.0.1' in host:
+#             portal_url = "http://localhost:4200/#/customer_portal_login"
 #         else:
-#             domain = host.split(':')[0]
+#             domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
 #             portal_url = f"https://{domain}/#/customer_portal_login"
 #     else:
-#         portal_url = "http://localhost:4200/#/customer_portal_login"
+#         portal_url = "https://rudhra.cnlerp.com/#/customer_portal_login"
     
 #     customer_name = customer.print_name or customer.name
+#     username = customer.username
+#     password = plain_password
     
-#     # Clean and simple message format - URL on its own line for clickability
-#     message_text = f"""*🎉 Welcome to Customer Portal, {customer_name}!* 🎉
-
-# Your account has been successfully created.
-
-# *🔐 Login Credentials:*
-# *Username:* {customer.username}
-# *Password:* {plain_password}
-
-# *🌐 Tap here to login:*
-# {portal_url}
-
-# *⚠️ Important:*
-# • Change password after first login
-# • Keep credentials secure
-# • Contact support for help
-
-# *Thank you for choosing us!* 🚀
-
-# _Automated message. Please do not reply._"""
-
-#     # Clean phone number (remove any non-digits)
+#     print(f"Customer: {customer_name}")
+#     print(f"Username: {username}")
+#     print(f"Password: {password}")
+    
+#     # Clean phone number
 #     import re
 #     clean_phone = re.sub(r'\D', '', phone_number)
+#     if len(clean_phone) == 10:
+#         clean_phone = '91' + clean_phone
     
-#     # Check if WATI is enabled (production) or use click-to-chat (local)
-#     if getattr(settings, 'ENABLE_WATI', False):
-#         # Production - send via WATI
-#         result = send_whatsapp_text_message(clean_phone, message_text)
-#         if result.get("sent"):
-#             return True, {"mode": "wati", "sent": True}
-#         else:
-#             return False, f"Failed to send WhatsApp: {result.get('reason', 'Unknown error')}"
+#     print(f"Phone: {clean_phone}")
+    
+#     # STEP 1: Add contact to WATI
+#     print("\n📌 Step 1: Adding contact to WATI...")
+#     contact_added, contact_result = add_wati_contact(clean_phone, customer_name)
+    
+#     if not contact_added:
+#         print(f"⚠️ Could not add contact: {contact_result}")
+#         print("Continuing anyway...")
 #     else:
-#         # Local development - use click-to-chat
-#         import urllib.parse
-#         encoded_message = urllib.parse.quote(message_text)
-#         whatsapp_url = f"https://wa.me/{clean_phone}?text={encoded_message}"
+#         print(f"✅ Contact added successfully")
+    
+#     # STEP 2: Send template message
+#     print("\n📌 Step 2: Sending template message...")
+#     print(f"Template: new_chat_v1")
+    
+#     # For new_chat_v1, we only need the name parameter
+#     # The template body already contains the message
+#     parameters = [customer_name]  # Just the name for {{name}}
+    
+#     print(f"Parameters: {parameters}")
+    
+#     result = send_whatsapp_template_message(clean_phone, "new_chat_v1", parameters)
+    
+#     print(f"\n📌 Final Result: {result}")
+    
+#     if result.get("sent"):
 #         return True, {
-#             "mode": "click_to_chat",
-#             "whatsapp_url": whatsapp_url,
-#             "phone": clean_phone
+#             "mode": "wati", 
+#             "sent": True, 
+#             "message_id": result.get("message_id")
 #         }
+#     else:
+#         error_msg = result.get('reason', 'Unknown error')
+#         print(f"❌ Failed to send: {error_msg}")
+#         return False, f"Failed to send WhatsApp: {error_msg}"
 
 # services/whatsapp_service.py
-
-import requests
 import logging
-from django.conf import settings
+import re
+import requests
+import json
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# services/whatsapp_service.py
+# ==================== WATI CONFIGURATION ====================
+WATI_INSTANCE_ID = "10114393"
+WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjUvMjAyNiAwNTozMToxMSIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.-HlwUtEJ6NVhW2zIgiaH0yLfSKMIxz9spaJzWqexsIE"
 
-def send_whatsapp_text_message(phone_number, message_text):
+# ==================== SESSION MESSAGE (No Template Needed!) ====================
+
+# def send_session_message(phone_number, message):
+#     """
+#     Send free-form message within 24-hour session window
+#     No template approval needed!
+#     """
+#     try:
+#         clean_phone = re.sub(r'\D', '', phone_number)
+#         if len(clean_phone) == 10:
+#             clean_phone = '91' + clean_phone
+        
+#         # Phone number goes in URL path for session messages
+#         url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendSessionMessage/{clean_phone}"
+        
+#         headers = {
+#             'Authorization': WATI_TOKEN,
+#             'Content-Type': 'application/json',
+#         }
+        
+#         payload = {
+#             "message": message  # Can be ANY text, with emojis, bold, line breaks!
+#         }
+        
+#         print(f"\n📤 Sending session message to {clean_phone}")
+#         print(f"Message: {message[:100]}...")  # Print first 100 chars
+#         print(f"URL: {url}")
+        
+#         response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+#         print(f"Response Status: {response.status_code}")
+#         print(f"Response Body: {response.text}")
+        
+#         if response.status_code == 200:
+#             response_data = response.json()
+#             if response_data.get('result') is True:
+#                 return {
+#                     "sent": True,
+#                     "message_id": response_data.get('local_message_id')
+#                 }
+#             else:
+#                 return {"sent": False, "reason": response_data.get('info', 'Unknown error')}
+#         else:
+#             return {"sent": False, "reason": f"HTTP {response.status_code}: {response.text}"}
+            
+#     except Exception as e:
+#         print(f"Exception: {str(e)}")
+#         return {"sent": False, "reason": str(e)}
+
+def send_session_message(phone_number, message):
     """
-    Send WhatsApp message via WATI API
+    Send free-form message within 24-hour session window
     """
     try:
         import re
+        import requests
         
-        print(f"\n🔵 Sending via WATI API:")
-        print(f"Phone: {phone_number}")
-        print(f"Message length: {len(message_text)}")
-        
-        # Clean phone number
         clean_phone = re.sub(r'\D', '', phone_number)
-        if not clean_phone.startswith('91'):
+        if len(clean_phone) == 10:
             clean_phone = '91' + clean_phone
         
-        # WATI API endpoint
-        url = f"{settings.WATI_CONFIG['BASE_URL']}/api/v1/sendSessionMessage/{clean_phone}"
-        
-        print(f"URL: {url}")
+        # URL with phone number in path
+        url = f"https://live-mt-server.wati.io/10114393/api/v1/sendSessionMessage/{clean_phone}"
         
         headers = {
-            'accept': '*/*',
-            'Authorization': settings.WATI_CONFIG['API_TOKEN'],
+            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjUvMjAyNiAwNTozMToxMSIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.-HlwUtEJ6NVhW2zIgiaH0yLfSKMIxz9spaJzWqexsIE',
             'Content-Type': 'application/json',
         }
         
-        # CRITICAL: Ensure message is not empty
-        if not message_text or len(message_text.strip()) == 0:
-            print("❌ ERROR: Message text is empty!")
-            return {"sent": False, "reason": "message text is empty"}
-        
+        # CORRECT field name is "messageText"
         payload = {
-            'message': message_text
+            "messageText": message
         }
         
+        print(f"\n📤 Sending session message to {clean_phone}")
+        print(f"URL: {url}")
         print(f"Payload: {payload}")
         
         response = requests.post(url, headers=headers, json=payload, timeout=30)
         
         print(f"Response Status: {response.status_code}")
-        print(f"Response: {response.text}")
+        print(f"Response Body: {response.text}")
         
         if response.status_code == 200:
             response_data = response.json()
             if response_data.get('result') is True:
-                return {"sent": True}
+                return {
+                    "sent": True,
+                    "message_id": response_data.get('local_message_id')
+                }
             else:
-                return {"sent": False, "reason": response_data.get('info', 'WATI_ERROR')}
+                return {"sent": False, "reason": response_data.get('info', 'Unknown error')}
         else:
-            return {"sent": False, "reason": f"HTTP_{response.status_code}"}
+            return {"sent": False, "reason": f"HTTP {response.status_code}: {response.text}"}
             
     except Exception as e:
         print(f"Exception: {str(e)}")
         return {"sent": False, "reason": str(e)}
 
-# services/whatsapp_service.py
+
+def send_beautiful_credentials(customer_name, username, password, portal_url):
+    """
+    Create a beautifully formatted credentials message with emojis and formatting
+    """
+    message = f"""*🎉 Welcome to Customer Portal, {customer_name}!* 🎉
+
+Your account has been successfully created.
+
+*🔐 Login Credentials:*
+*Username:* {username}
+*Password:* {password}
+
+*🌐 Tap here to login:*
+{portal_url}
+
+*⚠️ Important:*
+• Change password after first login
+• Keep credentials secure
+• Contact support for help
+
+*Thank you for choosing us!* 🚀
+
+_Automated message. Please do not reply._"""
+    
+    return message
+
+
+# ==================== TEMPLATE MESSAGE (For first-time contact) ====================
+
+def send_whatsapp_template_message(phone_number, template_name, parameters):
+    """
+    Send WhatsApp template message via WATI API
+    Use this when customer has NOT messaged you first
+    """
+    try:
+        clean_phone = re.sub(r'\D', '', phone_number)
+        if len(clean_phone) == 10:
+            clean_phone = '91' + clean_phone
+        
+        # Phone number goes in URL as query parameter
+        url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}"
+        
+        headers = {
+            'Authorization': WATI_TOKEN,
+            'Content-Type': 'application/json',
+        }
+        
+        # Format parameters
+        formatted_parameters = []
+        if template_name == "new_chat_v1":
+            formatted_parameters.append({
+                "name": "name",
+                "value": parameters[0] if parameters else ""
+            })
+        else:
+            for idx, param in enumerate(parameters, 1):
+                formatted_parameters.append({
+                    "name": str(idx),
+                    "value": param
+                })
+        
+        broadcast_name = f"{template_name}_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        
+        payload = {
+            "template_name": template_name,
+            "broadcast_name": broadcast_name,
+            "parameters": formatted_parameters
+        }
+        
+        # Add buttons for new_chat_v1
+        if template_name == "new_chat_v1":
+            payload["buttons"] = [
+                {
+                    "type": "quick_reply",
+                    "parameter": {
+                        "text": "Tell me more"
+                    }
+                }
+            ]
+        
+        print(f"\n📤 Sending template message")
+        print(f"URL: {url}")
+        print(f"Payload: {json.dumps(payload, indent=2)}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        print(f"Response Status: {response.status_code}")
+        print(f"Response Body: {response.text}")
+        
+        if response.status_code == 200:
+            response_data = response.json()
+            if response_data.get('result') is True:
+                return {
+                    "sent": True,
+                    "message_id": response_data.get('local_message_id')
+                }
+            else:
+                return {"sent": False, "reason": response_data.get('info', 'Unknown error')}
+        else:
+            try:
+                error_data = response.json()
+                error_msg = error_data.get('info') or error_data.get('error') or f"HTTP {response.status_code}"
+                return {"sent": False, "reason": error_msg}
+            except:
+                return {"sent": False, "reason": f"HTTP {response.status_code}: {response.text}"}
+            
+    except Exception as e:
+        print(f"Exception: {str(e)}")
+        return {"sent": False, "reason": str(e)}
+
+
+# ==================== ADD CONTACT ====================
+
+def add_wati_contact(phone_number, name):
+    """
+    Add a contact to WATI
+    """
+    try:
+        clean_phone = re.sub(r'\D', '', phone_number)
+        if len(clean_phone) == 10:
+            clean_phone = '91' + clean_phone
+        
+        url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/addContact/{clean_phone}"
+        
+        headers = {
+            'Authorization': WATI_TOKEN,
+            'Content-Type': 'application/json',
+        }
+        
+        payload = {
+            "name": name,
+            "customParams": [
+                {"name": "name", "value": name},
+                {"name": "source", "value": "customer_portal"}
+            ]
+        }
+        
+        print(f"Add Contact URL: {url}")
+        print(f"Add Contact Payload: {payload}")
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        print(f"Add Contact Response: {response.status_code} - {response.text}")
+        
+        if response.status_code in [200, 201]:
+            return True, {"added": True}
+        else:
+            return False, f"Failed to add contact: {response.text}"
+            
+    except Exception as e:
+        print(f"Exception adding contact: {str(e)}")
+        return False, str(e)
+
+
+# ==================== SEND CREDENTIALS (SMART VERSION) ====================
 
 def send_credentials_via_whatsapp(customer, plain_password, phone_number, request=None):
     """
     Send login credentials via WhatsApp
+    Uses session message if available, falls back to template
     """
     print("=" * 50)
     print("🔍 DEBUG: Starting send_credentials_via_whatsapp")
     print("=" * 50)
     
     # Get frontend URL
-    # 
-    # Get the frontend URL based on the request
     if request:
         host = request.get_host()
         
-        # Map backend API domains to frontend domains
         if 'apicore' in host:
-            # Production API domain → Production frontend
             portal_url = "https://prod.cnlerp.com/#/customer_portal_login"
         elif 'rudhra' in host:
-            # Rudhra API domain → Rudhra frontend
             portal_url = "https://rudhra.cnlerp.com/#/customer_portal_login"
         elif 'qa' in host:
             portal_url = "https://qa.cnlerp.com/#/customer_portal_login"
         elif 'localhost' in host or '127.0.0.1' in host:
             portal_url = "http://localhost:4200/#/customer_portal_login"
         else:
-            # Fallback - remove 'api' or 'apicore' from domain
             domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
             portal_url = f"https://{domain}/#/customer_portal_login"
     else:
-        portal_url = "https://prod.cnlerp.com/#/customer_portal_login"
-    
-    print(f"Portal URL: {portal_url}")
+        portal_url = "https://rudhra.cnlerp.com/#/customer_portal_login"
     
     customer_name = customer.print_name or customer.name
-    print(f"Customer Name: {customer_name}")
-    print(f"Username: {customer.username}")
-    print(f"Password: {plain_password}")
+    username = customer.username
+    password = plain_password
     
-    # Format message
-    message_text = f"""🎉 Welcome to Customer Portal, {customer_name}! 🎉
-
-Your account has been successfully created.
-
-Login Credentials:
-Username: {customer.username}
-Password: {plain_password}
-
-Click here to login:
-{portal_url}
-
-Important:
-- Change password after first login
-- Keep credentials secure
-- Contact support for help
-
-Thank you for choosing us!
-
-Automated message. Please do not reply."""
-
-    print(f"\n📝 MESSAGE TEXT:")
-    print("-" * 50)
-    print(message_text)
-    print("-" * 50)
-    print(f"Message length: {len(message_text)}")
-    print("=" * 50)
+    print(f"Customer: {customer_name}")
+    print(f"Username: {username}")
+    print(f"Password: {password}")
     
     # Clean phone number
-    import re
     clean_phone = re.sub(r'\D', '', phone_number)
-    if not clean_phone.startswith('91'):
+    if len(clean_phone) == 10:
         clean_phone = '91' + clean_phone
     
     print(f"Phone: {clean_phone}")
     
-    # Check if WATI is enabled
-    if getattr(settings, 'ENABLE_WATI', False):
-        print("🚀 WATI Mode: Sending via API")
-        result = send_whatsapp_text_message(clean_phone, message_text)
+    # STEP 1: Add contact to WATI
+    print("\n📌 Step 1: Adding contact to WATI...")
+    contact_added, contact_result = add_wati_contact(clean_phone, customer_name)
+    
+    if not contact_added:
+        print(f"⚠️ Could not add contact: {contact_result}")
+        print("Continuing anyway...")
+    else:
+        print(f"✅ Contact added successfully")
+    
+    # STEP 2: Try to send beautiful session message first
+    print("\n📌 Step 2: Trying to send beautiful session message...")
+    
+    # Create beautiful formatted message
+    beautiful_message = f"""*🎉 Welcome to Customer Portal, {customer_name}!* 🎉
+
+Your account has been successfully created.
+
+*🔐 Login Credentials:*
+*Username:* {username}
+*Password:* {password}
+
+*🌐 Tap here to login:*
+{portal_url}
+
+*⚠️ Important:*
+• Change password after first login
+• Keep credentials secure
+• Contact support for help
+
+*Thank you for choosing us!* 🚀
+
+_Automated message. Please do not reply._"""
+    
+    session_result = send_session_message(clean_phone, beautiful_message)
+    
+    if session_result.get("sent"):
+        print(f"✅ Session message sent successfully!")
+        return True, {
+            "mode": "session",
+            "sent": True,
+            "message_id": session_result.get("message_id")
+        }
+    else:
+        print(f"⚠️ Session message failed: {session_result.get('reason')}")
+        print("📌 Falling back to template message...")
+        
+        # STEP 3: Fallback to template message
+        print(f"Template: new_chat_v1")
+        parameters = [customer_name]
+        
+        result = send_whatsapp_template_message(clean_phone, "new_chat_v1", parameters)
+        
+        print(f"\n📌 Final Result: {result}")
         
         if result.get("sent"):
-            return True, {"mode": "wati", "sent": True}
+            return True, {
+                "mode": "template",
+                "sent": True,
+                "message_id": result.get("message_id")
+            }
         else:
-            return False, f"Failed to send WhatsApp: {result.get('reason', 'Unknown error')}"
-    else:
-        print("📱 Click-to-Chat Mode: Opening WhatsApp")
-        import urllib.parse
-        encoded_message = urllib.parse.quote(message_text)
-        whatsapp_url = f"https://wa.me/{clean_phone}?text={encoded_message}"
-        return True, {
-            "mode": "click_to_chat",
-            "whatsapp_url": whatsapp_url,
-            "phone": clean_phone
-        }
+            error_msg = result.get('reason', 'Unknown error')
+            print(f"❌ Failed to send: {error_msg}")
+            return False, f"Failed to send WhatsApp: {error_msg}"
