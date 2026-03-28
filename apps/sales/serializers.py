@@ -748,3 +748,32 @@ class MstCnlPaymentTransactionsSerializer(serializers.ModelSerializer):
     class Meta:
         model = MstCnlPaymentTransactions
         fields = '__all__'
+
+
+# -------------------- Delivery Challan Serializers --------------------
+
+class DeliveryChallanItemsSerializer(serializers.ModelSerializer):
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    unit_options = ModUnitOptionsSerializer(source='unit_options_id', read_only=True)
+    stock_unit = ModProductStockUnitsSerializer(source='stock_unit_id', read_only=True)
+    size = SizeSerializer(source='size_id', read_only=True)
+    color = ColorSerializer(source='color_id', read_only=True)
+
+    class Meta:
+        model = DeliveryChallanItems
+        fields = '__all__'
+
+
+class DeliveryChallansSerializer(serializers.ModelSerializer):
+    gst_type = ModGstTypesSerializer(source='gst_type_id', read_only=True)
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    customer_address = ModCustomerAddressesSerializer(source='customer_address_id', read_only=True)
+    payment_term = ModCustomerPaymentTermsSerializers(source='payment_term_id', read_only=True)
+    orders_salesman = ModOrdersSalesmanSerializer(source='order_salesman_id', read_only=True)
+    order_status = ModOrderStatusesSerializer(source='order_status_id', read_only=True)
+    sale_order = ModSaleOrderSerializer(source='sale_order_id', read_only=True)
+    sale_invoice = ModSaleInvoiceOrdersSerializer(source='sale_invoice_id', read_only=True)
+
+    class Meta:
+        model = DeliveryChallans
+        fields = '__all__'

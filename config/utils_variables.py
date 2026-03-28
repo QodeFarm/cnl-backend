@@ -178,6 +178,10 @@ workordermachines = 'work_order_machines'
 labor = 'labor'
 completedquantity = 'completed_quantity'
 
+#delivery challan db_tables
+deliverychallans = 'delivery_challans'
+deliverychalllanitemstable = 'delivery_challan_items'
+
 #workflow tables
 workflow = 'workflows'
 workflowstages = 'workflow_stages'

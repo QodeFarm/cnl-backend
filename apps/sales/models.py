@@ -6,7 +6,7 @@ from apps.customer.models import CustomerAddresses, LedgerAccounts, Customer
 from apps.masters.models import CustomerPaymentTerms, GstTypes, ProductBrands, CustomerCategories, SaleTypes, UnitOptions, OrderStatuses, ReturnOptions, FlowStatus
 from apps.products.models import ProductStockUnits, Products, Size, Color
 from apps.users.models import ModuleSections
-from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems
+from config.utils_variables import quickpackitems, quickpacks, saleorders, paymenttransactions, saleinvoiceitemstable, salespricelist, saleorderitemstable, saleinvoiceorderstable, salereturnorderstable, salereturnitemstable, orderattachmentstable, ordershipmentstable, workflow, workflowstages, salereceipts, default_workflow_name, default_workflow_stages, salecreditnote, salecreditnoteitems, saledebitnote, saledebitnoteitems, deliverychallans, deliverychalllanitemstable
 from config.utils_methods import OrderNumberMixin, get_active_workflow, get_section_id, generate_order_number
 import logging
 from django.core.exceptions import ObjectDoesNotExist
@@ -1151,6 +1151,105 @@ class SaleDebitNoteItems(models.Model):
     
     class Meta:
         db_table = saledebitnoteitems
+
+class DeliveryChallans(OrderNumberMixin):
+    delivery_challan_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.PROTECT, db_column='sale_order_id', null=True, default=None)
+    challan_no = models.CharField(max_length=20, unique=True, default='')
+    order_no_prefix = 'DC'
+    order_no_field = 'challan_no'
+    challan_date = models.DateField()
+    customer_id = models.ForeignKey(Customer, on_delete=models.PROTECT, db_column='customer_id')
+    gst_type_id = models.ForeignKey('masters.GstTypes', on_delete=models.PROTECT, db_column='gst_type_id', null=True, default=None)
+    email = models.EmailField(max_length=255, null=True, default=None)
+    ref_no = models.CharField(max_length=255, null=True, default=None)
+    ref_date = models.DateField(null=True, default=None)
+    order_salesman_id = models.ForeignKey('masters.OrdersSalesman', on_delete=models.PROTECT, db_column='order_salesman_id', null=True, default=None)
+    TAX_CHOICES = [('Exclusive', 'Exclusive'), ('Inclusive', 'Inclusive')]
+    tax = models.CharField(max_length=10, choices=TAX_CHOICES, null=True, default=None)
+    customer_address_id = models.ForeignKey(CustomerAddresses, on_delete=models.PROTECT, db_column='customer_address_id', null=True, default=None)
+    payment_term_id = models.ForeignKey(CustomerPaymentTerms, on_delete=models.PROTECT, db_column='payment_term_id', null=True, default=None)
+    remarks = models.CharField(max_length=1024, null=True, default=None)
+    vehicle_name = models.CharField(max_length=255, null=True, default=None)
+    driver_name = models.CharField(max_length=255, null=True, default=None)
+    lr_no = models.CharField(max_length=100, null=True, default=None)
+    total_boxes = models.IntegerField(null=True, default=None)
+    item_value = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    dis_amt = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    taxable = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    tax_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    cess_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    transport_charges = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    round_off = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    total_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    shipping_address = models.CharField(max_length=1024, null=True, default=None)
+    billing_address = models.CharField(max_length=1024, null=True, default=None)
+    order_status_id = models.ForeignKey('masters.OrderStatuses', on_delete=models.PROTECT, db_column='order_status_id', null=True, default=None)
+    is_converted = models.BooleanField(default=False)
+    sale_invoice_id = models.ForeignKey(SaleInvoiceOrders, on_delete=models.SET_NULL, db_column='sale_invoice_id', null=True, default=None, related_name='delivery_challans')
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = deliverychallans
+
+    def __str__(self):
+        return str(self.delivery_challan_id)
+
+    def save(self, *args, **kwargs):
+        from apps.masters.views import increment_order_number
+        is_new_record = self._state.adding
+
+        if not self.order_status_id:
+            self.order_status_id = OrderStatuses.objects.get_or_create(status_name='Pending')[0]
+
+        if is_new_record and not getattr(self, self.order_no_field):
+            order_number = generate_order_number(
+                self.order_no_prefix,
+                model_class=DeliveryChallans,
+                field_name='challan_no'
+            )
+            setattr(self, self.order_no_field, order_number)
+
+        super().save(*args, **kwargs)
+
+        if is_new_record:
+            increment_order_number(self.order_no_prefix)
+
+
+class DeliveryChallanItems(models.Model):
+    delivery_challan_item_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    delivery_challan_id = models.ForeignKey(DeliveryChallans, on_delete=models.CASCADE, db_column='delivery_challan_id')
+    product_id = models.ForeignKey(Products, on_delete=models.PROTECT, db_column='product_id')
+    unit_options_id = models.ForeignKey('masters.UnitOptions', on_delete=models.PROTECT, db_column='unit_options_id', null=True, default=None)
+    stock_unit_id = models.ForeignKey(ProductStockUnits, on_delete=models.PROTECT, db_column='stock_unit_id', null=True, default=None)
+    size_id = models.ForeignKey(Size, on_delete=models.PROTECT, db_column='size_id', null=True, default=None)
+    color_id = models.ForeignKey(Color, on_delete=models.PROTECT, db_column='color_id', null=True, default=None)
+    print_name = models.CharField(max_length=255, null=True, default=None)
+    quantity = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    total_boxes = models.IntegerField(null=True, default=None)
+    rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    DISCOUNT_TYPE_CHOICES = [('percentage', 'Percentage'), ('amount', 'Amount')]
+    discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPE_CHOICES, null=True, default=None)
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
+    discount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    tax = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    cgst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    sgst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    igst = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
+    remarks = models.CharField(max_length=1024, null=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = deliverychalllanitemstable
+
+    def __str__(self):
+        return str(self.delivery_challan_item_id)
+
 
 class PaymentTransactions(OrderNumberMixin):
     transaction_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

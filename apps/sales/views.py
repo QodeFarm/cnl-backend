@@ -7957,3 +7957,377 @@ def replicate_sale_order_to_mstcnl(sale_order_id):
         import traceback
         traceback.print_exc()
         return {"error": str(e)}
+
+
+# ==================== Delivery Challan Views ====================
+
+class DeliveryChallanItemsView(viewsets.ModelViewSet):
+    queryset = DeliveryChallanItems.objects.all()
+    serializer_class = DeliveryChallanItemsSerializer
+
+    def list(self, request, *args, **kwargs):
+        return list_all_objects(self, request, *args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        return create_instance(self, request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        return update_instance(self, request, *args, **kwargs)
+
+
+class DeliveryChallanViewSet(APIView):
+    """
+    API ViewSet for handling Delivery Challan creation and retrieval.
+    """
+
+    def get_object(self, pk):
+        try:
+            return DeliveryChallans.objects.get(pk=pk)
+        except DeliveryChallans.DoesNotExist:
+            logger.warning(f"DeliveryChallans with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
+    def get(self, request, *args, **kwargs):
+        if "pk" in kwargs:
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(request, *args, **kwargs)
+        try:
+            logger.info("Retrieving all DeliveryChallans")
+            page = int(request.query_params.get('page', 1))
+            limit = int(request.query_params.get('limit', 10))
+
+            queryset = DeliveryChallans.objects.all().order_by('is_deleted', '-created_at')
+            if request.query_params:
+                filterset = DeliveryChallanFilter(request.GET, queryset=queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+
+            total_count = queryset.count()
+            serializer = DeliveryChallansSerializer(queryset, many=True)
+            logger.info("DeliveryChallans data retrieved successfully.")
+            return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            pk = kwargs.get('pk')
+            if not pk:
+                logger.error("Primary key not provided in request.")
+                return build_response(0, "Primary key not provided", [], status.HTTP_400_BAD_REQUEST)
+
+            delivery_challan = get_object_or_404(DeliveryChallans, pk=pk)
+            challan_serializer = DeliveryChallansSerializer(delivery_challan)
+
+            challan_items_data = self.get_related_data(
+                DeliveryChallanItems, DeliveryChallanItemsSerializer, 'delivery_challan_id', pk)
+
+            order_attachments_data = self.get_related_data(
+                OrderAttachments, OrderAttachmentsSerializer, 'order_id', pk)
+
+            order_shipments_data = self.get_related_data(
+                OrderShipments, OrderShipmentsSerializer, 'order_id', pk)
+
+            custom_data = {
+                "delivery_challan": challan_serializer.data,
+                "delivery_challan_items": challan_items_data,
+                "order_attachments": order_attachments_data,
+                "order_shipments": order_shipments_data,
+            }
+            logger.info("DeliveryChallans and related data retrieved successfully.")
+            return build_response(1, "Success", custom_data, status.HTTP_200_OK)
+
+        except Http404:
+            logger.error("DeliveryChallans with pk %s does not exist.", pk)
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception("An error occurred while retrieving DeliveryChallans with pk %s: %s", pk, str(e))
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get_related_data(self, model, serializer_class, filter_field, filter_value):
+        try:
+            related_data = model.objects.filter(**{filter_field: filter_value})
+            serializer = serializer_class(related_data, many=True)
+            return serializer.data
+        except Exception as e:
+            logger.exception("Error retrieving related data for model %s: %s", model.__name__, str(e))
+            return []
+
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        given_data = request.data
+
+        delivery_challan_data = given_data.pop('delivery_challan', None)
+        delivery_challan_items_data = given_data.pop('delivery_challan_items', None)
+        order_attachments_data = given_data.pop('order_attachments', None)
+        order_shipments_data = given_data.pop('order_shipments', None)
+
+        # Filter out empty item rows (same pattern as SaleInvoiceOrdersView)
+        if delivery_challan_items_data:
+            delivery_challan_items_data = [
+                item for item in delivery_challan_items_data
+                if item.get('product_id') and item.get('quantity')
+            ]
+
+        challan_error = []
+        items_error = []
+
+        if delivery_challan_data:
+            challan_error = validate_payload_data(self, delivery_challan_data, DeliveryChallansSerializer)
+        if delivery_challan_items_data:
+            items_error = validate_multiple_data(
+                self, delivery_challan_items_data, DeliveryChallanItemsSerializer, ['delivery_challan_id'])
+
+        if not delivery_challan_data or not delivery_challan_items_data:
+            logger.error("DeliveryChallan and DeliveryChallanItems are mandatory but not provided.")
+            return build_response(0, "DeliveryChallan and its items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if challan_error:
+            errors["delivery_challan"] = challan_error
+        if items_error:
+            errors["delivery_challan_items"] = items_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        new_challan_data = generic_data_creation(self, [delivery_challan_data], DeliveryChallansSerializer)
+        new_challan_data = new_challan_data[0]
+        delivery_challan_id = new_challan_data.get("delivery_challan_id", None)
+        logger.info('DeliveryChallans - created*')
+
+        update_fields = {'delivery_challan_id': delivery_challan_id}
+        items_data = generic_data_creation(
+            self, delivery_challan_items_data, DeliveryChallanItemsSerializer, update_fields)
+        logger.info('DeliveryChallanItems - created*')
+
+        if order_attachments_data:
+            update_fields = {'order_id': delivery_challan_id}
+            generic_data_creation(self, order_attachments_data, OrderAttachmentsSerializer, update_fields)
+
+        if order_shipments_data:
+            update_fields = {'order_id': delivery_challan_id}
+            generic_data_creation(
+                self,
+                [order_shipments_data] if isinstance(order_shipments_data, dict) else order_shipments_data,
+                OrderShipmentsSerializer,
+                update_fields
+            )
+
+        custom_data = {
+            "delivery_challan": new_challan_data,
+            "delivery_challan_items": items_data,
+        }
+        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, pk, *args, **kwargs):
+        given_data = request.data
+
+        challan_error = []
+        items_error = []
+        attachment_error = []
+        shipments_error = []
+
+        delivery_challan_data = given_data.pop('delivery_challan', None)
+        if delivery_challan_data:
+            delivery_challan_data['delivery_challan_id'] = pk
+            challan_error = validate_multiple_data(
+                self, [delivery_challan_data], DeliveryChallansSerializer, ['challan_no'])
+
+        delivery_challan_items_data = given_data.pop('delivery_challan_items', None)
+        # Filter out empty item rows
+        if delivery_challan_items_data:
+            delivery_challan_items_data = [
+                item for item in delivery_challan_items_data
+                if item.get('product_id') and item.get('quantity')
+            ]
+        if delivery_challan_items_data:
+            exclude_fields = ['delivery_challan_id']
+            items_error = validate_put_method_data(
+                self, delivery_challan_items_data, DeliveryChallanItemsSerializer,
+                exclude_fields, DeliveryChallanItems, current_model_pk_field='delivery_challan_item_id')
+
+        order_attachments_data = given_data.pop('order_attachments', None)
+        exclude_fields = ['order_id', 'order_type_id']
+        if order_attachments_data:
+            attachment_error = validate_put_method_data(
+                self, order_attachments_data, OrderAttachmentsSerializer,
+                exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
+
+        order_shipments_data = given_data.pop('order_shipments', None)
+        if order_shipments_data:
+            shipments_error = validate_put_method_data(
+                self, order_shipments_data, OrderShipmentsSerializer,
+                exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+
+        if not delivery_challan_data or not delivery_challan_items_data:
+            logger.error("DeliveryChallan and DeliveryChallanItems are mandatory but not provided.")
+            return build_response(0, "DeliveryChallan and its items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+        errors = {}
+        if challan_error:
+            errors["delivery_challan"] = challan_error
+        if items_error:
+            errors["delivery_challan_items"] = items_error
+        if attachment_error:
+            errors['order_attachments'] = attachment_error
+        if shipments_error:
+            errors['order_shipments'] = shipments_error
+        if errors:
+            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+        if delivery_challan_data:
+            update_multi_instances(
+                self, pk, [delivery_challan_data], DeliveryChallans, DeliveryChallansSerializer,
+                [], main_model_related_field='delivery_challan_id', current_model_pk_field='delivery_challan_id')
+
+        update_fields = {'delivery_challan_id': pk}
+        if delivery_challan_items_data:
+            update_multi_instances(
+                self, pk, delivery_challan_items_data, DeliveryChallanItems, DeliveryChallanItemsSerializer,
+                update_fields, main_model_related_field='delivery_challan_id',
+                current_model_pk_field='delivery_challan_item_id')
+
+        if order_attachments_data:
+            update_fields = {'order_id': pk}
+            update_multi_instances(
+                self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer,
+                update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
+
+        if order_shipments_data:
+            update_fields = {'order_id': pk}
+            update_multi_instances(
+                self,
+                pk,
+                order_shipments_data if isinstance(order_shipments_data, list) else [order_shipments_data],
+                OrderShipments,
+                OrderShipmentsSerializer,
+                update_fields,
+                main_model_related_field='order_id',
+                current_model_pk_field='shipment_id'
+            )
+
+        challan_obj = DeliveryChallans.objects.get(pk=pk)
+        challan_serializer = DeliveryChallansSerializer(challan_obj)
+        items = DeliveryChallanItems.objects.filter(delivery_challan_id=pk)
+        items_serializer = DeliveryChallanItemsSerializer(items, many=True)
+
+        custom_data = {
+            "delivery_challan": challan_serializer.data,
+            "delivery_challan_items": items_serializer.data,
+        }
+        return build_response(1, "Record updated successfully", custom_data, status.HTTP_200_OK)
+
+    @transaction.atomic
+    def delete(self, request, pk, *args, **kwargs):
+        try:
+            instance = DeliveryChallans.objects.get(pk=pk)
+            instance.is_deleted = True
+            instance.save()
+            logger.info(f"DeliveryChallans with ID {pk} soft-deleted successfully.")
+            return build_response(1, "Record deleted successfully", [], status.HTTP_204_NO_CONTENT)
+        except DeliveryChallans.DoesNotExist:
+            logger.warning(f"DeliveryChallans with ID {pk} does not exist.")
+            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error deleting DeliveryChallans with ID {pk}: {str(e)}")
+            return build_response(0, "Record deletion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ConvertChallanToInvoiceView(APIView):
+    """
+    Converts a Delivery Challan into a Sale Invoice.
+    POST /sales/delivery_challan/<pk>/convert_to_invoice/
+    """
+
+    @transaction.atomic
+    def post(self, request, pk, *args, **kwargs):
+        try:
+            challan = get_object_or_404(DeliveryChallans, pk=pk)
+
+            if challan.is_converted:
+                return build_response(0, "Challan has already been converted to an invoice", [], status.HTTP_400_BAD_REQUEST)
+
+            # Create the SaleInvoiceOrders record from challan data
+            new_invoice = SaleInvoiceOrders(
+                sale_order_id=challan.sale_order_id,
+                bill_type="CREDIT",
+                invoice_date=challan.challan_date,
+                customer_id=challan.customer_id,
+                gst_type_id=challan.gst_type_id,
+                email=challan.email,
+                ref_no=challan.challan_no,
+                ref_date=challan.challan_date,
+                order_salesman_id=challan.order_salesman_id,
+                tax=challan.tax,
+                customer_address_id=challan.customer_address_id,
+                payment_term_id=challan.payment_term_id,
+                remarks=challan.remarks,
+                vehicle_name=challan.vehicle_name,
+                total_boxes=challan.total_boxes,
+                item_value=challan.item_value,
+                discount=challan.discount,
+                dis_amt=challan.dis_amt,
+                taxable=challan.taxable,
+                tax_amount=challan.tax_amount,
+                cess_amount=challan.cess_amount,
+                transport_charges=challan.transport_charges,
+                round_off=challan.round_off,
+                total_amount=challan.total_amount,
+                shipping_address=challan.shipping_address,
+                billing_address=challan.billing_address,
+            )
+            new_invoice.save()
+
+            # Copy challan items to invoice items
+            challan_items = DeliveryChallanItems.objects.filter(delivery_challan_id=pk)
+            for item in challan_items:
+                SaleInvoiceItems.objects.create(
+                    sale_invoice_id=new_invoice,
+                    product_id=item.product_id,
+                    unit_options_id=item.unit_options_id,
+                    stock_unit_id=item.stock_unit_id,
+                    size_id=item.size_id,
+                    color_id=item.color_id,
+                    print_name=item.print_name,
+                    quantity=item.quantity,
+                    total_boxes=item.total_boxes,
+                    rate=item.rate,
+                    amount=item.amount,
+                    discount_type=item.discount_type,
+                    discount_amount=item.discount_amount,
+                    discount=item.discount,
+                    tax=item.tax,
+                    cgst=item.cgst,
+                    sgst=item.sgst,
+                    igst=item.igst,
+                    remarks=item.remarks,
+                )
+
+            # Mark challan as converted and link the invoice
+            challan.is_converted = True
+            challan.sale_invoice_id = new_invoice
+            challan.save()
+
+            response_data = {
+                "delivery_challan_id": str(pk),
+                "challan_no": challan.challan_no,
+                "sale_invoice_id": str(new_invoice.sale_invoice_id),
+                "invoice_no": new_invoice.invoice_no,
+            }
+            logger.info(f"Challan {challan.challan_no} converted to Invoice {new_invoice.invoice_no} successfully.")
+            return build_response(1, "Challan converted to Invoice successfully", response_data, status.HTTP_201_CREATED)
+
+        except Http404:
+            return build_response(0, "DeliveryChallans record does not exist", [], status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.exception(f"Error converting challan to invoice: {str(e)}")
+            return build_response(0, "Conversion failed due to an error", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
