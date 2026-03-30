@@ -3030,22 +3030,46 @@ class SendCredentialsView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
 def get_portal_url(request):
-    """Get dynamic portal URL based on environment"""
-    if request:
-        host = request.get_host()
+    """Get dynamic portal URL based on frontend domain (Production Ready)"""
+    if not request:
+        return "https://rudhra.cnlerp.com/#/customer_portal_login"
+    
+    # Get frontend domain from headers (sent by browser automatically)
+    frontend_domain = (
+        request.META.get('HTTP_ORIGIN') or 
+        request.META.get('HTTP_REFERER') or 
+        ''
+    )
+    
+    if frontend_domain:
+        # Clean the domain (remove protocol, port, trailing slashes)
+        domain = (
+            frontend_domain
+            .replace('https://', '')
+            .replace('http://', '')
+            .split(':')[0]
+            .rstrip('/')
+        )
         
-        if 'apicore' in host:
-            return "https://prod.cnlerp.com/#/customer_portal_login"
-        elif 'rudhra' in host:
+        # Domain to portal URL mapping
+        if 'rudhra' in domain:
             return "https://rudhra.cnlerp.com/#/customer_portal_login"
-        elif 'qa' in host:
+        elif 'qa' in domain:
             return "https://qa.cnlerp.com/#/customer_portal_login"
-        elif 'localhost' in host or '127.0.0.1' in host:
+        elif 'localhost' in domain or '127.0.0.1' in domain:
             return "http://localhost:4200/#/customer_portal_login"
         else:
-            domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
+            # For any other domain (custom client domains)
             return f"https://{domain}/#/customer_portal_login"
-    return "https://rudhra.cnlerp.com/#/customer_portal_login"
+    
+    # Fallback to API host (works in production too)
+    api_host = request.get_host()
+    if 'rudhra' in api_host:
+        return "https://rudhra.cnlerp.com/#/customer_portal_login"
+    elif 'qa' in api_host:
+        return "https://qa.cnlerp.com/#/customer_portal_login"
+    else:
+        return "https://prod.cnlerp.com/#/customer_portal_login"
 
 # services/email_service.py
 import logging
