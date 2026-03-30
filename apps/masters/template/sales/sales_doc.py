@@ -443,7 +443,200 @@ def sale_return_doc(
     doc.build(elements)
     
 
-#Helpers 
+def delivery_challan_doc(
+    elements, doc,
+    company_logo, company_name, company_gst, company_address, company_phone, company_email,
+    number_lbl, number_value, date_lbl, date_value,
+    customer_name, city, country, phone, shipping_address, billing_address,
+    product_data,
+    total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount,
+    transport_charges, cess_amount, round_0ff, net_value, tax_type,
+    vehicle_name, driver_name, lr_no, total_boxes, remarks
+):
+    from apps.masters.template.table_defination import (
+        invoice_doc_details, invoice_customer_details,
+        invoice_product_details, invoice_product_total_details,
+        dc_product_total_details_inwords, dc_footer_section
+    )
+
+    elements.append(invoice_doc_details(
+        company_logo, company_name, company_gst, company_address, company_phone, company_email,
+        number_lbl, number_value, date_lbl, date_value
+    ))
+    elements.append(invoice_customer_details(
+        customer_name, city, country, phone, '', shipping_address, billing_address
+    ))
+    elements.append(invoice_product_details(product_data, show_gst=(tax_type != 'Inclusive')))
+    elements.append(invoice_product_total_details(
+        total_qty, itemstotal, final_total, total_disc_amt, show_gst=(tax_type != 'Inclusive')
+    ))
+    elements.append(dc_product_total_details_inwords(
+        bill_amount_in_words, itemstotal, finalDiscount, transport_charges,
+        total_cgst, total_sgst, total_igst, cess_amount, round_0ff, net_value, tax_type=tax_type
+    ))
+    elements.append(dc_footer_section(
+        vehicle_name=vehicle_name, driver_name=driver_name,
+        lr_no=lr_no, total_boxes=total_boxes, remarks=remarks
+    ))
+    doc.build(elements)
+
+
+def delivery_challan_data(pk, format_value=None):
+    """Fetch all data needed to generate a Delivery Challan PDF."""
+    from apps.sales.models import DeliveryChallans, DeliveryChallanItems
+    from apps.sales.serializers import DeliveryChallansSerializer, DeliveryChallanItemsSerializer
+
+    obj = get_object_or_404(DeliveryChallans, pk=pk)
+    data = DeliveryChallansSerializer(obj).data
+
+    # Tax type override based on format selection
+    if format_value == 'CNL_Standard_Incl':
+        tax_type = 'Inclusive'
+    else:
+        tax_type = 'Exclusive'
+
+    billing_address = data.get('billing_address') or ''
+    shipping_address = data.get('shipping_address') or ''
+
+    # Company
+    company = Companies.objects.first()
+    company_name = company.name if company else 'N/A'
+    company_gst = company.gst_tin if company else 'N/A'
+    company_address = company.address if company else 'N/A'
+    company_phone = company.phone if company else 'N/A'
+    company_email = company.email if company else 'N/A'
+    company_logo = None
+    if company and isinstance(company.logo, list) and company.logo:
+        attachment_path = company.logo[0].get('attachment_path')
+        if attachment_path:
+            company_logo = os.path.normpath(os.path.join(settings.MEDIA_ROOT, attachment_path))
+
+    # Bank
+    bank = BankAccount.objects.first()
+    bank_name = bank.bank_name if bank else 'N/A'
+    bank_branch = bank.branch_name if bank else 'N/A'
+    bank_ifsc = bank.ifsc_code if bank else 'N/A'
+    bank_acno = bank.account_number if bank else 'N/A'
+
+    # Customer billing address details
+    customer_raw_id = list(
+        DeliveryChallans.objects.filter(delivery_challan_id=pk).values_list('customer_id', flat=True)
+    )
+    billing_addr = CustomerAddresses.objects.filter(
+        customer_id=customer_raw_id[0], address_type='Billing'
+    ).first() if customer_raw_id else None
+
+    city = str(billing_addr.city_id) if billing_addr and billing_addr.city_id else 'N/A'
+    country = str(billing_addr.country_id) if billing_addr and billing_addr.country_id else 'N/A'
+    phone_number = str(billing_addr.phone) if billing_addr and billing_addr.phone else 'N/A'
+    phone = format_phone_number(phone_number) if phone_number != 'N/A' else 'N/A'
+    email = billing_addr.email if billing_addr and billing_addr.email else 'N/A'
+
+    # Items
+    items_data = get_related_data(DeliveryChallanItems, DeliveryChallanItemsSerializer, 'delivery_challan_id', pk)
+
+    itemstotal = float(data.get('item_value') or 0)
+    discount_amt = float(data.get('dis_amt') or 0)
+    total_qty = total_cgst = total_sgst = total_igst = total_disc_amt = 0.0
+
+    for item in items_data:
+        total_qty += float(item.get('quantity') or 0)
+        cgst = float(item.get('cgst') or 0)
+        sgst = float(item.get('sgst') or 0)
+        igst = float(item.get('igst') or 0)
+        if billing_address and 'Andhra Pradesh' in billing_address:
+            total_cgst += cgst
+            total_sgst += sgst
+        else:
+            total_igst += igst
+        total_disc_amt += (
+            float(item.get('quantity') or 0) *
+            float(item.get('rate') or 0) *
+            (float(item.get('discount') or 0))
+        ) / 100
+
+    product_data = extract_product_data(items_data, tax_type=tax_type)
+
+    transport_charges = round(float(data.get('transport_charges') or 0), 2)
+    cess_amount = round(float(data.get('cess_amount') or 0), 2)
+    final_total = round(itemstotal - total_disc_amt, 2)
+    final_discount = discount_amt + total_disc_amt
+    final_amount = round(itemstotal + total_cgst + total_sgst + total_igst + cess_amount, 2)
+    net_value = round(final_amount - final_discount + transport_charges)
+    round_off = round(net_value - (final_amount - final_discount + transport_charges), 2)
+    bill_amount_in_words = convert_amount_to_words(net_value)
+
+    # Date + Time
+    raw_date = obj.challan_date
+    raw_time = obj.created_at
+    date_part = raw_date.strftime('%d-%m-%Y') if raw_date else ''
+    time_part = raw_time.strftime('%I:%M %p') if raw_time else ''
+    combined_date_time = f'{date_part}  {time_part}'.strip()
+
+    # Append dispatch info to remarks
+    dispatch_parts = []
+    if obj.vehicle_name:
+        dispatch_parts.append(f'Vehicle: {obj.vehicle_name}')
+    if obj.driver_name:
+        dispatch_parts.append(f'Driver: {obj.driver_name}')
+    if obj.lr_no:
+        dispatch_parts.append(f'LR No: {obj.lr_no}')
+    if obj.total_boxes:
+        dispatch_parts.append(f'Boxes: {obj.total_boxes}')
+    remarks = data.get('remarks') or ''
+    if dispatch_parts:
+        remarks = (remarks + ' | ' if remarks else '') + ', '.join(dispatch_parts)
+
+    return {
+        'company_logo': company_logo or '',
+        'company_name': company_name,
+        'company_gst': company_gst,
+        'company_address': company_address,
+        'company_phone': company_phone,
+        'company_email': company_email,
+        'bank_name': bank_name,
+        'bank_acno': bank_acno,
+        'bank_ifsc': bank_ifsc,
+        'bank_branch': bank_branch,
+        'number_lbl': 'Challan No.',
+        'date_lbl': 'Challan Date',
+        'number_value': data.get('challan_no'),
+        'date_value': combined_date_time,
+        'customer_name': data['customer']['name'],
+        'city': city,
+        'country': country,
+        'phone': phone,
+        'dest': 'N/A',
+        'email': email,
+        'billing_address': billing_address,
+        'shipping_address': shipping_address,
+        'product_data': product_data,
+        'tax_type': tax_type,
+        'itemstotal': itemstotal,
+        'final_total': final_total,
+        'total_amt': itemstotal,
+        'total_qty': total_qty,
+        'total_cgst': round(total_cgst, 2),
+        'total_sgst': round(total_sgst, 2),
+        'total_igst': round(total_igst, 2),
+        'finalDiscount': final_discount,
+        'transport_charges': transport_charges,
+        'total_disc_amt': total_disc_amt,
+        'cess_amount': cess_amount,
+        'round_0ff': round_off,
+        'net_value': net_value,
+        'bill_amount_in_words': bill_amount_in_words,
+        'remarks': data.get('remarks') or '',
+        # Dispatch fields for footer
+        'vehicle_name': obj.vehicle_name or '',
+        'driver_name': obj.driver_name or '',
+        'lr_no': obj.lr_no or '',
+        'total_boxes': obj.total_boxes,
+    }
+
+
+#Helpers
 def num_val(value):
     """Return safe numeric value"""
     try:

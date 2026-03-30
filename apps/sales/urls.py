@@ -25,6 +25,7 @@ router.register(r'sale_credit_note', SaleCreditNoteViews)
 router.register(r'sale_credit_note_item', SaleCreditNoteItemsViews)
 router.register(r'sale_debit_note', SaleDebitNoteViews)
 router.register(r'sale_debit_note_item', SaleDebitNoteItemsViews)
+router.register(r'delivery_challan_items', DeliveryChallanItemsView)
 
 urlpatterns = [
     path('',include(router.urls)),
@@ -53,4 +54,7 @@ urlpatterns = [
     # path('payment_transactions/<uuid:transaction_id>/', PaymentTransactionAPIView.as_view(), name='payment-transaction-Update-API'),
     path('payment_transactions/transaction/<str:transaction_id>/', PaymentTransactionAPIView.as_view(),name='payment-transaction-Update-API'),
     path('data_for_payment_receipt_table/<str:customer_id>/', FetchSalesInvoicesForPaymentReceiptTable.as_view(), name='sale-Invoice-data-for-payment-receipt-table-by-customer-ID'),
-]      
+    path('delivery_challan/', DeliveryChallanViewSet.as_view(), name='delivery-challan-list-create'),
+    path('delivery_challan/<str:pk>/', DeliveryChallanViewSet.as_view(), name='delivery-challan-detail-update-delete'),
+    path('delivery_challan/<str:pk>/convert_to_invoice/', ConvertChallanToInvoiceView.as_view(), name='delivery-challan-convert-to-invoice'),
+]

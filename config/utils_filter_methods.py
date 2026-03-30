@@ -110,7 +110,7 @@ def apply_sorting(self, queryset):
                     raise ValueError("Invalid sorting direction.")
 
                 logger.debug(f"Sorting by field: {field_name} ({direction})")
-                queryset = queryset.order_by(field_name)
+                queryset = queryset.order_by('is_deleted', field_name)
                 logger.debug(f"Ordered queryset: {queryset.query}")
             else:
                 raise ValueError(f"Field '{field}' is not a valid filter field.")
@@ -124,7 +124,7 @@ def apply_sorting(self, queryset):
         field_name = f'-{self.filters[default_field].field_name}'
 
     logger.debug(f"Sorting by field: {field_name}")
-    return queryset.order_by(field_name)
+    return queryset.order_by('is_deleted', field_name)
 
 def filter_by_pagination(queryset, page, limit):
     logger.debug(f"Pagination - page: {page}, limit: {limit}")

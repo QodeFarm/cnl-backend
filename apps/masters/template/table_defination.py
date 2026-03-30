@@ -815,16 +815,24 @@ def invoice_doc_details(company_logo, company_name, company_gst, company_address
     if company_logo and os.path.exists(company_logo):
         company_logo = Image(company_logo, width=80, height=80)
     else:
-        # Fallback to empty space or a default image
-        company_logo = Paragraph("<b>No Logo</b>", getSampleStyleSheet()['Normal'])
+        company_logo = Paragraph("", getSampleStyleSheet()['Normal'])
 
     # Define company details as a Paragraph
+    def _safe(val):
+        return val if val and str(val).strip() not in ('None', 'N/A', '') else ''
+
+    gstin_line = f"<b>GSTIN:</b> {company_gst}<br/>" if _safe(company_gst) else ""
+    mobile_line = f"<b>Mobile:</b> {company_phone}<br/>" if _safe(company_phone) else ""
+    email_line = f"<b>Email:</b> {company_email}" if _safe(company_email) else ""
+
+    address_line = f"{company_address}<br/>" if _safe(company_address) else ""
+
     company_details_content = Paragraph(
         f"<b>{company_name}</b><br/>"
-        f"<b>GSTIN: {company_gst}</b><br/>"
-        f"{company_address}<br/>"
-        f"<b>Mobile:</b> {company_phone}<br/>"
-        f"<b>Email:</b> {company_email}",
+        f"{gstin_line}"
+        f"{address_line}"
+        f"{mobile_line}"
+        f"{email_line}",
         style_normal
     )
 
@@ -1988,5 +1996,128 @@ def ledger_doc_details(ledgername, ledger_name, number_lbl, date_lbl, doc_date):
         ('GRID', (0, 0), (-1, 0), 1, colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
         ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+    ]))
+    return table
+
+# ─── Delivery Challan specific functions ─────────────────────────────────────
+
+def dc_product_total_details_inwords(
+    Bill_Amount_In_Words, SubTotal, Discount_Amt, transport_charges,
+    total_cgst, total_sgst, total_igst, cess_amount,
+    round_off, net_value, tax_type='Exclusive'
+):
+    """Totals section for Delivery Challan — no Party Old Balance, Transport Charges label."""
+    styles = getSampleStyleSheet()
+    normal_style = styles['Normal']
+    bill_amount_paragraph = Paragraph(f"<b>Bill Amount In Words:</b> {Bill_Amount_In_Words}", normal_style)
+
+    disc_display = f"-{Discount_Amt}" if float(Discount_Amt or 0) > 0 else "0.0"
+    financials_data = [
+        [Paragraph("<b>Sub Total:</b>", normal_style), Paragraph(f"<b>{SubTotal}</b>", normal_style)],
+        [Paragraph("<b>Total Discount:</b>", normal_style), Paragraph(f"<b>{disc_display}</b>", normal_style)],
+        [Paragraph("<b>Transport Charges:</b>", normal_style), Paragraph(f"<b>{transport_charges}</b>", normal_style)],
+    ]
+
+    if tax_type != 'Inclusive':
+        if total_igst > 0:
+            financials_data.append([Paragraph("<b>IGST:</b>", normal_style), Paragraph(f"<b>{total_igst}</b>", normal_style)])
+        elif total_cgst > 0 and total_sgst > 0:
+            financials_data.append([Paragraph("<b>CGST:</b>", normal_style), Paragraph(f"<b>{total_cgst}</b>", normal_style)])
+            financials_data.append([Paragraph("<b>SGST:</b>", normal_style), Paragraph(f"<b>{total_sgst}</b>", normal_style)])
+
+    financials_data.extend([
+        [Paragraph("<b>Cess AMT:</b>", normal_style), Paragraph(f"<b>{cess_amount}</b>", normal_style)],
+        [Paragraph("<b>Round Off:</b>", normal_style), Paragraph(f"<b>{round_off}</b>", normal_style)],
+        [Paragraph("<b>Net Amount:</b>", normal_style), Paragraph(f"<b>{net_value}</b>", normal_style)],
+    ])
+
+    financials_table = Table(financials_data, colWidths=[2.0 * inch, 1.3 * inch])
+    financials_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0, -1), (-1, -1), 5),
+        ('TOPPADDING', (0, -1), (-1, -1), 5),
+    ]))
+
+    table = Table([[bill_amount_paragraph, financials_table]], colWidths=[7 * inch, 3 * inch])
+    table.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+    ]))
+    return table
+
+
+def dc_footer_section(vehicle_name='', driver_name='', lr_no='', total_boxes=None, remarks=''):
+    """Footer for Delivery Challan — dispatch details + dual signatory. No bank details."""
+    styles = getSampleStyleSheet()
+    style_normal = styles['Normal']
+
+    dispatch_lines = []
+    if vehicle_name:
+        dispatch_lines.append(f"<b>Vehicle:</b> {vehicle_name}")
+    if driver_name:
+        dispatch_lines.append(f"<b>Driver:</b> {driver_name}")
+    if lr_no:
+        dispatch_lines.append(f"<b>LR No:</b> {lr_no}")
+    if total_boxes is not None:
+        dispatch_lines.append(f"<b>Total Boxes:</b> {total_boxes}")
+
+    if dispatch_lines:
+        dispatch_html = "<b>Dispatch Details:</b><br/>" + "<br/>".join(dispatch_lines)
+    else:
+        dispatch_html = ""
+
+    notes_html = ""
+    if remarks and remarks.strip():
+        notes_html += f"<b>Remarks:</b> {remarks}<br/><br/>"
+    notes_html += "<b>Notes:</b><br/>Goods dispatched in good condition. Please verify count on receipt."
+
+    left_body = (dispatch_html + "<br/><br/>" + notes_html) if dispatch_html else notes_html
+    left_content = Paragraph(left_body, style_normal)
+
+    # Signature blocks — mini-table with LINEABOVE border as the signature line
+    sig_style = ParagraphStyle(
+        'sig_label',
+        parent=styles['Normal'],
+        fontSize=9,
+        fontName='Helvetica-Bold',
+        alignment=1,  # CENTER
+    )
+
+    def _sig_cell(label_text):
+        label_para = Paragraph(label_text, sig_style)
+        inner = Table(
+            [[''], [label_para]],
+            colWidths=[1.8 * inch],
+            rowHeights=[0.02 * inch, 0.3 * inch]
+        )
+        inner.setStyle(TableStyle([
+            ('LINEABOVE', (0, 1), (0, 1), 0.8, colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 0),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ]))
+        return inner
+
+    table = Table(
+        [[left_content, _sig_cell('Authorised Signatory'), _sig_cell("Receiver's Signature")]],
+        colWidths=[5.6 * inch, 2.2 * inch, 2.2 * inch],
+        rowHeights=[2.5 * inch]
+    )
+    table.setStyle(TableStyle([
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
+        ('LINEBEFORE', (2, 0), (2, -1), 1, colors.black),
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (2, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (0, 0), 'TOP'),
+        ('VALIGN', (1, 0), (2, 0), 'BOTTOM'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
     ]))
     return table
