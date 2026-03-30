@@ -110,7 +110,14 @@ def apply_sorting(self, queryset):
                     raise ValueError("Invalid sorting direction.")
 
                 logger.debug(f"Sorting by field: {field_name} ({direction})")
-                queryset = queryset.order_by('is_deleted', field_name)
+                
+                # Remove the 'is_deleted' ordering since it doesn't exist
+                # Check if 'is_deleted' exists in the model before ordering
+                if hasattr(queryset.model, 'is_deleted'):
+                    queryset = queryset.order_by('is_deleted', field_name)
+                else:
+                    queryset = queryset.order_by(field_name)
+                    
                 logger.debug(f"Ordered queryset: {queryset.query}")
             else:
                 raise ValueError(f"Field '{field}' is not a valid filter field.")
@@ -122,8 +129,61 @@ def apply_sorting(self, queryset):
     else:
         default_field = list(self.filters.keys())[0]
         field_name = f'-{self.filters[default_field].field_name}'
+        logger.debug(f"Sorting by default field: {field_name}")
+        
+        # Check if 'is_deleted' exists in the model before ordering
+        if hasattr(queryset.model, 'is_deleted'):
+            return queryset.order_by('is_deleted', field_name)
+        else:
+            return queryset.order_by(field_name)
 
     logger.debug(f"Sorting by field: {field_name}")
+    
+    # Final return with check
+    if hasattr(queryset.model, 'is_deleted'):
+        return queryset.order_by('is_deleted', field_name)
+    else:
+        return queryset.order_by(field_name)
+
+# def apply_sorting(self, queryset):
+#     sort_param = self.data.get('sort[0]')
+#     logger.debug(f"Sorting parameter: {sort_param}")
+
+#     if sort_param:
+#         try:
+#             sort_fields = sort_param.split(',')
+#             logger.debug(f"Sort fields: {sort_fields}")
+
+#             if len(sort_fields) != 2:
+#                 raise ValueError("Sort parameter should be in the format 'field,DIRECTION'.")
+
+#             field, direction = sort_fields
+
+#             if field in self.filters:
+#                 field_name = self.filters[field].field_name
+
+#                 if direction.upper() == 'DESC':
+#                     field_name = f'-{field_name}'
+#                 elif direction.upper() == 'ASC':
+#                     field_name = field_name
+#                 else:
+#                     raise ValueError("Invalid sorting direction.")
+
+#                 logger.debug(f"Sorting by field: {field_name} ({direction})")
+#                 queryset = queryset.order_by('is_deleted', field_name)
+#                 logger.debug(f"Ordered queryset: {queryset.query}")
+#             else:
+#                 raise ValueError(f"Field '{field}' is not a valid filter field.")
+
+#         except ValueError as e:
+#             logger.error(f"Sorting error: {e}")
+#             raise
+
+#     else:
+#         default_field = list(self.filters.keys())[0]
+#         field_name = f'-{self.filters[default_field].field_name}'
+
+#     logger.debug(f"Sorting by field: {field_name}")
     return queryset.order_by('is_deleted', field_name)
 
 def filter_by_pagination(queryset, page, limit):
