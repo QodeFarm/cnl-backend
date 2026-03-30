@@ -1,6 +1,6 @@
 # from django.forms import DecimalField, IntegerField
 from django_filters import rest_framework as filters
-from .models import MstcnlSaleInvoiceOrder, PaymentTransactions, QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
+from .models import DeliveryChallans, MstcnlSaleInvoiceOrder, PaymentTransactions, QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
@@ -861,4 +861,45 @@ class MstcnlSaleInvoiceFilter(django_filters.FilterSet):
             'delivery_date',
             'created_at',
             'updated_at',
+        ]
+
+
+class DeliveryChallanFilter(filters.FilterSet):
+    challan_no = filters.CharFilter(lookup_expr='icontains')
+    customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
+    customer_id = filters.CharFilter(method=filter_uuid)
+    challan_date = DateFromToRangeFilter()
+    order_status_id = filters.CharFilter(method=filter_uuid)
+    status_name = filters.CharFilter(field_name='order_status_id__status_name', lookup_expr='iexact')
+    is_converted = filters.BooleanFilter()
+    sale_order_id = filters.CharFilter(method=filter_uuid)
+    total_amount = filters.RangeFilter()
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = DeliveryChallans
+        fields = [
+            'challan_no', 'customer_id', 'challan_date', 'order_status_id',
+            'status_name', 'is_converted', 'sale_order_id', 'total_amount',
+            'created_at', 'period_name', 's', 'sort', 'page', 'limit',
         ]

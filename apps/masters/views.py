@@ -6,12 +6,12 @@ from apps.masters.template.payment_receipt.payment_receipt import payment_receip
 from apps.production.models import MaterialIssue, MaterialReceived
 from apps.products.models import Products
 from apps.purchase.models import BillPaymentTransactions, PurchaseInvoiceOrders, PurchaseOrders, PurchaseReturnOrders
-from apps.sales.models import OrderShipments, PaymentTransactions, SaleCreditNotes, SaleDebitNotes, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
+from apps.sales.models import DeliveryChallans, OrderShipments, PaymentTransactions, SaleCreditNotes, SaleDebitNotes, SaleInvoiceOrders, SaleOrder, SaleReturnOrders
 from apps.vendor.models import Vendor
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_methods import send_pdf_via_email, list_all_objects, create_instance, update_instance, build_response, path_generate, soft_delete
 from apps.masters.template.purchase.purchase_doc import purchase_doc, purchase_data
-from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data, sale_return_doc, sales_invoice_doc
+from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_doc, sale_order_sales_invoice_data, sale_return_doc, sales_invoice_doc, delivery_challan_data, delivery_challan_doc
 from apps.masters.template.table_defination import doc_heading, payment_receipt_amount_section, payment_receipt_voucher_table
 from django_filters.rest_framework import DjangoFilterBackend # type: ignore
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -885,6 +885,7 @@ ORDER_MODEL_MAPPING = {
     'PR': (PurchaseReturnOrders, 'return_no'),
     'CN': (SaleCreditNotes, 'credit_note_number'),
     'DN': (SaleDebitNotes, 'debit_note_number'),
+    'DC': (DeliveryChallans, 'challan_no'),
     'SHIP': (OrderShipments, 'shipping_tracking_no'),
     'PRD': (Products, 'code'),
     'CUST': (Customer, 'code'),
@@ -1133,6 +1134,20 @@ class DocumentGeneratorView(APIView):
                     pdf_data['finalDiscount'], pdf_data['bill_amount_in_words'],
                     pdf_data['round_0ff'],
                     pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['return_reason']
+                )
+            if document_type == "delivery_challan":
+                pdf_data = delivery_challan_data(pk, format_value)
+                elements, doc = doc_heading(file_path, "DELIVERY CHALLAN", '')
+                delivery_challan_doc(
+                    elements, doc,
+                    pdf_data['company_logo'], pdf_data['company_name'], pdf_data['company_gst'], pdf_data['company_address'], pdf_data['company_phone'], pdf_data['company_email'],
+                    pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
+                    pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['shipping_address'], pdf_data['billing_address'],
+                    pdf_data['product_data'],
+                    pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'],
+                    pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'],
+                    pdf_data['transport_charges'], pdf_data['cess_amount'], pdf_data['round_0ff'], pdf_data['net_value'], pdf_data['tax_type'],
+                    pdf_data['vehicle_name'], pdf_data['driver_name'], pdf_data['lr_no'], pdf_data['total_boxes'], pdf_data['remarks'],
                 )
             if document_type == "purchase_order" or document_type == "purchase_return":
                 pdf_data = purchase_data(pk, document_type, format_value)
