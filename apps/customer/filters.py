@@ -51,6 +51,7 @@ class CustomerFilters(filters.FilterSet):
     gst_category_id = filters.CharFilter(field_name='gst_category_id__name', lookup_expr='exact')
     max_credit_days = filters.RangeFilter(lookup_expr='exact')
     name = filters.CharFilter(lookup_expr='icontains')
+    code = filters.CharFilter(lookup_expr='icontains')
     gst = filters.CharFilter(lookup_expr='icontains')
     is_deleted = filters.BooleanFilter()
     created_at = filters.DateFromToRangeFilter()
@@ -88,7 +89,7 @@ class CustomerFilters(filters.FilterSet):
     class Meta:
         model = Customer
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name', 'is_deleted', 's','search','sort','page','limit']
+        fields = ['name','code','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name', 'is_deleted', 's','search','sort','page','limit']
 
     
 class CustomerAttachmentsFilters(filters.FilterSet):

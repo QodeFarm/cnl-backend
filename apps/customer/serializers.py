@@ -202,7 +202,7 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code', 'customer_category', 'is_deleted']
+        fields = ['customer_id', 'name', 'code', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code', 'customer_category', 'is_deleted']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
