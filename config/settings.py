@@ -49,7 +49,7 @@ else:
 # DEBUG = True
 #------------File_uploads_requirements------------
 import os
-MEDIA_URL = '/cdn/'
+MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #--------------------------------------------
 
@@ -98,6 +98,7 @@ INSTALLED_APPS = [
     'apps.dashboard',
     'apps.auditlogs',
     'apps.ai_features',
+    'apps.documents',
 ]
 
 MIDDLEWARE = [

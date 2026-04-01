@@ -15,9 +15,10 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
+from apps.documents.views import serve_public_document
 from config import settings
 from config.views import api_links
 from rest_framework import permissions
@@ -61,13 +62,25 @@ urlpatterns = [
     path('api/v1/dashboard/', include('apps.dashboard.urls')),
     path('api/v1/audit/logs/', include('apps.auditlogs.urls')),
     path('api/v1/smart-insights/', include('apps.ai_features.urls')),
-
+    path('api/v1/', include('apps.documents.urls')),
 
     path('', api_links, name='api_links'),
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
+    
+    # re_path(r'^public/documents/(?P<file_path>.+)$', serve_public_document, name='serve_public_document'),
+    
 ]
 
 #below will handle media files uploaded when instance is created.
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) 
+# urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT) 
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Add public documents endpoint (MUST be after media serving)
+urlpatterns += [
+    re_path(r'^public/documents/(?P<file_path>.+)$', serve_public_document, name='serve_public_document'),
+]
 
