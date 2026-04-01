@@ -1,5 +1,4 @@
 from apps.customer.models import Customer
-from apps.documents.models import DocumentsGeneration
 from apps.finance.models import JournalEntry, JournalVoucher
 from apps.masters.template.account_ledger.account_ledger import ledger_document_data, ledger_document_doc
 from apps.masters.template.billpayment_receipt.billpayment_receipt import billpayment_receipt_data, billpayment_receipt_doc
@@ -1065,6 +1064,8 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 #===============================================PDF_creation================================
 class DocumentGeneratorView(APIView):
     def post(self, request, **kwargs):
+        """ Retrieves a sale order and its related data. """
+
         try:
             flag = request.data.get('flag')
             format_value = request.data.get('format')
@@ -1073,24 +1074,12 @@ class DocumentGeneratorView(APIView):
             document_type = kwargs.get('document_type')
             doc_name, file_path, relative_file_path = path_generate(document_type)
             
-            # ========== CONSTRUCT FULL URL ==========
-            # Convert Windows path to URL format
-            relative_url = relative_file_path.replace('\\', '/')
+            from django.conf import settings
             
-            # Get host from request
-            host = request.get_host().lower()
+            print(" PATH :", f"{settings.MEDIA_URL}{relative_file_path}")
+            cdn_path = f"{settings.MEDIA_URL}{relative_file_path}"
             
-            # Determine base URL based on domain
-            if '127.0.0.1' in host or 'localhost' in host:
-                # Local development
-                full_pdf_url = f"http://127.0.0.1:8000/public/documents/{relative_url}"
-            else:
-                # Production - use apicore
-                full_pdf_url = f"https://apicore.cnlerp.com/public/documents/{relative_url}"
-            
-            print(f"Request host: {host}")
-            print(f"Full PDF URL: {full_pdf_url}")
-            # ========== END URL CONSTRUCTION ==========
+            print("CDN PATH :", cdn_path)
             
 #   #=======================================ReportLab Code Started============================          
             if document_type == "sale_order":
@@ -1113,39 +1102,6 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'], 
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks']
                                 )
-                
-                # ========== FIXED TRACKING CODE ==========
-                # Get file size
-                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
-
-                # Get customer_id from pdf_data
-                customer_id = pdf_data.get('customer_id')
-                print("customer_id : ", customer_id)
-
-                # Get Customer object
-                customer_obj = None
-                if customer_id:
-                    try:
-                        from apps.customer.models import Customer
-                        customer_obj = Customer.objects.get(customer_id=customer_id)  # Use id, not customer_id
-                        print(f"Found customer: {customer_obj}")
-                    except Customer.DoesNotExist:
-                        print(f"Customer with ID {customer_id} not found")
-                    except Exception as e:
-                        print(f"Error fetching customer: {e}")
-
-                # Create document record
-                DocumentsGeneration.objects.create(
-                    document_type=document_type,
-                    document_id=str(pk),  # Convert UUID to string
-                    customer=customer_obj,  # Pass the object, not the ID string
-                    file_name=doc_name,
-                    file_path=relative_file_path,
-                    file_url=full_pdf_url,
-                    file_size=file_size,
-                    # generated_by=request.user if request.user.is_authenticated else None,
-                )
-                # ========== END ==========
                 
             if document_type == "sale_invoice":
                 pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)  
@@ -1348,115 +1304,57 @@ class DocumentGeneratorView(APIView):
                 
             # elif flag == 'whatsapp':
             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
-            # elif flag == 'whatsapp':
-
-            #     from django.conf import settings
-
-            #     city_id = request.GET.get('city')
-
-            #     # 1️⃣ Resolve phone
-            #     phone = resolve_phone_from_document(
-            #         document_type=document_type,
-            #         pk=pk,
-            #         city_id=city_id,
-            #         request=request   # REQUIRED FOR LEDGER
-            #     )
-
-            #     if not phone:
-            #         return Response({
-            #             "status": 0,
-            #             "message": "Phone number not found in address"
-            #         }, status=400)
-
-            #     # 2️⃣ WATI ENABLED (PROD)
-            #     if getattr(settings, 'ENABLE_WATI', False):
-            #         result = send_whatsapp_message_via_wati(phone, cdn_path)
-
-            #         return Response({
-            #             "status": 1,
-            #             "mode": "wati",
-            #             "message": result,                        
-            #             "phone": phone
-            #         })
-
-            #     # 3️⃣ LOCAL / DEV MODE (NO LICENSE)
-            #     customer_name = pdf_data.get("customer_name", "Customer")
-
-            #     message = (
-            #         f"Hello {customer_name} 👋\n\n"
-            #         f"Please find your *{document_type.replace('_', ' ').title()}* below:\n\n"
-            #         f"{cdn_path}\n\n"
-            #         "Thank you.\n"
-            #         "Rudhra Industries"
-            #     )
-
-            #     whatsapp_url = build_whatsapp_click_url(phone, message)
-
-            #     return Response({
-            #         "status": 1,
-            #         "mode": "click_to_chat",
-            #         "phone": phone,
-            #         "whatsapp_url": whatsapp_url
-            #     })
-            # In your DocumentGeneratorView (views.py)
             elif flag == 'whatsapp':
+
                 from django.conf import settings
-                # import os
 
                 city_id = request.GET.get('city')
 
-                # Resolve phone
+                # 1️⃣ Resolve phone
                 phone = resolve_phone_from_document(
                     document_type=document_type,
                     pk=pk,
                     city_id=city_id,
-                    request=request
+                    request=request   # REQUIRED FOR LEDGER
                 )
 
                 if not phone:
-                    return build_response(0, "Phone number not found in address", [], status.HTTP_400_BAD_REQUEST)
+                    return Response({
+                        "status": 0,
+                        "message": "Phone number not found in address"
+                    }, status=400)
 
-                # Ensure PDF was generated
-                if not os.path.exists(file_path):
-                    return build_response(0, f"PDF file not found: {file_path}", [], status.HTTP_404_NOT_FOUND)
+                # 2️⃣ WATI ENABLED (PROD)
+                if getattr(settings, 'ENABLE_WATI', False):
+                    result = send_whatsapp_message_via_wati(phone, cdn_path)
 
-                # ========== FIX: Use public/documents endpoint ==========
-                relative_url = relative_file_path.replace('\\', '/')
-                
-                # Get host from request
-                host = request.get_host().lower()
-                
-                if '127.0.0.1' in host or 'localhost' in host:
-                    # Local development
-                    full_pdf_url = f"http://127.0.0.1:8000/public/documents/{relative_url}"
-                else:
-                    # Production - all documents served from apicore
-                    full_pdf_url = f"https://apicore.cnlerp.com/public/documents/{relative_url}"
-                
-                print(f"Request host: {host}")
-                print(f"Public PDF URL: {full_pdf_url}")
-                # ========== END FIX ==========
+                    return Response({
+                        "status": 1,
+                        "mode": "wati",
+                        "message": result,                        
+                        "phone": phone
+                    })
 
-                # Get customer name
-                customer_name = pdf_data.get('customer_name', 'Customer')
-                order_no = pdf_data.get('order_no')  # or 'invoice_no' for invoices
-                
-                # Send via WhatsApp
-                result = send_whatsapp_document(
-                    to_number=phone,
-                    pdf_url=full_pdf_url,
-                    customer_name=customer_name,
-                    order_no=order_no
+                # 3️⃣ LOCAL / DEV MODE (NO LICENSE)
+                customer_name = pdf_data.get("customer_name", "Customer")
+
+                message = (
+                    f"Hello {customer_name} 👋\n\n"
+                    f"Please find your *{document_type.replace('_', ' ').title()}* below:\n\n"
+                    f"{cdn_path}\n\n"
+                    "Thank you.\n"
+                    "Rudhra Industries"
                 )
-                
+
+                whatsapp_url = build_whatsapp_click_url(phone, message)
+
                 return Response({
-                    "status": 1 if result.get('success') else 0,
-                    "message": result,
+                    "status": 1,
+                    "mode": "click_to_chat",
                     "phone": phone,
-                    "pdf_url": full_pdf_url,
-                    "document_type": document_type,
-                    "customer_name": customer_name
+                    "whatsapp_url": whatsapp_url
                 })
+
 
 
         except Http404:

@@ -265,7 +265,6 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                 'billing_address' : billing_address,
 
                 'customer_name' : customer_data_for_cust_data['customer']['name'],
-                'customer_id': customer_data_for_cust_data['customer']['customer_id'],  # ADD THIS LINE
                 'city' : city,
                 'country' : country,
                 'phone' : phone,
