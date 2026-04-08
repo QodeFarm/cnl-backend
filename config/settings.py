@@ -56,21 +56,21 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # # Local dev only — update this each time you restart ngrok
 # # NGROK_BASE_URL = "https://abc123.ngrok-free.app"
-# NGROK_BASE_URL = "https://calculatedly-handloomed-ray.ngrok-free.dev"
+NGROK_BASE_URL = "https://apicore.cnlerp.com"
 
-# ENABLE_WATI = True
+ENABLE_WATI = True
 
 # Environment-based configuration
-ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')  # 'production' or 'development'
+# ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')  # 'production' or 'development'
 
-if ENVIRONMENT == 'production':
-    # Production
-    NGROK_BASE_URL = "https://apicore.cnlerp.com"
-    ENABLE_WATI = True
-else:
-    # Local development - update this each time you restart ngrok
-    NGROK_BASE_URL = "https://calculatedly-handloomed-ray.ngrok-free.dev"
-    ENABLE_WATI = True  # or False for local testing
+# if ENVIRONMENT == 'production':
+#     # Production
+#     NGROK_BASE_URL = "https://apicore.cnlerp.com"
+#     ENABLE_WATI = True
+# else:
+#     # Local development - update this each time you restart ngrok
+#     NGROK_BASE_URL = "https://calculatedly-handloomed-ray.ngrok-free.dev"
+#     ENABLE_WATI = True  # or False for local testing
 
 
 # Application definition
