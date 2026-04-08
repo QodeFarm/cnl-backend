@@ -1865,90 +1865,179 @@ class StockSummaryAPIView(APIView):
     
     def get(self, request, *args, **kwargs):
         try:
-            # Get or generate stock summary for the period
-            self.generate_stock_summary()
-            
             page, limit = self.get_pagination_params(request)
-            
-            # Query the stock summary
+
+            # Regenerate if:
+            # 1. New products exist without a summary row, OR
+            # 2. New Stock Journal transactions were created after the last summary update
+            product_count = Products.objects.filter(is_deleted=False).count()
+            summary_count = StockSummary.objects.filter(is_deleted=False).count()
+            latest_summary_update = StockSummary.objects.filter(
+                is_deleted=False
+            ).aggregate(Max('updated_at'))['updated_at__max']
+
+            new_transactions = (
+                latest_summary_update is None or
+                StockJournal.objects.filter(
+                    is_deleted=False,
+                    created_at__gt=latest_summary_update
+                ).exists()
+            )
+
+            if summary_count < product_count or new_transactions:
+                self.generate_stock_summary()
+
+            # Query with select_related to eliminate N+1 on FK traversals
             queryset = StockSummary.objects.filter(
                 is_deleted=False
+            ).select_related(
+                'product_id',
+                'product_id__product_group_id',
+                'product_id__category_id',
+                'unit_options_id',
             ).order_by('product_id__product_group_id__group_name', 'product_id__name')
-            
-            # Apply filters if any
+
+            # Let StockSummaryFilter handle sort, search, page, limit — it internally
+            # paginates via filter_by_limit() and stores the pre-pagination total in
+            # filterset.total_count. Do NOT manually slice after this.
+            total_count = queryset.count()
             if request.query_params:
                 filterset = StockSummaryFilter(request.GET, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-            
-            total_count = StockSummary.objects.all().count()
+                    # filter_by_limit sets this to the full count before slicing
+                    if hasattr(filterset, 'total_count'):
+                        total_count = filterset.total_count
+
             serializer = StockSummarySerializer(queryset, many=True)
-            
+
             return filter_response(
-                queryset.count(), 
-                "Success", 
-                serializer.data, 
-                page, 
-                limit, 
-                total_count, 
+                len(serializer.data),
+                "Success",
+                serializer.data,
+                page,
+                limit,
+                total_count,
                 status.HTTP_200_OK
             )
-            
+
         except Exception as e:
             logger.error(f"Error retrieving stock summary: {str(e)}")
             return build_response(
-                0, 
-                f"An error occurred: {str(e)}", 
-                [], 
+                0,
+                f"An error occurred: {str(e)}",
+                [],
                 status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    def post(self, request, *args, **kwargs):
+        """Explicit refresh — regenerates stock summary for all products."""
+        try:
+            self.generate_stock_summary()
+            return build_response(1, "Stock summary refreshed successfully.", [], status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error refreshing stock summary: {str(e)}")
+            return build_response(0, f"Refresh failed: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def generate_stock_summary(self):
         """
-        Generates stock summary for all products for the given period
+        Generates / refreshes stock summary for all active products.
+
+        Performance: uses 2 bulk aggregate queries (received + issued totals for ALL
+        products at once) instead of the previous 2 queries × N products = O(2N) approach.
+        Result: ~7 total queries regardless of product count.
         """
+        from django.utils import timezone
+        today = timezone.now().date()
+
+        RECEIVE_TYPES = ['Receive', 'receive', 'RECEIVE', 'receive-edit']
+        ISSUE_TYPES   = ['Issue',   'issue',   'ISSUE',   'issue-edit']
+
         with transaction.atomic():
-            # Get all products
-            products = Products.objects.filter(is_deleted=False)
-            
+            # --- 1 query: all products ---
+            products = list(Products.objects.filter(is_deleted=False).select_related(
+                'unit_options_id', 'product_group_id'
+            ))
+
+            # --- 1 query: received totals per product ---
+            received_map = {
+                str(row['product_id']): row['total'] or 0
+                for row in StockJournal.objects.filter(
+                    is_deleted=False,
+                    transaction_type__in=RECEIVE_TYPES
+                ).values('product_id').annotate(total=Sum('quantity'))
+            }
+
+            # --- 1 query: issued totals per product ---
+            issued_map = {
+                str(row['product_id']): row['total'] or 0
+                for row in StockJournal.objects.filter(
+                    is_deleted=False,
+                    transaction_type__in=ISSUE_TYPES
+                ).values('product_id').annotate(total=Sum('quantity'))
+            }
+
+            # --- 1 query: latest journal date per product ---
+            # Used for period_end so "Last Transaction" shows a meaningful date,
+            # not the bulk-create timestamp (which is the same for all new rows).
+            last_txn_map = {
+                str(row['product_id']): row['latest'].date()
+                for row in StockJournal.objects.filter(is_deleted=False)
+                .values('product_id').annotate(latest=Max('created_at'))
+            }
+
+            # --- 1 query: existing summary rows ---
+            existing_map = {
+                str(row.product_id_id): row
+                for row in StockSummary.objects.filter(is_deleted=False)
+            }
+
+            to_create = []
+            to_update = []
+
             for product in products:
-                # Find existing summary or create new
-                summary, created = StockSummary.objects.get_or_create(
-                    product_id=product,
-                    
-                    defaults={
-                        'unit_options_id': product.unit_options_id,
-                        'mrp': product.mrp or 0,
-                        'sales_rate': product.sales_rate or 0,
-                        'purchase_rate': product.purchase_rate or 0,
-                    }
+                pid = str(product.product_id)
+                received_qty = received_map.get(pid, 0)
+                issued_qty   = issued_map.get(pid, 0)
+                current_balance = product.balance or 0
+                opening_qty  = current_balance - (received_qty - issued_qty)
+                closing_qty  = current_balance
+                # period_end = date of most recent transaction, or None if no transactions.
+                # None displays as "—" in the UI (correct for products with no activity).
+                last_txn_date = last_txn_map.get(pid)
+
+                summary = existing_map.get(pid)
+                if summary is None:
+                    to_create.append(StockSummary(
+                        product_id=product,
+                        unit_options_id=product.unit_options_id,
+                        mrp=product.mrp or 0,
+                        sales_rate=product.sales_rate or 0,
+                        purchase_rate=product.purchase_rate or 0,
+                        period_start=today,
+                        period_end=last_txn_date,
+                        opening_quantity=opening_qty,
+                        closing_quantity=closing_qty,
+                        received_quantity=received_qty,
+                        issued_quantity=issued_qty,
+                    ))
+                else:
+                    summary.opening_quantity = opening_qty
+                    summary.closing_quantity = closing_qty
+                    summary.received_quantity = received_qty
+                    summary.issued_quantity = issued_qty
+                    summary.period_end = last_txn_date
+                    to_update.append(summary)
+
+            # --- 1 query: bulk create new rows ---
+            if to_create:
+                StockSummary.objects.bulk_create(to_create, ignore_conflicts=True)
+
+            # --- 1 query: bulk update existing rows ---
+            if to_update:
+                StockSummary.objects.bulk_update(
+                    to_update,
+                    ['opening_quantity', 'closing_quantity', 'received_quantity',
+                     'issued_quantity', 'period_end'],
+                    batch_size=500
                 )
-                
-                # Calculate transactions within this period
-                stock_movements = StockJournal.objects.filter(
-                    product_id=product,
-                    is_deleted=False
-                )
-                
-                received_qty = stock_movements.filter(
-                    transaction_type__in=['Receive', 'receive', 'RECEIVE', 'receive-edit']
-                ).aggregate(Sum('quantity'))['quantity__sum'] or 0
-                
-                issued_qty = stock_movements.filter(
-                    transaction_type__in=['Issue', 'issue', 'ISSUE', 'issue-edit']
-                ).aggregate(Sum('quantity'))['quantity__sum'] or 0
-                
-                # IMPORTANT: Calculate opening balance by REMOVING the effect of current period transactions
-                # Current balance minus (received minus issued) during period
-                current_balance = product.balance
-                opening_qty = current_balance - (received_qty - issued_qty)
-                
-                # Calculate closing stock (current balance)
-                closing_qty = current_balance
-                
-                # Update the summary
-                summary.opening_quantity = opening_qty
-                summary.closing_quantity = closing_qty
-                summary.received_quantity = received_qty
-                summary.issued_quantity = issued_qty
-                summary.save()

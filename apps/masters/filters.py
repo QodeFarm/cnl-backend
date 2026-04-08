@@ -10,29 +10,50 @@ from config.utils_filter_methods import filter_by_search, filter_by_sort, filter
 class CountryFilters(django_filters.FilterSet):
     country_name = django_filters.CharFilter(field_name='country_name', lookup_expr='icontains')
     country_code = django_filters.CharFilter(field_name='country_code', lookup_expr='exact')
+    s = django_filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
 
     class Meta:
         model = Country
-        fields = ['country_name', 'country_code']
-    
+        fields = ['country_name', 'country_code', 's']
+
 class StateFilters(django_filters.FilterSet):
     state_name = django_filters.CharFilter(field_name='state_name', lookup_expr='icontains')
     state_code = django_filters.CharFilter(field_name='state_code', lookup_expr='exact')
     country_name = django_filters.CharFilter(field_name='country_id__country_name', lookup_expr='icontains')
+    s = django_filters.CharFilter(method='filter_by_search', label="Search")
 
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+    
     class Meta:
         model = State
-        fields = ['state_name', 'state_code', 'country_name']
+        fields = ['state_name', 'state_code', 'country_name', 's']
 
 class CityFilters(django_filters.FilterSet):
     city_name = django_filters.CharFilter(field_name='city_name', lookup_expr='icontains')
     city_code = django_filters.CharFilter(field_name='city_code', lookup_expr='exact')
     state_name = django_filters.CharFilter(field_name='state_id__state_name', lookup_expr='icontains')
     country_name = django_filters.CharFilter(field_name='state_id__country_id__country_name', lookup_expr='icontains')
+    s = django_filters.CharFilter(method='filter_by_search', label="Search")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
 
     class Meta:
         model = City
-        fields = ['city_name', 'city_code', 'state_name', 'country_name']
+        fields = ['city_name', 'city_code', 'state_name', 'country_name', 's']
 
 
 class LedgerGroupsFilters(filters.FilterSet):
