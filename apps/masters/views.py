@@ -1305,55 +1305,111 @@ class DocumentGeneratorView(APIView):
             # elif flag == 'whatsapp':
             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
             elif flag == 'whatsapp':
-
                 from django.conf import settings
-
+                
                 city_id = request.GET.get('city')
-
+                
                 # 1️⃣ Resolve phone
                 phone = resolve_phone_from_document(
                     document_type=document_type,
                     pk=pk,
                     city_id=city_id,
-                    request=request   # REQUIRED FOR LEDGER
+                    request=request
                 )
-
+                
                 if not phone:
                     return Response({
                         "status": 0,
                         "message": "Phone number not found in address"
                     }, status=400)
-
-                # 2️⃣ WATI ENABLED (PROD)
+                
+                # Get customer name
+                customer_name = pdf_data.get("customer_name", "Customer")
+                document_type_display = document_type.replace('_', ' ').title()
+                
+                # 2️⃣ WATI ENABLED
                 if getattr(settings, 'ENABLE_WATI', False):
-                    result = send_whatsapp_message_via_wati(phone, cdn_path)
-
+                    result = send_whatsapp_message_via_wati(
+                        to_number=phone,
+                        file_url=cdn_path,
+                        document_type=document_type,
+                        customer_name=customer_name
+                    )
+                    
                     return Response({
-                        "status": 1,
-                        "mode": "wati",
-                        "message": result,                        
+                        "status": 1 if result.get('sent') else 0,
+                        "mode": result.get('mode', 'wati'),
+                        "message": result,
                         "phone": phone
                     })
-
-                # 3️⃣ LOCAL / DEV MODE (NO LICENSE)
-                customer_name = pdf_data.get("customer_name", "Customer")
-
+                
+                # 3️⃣ LOCAL / DEV MODE (fallback)
                 message = (
                     f"Hello {customer_name} 👋\n\n"
-                    f"Please find your *{document_type.replace('_', ' ').title()}* below:\n\n"
+                    f"Please find your *{document_type_display}* below:\n\n"
                     f"{cdn_path}\n\n"
                     "Thank you.\n"
                     "Rudhra Industries"
                 )
-
+                
                 whatsapp_url = build_whatsapp_click_url(phone, message)
-
+                
                 return Response({
                     "status": 1,
                     "mode": "click_to_chat",
                     "phone": phone,
                     "whatsapp_url": whatsapp_url
                 })
+            # elif flag == 'whatsapp':
+
+            #     from django.conf import settings
+
+            #     city_id = request.GET.get('city')
+
+            #     # 1️⃣ Resolve phone
+            #     phone = resolve_phone_from_document(
+            #         document_type=document_type,
+            #         pk=pk,
+            #         city_id=city_id,
+            #         request=request   # REQUIRED FOR LEDGER
+            #     )
+
+            #     if not phone:
+            #         return Response({
+            #             "status": 0,
+            #             "message": "Phone number not found in address"
+            #         }, status=400)
+
+            #     # 2️⃣ WATI ENABLED (PROD)
+            #     if getattr(settings, 'ENABLE_WATI', False):
+            #         result = send_whatsapp_message_via_wati(phone, cdn_path)
+
+            #         return Response({
+            #             "status": 1,
+            #             "mode": "wati",
+            #             "message": result,                        
+            #             "phone": phone
+            #         })
+
+            #     # 3️⃣ LOCAL / DEV MODE (NO LICENSE)
+            #     customer_name = pdf_data.get("customer_name", "Customer")
+
+            #     message = (
+            #         f"Hello {customer_name} 👋\n\n"
+            #         f"Please find your *{document_type.replace('_', ' ').title()}* below:\n\n"
+            #         f"{cdn_path}\n\n"
+            #         "Thank you.\n"
+            #         "Rudhra Industries"
+            #     )
+
+            #     whatsapp_url = build_whatsapp_click_url(phone, message)
+
+            #     return Response({
+            #         "status": 1,
+            #         "mode": "click_to_chat",
+            #         "phone": phone,
+            #         "whatsapp_url": whatsapp_url
+            #     })
 
 
 

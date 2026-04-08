@@ -1916,71 +1916,211 @@ def send_pdf_via_email(to_email, pdf_relative_path, document_type):
 #             "error": str(e)
 #         }
 
-def send_whatsapp_message_via_wati(to_number, file_url=None, template_name=None, template_params=None):
-    """
-    Send WhatsApp message via WATI API – FORCED PRODUCTION MODE
-    """
-    import re
-    import requests
-    
-    # ========== HARDCODED PRODUCTION CONFIG ==========
-    WATI_INSTANCE_ID = "10114393"
-    WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs"
-    
-    # Clean phone number
-    clean_phone = re.sub(r'\D', '', to_number)
-    if not clean_phone.startswith('91'):
-        clean_phone = '91' + clean_phone
-    
-    # If template_name is provided, send template message
-    if template_name and template_params:
-        url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage/{clean_phone}"
-        headers = {
-            'Authorization': WATI_TOKEN,
-            'Content-Type': 'application/json',
-        }
-        payload = {
-            'template_name': template_name,
-            'parameters': template_params
-        }
-        
-        print(f"📤 Sending template to {clean_phone}")
-        print(f"URL: {url}")
-        print(f"Payload: {payload}")
-        
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        
-        print(f"Response status: {response.status_code}")
-        print(f"Response: {response.text}")
-        
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('result') is True:
-                return {"mode": "wati", "sent": True}
-            else:
-                return {"mode": "error", "reason": result.get('info', 'Unknown error')}
-        else:
-            return {"mode": "error", "reason": f"HTTP_{response.status_code}"}
-    
-    # If file_url is provided, send file
-    elif file_url:
-        url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendSessionFile/{clean_phone}"
-        headers = {
-            'Authorization': WATI_TOKEN,
-        }
-        with open(file_url, 'rb') as f:
-            files = {'file': (os.path.basename(file_url), f, 'application/pdf')}
-            response = requests.post(url, headers=headers, files=files, timeout=30)
-        
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('result') is True:
-                return {"mode": "wati", "sent": True}
-        return {"mode": "error", "reason": "File send failed"}
-    
-    else:
-        return {"mode": "error", "reason": "No template_name or file_url provided"}
+# utils_methods.py
 
+# def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None, customer_name=None):
+#     """
+#     Send WhatsApp document via WATI using Template + File approach
+#     """
+#     import re
+#     import requests
+#     import os
+#     from datetime import datetime
+#     from django.conf import settings
+    
+#     # WATI Config
+#     WATI_INSTANCE_ID = "10114393"
+#     WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjcvMjAyNiAxMzoyMDo1OCIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwianRpIjoiNTU1MzcwN2MtZWNhOS00ODg1LTk1M2EtZGUwYjM1NWFjNmQ3IiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.T8e7fbojYm30K8UEMoecnzJccYXcYVsDbOxb7Evm3RU"
+    
+#     # Clean phone number
+#     clean_phone = re.sub(r'\D', '', to_number)
+#     if len(clean_phone) == 10:
+#         clean_phone = '91' + clean_phone
+    
+#     print(f"📱 Processing WhatsApp for: {clean_phone}")
+    
+#     # Step 1: Add contact to WATI
+#     try:
+#         add_contact_url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/addContact/{clean_phone}"
+#         headers = {
+#             'Authorization': WATI_TOKEN,
+#             'Content-Type': 'application/json',
+#         }
+#         contact_payload = {
+#             "name": customer_name or "Customer",
+#             "customParams": [
+#                 {"name": "source", "value": "document_generator"}
+#             ]
+#         }
+#         add_response = requests.post(add_contact_url, headers=headers, json=contact_payload, timeout=30)
+#         print(f"✅ Add Contact Response: {add_response.status_code}")
+#     except Exception as e:
+#         print(f"⚠️ Add contact error: {e}")
+    
+#     # Step 2: Send template first (opens session)
+#     document_type_display = document_type.replace('_', ' ').title() if document_type else "Document"
+    
+#     template_url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}"
+    
+#     headers = {
+#         'Authorization': WATI_TOKEN,
+#         'Content-Type': 'application/json',
+#     }
+    
+#     template_params = [
+#         {"name": "1", "value": customer_name or "Customer"},
+#         {"name": "2", "value": document_type_display},
+#         {"name": "3", "value": "Rudhra Industries"}
+#     ]
+    
+#     template_payload = {
+#         "template_name": "document_notification",  # Create this template first!
+#         "broadcast_name": f"doc_notify_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+#         "parameters": template_params
+#     }
+    
+#     print(f"📤 Sending template to {clean_phone}")
+#     print(f"Template Payload: {template_payload}")
+    
+#     template_response = requests.post(template_url, headers=headers, json=template_payload, timeout=30)
+#     print(f"Template Response: {template_response.status_code} - {template_response.text}")
+    
+#     if template_response.status_code != 200:
+#         return {"mode": "error", "reason": f"Template failed: {template_response.text}"}
+    
+#     template_result = template_response.json()
+#     if not template_result.get('result'):
+#         return {"mode": "error", "reason": template_result.get('info', 'Template send failed')}
+    
+#     print("✅ Template sent, session opened")
+    
+#     # Step 3: Send file via session
+#     if file_url:
+#         full_file_path = os.path.join(settings.MEDIA_ROOT, file_url.replace('/cdn/', ''))
+        
+#         if not os.path.exists(full_file_path):
+#             return {"mode": "error", "reason": f"File not found: {full_file_path}"}
+        
+#         file_url_api = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendSessionFile/{clean_phone}"
+#         headers_file = {'Authorization': WATI_TOKEN}
+        
+#         filename = os.path.basename(full_file_path)
+        
+#         with open(full_file_path, 'rb') as f:
+#             files = {'file': (filename, f, 'application/pdf')}
+#             file_response = requests.post(file_url_api, headers=headers_file, files=files, timeout=60)
+        
+#         print(f"File Response: {file_response.status_code} - {file_response.text}")
+        
+#         if file_response.status_code == 200:
+#             file_result = file_response.json()
+#             if file_result.get('result'):
+#                 return {
+#                     "mode": "wati", 
+#                     "sent": True, 
+#                     "message": "Document sent successfully",
+#                     "template_id": template_result.get('messageId'),
+#                     "file_id": file_result.get('messageId')
+#                 }
+#             else:
+#                 return {"mode": "error", "reason": file_result.get('info', 'File send failed')}
+#         else:
+#             return {"mode": "error", "reason": f"File send failed: {file_response.text}"}
+    
+#     return {"mode": "wati", "sent": True, "message": "Template sent, waiting for file"}
+    
+def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None, customer_name=None):
+    import re, requests, os
+    from datetime import datetime
+    from django.conf import settings
+
+    WATI_INSTANCE_ID = "10114393"
+    WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDgvMjAyNiAwNTozNjozMyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.fgw-FrZ17KIRnuwXeftK55HeRi61PCTRBa-TI7NSgbY"
+
+    clean_phone = re.sub(r'\D', '', to_number)
+    if len(clean_phone) == 10:
+        clean_phone = '91' + clean_phone
+
+    auth_headers = {
+        'Authorization': WATI_TOKEN,
+        'Content-Type': 'application/json'
+    }
+
+    # --- Step 1: Add contact ---
+    try:
+        requests.post(
+            f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/addContact/{clean_phone}",
+            headers=auth_headers,
+            json={"name": customer_name or "Customer"},
+            timeout=30
+        )
+    except Exception as e:
+        print(f"⚠️ Add contact error: {e}")
+
+    # --- Step 2: Build public URL ---
+    if not file_url:
+        return {"sent": False, "mode": "error", "reason": "No file URL provided"}
+
+    NGROK_BASE_URL = getattr(settings, 'NGROK_BASE_URL', None)
+    if not NGROK_BASE_URL:
+        return {"sent": False, "mode": "error", "reason": "NGROK_BASE_URL not set in settings"}
+
+    file_url_clean = file_url.replace('\\', '/')
+    public_url = f"{NGROK_BASE_URL.rstrip('/')}/{file_url_clean.lstrip('/')}"
+    filename = os.path.basename(file_url_clean)
+
+    print(f"📎 Public URL: {public_url}")
+
+    # --- Step 3: Verify file is actually accessible before calling WATI ---
+    try:
+        check = requests.get(public_url, timeout=10, allow_redirects=True)
+        print(f"🔍 URL check: {check.status_code} | Content-Type: {check.headers.get('Content-Type')}")
+        if check.status_code != 200:
+            return {"sent": False, "mode": "error", "reason": f"File not publicly accessible: HTTP {check.status_code}"}
+    except Exception as e:
+        return {"sent": False, "mode": "error", "reason": f"Could not reach public URL: {e}"}
+
+    # --- Step 4: Send template with document header using public URL ---
+    template_payload = {
+        "template_name": "sale_order_sending",
+        "broadcast_name": f"doc_file_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "parameters": [
+            {"name": "customer_name", "value": customer_name or "Customer"},
+        ],
+        "header": {
+            "type": "document",
+            "document": {
+                "link": public_url,       # ✅ public URL instead of media ID
+                "filename": filename
+            }
+        }
+    }
+
+    print(f"📨 Payload: {template_payload}")
+
+    t_resp = requests.post(
+        f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
+        headers=auth_headers,
+        json=template_payload,
+        timeout=30
+    )
+
+    print(f"📨 Template+doc: {t_resp.status_code} - {t_resp.text}")
+
+    if t_resp.status_code != 200:
+        return {"sent": False, "mode": "error", "reason": f"HTTP {t_resp.status_code}: {t_resp.text}"}
+
+    try:
+        result = t_resp.json()
+    except Exception:
+        return {"sent": False, "mode": "error", "reason": f"Invalid JSON: {t_resp.text}"}
+
+    return {
+        "sent": result.get('result', False),
+        "mode": "wati",
+        "message_id": result.get('messageId'),
+        "reason": result.get('info') if not result.get('result') else None
+    }
     
 # from apps.customers.models import Customer
 # from apps.vendors.models import Vendor
@@ -3514,7 +3654,7 @@ logger = logging.getLogger(__name__)
 
 # ==================== WATI CONFIGURATION ====================
 WATI_INSTANCE_ID = "10114393"
-WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjUvMjAyNiAwNTozMToxMSIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.-HlwUtEJ6NVhW2zIgiaH0yLfSKMIxz9spaJzWqexsIE"
+WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjcvMjAyNiAxMzoyMDo1OCIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwianRpIjoiNTU1MzcwN2MtZWNhOS00ODg1LTk1M2EtZGUwYjM1NWFjNmQ3IiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.T8e7fbojYm30K8UEMoecnzJccYXcYVsDbOxb7Evm3RU"
 
 # ==================== SESSION MESSAGE (No Template Needed!) ====================
 
@@ -3879,3 +4019,104 @@ _Automated message. Please do not reply._"""
             error_msg = result.get('reason', 'Unknown error')
             print(f"❌ Failed to send: {error_msg}")
             return False, f"Failed to send WhatsApp: {error_msg}"
+        
+#documentation wati
+def send_template_without_document(phone_number, customer_name, document_type, company_name="Rudhra Industries"):
+    """
+    Send template message to open session (no document attached)
+    """
+    import re
+    import requests
+    from datetime import datetime
+    
+    # Clean phone number
+    clean_phone = re.sub(r'\D', '', phone_number)
+    if len(clean_phone) == 10:
+        clean_phone = '91' + clean_phone
+    
+    # WATI Config
+    WATI_INSTANCE_ID = "10114393"
+    WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs"
+    
+    # URL with phone as query parameter
+    url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}"
+    
+    headers = {
+        'Authorization': WATI_TOKEN,
+        'Content-Type': 'application/json',
+    }
+    
+    # Parameters for template
+    parameters = [
+        {"name": "1", "value": customer_name},
+        {"name": "2", "value": document_type},
+        {"name": "3", "value": company_name}
+    ]
+    
+    payload = {
+        "template_name": "document_notification",  # Your template name
+        "broadcast_name": f"doc_notify_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "parameters": parameters
+    }
+    
+    print(f"📤 Sending template to {clean_phone}")
+    print(f"Payload: {payload}")
+    
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    
+    print(f"Template Response: {response.status_code} - {response.text}")
+    
+    if response.status_code == 200:
+        result = response.json()
+        if result.get('result') is True:
+            return {"sent": True, "message_id": result.get('messageId')}
+        else:
+            return {"sent": False, "reason": result.get('info', 'Unknown error')}
+    else:
+        return {"sent": False, "reason": f"HTTP_{response.status_code}"}
+    
+def send_file_via_session(phone_number, file_path, filename=None):
+    """
+    Send PDF file via session (must have an open session)
+    """
+    import re
+    import requests
+    import os
+    
+    # Clean phone number
+    clean_phone = re.sub(r'\D', '', phone_number)
+    if len(clean_phone) == 10:
+        clean_phone = '91' + clean_phone
+    
+    # WATI Config
+    WATI_INSTANCE_ID = "10114393"
+    WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjcvMjAyNiAxMzoyMDo1OCIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwianRpIjoiNTU1MzcwN2MtZWNhOS00ODg1LTk1M2EtZGUwYjM1NWFjNmQ3IiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.T8e7fbojYm30K8UEMoecnzJccYXcYVsDbOxb7Evm3RU"
+    
+    # Check if file exists
+    if not os.path.exists(file_path):
+        return {"sent": False, "reason": f"File not found: {file_path}"}
+    
+    # Send file via session
+    url = f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendSessionFile/{clean_phone}"
+    
+    headers = {
+        'Authorization': WATI_TOKEN,
+    }
+    
+    if not filename:
+        filename = os.path.basename(file_path)
+    
+    with open(file_path, 'rb') as f:
+        files = {'file': (filename, f, 'application/pdf')}
+        response = requests.post(url, headers=headers, files=files, timeout=60)
+    
+    print(f"Send File Response: {response.status_code} - {response.text}")
+    
+    if response.status_code == 200:
+        result = response.json()
+        if result.get('result') is True:
+            return {"sent": True, "message_id": result.get('messageId')}
+        else:
+            return {"sent": False, "reason": result.get('info', 'Unknown error')}
+    else:
+        return {"sent": False, "reason": f"HTTP_{response.status_code}"}
