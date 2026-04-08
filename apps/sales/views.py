@@ -745,10 +745,9 @@ from django.conf import settings
 
 def try_send_sale_order_whatsapp(request, sale_order_id):
     """
-    Auto-send order confirmation WhatsApp with PDF on sale order creation.
-    Template : sale_order_confirmation
-    Variables: {{1}} = customer name
-    Header   : Document (PDF)
+    Auto-send order confirmation WhatsApp with PDF link on sale order creation.
+    Template : final_confirm
+    Variables: {{1}} = customer name, {{2}} = PDF link
     """
     import re, requests, os, time
     from datetime import datetime
@@ -756,9 +755,8 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
 
     try:
         WATI_INSTANCE_ID = getattr(settings, 'WATI_INSTANCE_ID', '10114393')
-        # WATI_TOKEN       = getattr(settings, 'WATI_TOKEN', 'Bearer YOUR_TOKEN')
         WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDQvMjAyNiAxMjowODo1MyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.x9a782YijlrrmVspjdEpgZnJwmJMpFeSZDByUxMjuC8"
-        NGROK_BASE_URL   = getattr(settings, 'NGROK_BASE_URL', None)
+        NGROK_BASE_URL = getattr(settings, 'NGROK_BASE_URL', None)
 
         # ── 1. Resolve phone ──────────────────────────────────────────────────
         city_id = request.GET.get('city') if request else None
@@ -799,15 +797,15 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             return {"whatsapp_sent": False, "mode": "error", "reason": "NGROK_BASE_URL not set"}
 
         file_url_clean = cdn_path.replace('\\', '/')
-        cache_bust     = int(time.time())
-        public_url     = f"{NGROK_BASE_URL.rstrip('/')}/{file_url_clean.lstrip('/')}?v={cache_bust}"
-        filename       = os.path.basename(file_url_clean)
+        cache_bust = int(time.time())
+        public_url = f"{NGROK_BASE_URL.rstrip('/')}/{file_url_clean.lstrip('/')}?v={cache_bust}"
+        filename = os.path.basename(file_url_clean)
 
         logger.info(f"📎 Public URL: {public_url}")
 
         # ── 6. Verify public URL accessible ───────────────────────────────────
         max_retries = 5
-        file_ready  = False
+        file_ready = False
 
         for attempt in range(max_retries):
             try:
@@ -824,7 +822,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         if not file_ready:
             return {"whatsapp_sent": False, "mode": "error", "reason": "File not publicly accessible"}
 
-        # ── 7. Send via WATI ──────────────────────────────────────────────────
+        # ── 7. Send via WATI (LINK APPROACH - NO DOCUMENT HEADER) ─────────────
         clean_phone = re.sub(r'\D', '', phone)
         if len(clean_phone) == 10:
             clean_phone = '91' + clean_phone
@@ -834,19 +832,14 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             'Content-Type': 'application/json'
         }
 
+        # USING LINK APPROACH - parameters as simple list
         template_payload = {
-            "template_name": "sale_order_confirm",
+            "template_name": "final_confirm",
             "broadcast_name": f"so_confirm_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "parameters": [
-                {"name": "1", "value": customer_name},
-            ],
-            "header": {
-                "type": "document",
-                "document": {
-                    "link": public_url,
-                    "filename": filename
-                }
-            }
+                {"name": "1", "value": customer_name or "Customer"},
+                {"name": "2", "value": public_url}  # Just the URL as text!
+            ]
         }
 
         logger.info(f"📨 Payload: {template_payload}")
@@ -861,7 +854,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         logger.info(f"📨 WATI Response: {t_resp.status_code} - {t_resp.text}")
 
         if t_resp.status_code != 200:
-            return {"whatsapp_sent": False, "mode": "error", "reason": f"HTTP {t_resp.status_code}"}
+            return {"whatsapp_sent": False, "mode": "error", "reason": f"HTTP {t_resp.status_code}: {t_resp.text}"}
 
         try:
             result = t_resp.json()
@@ -872,7 +865,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             "whatsapp_sent": result.get('result', False),
             "mode": "wati",
             "phone": phone,
-            "message_id": result.get('local_message_id'),
+            "message_id": result.get('messageId'),
             "reason": result.get('info') if not result.get('result') else None
         }
 
@@ -881,7 +874,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         import traceback
         traceback.print_exc()
         return {"whatsapp_sent": False, "mode": "error", "reason": str(e)}
-
+    
 class SaleOrderViewSet(APIView):
     """API ViewSet for handling sale order creation and related data."""
     def get_object(self, pk):
