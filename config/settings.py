@@ -39,19 +39,38 @@ ALLOWED_HOSTS = [
     "prod.cnlerp.com",  # Add frontend domain
     "rudhra.cnlerp.com",  # Add frontend domain
     "qa.cnlerp.com",  # Add frontend domain
+    "calculatedly-handloomed-ray.ngrok-free.dev",
 ]
 
 # Set DEBUG = False for master and demo
-if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS or "apicore.cnlerp.com" in ALLOWED_HOSTS:
-    DEBUG = False
-else:
-    DEBUG = True
-# DEBUG = True
+# if "demo.cnlerp.com" in ALLOWED_HOSTS or "master.cnlerp.com" in ALLOWED_HOSTS or "apicore.cnlerp.com" in ALLOWED_HOSTS:
+#     DEBUG = False
+# else:
+#     DEBUG = True
+DEBUG = True
 #------------File_uploads_requirements------------
 import os
 MEDIA_URL = '/cdn/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #--------------------------------------------
+
+# # Local dev only — update this each time you restart ngrok
+# # NGROK_BASE_URL = "https://abc123.ngrok-free.app"
+# NGROK_BASE_URL = "https://calculatedly-handloomed-ray.ngrok-free.dev"
+
+# ENABLE_WATI = True
+
+# Environment-based configuration
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'development')  # 'production' or 'development'
+
+if ENVIRONMENT == 'production':
+    # Production
+    NGROK_BASE_URL = "https://apicore.cnlerp.com"
+    ENABLE_WATI = True
+else:
+    # Local development - update this each time you restart ngrok
+    NGROK_BASE_URL = "https://calculatedly-handloomed-ray.ngrok-free.dev"
+    ENABLE_WATI = True  # or False for local testing
 
 
 # Application definition
@@ -111,6 +130,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'middleware.middleware.DatabaseMiddleware',
     'middleware.download_response_middleware.StripDownloadJsonMiddleware',
+    # 'config.middleware.NgrokBypassMiddleware',
     
 ]
 
@@ -479,9 +499,12 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 52428800  # 50 MB
 
 # settings.py
 
+WATI_INSTANCE_ID = "10114393"
+WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDQvMjAyNiAxMjowODo1MyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.x9a782YijlrrmVspjdEpgZnJwmJMpFeSZDByUxMjuC8"
+
 WATI_CONFIG = {
     'BASE_URL': 'https://live-mt-server.wati.io/10114393',
-    'API_TOKEN': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDMvMjQvMjAyNiAwNzozNDo0NiIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.NMJjiI4t6i-BDJQ8HzEO0Py40ny7iU583FCV2r6nJbs',
+    'WATI_TOKEN': WATI_TOKEN,
     'PHONE_NUMBER': '919505024999',
     'ENABLED': True,  # Set to False for local, True for production
 }
