@@ -2072,13 +2072,13 @@ def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None,
     print(f"📎 Public URL: {public_url}")
 
     # --- Step 3: Verify file is actually accessible before calling WATI ---
-    try:
-        check = requests.get(public_url, timeout=10, allow_redirects=True)
-        print(f"🔍 URL check: {check.status_code} | Content-Type: {check.headers.get('Content-Type')}")
-        if check.status_code != 200:
-            return {"sent": False, "mode": "error", "reason": f"File not publicly accessible: HTTP {check.status_code}"}
-    except Exception as e:
-        return {"sent": False, "mode": "error", "reason": f"Could not reach public URL: {e}"}
+    # try:
+    #     check = requests.get(public_url, timeout=10, allow_redirects=True)
+    #     print(f"🔍 URL check: {check.status_code} | Content-Type: {check.headers.get('Content-Type')}")
+    #     if check.status_code != 200:
+    #         return {"sent": False, "mode": "error", "reason": f"File not publicly accessible: HTTP {check.status_code}"}
+    # except Exception as e:
+    #     return {"sent": False, "mode": "error", "reason": f"Could not reach public URL: {e}"}
 
     # --- Step 4: Send template with document header using public URL ---
     template_payload = {
