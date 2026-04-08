@@ -2029,6 +2029,99 @@ def send_pdf_via_email(to_email, pdf_relative_path, document_type):
     
 #     return {"mode": "wati", "sent": True, "message": "Template sent, waiting for file"}
     
+# def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None, customer_name=None):
+#     import re, requests, os
+#     from datetime import datetime
+#     from django.conf import settings
+
+#     WATI_INSTANCE_ID = "10114393"
+#     WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDgvMjAyNiAwNTozNjozMyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.fgw-FrZ17KIRnuwXeftK55HeRi61PCTRBa-TI7NSgbY"
+
+#     clean_phone = re.sub(r'\D', '', to_number)
+#     if len(clean_phone) == 10:
+#         clean_phone = '91' + clean_phone
+
+#     auth_headers = {
+#         'Authorization': WATI_TOKEN,
+#         'Content-Type': 'application/json'
+#     }
+
+#     # --- Step 1: Add contact ---
+#     try:
+#         requests.post(
+#             f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/addContact/{clean_phone}",
+#             headers=auth_headers,
+#             json={"name": customer_name or "Customer"},
+#             timeout=30
+#         )
+#     except Exception as e:
+#         print(f"⚠️ Add contact error: {e}")
+
+#     # --- Step 2: Build public URL ---
+#     if not file_url:
+#         return {"sent": False, "mode": "error", "reason": "No file URL provided"}
+
+#     NGROK_BASE_URL = getattr(settings, 'NGROK_BASE_URL', None)
+#     if not NGROK_BASE_URL:
+#         return {"sent": False, "mode": "error", "reason": "NGROK_BASE_URL not set in settings"}
+
+#     file_url_clean = file_url.replace('\\', '/')
+#     public_url = f"{NGROK_BASE_URL.rstrip('/')}/{file_url_clean.lstrip('/')}"
+#     filename = os.path.basename(file_url_clean)
+
+#     print(f"📎 Public URL: {public_url}")
+
+#     # --- Step 3: Verify file is actually accessible before calling WATI ---
+#     # try:
+#     #     check = requests.get(public_url, timeout=10, allow_redirects=True)
+#     #     print(f"🔍 URL check: {check.status_code} | Content-Type: {check.headers.get('Content-Type')}")
+#     #     if check.status_code != 200:
+#     #         return {"sent": False, "mode": "error", "reason": f"File not publicly accessible: HTTP {check.status_code}"}
+#     # except Exception as e:
+#     #     return {"sent": False, "mode": "error", "reason": f"Could not reach public URL: {e}"}
+
+#     # --- Step 4: Send template with document header using public URL ---
+#     template_payload = {
+#         "template_name": "sale_order_sending",
+#         "broadcast_name": f"doc_file_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+#         "parameters": [
+#             {"name": "customer_name", "value": customer_name or "Customer"},
+#         ],
+#         "header": {
+#             "type": "document",
+#             "document": {
+#                 "link": public_url,       # ✅ public URL instead of media ID
+#                 "filename": filename
+#             }
+#         }
+#     }
+
+#     print(f"📨 Payload: {template_payload}")
+
+#     t_resp = requests.post(
+#         f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
+#         headers=auth_headers,
+#         json=template_payload,
+#         timeout=30
+#     )
+
+#     print(f"📨 Template+doc: {t_resp.status_code} - {t_resp.text}")
+
+#     if t_resp.status_code != 200:
+#         return {"sent": False, "mode": "error", "reason": f"HTTP {t_resp.status_code}: {t_resp.text}"}
+
+#     try:
+#         result = t_resp.json()
+#     except Exception:
+#         return {"sent": False, "mode": "error", "reason": f"Invalid JSON: {t_resp.text}"}
+
+#     return {
+#         "sent": result.get('result', False),
+#         "mode": "wati",
+#         "message_id": result.get('messageId'),
+#         "reason": result.get('info') if not result.get('result') else None
+#     }
+
 def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None, customer_name=None):
     import re, requests, os
     from datetime import datetime
@@ -2046,7 +2139,7 @@ def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None,
         'Content-Type': 'application/json'
     }
 
-    # --- Step 1: Add contact ---
+    # Step 1: Add contact
     try:
         requests.post(
             f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/addContact/{clean_phone}",
@@ -2057,7 +2150,7 @@ def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None,
     except Exception as e:
         print(f"⚠️ Add contact error: {e}")
 
-    # --- Step 2: Build public URL ---
+    # Step 2: Build public URL
     if not file_url:
         return {"sent": False, "mode": "error", "reason": "No file URL provided"}
 
@@ -2071,57 +2164,44 @@ def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None,
 
     print(f"📎 Public URL: {public_url}")
 
-    # --- Step 3: Verify file is actually accessible before calling WATI ---
-    # try:
-    #     check = requests.get(public_url, timeout=10, allow_redirects=True)
-    #     print(f"🔍 URL check: {check.status_code} | Content-Type: {check.headers.get('Content-Type')}")
-    #     if check.status_code != 200:
-    #         return {"sent": False, "mode": "error", "reason": f"File not publicly accessible: HTTP {check.status_code}"}
-    # except Exception as e:
-    #     return {"sent": False, "mode": "error", "reason": f"Could not reach public URL: {e}"}
-
-    # --- Step 4: Send template with document header using public URL ---
+    # Step 3: Send template with document
+    # Send template with LINK instead of document
     template_payload = {
-        "template_name": "sale_order_sending",
-        "broadcast_name": f"doc_file_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "template_name": "order_ready_link",  # Your new template
+        "broadcast_name": f"order_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
         "parameters": [
-            {"name": "customer_name", "value": customer_name or "Customer"},
-        ],
-        "header": {
-            "type": "document",
-            "document": {
-                "link": public_url,       # ✅ public URL instead of media ID
-                "filename": filename
-            }
-        }
+            {"name": "1", "value": customer_name or "Customer"},
+            {"name": "2", "value": public_url}  # Just the URL as text!
+        ]
+        # NO header with document
     }
 
-    print(f"📨 Payload: {template_payload}")
-
-    t_resp = requests.post(
+    print(f"📨 Using template: order_ready_link")
+    
+    response = requests.post(
         f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
         headers=auth_headers,
         json=template_payload,
         timeout=30
     )
 
-    print(f"📨 Template+doc: {t_resp.status_code} - {t_resp.text}")
+    print(f"📨 Response: {response.status_code} - {response.text}")
 
-    if t_resp.status_code != 200:
-        return {"sent": False, "mode": "error", "reason": f"HTTP {t_resp.status_code}: {t_resp.text}"}
+    if response.status_code != 200:
+        return {"sent": False, "mode": "error", "reason": f"HTTP {response.status_code}: {response.text}"}
 
     try:
-        result = t_resp.json()
-    except Exception:
-        return {"sent": False, "mode": "error", "reason": f"Invalid JSON: {t_resp.text}"}
-
-    return {
-        "sent": result.get('result', False),
-        "mode": "wati",
-        "message_id": result.get('messageId'),
-        "reason": result.get('info') if not result.get('result') else None
-    }
+        result = response.json()
+        return {
+            "sent": result.get('result', False),
+            "mode": "wati",
+            "message_id": result.get('messageId'),
+            "reason": result.get('info') if not result.get('result') else None
+        }
+    except Exception as e:
+        return {"sent": False, "mode": "error", "reason": str(e)}
     
+
 # from apps.customers.models import Customer
 # from apps.vendors.models import Vendor
 
