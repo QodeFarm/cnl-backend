@@ -25,9 +25,8 @@ def api_links(request):
         ('api/v1/customfields/', 'Customfields API'),
         ('api/v1/reminders/', 'Reminders API'),
         ('api/v1/audit/logs/', 'Audit API'),
-        ('api/v1/documents/', 'Documents API'),
+        ( 'api/v1/documents/', 'Documents API'),
         ('swagger/','Swagger')
-        
     ]
 
     html = """

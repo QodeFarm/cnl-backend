@@ -11,6 +11,27 @@ from config.utils_methods import convert_amount_to_words
 from django.utils.timezone import now
 
 
+def _fmt_date(value):
+    """Format date/datetime to DD/MM/YYYY or DD/MM/YYYY HH:MM:SS.
+    Time is only shown if it is not midnight (00:00:00)."""
+    if not value:
+        return ''
+    s = str(value).strip().replace('T', ' ')
+    parts = s.split(' ')
+    date_part = parts[0]
+    time_part = parts[1] if len(parts) > 1 else ''
+    try:
+        d = date_part.split('-')
+        if len(d) == 3 and len(d[0]) == 4:
+            formatted = f"{d[2]}/{d[1]}/{d[0]}"
+            if time_part and time_part not in ('00:00:00', '00:00'):
+                formatted += f" {time_part}"
+            return formatted
+    except Exception:
+        pass
+    return s
+
+
 def billpayment_receipt_data(pk, document_type):
     """Extracts data needed for payment receipt generation"""
     model_data = doc_data.get(document_type)
@@ -25,52 +46,54 @@ def billpayment_receipt_data(pk, document_type):
     print("-"*20)
     # Get company details
     company = Companies.objects.first()
-    company_name = company.name if company else "N/A"
-    company_address = company.address if company and company.address else "Address\xa0Not\xa0Provided"
-    company_phone = company.phone if company else "N/A"
-    company_email = company.email if company else "N/A"
-    
+    company_name = (company.name or '') if company else ''
+    company_address = (company.address or '') if company else ''
+    company_phone = (company.phone or '') if company else ''
+    company_email = (company.email or '') if company else ''
+
     # Get vendor details
     vendor = obj.vendor
-    vendor_name = vendor.name if vendor else "N/A"
-    
-    # Get billing address
-    billing_address = VendorAddress.objects.filter(
-        vendor_id=vendor.vendor_id,
-        address_type="Billing"
-    ).first()
-    
-    # Format amounts
-    amount = float(payment_data.get('amount', 0))
-    outstanding = float(payment_data.get('outstanding_amount', 0))
-    total = float(payment_data.get('total_amount', 0))
-    
+    vendor_name = (vendor.name or '') if vendor else ''
+
+    # Get billing address — guard against vendor being None
+    billing_address = None
+    if vendor:
+        billing_address = VendorAddress.objects.filter(
+            vendor_id=vendor.vendor_id,
+            address_type="Billing"
+        ).first()
+
+    # Format amounts — use `or 0` so None values don't raise TypeError
+    amount = float(payment_data.get('amount') or 0)
+    outstanding = float(payment_data.get('outstanding_amount') or 0)
+    total = float(payment_data.get('total_amount') or 0)
+
     # Generate voucher details
     current_date = now()
     voucher_no = f"{random.randint(100,999)}/{random.randint(1,12)}/{current_date.year}"
     voucher_date = current_date.strftime("%d/%m/%Y")
     transfer_date = (current_date - datetime.timedelta(days=1)).strftime("%d/%m/%Y")
-    
+
     return {
         # Company details
         'company_name': company_name,
         'company_address': company_address,
         'company_phone': company_phone,
         'company_email': company_email,
-        
+
         # vendor details
         'vendor_name': vendor_name,
-        'billing_address': billing_address.address if billing_address else "N/A",
-        'email': billing_address.email if billing_address else company_email,
-        'phone': billing_address.phone if billing_address else "N/A",
+        'billing_address': (billing_address.address or '') if billing_address else '',
+        'email': (billing_address.email or company_email) if billing_address else company_email,
+        'phone': (billing_address.phone or '') if billing_address else '',
         
         # Payment details
-        'invoice_no': payment_data['bill_no'],
-        'invoice_date': payment_data['bill_date'],
-        'payment_method': payment_data['payment_method'],
-        'cheque_no': payment_data.get('cheque_no', 'N/A'),
-        'receipt_no': payment_data['payment_receipt_no'],
-        'receipt_date': payment_data['payment_date'],
+        'invoice_no': payment_data.get('bill_no', ''),
+        'invoice_date': _fmt_date(payment_data.get('bill_date')),
+        'payment_method': payment_data.get('payment_method', ''),
+        'cheque_no': payment_data.get('cheque_no') or '',
+        'receipt_no': payment_data.get('payment_receipt_no', ''),
+        'receipt_date': _fmt_date(payment_data.get('payment_date')),
         
         # Amounts
         'amount': amount,
@@ -85,7 +108,7 @@ def billpayment_receipt_data(pk, document_type):
         'transfer_date': transfer_date,
         
         # Labels from doc_data
-        'cust_bill_dtl' : 'vendor Name',
+        'cust_bill_dtl' : 'Vendor Name',
         'number_lbl': model_data['number_lbl'],
         'date_lbl': model_data['date_lbl'],
         'doc_header': model_data['Doc_Header'],
@@ -97,30 +120,11 @@ def billpayment_receipt_doc(
     vendor_name, billing_address, phone, email,
     payment_data,
     amount, outstanding, total,
-    amount_in_words,receipt_no
+    amount_in_words, receipt_no, print_config=None
 ):
-    
-    # 1. Add company header
-    elements.extend(
-        return_company_header(company_name, company_address, company_phone)
-    )
-    # Append document details
-    elements.append(doc_details(
-        cust_bill_dtl, number_lbl, receipt_no, date_lbl, receipt_date
-    ))
-    
-    # Append vendor details (modified for payment receipt)
-    elements.append(payment_customer_details(
-        vendor_name, billing_address, phone, email
-    ))
-    
-    # Append payment details table
-    elements.append(payment_details_table(payment_data))
-    
-    # Append amount summary
-    elements.append(payment_amount_summary(
-        outstanding, amount_in_words
-    ))
-    
-    # Build the PDF
+    elements.extend(return_company_header(company_name, company_address, company_phone))
+    elements.append(doc_details(cust_bill_dtl, number_lbl, receipt_no, date_lbl, receipt_date, print_config=print_config))
+    elements.append(payment_customer_details(vendor_name, billing_address, phone, email, print_config=print_config))
+    elements.append(payment_details_table(payment_data, print_config=print_config))
+    elements.append(payment_amount_summary(outstanding, amount_in_words, print_config=print_config))
     doc.build(elements)

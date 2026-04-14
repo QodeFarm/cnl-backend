@@ -112,10 +112,10 @@ def ledger_document_data(request, pk, document_type):
     # ---------------------------
     company = Companies.objects.first()
 
-    company_name = company.name if company else "N/A"
-    company_address = company.address if company and company.address else "Address Not Provided"
-    company_phone = company.phone if company else "N/A"
-    company_email = company.email if company else "N/A"
+    company_name = (company.name or '') if company else ''
+    company_address = (company.address or '') if company else ''
+    company_phone = (company.phone or '') if company else ''
+    company_email = (company.email or '') if company else ''
 
     # ---------------------------
     # Base queryset
@@ -233,17 +233,19 @@ def ledger_document_data(request, pk, document_type):
         'number_lbl': model_data['number_lbl'],
         'date_lbl': model_data['date_lbl'],
         'doc_date': now().strftime('%d/%m/%Y'),
+        # Required for email flag in views.py
+        'email': company_email,
     }
 
 
 
 def ledger_document_doc(
     elements, doc,
-    company_name, company_address, company_phone, from_date, to_date, 
+    company_name, company_address, company_phone, from_date, to_date,
     ledger_name, number_lbl, date_lbl, doc_date,
     ledger_data,
     debit_total, credit_total, closing_balance,
-    amount_in_words
+    amount_in_words, print_config=None
 ):
 
     # 1. Company Header
@@ -253,7 +255,7 @@ def ledger_document_doc(
     
     # ✅ 2.1 Period line (BEST PLACE)
     elements.append(
-        ledger_period_details(from_date, to_date)
+        ledger_period_details(from_date, to_date, print_config=print_config)
     )
 
     # 2. Document Details
@@ -263,14 +265,15 @@ def ledger_document_doc(
             number_lbl,
             ledger_name,
             date_lbl,
-            doc_date
+            doc_date,
+            print_config=print_config
         )
     )
     
 
     # 3. Ledger Transactions Table
     elements.append(
-        ledger_details_table(ledger_data)
+        ledger_details_table(ledger_data, print_config=print_config)
     )
 
     # 4. Ledger Summary
@@ -279,7 +282,8 @@ def ledger_document_doc(
             debit_total,
             credit_total,
             closing_balance,
-            amount_in_words
+            amount_in_words,
+            print_config=print_config
         )
     )
 

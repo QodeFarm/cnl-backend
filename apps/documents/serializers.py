@@ -6,7 +6,7 @@ from apps.documents.models import DocumentsGeneration
 
 class DocumentSerializersSerializer(serializers.ModelSerializer):
     document_type_display = serializers.CharField(source='get_document_type_display', read_only=True)
-    
+
     class Meta:
         model = DocumentsGeneration
         fields = [

@@ -2,97 +2,220 @@ import os
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate, Spacer, Image  
+from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate, Spacer, Image
 
 from apps.company.models import Companies
+from apps.masters.template.print_config_defaults import (
+    SALES_PURCHASE_COLUMN_DEFINITIONS, COLOR_THEMES, PAPER_SIZES,
+    get_header_color, get_width_scale, FONT_SIZE_MAP, PAPER_WIDTH_SCALE,
+)
 
-def doc_heading(file_path, doc_header, sub_header):
+
+# ─────────────────────────────────────────────
+# INTERNAL HELPERS
+# ─────────────────────────────────────────────
+def _resolve_product_columns(column_config, show_gst=True, print_config=None):
+    """
+    Returns an ordered list of column dicts from SALES_PURCHASE_COLUMN_DEFINITIONS
+    that should be rendered, based on column_config (list of {key, visible, order}).
+    Each returned dict includes 'base_width' for proportional sizing.
+    Falls back to default behavior when column_config is None/empty.
+
+    show_gst=False (Inclusive tax) ALWAYS removes the gst_amount column,
+    regardless of what column_config says — GST is baked into the price.
+
+    For small paper sizes (A5), auto-limits to essential columns so the table
+    remains readable — this is standard ERP behavior for half-page formats.
+    """
+    if column_config:
+        cfg_map = {c['key']: c for c in column_config}
+        visible_cols = []
+        for col_def in SALES_PURCHASE_COLUMN_DEFINITIONS:
+            cfg = cfg_map.get(col_def['key'])
+            if cfg is None:
+                if col_def['required']:
+                    visible_cols.append({**col_def, 'order': 99})
+            elif cfg.get('visible', True) or col_def['required']:
+                label = cfg.get('label') or col_def['label']
+                visible_cols.append({**col_def, 'label': label, 'order': cfg.get('order', 99)})
+        visible_cols.sort(key=lambda c: c.get('order', 99))
+    else:
+        visible_cols = list(SALES_PURCHASE_COLUMN_DEFINITIONS)
+
+    # Always hide GST column for Inclusive tax — GST is baked into the price
+    if not show_gst:
+        visible_cols = [c for c in visible_cols if c['key'] != 'gst_amount']
+
+    # ── Paper-size-aware auto-filtering ──────────────────────────
+    # A5 (4.83" usable) cannot fit 8+ columns at any readable font size.
+    # Auto-limit to essential columns — standard practice for half-page formats.
+    paper_size = (print_config or {}).get('paper_size', 'Custom_11x16')
+    s = PAPER_WIDTH_SCALE.get(paper_size, 1.0)
+    if s <= 0.55:   # A5 (0.483) — essential columns only: S.No, Product, Qty, Rate, Total
+        A5_KEEP = {'serial_no', 'product_name', 'quantity', 'rate', 'total_amount'}
+        visible_cols = [c for c in visible_cols if c['key'] in A5_KEEP]
+    elif s < 0.8:   # A4 (0.727), Letter (0.75) — drop decorative-only columns
+        A4_DROP = {'boxes', 'discount_amount'}
+        visible_cols = [c for c in visible_cols if c['key'] not in A4_DROP]
+
+    return visible_cols
+
+
+def _get_font_size(print_config, default=10):
+    """Returns base font size from style_config: small=8, medium=10, large=12."""
+    key = ((print_config or {}).get('style_config') or {}).get('font_size', 'medium')
+    return FONT_SIZE_MAP.get(key, default)
+
+
+def _effective_table_font_size(print_config):
+    """
+    Returns the font size to use inside the product table.
+    Caps it based on paper size to prevent numeric column overflow:
+      - A4 / Letter (s<0.9): max 10pt — 7.27" is too narrow for 12pt × 10 columns
+      - A5 (s<0.6): max 9pt — 4.83" is very constrained
+      - Custom_11x16 / A4_Landscape: allow up to large (12pt)
+    """
+    paper_size = (print_config or {}).get('paper_size', 'Custom_11x16')
+    s = PAPER_WIDTH_SCALE.get(paper_size, 1.0)
+    fs = _get_font_size(print_config)
+    if s < 0.6:
+        return min(fs, 9)
+    elif s < 0.9:
+        return min(fs, 10)
+    return fs
+
+
+def _compute_col_widths(visible_cols, total_width):
+    """
+    Compute per-column widths scaled to fill total_width proportionally,
+    using each column's base_width as the ratio.
+    """
+    base_widths = [col.get('base_width', 0.8) for col in visible_cols]
+    total_base = sum(base_widths)
+    if total_base == 0:
+        equal = total_width / len(visible_cols)
+        return [equal] * len(visible_cols)
+    return [(bw / total_base) * total_width for bw in base_widths]
+
+
+def doc_heading(file_path, doc_header, sub_header, print_config=None):
     elements = []
 
-    # Custom page size (11 inches wide, 10.5 inches high)
-    page_width = 11 * inch
-    page_height = 16 * inch
+    # Resolve paper size from config (defaults to Custom_11x16)
+    paper_size_key = (print_config or {}).get('paper_size', 'Custom_11x16')
+    paper_dims = PAPER_SIZES.get(paper_size_key, PAPER_SIZES['Custom_11x16'])
+    page_width  = paper_dims['width']
+    page_height = paper_dims['height']
 
     # Create the PDF document
-    doc = SimpleDocTemplate(file_path, pagesize=(page_width, page_height))
+    # Use 0.5" margins — matches usable_width values defined in PAPER_SIZES
+    # (Default ReportLab margins are 1" which clips tables and causes page overflow)
+    HALF_INCH = 0.5 * inch
+    doc = SimpleDocTemplate(
+        file_path,
+        pagesize=(page_width, page_height),
+        leftMargin=HALF_INCH,
+        rightMargin=HALF_INCH,
+        topMargin=HALF_INCH,
+        bottomMargin=HALF_INCH,
+    )
     
     # Get the default styles
     styles = getSampleStyleSheet()
     
+    # For height-constrained paper sizes (A5, A4_Landscape) use smaller heading font
+    # to save vertical space — both have only 7.27" usable height.
+    _tight_height = paper_size_key in ('A5', 'A4_Landscape')
+    _heading_fs  = 13 if _tight_height else 16
+    _sub_fs      = 9  if _tight_height else 10
+
     def main_heading(doc_header):
         # Modify the heading style to be bold
         style_heading = ParagraphStyle(
             name='Heading1',
             parent=styles['Heading1'],
-            fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
-            fontSize=16,                # You can adjust the font size if needed
-            spaceAfter=3,              # Adjust space after heading if needed
-            alignment=1,                # Center align the text (0=left, 1=center, 2=right)
+            fontName='Helvetica-Bold',
+            fontSize=_heading_fs,
+            spaceAfter=2 if _tight_height else 3,
+            spaceBefore=0,
+            alignment=1,
         )
-        
-        # Add a bold heading
         elements.append(Paragraph(doc_header, style_heading))
 
-    # if doc_header == "SALES ORDER":
-    #     main_heading(doc_header)
     # Match exact header text (all uppercase as shown in your image)
     if doc_header.upper() == "SALES ORDER" or doc_header.upper() == "SALES QUOTATION":
         main_heading(doc_header.upper())  # Force uppercase to match your style
-        
+
     elif doc_header == "TAX INVOICE":
         main_heading(doc_header)
-        # Modify the heading style to be bold
         sub_style_heading = ParagraphStyle(
-        name='Heading1',
-        parent=styles['Heading1'],
-        fontName='Helvetica-Bold',  # Set font to Helvetica-Bold to make it bold
-        fontSize=10,                # You can adjust the font size if needed
-        alignment=1,                # Center align the text (0=left, 1=center, 2=right)
-        )    
-        # Add a bold heading
+            name='Heading1Sub',
+            parent=styles['Heading1'],
+            fontName='Helvetica-Bold',
+            fontSize=_sub_fs,
+            spaceAfter=2 if _tight_height else 3,
+            spaceBefore=0,
+            alignment=1,
+        )
         elements.append(Paragraph(sub_header, sub_style_heading))
-    elif doc_header == "Purchase Bill" or doc_header == "Purchase Return":
-        # Define styles
-        styles = getSampleStyleSheet()
-        bold_style = ParagraphStyle(
-                'BoldStyle',
-                parent=styles['Normal'],
-                fontName='Helvetica-Bold',
-                fontSize=14,
-                alignment=0,  # 0 = left aligned
-                textColor=colors.black
-            )
-
-        normal_style = ParagraphStyle(
-                'NormalStyle',
-                parent=styles['Normal'],
-                fontName='Helvetica',
-                fontSize=12,
-                alignment=0,  # 0 = left aligned
-                textColor=colors.black
-            )
-        elements.append(Paragraph(sub_header[0], bold_style))  # Bold and capitalized text
-        elements.append(Spacer(1, 2))
-        elements.append(Paragraph(sub_header[1], normal_style))
-        elements.append(Spacer(1, 1))
-        elements.append(Paragraph('Phone No: ' + sub_header[2] + ' | ' + 'Email: ' + sub_header[3], normal_style))
-        # Add a spacer
-        elements.append(Spacer(1, 18))
-
-        main_heading(doc_header)
+    elif doc_header.upper() in ("PURCHASE BILL", "PURCHASE RETURN"):
+        # sub_header may be a list [name, address, phone, email] or a plain string.
+        # Guard against both so we never crash with IndexError.
+        if isinstance(sub_header, list) and len(sub_header) >= 4:
+            styles = getSampleStyleSheet()
+            bold_style = ParagraphStyle(
+                    'BoldStyle',
+                    parent=styles['Normal'],
+                    fontName='Helvetica-Bold',
+                    fontSize=14,
+                    alignment=0,
+                    textColor=colors.black
+                )
+            normal_style = ParagraphStyle(
+                    'NormalStyle',
+                    parent=styles['Normal'],
+                    fontName='Helvetica',
+                    fontSize=12,
+                    alignment=0,
+                    textColor=colors.black
+                )
+            elements.append(Paragraph(sub_header[0], bold_style))
+            elements.append(Spacer(1, 2))
+            elements.append(Paragraph(sub_header[1], normal_style))
+            elements.append(Spacer(1, 1))
+            elements.append(Paragraph('Phone No: ' + sub_header[2] + ' | ' + 'Email: ' + sub_header[3], normal_style))
+            elements.append(Spacer(1, 18))
+        main_heading(doc_header.upper())
 
     return elements, doc
 
 
-def doc_details(cust_bill_dtl, sno_lbl, receipt_no, sdate_lbl, receipt_date): 
-    col_widths = [3.3*inch, 3.4*inch, 3.3*inch]
-    table_data_1 = [
-        [cust_bill_dtl, f'{sno_lbl} : {receipt_no}', f'{sdate_lbl} : {receipt_date}'],
-    ]
-    
+def doc_details(cust_bill_dtl, sno_lbl, receipt_no, sdate_lbl, receipt_date, print_config=None):
+    s = get_width_scale(print_config) if print_config else 1.0
+    col_widths = [3.3*inch*s, 3.4*inch*s, 3.3*inch*s]
+
+    # For A4 and smaller (s < 0.8): wrap cells in Paragraph so long SO numbers / dates
+    # word-wrap instead of overflowing into adjacent cells on narrow paper sizes
+    if s < 0.8:
+        _styles = getSampleStyleSheet()
+        _fs = max(7, _get_font_size(print_config) - 1)
+        _cell_style = ParagraphStyle(
+            'dd_cell_small', parent=_styles['Normal'],
+            fontName='Helvetica-Bold', fontSize=_fs, leading=_fs + 2,
+        )
+        row = [
+            Paragraph(cust_bill_dtl, _cell_style),
+            Paragraph(f'{sno_lbl} : {receipt_no}', _cell_style),
+            Paragraph(f'{sdate_lbl} : {receipt_date}', _cell_style),
+        ]
+    else:
+        row = [cust_bill_dtl, f'{sno_lbl} : {receipt_no}', f'{sdate_lbl} : {receipt_date}']
+
+    table_data_1 = [row]
+
     table = Table(table_data_1, colWidths=col_widths)
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+        ('BACKGROUND', (0, 0), (-1, 0), get_header_color(print_config) if print_config else colors.skyblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
@@ -104,28 +227,45 @@ def doc_details(cust_bill_dtl, sno_lbl, receipt_no, sdate_lbl, receipt_date):
     ]))
     return table
 
-def customer_details(cust_name, billing_address, phone, city):
+def customer_details(cust_name, billing_address, phone, city, print_config=None):
     styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
-    
-    # Create structured content with bold headers
-    billing_content = Paragraph(
-        f"<b>{cust_name}</b>"
-        f"<br/>{billing_address}<br/>", 
-        style_normal
-    )
-    
-    shipping_content = Paragraph(
-        f"<b>Mobile: {phone}</b><br/>"
-        f"Destination: {city}", 
-        style_normal
-    )
-    
-    table_data = [
-        [billing_content, shipping_content]
-    ]
-    
-    table_col_widths = [6.7*inch, 3.3*inch]
+    fs = _get_font_size(print_config)
+    style_normal = ParagraphStyle('cust_normal', parent=styles['Normal'], fontSize=fs)
+
+    sec = (print_config or {}).get('section_config', {}) if print_config else {}
+    show_billing  = sec.get('show_billing_address', True)
+    show_shipping = sec.get('show_shipping_address', True)
+
+    def _safe(val):
+        """Return empty string for None/N/A values so PDF stays clean."""
+        if val is None:
+            return ''
+        s = str(val).strip()
+        return '' if s.lower() in ('none', 'n/a', 'null', '-') else s
+
+    address_text = _safe(billing_address)
+    phone_text   = _safe(phone)
+    city_text    = _safe(city)
+
+    billing_html = f"<b>{_safe(cust_name)}</b>"
+    if show_billing and address_text:
+        billing_html += f"<br/>{address_text}"
+
+    shipping_parts = []
+    if show_shipping:
+        if phone_text:
+            shipping_parts.append(f"<b>Mobile:</b> {phone_text}")
+        if city_text:
+            shipping_parts.append(f"<b>Destination:</b> {city_text}")
+    shipping_html = "<br/>".join(shipping_parts)
+
+    billing_content  = Paragraph(billing_html, style_normal)
+    shipping_content = Paragraph(shipping_html, style_normal)
+
+    table_data = [[billing_content, shipping_content]]
+
+    s = get_width_scale(print_config) if print_config else 1.0
+    table_col_widths = [6.7*inch*s, 3.3*inch*s]
     
     table = Table(table_data, colWidths=table_col_widths)
     table.setStyle(TableStyle([
@@ -144,7 +284,7 @@ def customer_details(cust_name, billing_address, phone, city):
 
 def format_numeric(cell):
     try:
-        return "{:.2f}".format(float(cell))
+        return "{:,.2f}".format(float(cell))
     except (ValueError, TypeError):
         return str(cell)
 
@@ -218,244 +358,188 @@ def format_numeric(cell):
     
 #     return table
 
-def product_details(data, show_gst=True):
-    style_normal = getSampleStyleSheet()['Normal']
+def product_details(data, show_gst=True, print_config=None):
+    styles = getSampleStyleSheet()
+    fs = _effective_table_font_size(print_config)
+    style_normal = ParagraphStyle('prod_normal', parent=styles['Normal'], fontSize=fs)
+    header_color = get_header_color(print_config) if print_config else colors.skyblue
+    width_scale  = get_width_scale(print_config)  if print_config else 1.0
 
-    # FULL TABLE WIDTH (same for all versions)
-    TOTAL_WIDTH = (
-        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
-        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
-    )
+    BASE_TOTAL_WIDTH = 10.0 * inch  # usable width for Custom_11x16
+    TOTAL_WIDTH = BASE_TOTAL_WIDTH * width_scale
 
-    # HEADERS
-    headers = [
-        "Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate",
-        "Amount", "Disc(%)", "Disc(Rs)", "GST(Rs)", "Total Amount"
-    ]
+    # Resolve visible columns
+    col_config   = (print_config or {}).get('column_config') if print_config else None
+    visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
 
-    # Remove GST column completely if not showing
-    if not show_gst:
-        headers.pop(9)  # remove GST header
+    headers    = [col['label'] for col in visible_cols]
+    col_widths = _compute_col_widths(visible_cols, TOTAL_WIDTH)
 
-    num_columns = len(headers)
+    # Keys that should be right-aligned (numeric) and formatted
+    NUMERIC_KEYS = {'quantity', 'rate', 'amount', 'discount_percent', 'discount_amount', 'gst_amount', 'total_amount', 'boxes'}
 
-    # AUTO DISTRIBUTE WIDTHS PERFECTLY
-    col_width = TOTAL_WIDTH / num_columns
-    col_widths = [col_width] * num_columns
-
-    # Build table data
     table_data = [headers]
 
     for item in data:
-        row = item.copy()
+        if not isinstance(item, (list, tuple)):
+            continue
+        row = []
+        for col in visible_cols:
+            idx = col.get('data_index', 0)
+            raw = item[idx] if idx < len(item) else ''
+            if col['key'] in NUMERIC_KEYS:
+                # Plain string — ReportLab won't break mid-number (no space to break on)
+                cell = format_numeric(raw)
+            elif col['key'] == 'product_name':
+                # Only product_name needs Paragraph for proper word-wrap
+                cell = Paragraph(str(raw or ''), style_normal)
+            elif col['key'] == 'unit':
+                # Wrap unit name so multi-word names (e.g. "Stock Unit") word-wrap in narrow columns
+                cell = Paragraph(str(raw or ''), style_normal) if raw not in (None, '', '-') else ''
+            else:
+                cell = str(raw) if raw not in (None, '', '-') else ''
+            row.append(cell)
+        table_data.append(row)
 
-        # Remove GST value if hiding
-        if not show_gst:
-            row.pop(9)
+    num_columns = len(visible_cols)
+    # A5 gets fewer padding rows — small page has limited height to spare
+    min_total_rows = 4 if width_scale <= 0.55 else 6
+    while len(table_data) < min_total_rows:
+        table_data.append([' '] * num_columns)
 
-        # Wrap row cells
-        wrapped = [Paragraph(str(x), style_normal) for x in row]
-        table_data.append(wrapped)
-
-    # Add filler rows for consistency
-    while len(table_data) < 6:
-        table_data.append([" "] * num_columns)
-
-    # Create table
     table = Table(table_data, colWidths=col_widths)
 
-    table.setStyle(TableStyle([        
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+    NUMERIC_KEYS = {'quantity', 'rate', 'amount', 'discount_percent', 'discount_amount', 'gst_amount', 'total_amount'}
+    # Reduce cell padding on narrow paper sizes to reclaim column width
+    cell_pad = max(3, int(5 * width_scale))
+    row_pad  = max(4, int(8 * width_scale))
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),           # header row: centre all
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
-        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
+        ('ALIGN', (0, 1), (-1, -1), 'LEFT'),             # data rows default left
         ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),
-        ('LINEAFTER', (6, 0), (10, -1), 1, colors.black),
+        ('LINEAFTER', (-1, 0), (-1, -1), 1, colors.black),
         ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
         ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 12),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), row_pad),
+        ('TOPPADDING', (0, 0), (-1, -1), row_pad),
+        ('LEFTPADDING', (0, 0), (-1, -1), cell_pad),
+        ('RIGHTPADDING', (0, 0), (-1, -1), cell_pad),
+    ]
+    # Right-align numeric data columns dynamically
+    for ci, col in enumerate(visible_cols):
+        if col['key'] in NUMERIC_KEYS:
+            style_cmds.append(('ALIGN', (ci, 1), (ci, -1), 'RIGHT'))
+
+    table.setStyle(TableStyle(style_cmds))
+    return table
+
+
+
+def _fmt_total(val):
+    """Format a totals-row numeric value with commas and 2 decimal places."""
+    if val is None or str(val).strip() in ('', '-'):
+        return ''
+    try:
+        return '{:,.2f}'.format(round(float(val), 2))
+    except (ValueError, TypeError):
+        return str(val)
+
+
+def product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gst=False, print_config=None):
+    """
+    Renders the totals row below the product table.
+    Dynamically matches visible columns from print_config so widths stay aligned.
+    """
+    width_scale  = get_width_scale(print_config) if print_config else 1.0
+    TOTAL_WIDTH  = 10.0 * inch * width_scale
+    fs           = _effective_table_font_size(print_config)
+
+    col_config   = (print_config or {}).get('column_config') if print_config else None
+    visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
+    col_widths   = _compute_col_widths(visible_cols, TOTAL_WIDTH)
+
+    # Map column key → value to display in totals row (formatted)
+    value_map = {
+        'serial_no':        '',
+        'product_name':     'Total',
+        'boxes':            '',
+        'quantity':         _fmt_total(ttl_Qty),
+        'unit':             '',
+        'rate':             '',
+        'amount':           _fmt_total(final_Amount),
+        'discount_percent': '',
+        'discount_amount':  _fmt_total(total_disc),
+        'gst_amount':       '',
+        'total_amount':     _fmt_total(ttl_Amount),
+    }
+
+    row = [value_map.get(col['key'], '') for col in visible_cols]
+
+    cell_pad = max(3, int(5 * width_scale))
+    table = Table([row], colWidths=col_widths)
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), get_header_color(print_config) if print_config else colors.skyblue),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), cell_pad),
+        ('RIGHTPADDING', (0, 0), (-1, -1), cell_pad),
     ]))
-
     return table
 
+def product_total_details_purchase(ttl_Qty, final_Amount, total_disc, ttl_Amount, show_gst=False, print_config=None):
+    """
+    Purchase totals row — mirrors product_total_details but purchase arg order differs.
+    Dynamically matches visible columns from print_config.
+    """
+    width_scale  = get_width_scale(print_config) if print_config else 1.0
+    TOTAL_WIDTH  = 10.0 * inch * width_scale
+    fs           = _effective_table_font_size(print_config)
 
+    col_config   = (print_config or {}).get('column_config') if print_config else None
+    visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
+    col_widths   = _compute_col_widths(visible_cols, TOTAL_WIDTH)
 
-def product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gst=False):
-    # if show_gst:
-    #     print("Entered with show_gst")
-    #     col_widths = [
-    #         0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-    #         0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-    #         0.8 * inch, 0.8 * inch, 1.0 * inch
-    #     ]
-    #     row = [
-    #         '', 'Total', '', ttl_Qty, '', '', final_Amount,
-    #         '', total_disc, '', ttl_Amount
-    #     ]
-    # else:
-    #     print("Entered with out show_gst")
-    #     col_widths = [
-    #         0.5 * inch, 2.0 * inch, 0.7 * inch, 0.7 * inch,
-    #         0.8 * inch, 1.0 * inch, 1.0 * inch, 0.7 * inch,
-    #         0.8 * inch, 1.0 * inch  # One less column
-    #     ]
-    #     row = [
-    #         '', 'Total', '', ttl_Qty, '', '', final_Amount,
-    #         '', total_disc, ttl_Amount
-    #     ]
+    value_map = {
+        'serial_no':        '',
+        'product_name':     'Total',
+        'boxes':            '',
+        'quantity':         _fmt_total(ttl_Qty),
+        'unit':             '',
+        'rate':             '',
+        'amount':           _fmt_total(final_Amount),
+        'discount_percent': '',
+        'discount_amount':  _fmt_total(total_disc),
+        'gst_amount':       '',
+        'total_amount':     _fmt_total(ttl_Amount),
+    }
 
-    # table = Table([row], colWidths=col_widths)
-    # table.setStyle(TableStyle([
-    #     ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-    #     ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-    #     ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-    #     ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-    #     ('GRID', (0, 0), (-1, 0), 1, colors.black),
-    #     ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-    #     ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-    # ]))
-    # return table
-    
-    # SAME TOTAL WIDTH AS PRODUCT TABLE
-    TOTAL_WIDTH = (
-        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
-        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
-    )
+    row = [value_map.get(col['key'], '') for col in visible_cols]
 
-    # HEADERS COUNT MATCHES PRODUCT TABLE
-    if show_gst:
-        num_columns = 11
-    else:
-        num_columns = 10
-
-    # AUTO-CALCULATED COLUMN WIDTHS
-    col_width = TOTAL_WIDTH / num_columns
-    col_widths = [col_width] * num_columns
-
-    # ----- BUILD ROW -----
-
-    if show_gst:
-        row = [
-            "",          # idx
-            "Total",     # Total label
-            "",          # Boxes
-            ttl_Qty,     # Qty total
-            "",          # Unit
-            "",          # Rate
-            final_Amount,# Amount
-            "",          # Disc%
-            total_disc,  # Disc Rs
-            "",          # GST
-            ttl_Amount   # Total Amt
-        ]
-    else:
-        row = [
-            "",          # idx
-            "Total",     
-            "",          # Boxes
-            ttl_Qty,     
-            "",          # Unit
-            "",          # Rate
-            final_Amount,
-            "",          # Disc%
-            total_disc,
-            ttl_Amount   # Last column (no GST)
-        ]
-
-    # CREATE TABLE
+    cell_pad = max(3, int(5 * width_scale))
     table = Table([row], colWidths=col_widths)
-
-    # STYLE MATCHES PRODUCT TABLE
-    style = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), get_header_color(print_config) if print_config else colors.skyblue),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-
-        # MERGE Total across Product + Boxes columns
-        ('SPAN', (1, 0), (2, 0)),
-
-        # Merge Unit + Rate columns
-        ('SPAN', (4, 0), (5, 0)),
-    ]
-
-    table.setStyle(TableStyle(style))
-    return table
-
-def product_total_details_purchase(ttl_Qty, final_Amount, total_disc, ttl_Amount, show_gst=False):
-    TOTAL_WIDTH = (
-        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
-        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
-    )
-
-    # HEADERS COUNT MATCHES PRODUCT TABLE
-    if show_gst:
-        num_columns = 11
-    else:
-        num_columns = 10
-
-    # AUTO-CALCULATED COLUMN WIDTHS
-    col_width = TOTAL_WIDTH / num_columns
-    col_widths = [col_width] * num_columns
-
-    # ----- BUILD ROW -----
-
-    if show_gst:
-        row = [
-            "",          # idx
-            "Total",     # Total label
-            "",          # Boxes
-            ttl_Qty,     # Qty total
-            "",          # Unit
-            "",          # Rate
-            final_Amount,# Amount
-            "",          # Disc%
-            total_disc,  # Disc Rs
-            "",          # GST
-            ttl_Amount   # Total Amt
-        ]
-    else:
-        row = [
-            "",          # idx
-            "Total",     
-            "",          # Boxes
-            ttl_Qty,     
-            "",          # Unit
-            "",          # Rate
-            final_Amount,
-            "",          # Disc%
-            total_disc,
-            ttl_Amount   # Last column (no GST)
-        ]
-
-    # CREATE TABLE
-    table = Table([row], colWidths=col_widths)
-
-    # STYLE MATCHES PRODUCT TABLE
-    style = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-
-        # MERGE Total across Product + Boxes columns
-        ('SPAN', (1, 0), (2, 0)),
-
-        # Merge Unit + Rate columns
-        ('SPAN', (4, 0), (5, 0)),
-    ]
-
-    table.setStyle(TableStyle(style))
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), cell_pad),
+        ('RIGHTPADDING', (0, 0), (-1, -1), cell_pad),
+    ]))
     return table
 
 
@@ -464,54 +548,169 @@ def product_total_details_inwords(
     Bill_Amount_In_Words, SubTotal, Discount_Amt, shipping_charges,
     total_cgst, total_sgst, total_igst, cess_amount,
     round_off, Party_Old_Balance, net_lbl, net_value,
-    tax_type='Exclusive'
+    tax_type='Exclusive', print_config=None
 ):
     styles = getSampleStyleSheet()
-    normal_style = styles['Normal']
-    bill_amount_paragraph = Paragraph(f"<b>Bill Amount In Words:</b> {Bill_Amount_In_Words}", normal_style)
+    fs = _get_font_size(print_config)
+    normal_style  = ParagraphStyle('inwords_normal', parent=styles['Normal'], fontSize=fs)
+    bold_style    = ParagraphStyle('inwords_bold', parent=normal_style, fontName='Helvetica-Bold', fontSize=fs)
+    header_color  = get_header_color(print_config) if print_config else colors.skyblue
 
-    financials_data = [
-        [Paragraph("<b>Sub Total:</b>", normal_style), Paragraph(f"<b>{SubTotal}</b>", normal_style)],
-        [Paragraph("<b>Total Discount:</b>", normal_style), Paragraph(f"<b>-{Discount_Amt}</b>", normal_style)],
-        [Paragraph("<b>Shipping Charges:</b>", normal_style), Paragraph(f"<b>{shipping_charges}</b>", normal_style)]
+    sec = (print_config or {}).get('section_config', {}) if print_config else {}
+    show_amount_in_words = sec.get('show_amount_in_words', True)
+    show_subtotal        = sec.get('show_subtotal', True)
+    show_discount        = sec.get('show_discount', True)
+    show_shipping        = sec.get('show_shipping_charges', True)
+    show_tax             = sec.get('show_tax_breakdown', True)
+    show_cess            = sec.get('show_cess', True)
+    show_round_off       = sec.get('show_round_off', True)
+    show_party_balance   = sec.get('show_party_balance', True)
+
+    def _fmt(val):
+        """Format a numeric value: 2 decimal places, handle negative-zero, add commas."""
+        try:
+            f = round(float(val), 2)
+            if f == 0.0:
+                return '0.00'
+            # Comma formatting with 2 decimals (Indian/International style)
+            return '{:,.2f}'.format(f)
+        except (ValueError, TypeError):
+            return str(val)
+
+    def _is_zero(val):
+        if val is None:
+            return True
+        s = str(val).strip()
+        if s in ('', 'None', 'N/A', 'null', '-'):
+            return True
+        try:
+            return round(float(s), 2) == 0.0
+        except (ValueError, TypeError):
+            return False
+
+    def _signed(val):
+        """Show negative values with − prefix, positive as-is."""
+        try:
+            f = round(float(val), 2)
+            if f == 0.0:
+                return '0.00'
+            if f < 0:
+                return '-{:,.2f}'.format(abs(f))
+            return '{:,.2f}'.format(f)
+        except (ValueError, TypeError):
+            return str(val)
+
+    # ── Bill Amount In Words ─────────────────────────────────────
+    bill_amount_paragraph = Paragraph(
+        f"<b>Bill Amount In Words:</b><br/>{Bill_Amount_In_Words}" if show_amount_in_words else '',
+        normal_style
+    )
+
+    # ── Financials rows ──────────────────────────────────────────
+    # Each row: (label, value_str, is_net_total)
+    rows = []
+
+    if show_subtotal:
+        rows.append(('Sub Total', _fmt(SubTotal), False))
+
+    if show_discount and not _is_zero(Discount_Amt):
+        disc_val = round(float(Discount_Amt), 2)
+        disc_display = '-{:,.2f}'.format(abs(disc_val))
+        rows.append(('Total Discount', disc_display, False))
+
+    if show_shipping and not _is_zero(shipping_charges):
+        rows.append(('Shipping Charges', _fmt(shipping_charges), False))
+
+    if show_tax and tax_type != 'Inclusive':
+        if not _is_zero(total_igst):
+            rows.append(('IGST', _fmt(total_igst), False))
+        else:
+            if not _is_zero(total_cgst):
+                rows.append(('CGST', _fmt(total_cgst), False))
+            if not _is_zero(total_sgst):
+                rows.append(('SGST', _fmt(total_sgst), False))
+
+    if show_cess and not _is_zero(cess_amount):
+        rows.append(('Cess Amt', _fmt(cess_amount), False))
+
+    if show_round_off and not _is_zero(round_off):
+        rows.append(('Round Off', _signed(round_off), False))
+
+    if show_party_balance and not _is_zero(Party_Old_Balance):
+        rows.append(('Party Old Balance', _fmt(Party_Old_Balance), False))
+
+    # Net Total always shown
+    rows.append((net_lbl or 'Net Total', _fmt(net_value), True))
+
+    # ── Build table rows ────────────────────────────────────────
+    s            = get_width_scale(print_config) if print_config else 1.0
+    TOTAL_USABLE = 10.0 * inch * s
+    # Scale minimum width with font size: "232,391.10" at 12pt needs ~1.2", at 10pt ~1.0"
+    font_scale   = fs / 10.0
+    LABEL_W      = max(1.5 * inch * font_scale, 2.2 * inch * s)
+    VALUE_W      = max(1.0 * inch * font_scale, 1.1 * inch * s)
+    LEFT_W       = TOTAL_USABLE - LABEL_W - VALUE_W
+
+    financials_data = []
+    net_row_index = None
+    for i, (lbl, val, is_net) in enumerate(rows):
+        if is_net:
+            net_row_index = i
+            financials_data.append([
+                Paragraph(f"<b>{lbl}:</b>", bold_style),
+                Paragraph(f"<b>{val}</b>", bold_style),
+            ])
+        else:
+            financials_data.append([
+                Paragraph(f"{lbl}:", normal_style),
+                Paragraph(val, normal_style),
+            ])
+
+    if not financials_data:
+        financials_data.append([Paragraph('', normal_style), Paragraph('', normal_style)])
+
+    fin_style_cmds = [
+        ('ALIGN',         (0, 0),  (-1, -1), 'LEFT'),
+        ('ALIGN',         (1, 0),  (1, -1),  'RIGHT'),
+        ('FONTNAME',      (0, 0),  (-1, -1), 'Helvetica'),
+        ('FONTSIZE',      (0, 0),  (-1, -1), fs),
+        ('TOPPADDING',    (0, 0),  (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0),  (-1, -1), 4),
+        ('LEFTPADDING',   (0, 0),  (-1, -1), 6),
+        ('RIGHTPADDING',  (0, 0),  (-1, -1), 6),
+        # Thin separator line between rows
+        ('LINEBELOW',     (0, 0),  (-1, -2), 0.3, colors.HexColor('#CCCCCC')),
     ]
 
-    # Show only if tax_type is not 'Inclusive'
-    if tax_type != 'Inclusive':
-        if total_igst > 0:
-            financials_data.append([Paragraph("<b>IGST:</b>", normal_style), Paragraph(f"<b>{total_igst}</b>", normal_style)])
-        elif total_cgst > 0 and total_sgst > 0:
-            financials_data.append([Paragraph("<b>CGST:</b>", normal_style), Paragraph(f"<b>{total_cgst}</b>", normal_style)])
-            financials_data.append([Paragraph("<b>SGST:</b>", normal_style), Paragraph(f"<b>{total_sgst}</b>", normal_style)])
+    # Highlight Net Total row
+    if net_row_index is not None:
+        fin_style_cmds += [
+            ('BACKGROUND',    (0, net_row_index), (-1, net_row_index), header_color),
+            ('FONTNAME',      (0, net_row_index), (-1, net_row_index), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, net_row_index), (-1, net_row_index), fs + 1),
+            ('LINEABOVE',     (0, net_row_index), (-1, net_row_index), 1, colors.black),
+        ]
 
-    financials_data.extend([
-        [Paragraph("<b>Cess AMT:</b>", normal_style), Paragraph(f"<b>{cess_amount}</b>", normal_style)],
-        [Paragraph("<b>Round Off:</b>", normal_style), Paragraph(f"<b>{round_off}</b>", normal_style)],
-        [Paragraph("<b>Party Old Balance:</b>", normal_style), Paragraph(f"<b>{Party_Old_Balance}</b>", normal_style)],
-        [Paragraph(f"<b>{net_lbl}:</b>", normal_style), Paragraph(f"<b>{net_value}</b>", normal_style)]
-    ])
+    financials_table = Table(financials_data, colWidths=[LABEL_W, VALUE_W])
+    financials_table.setStyle(TableStyle(fin_style_cmds))
 
-    financials_table = Table(financials_data, colWidths=[2.0 * inch, 1.3 * inch])
-    financials_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTNAME', (0, -2), (-1, -2), 'Helvetica-Bold'),  # Party Old Balance in Bold
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),  # Net Total in Bold
-        ('BOTTOMPADDING', (0, -2), (-1, -1), 5),
-        ('TOPPADDING', (0, -2), (-1, -1), 5),
-    ]))
-
-    # Combine bill amount and financials
-    table_data = [
-        [bill_amount_paragraph, financials_table]
-    ]
-
-    # Main Table
-    table = Table(table_data, colWidths=[7 * inch, 3 * inch])
+    # ── Outer wrapper table ──────────────────────────────────────
+    table = Table(
+        [[bill_amount_paragraph, financials_table]],
+        colWidths=[LEFT_W, (LABEL_W + VALUE_W)]
+    )
     table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
+        ('BOX',      (0, 0), (-1, -1), 1, colors.black),
+        ('LINEBEFORE',(1, 0), (1, 0),  1, colors.black),
+        ('VALIGN',   (0, 0), (-1, -1), 'TOP'),
+        ('LEFTPADDING',  (0, 0), (0, 0), 8),
+        ('RIGHTPADDING', (0, 0), (0, 0), 8),
+        ('TOPPADDING',   (0, 0), (0, 0), 8),
+        ('BOTTOMPADDING',(0, 0), (0, 0), 8),
+        ('LEFTPADDING',  (1, 0), (1, 0), 0),
+        ('RIGHTPADDING', (1, 0), (1, 0), 0),
+        ('TOPPADDING',   (1, 0), (1, 0), 0),
+        ('BOTTOMPADDING',(1, 0), (1, 0), 0),
     ]))
 
     return table
@@ -540,207 +739,223 @@ def product_total_details_inwords(
 #     ]))
 #     return table
 
-def declaration():
+def declaration(print_config=None):
     styles = getSampleStyleSheet()
-    
-    # Normal style (slightly small for ERP declaration footer)
+    sec = (print_config or {}).get('section_config', {}) if print_config else {}
+    txt = (print_config or {}).get('custom_text', {}) if print_config else {}
+
+    show_declaration = sec.get('show_declaration', True)
+    show_signature   = sec.get('show_signature', True)
+    decl_text = txt.get('declaration',
+        'We declare that this invoice shows the actual price of the goods/services '
+        'described and that all particulars are true and correct.'
+    )
+
+    fs = _get_font_size(print_config)
     styleN = ParagraphStyle(
-        'normal_declaration',
-        parent=styles['Normal'],
-        fontSize=9,
-        leading=12
+        'normal_declaration', parent=styles['Normal'],
+        fontSize=fs, leading=fs + 3, textColor=colors.black
     )
 
-    # LEFT SIDE: Declaration Text
+    # Use copy label from config, fall back to "Original For Recipient"
+    copy_cfg    = (print_config or {}).get('copy_config', {}) if print_config else {}
+    copy_labels = copy_cfg.get('copy_labels', ['Original For Recipient'])
+    copy_label  = copy_labels[0] if copy_labels else 'Original For Recipient'
+
     left_text = Paragraph(
-        "<b>Declaration:</b><br/><br/>"
-        "We declare that this invoice shows the actual price of the goods/services<br/>"
-        "described and that all particulars are true and correct.<br/><br/>"
-        "Original For Recipient",
+        (f"<b>Declaration:</b><br/><br/>{decl_text}<br/><br/>{copy_label}"
+         if show_declaration else ''),
         styleN
     )
-
-    # RIGHT SIDE: Authorised Signatory with signature line
     right_text = Paragraph(
-        "<br/><br/><br/>__________________________<br/>"
-        "<b>Authorised Signatory</b>",
+        ("<br/><br/><br/>__________________________<br/><b>Authorised Signatory</b>"
+         if show_signature else ''),
         styleN
     )
 
-    # Table data
-    table_data_6 = [[left_text, right_text]]
-
-    # Column widths (ERP standard)
-    table_6_col_widths = [7 * inch, 3 * inch]
-
-    # Create table
-    table = Table(table_data_6, colWidths=table_6_col_widths)
-
-    # Styling
+    s = get_width_scale(print_config) if print_config else 1.0
+    paper_size = (print_config or {}).get('paper_size', 'Custom_11x16')
+    TOTAL_W = 10.0 * inch * s
+    # A5 and smaller: shift to 60/40 so signature column has readable width
+    left_w  = TOTAL_W * (0.60 if s <= 0.55 else 0.70)
+    right_w = TOTAL_W - left_w
+    # Reduce vertical padding for height-constrained sizes (A5, A4_Landscape)
+    decl_pad = max(4, int(10 * min(s, 1.0))) if paper_size in ('A5', 'A4_Landscape') else 10
+    table = Table([[left_text, right_text]], colWidths=[left_w, right_w])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
-
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),      # Declaration left aligned
-        ('ALIGN', (1, 0), (1, 0), 'CENTER'),    # Signatory centered
-
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),    # Both top aligned
-
-        ('TOPPADDING', (0, 0), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),  # Border around it (optional)
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), decl_pad),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), decl_pad),
+        ('GRID', (0, 0), (-1, 0), 1, colors.black),
     ]))
 
     return table
 
 
 #====PURCHASE ORDER RELATED TBL
-def shipping_details(destination, tax_type,  shipping_mode_name, port_of_landing, port_of_discharge, sdate):
-    style_normal = getSampleStyleSheet()['Normal']
-    shipping_details_table_data = [[f"Destination: {destination} \nShipping Mode :{shipping_mode_name} \nPort of Loading: {port_of_landing}  \nPort of Discharge: {port_of_discharge}",f"Tax Preference: {tax_type} \nRef Date : {sdate}  \n   \n   \n "]]
-    shipping_details_table_col_widths = [5*inch, 5*inch]
-    
-    table = Table(shipping_details_table_data, colWidths=shipping_details_table_col_widths)
+def shipping_details(destination, tax_type, shipping_mode_name, port_of_landing, port_of_discharge, sdate, print_config=None):
+    s = get_width_scale(print_config)
+    fs = _get_font_size(print_config)
+    style_normal = ParagraphStyle('sd_normal', parent=getSampleStyleSheet()['Normal'], fontSize=fs)
+    left_para = Paragraph(
+        f"<b>Destination:</b> {destination}<br/>"
+        f"<b>Shipping Mode:</b> {shipping_mode_name}<br/>"
+        f"<b>Port of Loading:</b> {port_of_landing}<br/>"
+        f"<b>Port of Discharge:</b> {port_of_discharge}",
+        style_normal
+    )
+    right_para = Paragraph(
+        f"<b>Tax Preference:</b> {tax_type}<br/>"
+        f"<b>Ref Date:</b> {sdate}",
+        style_normal
+    )
+    table = Table([[left_para, right_para]], colWidths=[5*inch*s, 5*inch*s])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-        ('VALIGN', (1, 0), (1, -1), 'TOP'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
     ]))
     return table
 
 
-def vendor_details(customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address):
-    styles = getSampleStyleSheet()
-    normal_style = styles['Normal']   
+def vendor_details(customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address, print_config=None):
+    s = get_width_scale(print_config)
+    fs = _get_font_size(print_config)
+    normal_style = ParagraphStyle('vd_normal', parent=getSampleStyleSheet()['Normal'], fontSize=fs)
 
-    # Create Paragraph objects for each cell with proper HTML-like tags
-    cust_bill_paragraph = Paragraph(f"<b>{customer_name}</b><br/>{v_billing_address}<br/>", normal_style)
-    cust_ship_paragraph = Paragraph(f"<b>{v_shipping_address_lbl}</b><br/>{v_shipping_address}<br/>", normal_style)
-    # Table data with Paragraph objects
-    vendor_table_data_2 = [
-        [cust_bill_paragraph, cust_ship_paragraph]
-    ]
+    def _s(v):
+        t = str(v).strip() if v is not None else ''
+        return '' if t.lower() in ('none', 'n/a', 'null', '-') else t
 
-    table_2_col_widths = [5*inch, 5*inch]
-    
-    table = Table(vendor_table_data_2, colWidths=table_2_col_widths)
+    bill_html = f"<b>{_s(customer_name) or '—'}</b>"
+    if _s(v_billing_address):
+        bill_html += f"<br/>{_s(v_billing_address)}"
+
+    ship_html = f"<b>{_s(v_shipping_address_lbl) or 'Delivery Address'}</b>"
+    if _s(v_shipping_address):
+        ship_html += f"<br/>{_s(v_shipping_address)}"
+
+    cust_bill_paragraph = Paragraph(bill_html, normal_style)
+    cust_ship_paragraph = Paragraph(ship_html, normal_style)
+
+    table = Table([[cust_bill_paragraph, cust_ship_paragraph]], colWidths=[5*inch*s, 5*inch*s])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-        ('VALIGN', (1, 0), (1, -1), 'TOP'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
     ]))
     return table
 
-def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt):
-    styles = getSampleStyleSheet()
-    normal_style = styles['Normal']   
+def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt, print_config=None):
+    s = get_width_scale(print_config)
+    fs = _get_font_size(print_config)
+    normal_style = ParagraphStyle('nt_normal', parent=getSampleStyleSheet()['Normal'], fontSize=fs)
 
-    # Create Paragraph objects for each cell with proper HTML-like tags
-    narration_paragraph = Paragraph(f"<b>Narration :</b> Being Goods Purchase From {comp_name }  { sdate}", normal_style)
-    total_paragraph = Paragraph(f"<b> Sub Total : {total_sub_amt}<br/>Bill Total : {total_bill_amt}<br/> </b>", normal_style)
-    # Table data with Paragraph objects
-    vendor_table_data_2 = [
-        [narration_paragraph, total_paragraph]
-    ]
+    def _f(v):
+        try:
+            return '{:,.2f}'.format(round(float(v), 2))
+        except (ValueError, TypeError):
+            return str(v)
 
-    narration_and_total_table_col_widths = [5*inch, 5*inch]
-    
-    table = Table(vendor_table_data_2, colWidths=narration_and_total_table_col_widths)
+    narration_paragraph = Paragraph(f"<b>Narration:</b> Being Goods Purchase From {comp_name} {sdate}", normal_style)
+    total_paragraph = Paragraph(
+        f"<b>Sub Total:</b> {_f(total_sub_amt)}<br/>"
+        f"<b>Bill Total:</b> {_f(total_bill_amt)}",
+        normal_style
+    )
+
+    table = Table([[narration_paragraph, total_paragraph]], colWidths=[5*inch*s, 5*inch*s])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-        ('VALIGN', (1, 0), (1, -1), 'TOP'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
     ]))
     return table
 
-def logistics_info(shipping_company_name, shipping_tracking_no , vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight):
-    styles = getSampleStyleSheet()
-    normal_style = styles['Normal']   
+def logistics_info(shipping_company_name, shipping_tracking_no, vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight, print_config=None):
+    s = get_width_scale(print_config)
+    fs = _get_font_size(print_config)
+    normal_style = ParagraphStyle('li_normal', parent=getSampleStyleSheet()['Normal'], fontSize=fs)
 
-    # Create Paragraph objects for each cell with proper HTML-like tags
-    logistics_info  = Paragraph(f"<b>Logistics Info : </b> <br/> <br/> Shipping Company  : {shipping_company_name} <br/> Tracking No: {shipping_tracking_no} <br/> Vehicle/Vessel No. : {vehicle_vessel}  <br/> No of Packets: {no_of_packets}", normal_style)
-    doc_extra_info = Paragraph(f"<b> Document extra info :</b> <br/> <br/> Shipping Date : {shipping_date} <br/> Charges Paid  {shipping_charges} <br/> Weight : {weight}", normal_style)
-    # Table data with Paragraph objects
-    logistics_info_table_data = [
-        [logistics_info, doc_extra_info]
-    ]
+    logistics_para = Paragraph(
+        f"<b>Logistics Info:</b><br/><br/>"
+        f"Shipping Company: {shipping_company_name}<br/>"
+        f"Tracking No: {shipping_tracking_no}<br/>"
+        f"Vehicle/Vessel No.: {vehicle_vessel}<br/>"
+        f"No of Packets: {no_of_packets}",
+        normal_style
+    )
+    doc_extra_para = Paragraph(
+        f"<b>Document Extra Info:</b><br/><br/>"
+        f"Shipping Date: {shipping_date}<br/>"
+        f"Charges Paid: {shipping_charges}<br/>"
+        f"Weight: {weight}",
+        normal_style
+    )
 
-    logistics_info_table_col_widths = [5*inch, 5*inch]
-    
-    table = Table(logistics_info_table_data, colWidths = logistics_info_table_col_widths)
+    table = Table([[logistics_para, doc_extra_para]], colWidths=[5*inch*s, 5*inch*s])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
-        ('VALIGN', (1, 0), (1, -1), 'TOP'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
-        ('GRID', (0, 0), (-1, 0), 1, colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
     ]))
     return table
 
-def purchase_declaration(comp_name):
-    styles = getSampleStyleSheet()
-    normal_style = styles['Normal']
+def purchase_declaration(comp_name, print_config=None):
+    s = get_width_scale(print_config)
+    fs = _get_font_size(print_config)
 
-    table_data_6 = [[f"For {comp_name}  \n\n\n\n  Authorised Signatory"]]
-    table_6_col_widths = [10*inch]
-    
-    table = Table(table_data_6, colWidths=table_6_col_widths)
+    table = Table([[f"For {comp_name}  \n\n\n\n  Authorised Signatory"]], colWidths=[10*inch*s])
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.white),  # Background color for the entire table
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),   # Text color for the entire table
-        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),             # Right align all cells
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),              # Top align all cells
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'), # Use bold font for all text
-        ('FONTSIZE', (0, 0), (-1, -1), 10),               # Set font size
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),      # Add border around all cells
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),          # Padding for all cells
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
     ]))
     return table
 
-def comp_address_last_tbl(comp_address, comp_phone, comp_email):
-    styles = getSampleStyleSheet()
-    normal_style = styles['Normal']
+def comp_address_last_tbl(comp_address, comp_phone, comp_email, print_config=None):
+    s = get_width_scale(print_config)
+    fs = _get_font_size(print_config, default=8)
 
-    comp_address_last_tbl_data_ = [[f"{comp_address}  {comp_phone}  {comp_email}"]]
-    comp_address_last_tbl_data__col_widths = [10*inch]
-    
-    table = Table(comp_address_last_tbl_data_, colWidths=comp_address_last_tbl_data__col_widths)
+    table = Table([[f"{comp_address}  {comp_phone}  {comp_email}"]], colWidths=[10*inch*s])
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), colors.white),  # Background color for the entire table
-        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),   # Text color for the entire table
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),             # CENTER align all cells
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),              # Top align all cells
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'), # Use bold font for all text
-        ('FONTSIZE', (0, 0), (-1, -1), 8),               # Set font size
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),      # Add border around all cells
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),          # Padding for all cells
+        ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
     ]))
     return table
 
@@ -793,7 +1008,7 @@ def comp_address_last_tbl(comp_address, comp_phone, comp_email):
     
 #     return table
 
-def invoice_doc_details(company_logo, company_name, company_gst, company_address, company_phone, company_email, sno_lbl, sno, sdate_lbl, sdate): 
+def invoice_doc_details(company_logo, company_name, company_gst, company_address, company_phone, company_email, sno_lbl, sno, sdate_lbl, sdate, print_config=None):
     from reportlab.platypus import Image, Paragraph, Table, TableStyle
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import inch
@@ -801,48 +1016,63 @@ def invoice_doc_details(company_logo, company_name, company_gst, company_address
     import os
 
     styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
-    style_bold = styles['Heading4']
+    s = get_width_scale(print_config) if print_config else 1.0
+    paper_size = (print_config or {}).get('paper_size', 'Custom_11x16')
 
-    # Check if image path is valid
-    # if not os.path.exists(company_logo):
-    #     raise FileNotFoundError(f"Company logo file not found: {company_logo}")
+    # Scale font and logo for small / height-constrained paper sizes
+    fs = _get_font_size(print_config)
+    if s <= 0.55:       # A5 — very narrow, must compress aggressively
+        fs = max(7, fs - 2)
+        logo_w = logo_h = 35
+    elif paper_size == 'A4_Landscape':  # landscape — height-constrained
+        logo_w = logo_h = 55
+    elif s < 0.85:      # A4, Letter
+        logo_w = logo_h = 60
+    else:               # Custom_11x16 default
+        logo_w = logo_h = 80
 
-    # # Create an image object from the provided dynamic path
-    # company_logo = Image(company_logo, width=60, height=60)
-    
-    # ✅ Validate and convert path string to Image object
-    if company_logo and os.path.exists(company_logo):
-        company_logo = Image(company_logo, width=80, height=80)
+    style_normal = ParagraphStyle('inv_normal', parent=styles['Normal'], fontSize=fs, leading=fs + 2)
+
+    sec = (print_config or {}).get('section_config', {}) if print_config else {}
+    show_logo         = sec.get('show_logo', True)
+    show_company_name = sec.get('show_company_name', True)
+    show_gstin        = sec.get('show_gstin', True)
+    show_address      = sec.get('show_company_address', True)
+    show_phone        = sec.get('show_company_phone', True)
+    show_email        = sec.get('show_company_email', True)
+
+    # Logo — scaled to fit the cell on small paper sizes
+    if show_logo and company_logo and os.path.exists(company_logo):
+        logo_cell = Image(company_logo, width=logo_w, height=logo_h)
     else:
-        company_logo = Paragraph("", getSampleStyleSheet()['Normal'])
+        logo_cell = Paragraph('', style_normal)
 
-    # Define company details as a Paragraph
     def _safe(val):
         return val if val and str(val).strip() not in ('None', 'N/A', '') else ''
 
-    gstin_line = f"<b>GSTIN:</b> {company_gst}<br/>" if _safe(company_gst) else ""
-    mobile_line = f"<b>Mobile:</b> {company_phone}<br/>" if _safe(company_phone) else ""
-    email_line = f"<b>Email:</b> {company_email}" if _safe(company_email) else ""
-
-    address_line = f"{company_address}<br/>" if _safe(company_address) else ""
+    name_line    = f"<b>{company_name}</b><br/>"          if (show_company_name and _safe(company_name)) else ''
+    gstin_line   = f"<b>GSTIN:</b> {company_gst}<br/>"   if (show_gstin   and _safe(company_gst))        else ''
+    address_line = f"{company_address}<br/>"              if (show_address and _safe(company_address))    else ''
+    mobile_line  = f"<b>Mobile:</b> {company_phone}<br/>" if (show_phone   and _safe(company_phone))     else ''
+    email_line   = f"<b>Email:</b> {company_email}"       if (show_email   and _safe(company_email))     else ''
 
     company_details_content = Paragraph(
-        f"<b>{company_name}</b><br/>"
-        f"{gstin_line}"
-        f"{address_line}"
-        f"{mobile_line}"
-        f"{email_line}",
+        f"{name_line}{gstin_line}{address_line}{mobile_line}{email_line}",
         style_normal
     )
 
-    # Table layout
-    col_widths = [1.2*inch, 3.8*inch, 2.5*inch, 2.5*inch]
+    # For A5 the invoice/date labels also need Paragraph wrapping to word-wrap in narrow cells
+    if s <= 0.55:
+        sno_content   = Paragraph(f'<b>{sno_lbl}:</b><br/>{sno}',   style_normal)
+        sdate_content = Paragraph(f'<b>{sdate_lbl}:</b><br/>{sdate}', style_normal)
+    else:
+        sno_content   = f'{sno_lbl} : \n{sno}'
+        sdate_content = f'{sdate_lbl} : \n{sdate}'
 
-    table_data_1 = [
-        [company_logo, company_details_content, f'{sno_lbl} : \n{sno}', f'{sdate_lbl} : \n{sdate}']
-    ]
+    col_widths = [1.2*inch*s, 3.8*inch*s, 2.5*inch*s, 2.5*inch*s]
+    table_data_1 = [[logo_cell, company_details_content, sno_content, sdate_content]]
 
+    bottom_pad = max(4, int(10 * min(s, 1.0)))
     table = Table(table_data_1, colWidths=col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.white),
@@ -852,7 +1082,9 @@ def invoice_doc_details(company_logo, company_name, company_gst, company_address
         ('GRID', (2, 0), (-1, 0), 1, colors.black),
         ('BOX', (0, 0), (-1, 0), 1, colors.black),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+        ('FONTSIZE', (0, 0), (-1, 0), fs),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), bottom_pad),
+        ('TOPPADDING', (0, 0), (-1, 0), bottom_pad),
     ]))
 
     return table
@@ -860,30 +1092,47 @@ def invoice_doc_details(company_logo, company_name, company_gst, company_address
 
 
 
-def invoice_customer_details(cust_name, city, country, phone, destination, shipping_address, billing_address):
+def invoice_customer_details(cust_name, city, country, phone, destination, shipping_address, billing_address, print_config=None):
     styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
-    # style_bold = styles['Normal']
-    # style_bold.fontName = 'Helvetica-Bold'
-    
-    # Create structured content with bold headers
-    billing_content = Paragraph(
-        f"<b>Customer Details: </b><br/>{cust_name}<br/>"
-        f"<b>Billing Address:</b><br/>{billing_address}", 
-        style_normal
-    )
-    
-    shipping_content = Paragraph(
-        f"<b>Shipping Address:</b><br/>{shipping_address}", 
-        style_normal
-    )
-    
-    table_data = [
-        [billing_content, shipping_content]
-    ]
-    
-    table_col_widths = [5*inch, 5*inch]
-    
+    s = get_width_scale(print_config) if print_config else 1.0
+    paper_size = (print_config or {}).get('paper_size', 'Custom_11x16')
+
+    # Reduce font for A5 to fit narrow width and save vertical space
+    fs = _get_font_size(print_config)
+    if s <= 0.55:
+        fs = max(7, fs - 2)
+    elif paper_size == 'A4_Landscape':
+        fs = max(8, fs - 1)
+
+    style_normal = ParagraphStyle('inv_cust_normal', parent=styles['Normal'], fontSize=fs, leading=fs + 2)
+
+    sec = (print_config or {}).get('section_config', {}) if print_config else {}
+    show_billing  = sec.get('show_billing_address', True)
+    show_shipping = sec.get('show_shipping_address', True)
+
+    def _safe(v):
+        sv = str(v).strip() if v is not None else ''
+        return '' if sv.lower() in ('none', 'n/a', 'null', '', '-') else sv
+
+    # Left: customer name always; billing address only when toggled on and non-empty
+    billing_html = f"<b>Customer Details:</b><br/>{_safe(cust_name) or '—'}"
+    if show_billing and _safe(billing_address):
+        billing_html += f"<br/><b>Billing Address:</b><br/>{_safe(billing_address)}"
+    billing_content = Paragraph(billing_html, style_normal)
+
+    # Right: shipping address only when toggled on and non-empty
+    if show_shipping and _safe(shipping_address):
+        ship_html = f"<b>Shipping Address:</b><br/>{_safe(shipping_address)}"
+    else:
+        ship_html = ''
+    shipping_content = Paragraph(ship_html, style_normal)
+
+    table_data = [[billing_content, shipping_content]]
+    table_col_widths = [5*inch*s, 5*inch*s]
+
+    # Tighter cell padding for height-constrained sizes to reduce vertical space used
+    cell_pad = max(2, int(4 * min(s, 1.0)))
+
     table = Table(table_data, colWidths=table_col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
@@ -891,226 +1140,197 @@ def invoice_customer_details(cust_name, city, country, phone, destination, shipp
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('LEFTPADDING', (0, 0), (-1, -1), 4),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-    ]))
-    
-    return table
-
-def invoice_product_details(data, show_gst=True):
-    style_normal = getSampleStyleSheet()['Normal']
-
-    # FULL TABLE WIDTH (same for all versions)
-    TOTAL_WIDTH = (
-        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
-        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
-    )
-
-    # HEADERS
-    headers = [
-        "Idx", "Product", "Boxes", "Qty", "Unit Name", "Rate",
-        "Amount", "Disc(%)", "Disc(Rs)", "GST(Rs)", "Total Amount"
-    ]
-
-    # Remove GST column completely if not showing
-    if not show_gst:
-        headers.pop(9)  # remove GST header
-
-    num_columns = len(headers)
-
-    # AUTO DISTRIBUTE WIDTHS PERFECTLY
-    col_width = TOTAL_WIDTH / num_columns
-    col_widths = [col_width] * num_columns
-
-    # Build table data
-    table_data = [headers]
-
-    for item in data:
-        row = item.copy()
-
-        # Remove GST value if hiding
-        if not show_gst:
-            row.pop(9)
-
-        # Wrap row cells
-        wrapped = [Paragraph(str(x), style_normal) for x in row]
-        table_data.append(wrapped)
-
-    # Add filler rows for consistency
-    while len(table_data) < 6:
-        table_data.append([" "] * num_columns)
-
-    # Create table
-    table = Table(table_data, colWidths=col_widths)
-
-    table.setStyle(TableStyle([        
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (2, 1), (-1, -1), 'RIGHT'),
-        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
-        ('LINEBEFORE', (0, 0), (-1, -1), 1, colors.black),
-        ('LINEAFTER', (6, 0), (10, -1), 1, colors.black),
-        ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
-        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
-        ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-        ('TOPPADDING', (0, 0), (-1, -1), 12),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), cell_pad),
+        ('RIGHTPADDING', (0, 0), (-1, -1), cell_pad),
+        ('TOPPADDING', (0, 0), (-1, -1), cell_pad),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), cell_pad),
     ]))
 
     return table
 
-def invoice_product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gst=True):
+def invoice_product_details(data, show_gst=True, print_config=None):
+    # Delegates to product_details — same logic, same config support
+    return product_details(data, show_gst=show_gst, print_config=print_config)
 
-    # SAME TOTAL WIDTH AS PRODUCT TABLE
-    TOTAL_WIDTH = (
-        0.5 * inch + 2.0 * inch + 0.7 * inch + 0.7 * inch + 0.8 * inch +
-        1.0 * inch + 1.0 * inch + 0.7 * inch + 0.8 * inch + 0.8 * inch + 1.0 * inch
-    )
+def invoice_product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gst=True, print_config=None):
+    """
+    Invoice totals row — dynamically matches visible columns from print_config.
+    """
+    width_scale  = get_width_scale(print_config) if print_config else 1.0
+    TOTAL_WIDTH  = 10.0 * inch * width_scale
+    fs           = _effective_table_font_size(print_config)
 
-    # HEADERS COUNT MATCHES PRODUCT TABLE
-    if show_gst:
-        num_columns = 11
-    else:
-        num_columns = 10
+    col_config   = (print_config or {}).get('column_config') if print_config else None
+    visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
+    col_widths   = _compute_col_widths(visible_cols, TOTAL_WIDTH)
 
-    # AUTO-CALCULATED COLUMN WIDTHS
-    col_width = TOTAL_WIDTH / num_columns
-    col_widths = [col_width] * num_columns
+    value_map = {
+        'serial_no':        '',
+        'product_name':     'Total',
+        'boxes':            '',
+        'quantity':         _fmt_total(ttl_Qty),
+        'unit':             '',
+        'rate':             '',
+        'amount':           _fmt_total(final_Amount),
+        'discount_percent': '',
+        'discount_amount':  _fmt_total(total_disc),
+        'gst_amount':       '',
+        'total_amount':     _fmt_total(ttl_Amount),
+    }
 
-    # ----- BUILD ROW -----
+    row = [value_map.get(col['key'], '') for col in visible_cols]
 
-    if show_gst:
-        row = [
-            "",          # idx
-            "Total",     # Total label
-            "",          # Boxes
-            ttl_Qty,     # Qty total
-            "",          # Unit
-            "",          # Rate
-            final_Amount,# Amount
-            "",          # Disc%
-            total_disc,  # Disc Rs
-            "",          # GST
-            ttl_Amount   # Total Amt
-        ]
-    else:
-        row = [
-            "",          # idx
-            "Total",     
-            "",          # Boxes
-            ttl_Qty,     
-            "",          # Unit
-            "",          # Rate
-            final_Amount,
-            "",          # Disc%
-            total_disc,
-            ttl_Amount   # Last column (no GST)
-        ]
-
-    # CREATE TABLE
+    cell_pad = max(3, int(5 * width_scale))
     table = Table([row], colWidths=col_widths)
-
-    # STYLE MATCHES PRODUCT TABLE
-    style = [
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), get_header_color(print_config) if print_config else colors.skyblue),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-
-        # MERGE Total across Product + Boxes columns
-        ('SPAN', (1, 0), (2, 0)),
-
-        # Merge Unit + Rate columns
-        ('SPAN', (4, 0), (5, 0)),
-    ]
-
-    table.setStyle(TableStyle(style))
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), cell_pad),
+        ('RIGHTPADDING', (0, 0), (-1, -1), cell_pad),
+    ]))
     return table
 
-def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch, remarks=""):
+def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch, remarks="", print_config=None):
     styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
+    s = get_width_scale(print_config) if print_config else 1.0
+    paper_size = (print_config or {}).get('paper_size', 'Custom_11x16')
 
-    # --- Top Row: Bank Details + Signature ---
-    bank_content = Paragraph(
-        f"<b>Bank Details:</b><br/>"
-        f"Bank: <b>{bank_name}</b><br/>"
-        f"Account #: <b>{bank_acno}</b><br/>"
-        f"IFSC: <b>{bank_ifsc}</b><br/>"
-        f"Branch: <b>{bank_branch}</b><br/>",
-        style_normal
+    # Height-constrained sizes: A5 (portrait) and A4_Landscape — only 7.27" usable height.
+    # For these, collapse to a single row (bank + signature only) to prevent page overflow.
+    is_tight_height = paper_size in ('A5', 'A4_Landscape')
+
+    fs = _get_font_size(print_config)
+    if s <= 0.55:       # A5 — aggressively compress
+        fs = max(7, fs - 2)
+    elif is_tight_height:  # A4_Landscape — slightly compress
+        fs = max(8, fs - 1)
+
+    style_normal = ParagraphStyle('footer_normal', parent=styles['Normal'], fontSize=fs, leading=fs + 2)
+    sec = (print_config or {}).get('section_config', {}) if print_config else {}
+    txt = (print_config or {}).get('custom_text', {}) if print_config else {}
+
+    show_bank      = sec.get('show_bank_details', True)
+    show_terms     = sec.get('show_terms', True)
+    show_notes     = sec.get('show_notes', True)
+    show_signature = sec.get('show_signature', True)
+
+    notes_text = txt.get('notes', 'Thank you for the Business')
+    terms_text = txt.get('terms_conditions',
+        "1. Goods once sold cannot be taken back\n"
+        "2. Warranty per manufacturer terms\n"
+        "3. 24% p.a. interest after 15 days\n"
+        "4. Subject to local Jurisdiction"
     )
+    footer_note = txt.get('footer_note', '')
 
+    # Bank details cell
+    if show_bank:
+        bank_content = Paragraph(
+            f"<b>Bank Details:</b><br/>"
+            f"Bank: <b>{bank_name}</b><br/>"
+            f"A/C: <b>{bank_acno}</b>  IFSC: <b>{bank_ifsc}</b><br/>"
+            f"Branch: <b>{bank_branch}</b>",
+            style_normal
+        )
+    else:
+        bank_content = Paragraph('', style_normal)
+
+    # Signature cell — shorter on tight sizes to save height
+    sig_spacer = '<br/>' if is_tight_height else '<br/><br/><br/>'
     signature_content = Paragraph(
-        # "<br/><br/><br/><b>Authorized Signature</b>",
-        "<br/><br/><br/>__________________________<br/>"
-        "<b>Authorised Signatory</b>",
+        (f"{sig_spacer}__________________________<br/><b>Authorised Signatory</b>"
+         if show_signature else ''),
         style_normal
     )
-    
-    # --- Initialize Notes block ---
-    notes_html = ""  # start empty
 
-    # --- Add Remarks first (if available) ---
-    if remarks and remarks.strip() != "":
+    col_widths = [7 * inch * s, 3 * inch * s]
+    cell_pad = max(4, int(8 * min(s, 1.0)))
+
+    if is_tight_height:
+        # Single-row compact footer for height-constrained paper sizes.
+        # Notes and Terms are merged into the left cell as compact inline text.
+        inline_notes = ''
+        if remarks and remarks.strip():
+            inline_notes += f"<br/><b>Remarks:</b> {remarks}"
+        if show_notes and notes_text:
+            inline_notes += f"<br/><b>Note:</b> {notes_text}"
+        if show_terms:
+            terms_lines = terms_text.replace('\n', ' | ')
+            inline_notes += f"<br/><b>Terms:</b> {terms_lines}"
+        if footer_note:
+            inline_notes += f"<br/>{footer_note}"
+        bank_html = ''
+        if show_bank:
+            bank_html = (
+                f"<b>Bank Details:</b> Bank: <b>{bank_name}</b>  "
+                f"A/C: <b>{bank_acno}</b>  IFSC: <b>{bank_ifsc}</b>  "
+                f"Branch: <b>{bank_branch}</b>"
+            )
+        bank_html += inline_notes
+        left_cell = Paragraph(bank_html, style_normal)
+
+        table_data = [[left_cell, signature_content]]
+        table = Table(table_data, colWidths=col_widths)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+            ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 0), (-1, -1), fs),
+            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+            ('VALIGN', (1, 0), (1, 0), 'BOTTOM'),
+            ('LEFTPADDING', (0, 0), (-1, -1), cell_pad),
+            ('RIGHTPADDING', (0, 0), (-1, -1), cell_pad),
+            ('TOPPADDING', (0, 0), (-1, -1), cell_pad),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), cell_pad),
+        ]))
+        return table
+
+    # Standard two-row footer for full-size paper (Custom_11x16, A4 portrait, Letter)
+    notes_html = ''
+    if remarks and remarks.strip():
         notes_html += f"<b>Remarks:</b> {remarks}<br/><br/>"
+    if footer_note:
+        notes_html += f"{footer_note}<br/><br/>"
+    if show_notes:
+        notes_html += f"<b>Notes:</b><br/>{notes_text}"
+    notes_content = Paragraph(notes_html or '', style_normal)
 
-    # --- Add Notes ---
-    notes_html += "<b>Notes:</b><br/>Thank you for the Business"
-
-    # --- Convert to paragraph ---
-    notes_content = Paragraph(notes_html, style_normal)
-
-
-    # --- Terms block ---
+    terms_lines = terms_text.replace('\n', '<br/>')
     terms_content = Paragraph(
-        "<b>Terms and Conditions:</b><br/>"
-        "1. Goods once sold cannot be taken back<br/>"
-        "2. Warranty per manufacturer terms<br/>"
-        "3. 24% p.a. interest after 15 days<br/>"
-        "4. Subject to local Jurisdiction",
+        f"<b>Terms and Conditions:</b><br/>{terms_lines}" if show_terms else '',
         style_normal
     )
 
-    # Column widths (equal columns)
-    col_widths = [7 * inch, 3 * inch]
-
-    # Create the table structure
     table_data = [
-        [bank_content, signature_content],   # Row 1
-        [notes_content, terms_content]       # Row 2
+        [bank_content, signature_content],
+        [notes_content, terms_content]
     ]
 
-    table = Table(table_data, colWidths=col_widths, rowHeights=[2 * inch, 1.4 * inch])
-
+    table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-
-        # Borders
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
         ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
-
-        # Alignments
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-
         ('ALIGN', (1, 0), (1, 0), 'CENTER'),
         ('VALIGN', (1, 0), (1, 0), 'BOTTOM'),
-
-        # Padding
         ('LEFTPADDING', (0, 0), (-1, -1), 10),
         ('RIGHTPADDING', (0, 0), (-1, -1), 10),
         ('TOPPADDING', (0, 0), (-1, -1), 8),
@@ -1124,18 +1344,22 @@ def create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch, remarks=
 
 def return_company_header(company_name, company_address, company_phone):
     styles = getSampleStyleSheet()
-    
-    # Style for company name (bold and centered)
+
+    def _s(v):
+        """Return empty string for None/blank/sentinel values."""
+        if v is None:
+            return ''
+        s = str(v).strip()
+        return '' if s.lower() in ('none', 'n/a', 'null', '-', 'address not provided') else s
+
     company_style = ParagraphStyle(
         'CompanyStyle',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
         fontSize=14,
-        alignment=1,  # 1 = Center
+        alignment=1,
         spaceAfter=6
     )
-    
-    # Style for address/phone (normal and centered)
     address_style = ParagraphStyle(
         'AddressStyle',
         parent=styles['Normal'],
@@ -1143,30 +1367,30 @@ def return_company_header(company_name, company_address, company_phone):
         alignment=1,
         spaceAfter=2
     )
-    
-    # Build content
-    content = [
-        Paragraph(f"<b>{company_name}</b>", company_style),
-        Paragraph(company_address, address_style),
-        Paragraph(f"Phone No: {company_phone}", address_style),
-        Spacer(1, 12),  # Add space before "BILL OF SUPPLY"
-        # Paragraph("<b>BILL OF SUPPLY</b>", company_style),  # Subheader
-        Spacer(1, 12)   # Space after header
-    ]
-    
+
+    content = [Paragraph(f"<b>{_s(company_name) or 'Company'}</b>", company_style)]
+
+    addr = _s(company_address)
+    if addr:
+        content.append(Paragraph(addr, address_style))
+
+    phone = _s(company_phone)
+    if phone:
+        content.append(Paragraph(f"Phone No: {phone}", address_style))
+
+    content += [Spacer(1, 12), Spacer(1, 12)]
     return content
 
-def return_doc_details(cust_bill_dtl, sno_lbl, sno, sdate_lbl, sdate): 
-    col_widths = [3.3*inch, 2.8*inch, 3.9*inch]
+def return_doc_details(cust_bill_dtl, sno_lbl, sno, sdate_lbl, sdate, print_config=None):
+    s = get_width_scale(print_config) if print_config else 1.0
+    col_widths = [3.3*inch*s, 2.8*inch*s, 3.9*inch*s]
     table_data = [
         [cust_bill_dtl, f'{sno_lbl} : {sno}', f'{sdate_lbl} : {sdate}'],
     ]
-    
-    
-    
+
     table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+        ('BACKGROUND', (0, 0), (-1, 0), get_header_color(print_config) if print_config else colors.skyblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
@@ -1197,11 +1421,11 @@ def return_doc_details(cust_bill_dtl, sno_lbl, sno, sdate_lbl, sdate):
 #     ]))
 #     return table
 
-def return_customer_details_with_reason(cust_name, billing_address, phone, city, return_reason):
+def return_customer_details_with_reason(cust_name, billing_address, phone, city, return_reason, print_config=None):
     styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
+    fs = _get_font_size(print_config)
+    style_normal = ParagraphStyle('ret_cust_normal', parent=styles['Normal'], fontSize=fs)
 
-    # Left content: customer details
     left_content = Paragraph(
         f"<b>{cust_name}</b><br/>"
         f"{billing_address}<br/>"
@@ -1209,8 +1433,6 @@ def return_customer_details_with_reason(cust_name, billing_address, phone, city,
         f"Destination: {city}",
         style_normal
     )
-
-    # Right content: return reason
     right_content = Paragraph(
         f"<b>Return Reason:</b> {return_reason}",
         style_normal
@@ -1219,21 +1441,19 @@ def return_customer_details_with_reason(cust_name, billing_address, phone, city,
     # Table data: two columns
     table_data = [[left_content, right_content]]
 
-    # Column widths: roughly 60% left, 40% right (adjust as needed)
-    col_widths = [6.1*inch, 3.9*inch]
+    # Scale col widths for paper size
+    s = get_width_scale(print_config) if print_config else 1.0
+    col_widths = [6.1 * inch * s, 3.9 * inch * s]
 
     table = Table(table_data, colWidths=col_widths)
-
-    # Styling with vertical grid line between columns
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),       # Outer border
-        ('GRID', (1, 0), (1, 0), 1, colors.black),         # Vertical divider between columns
+        ('BOX', (0, 0), (-1, -1), 1, colors.black),
+        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('ALIGN', (0, 0), (0, 0), 'LEFT'),
         ('ALIGN', (1, 0), (1, 0), 'LEFT'),
     ]))
-
     return table
 
 
@@ -1241,14 +1461,15 @@ def return_customer_details_with_reason(cust_name, billing_address, phone, city,
 
 def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
                           total_cgst, total_sgst, total_igst, round_0ff, bill_total,
-                          amount_in_words, show_gst=False):
+                          amount_in_words, show_gst=False, print_config=None):
     styles = getSampleStyleSheet()
-    normal_style = styles['Normal']
+    fs = _effective_table_font_size(print_config)
+    normal_style = ParagraphStyle('ret_tbl_normal', parent=styles['Normal'], fontSize=fs)
+    header_color = get_header_color(print_config) if print_config else colors.HexColor('#f0f0f0')
+    s = get_width_scale(print_config) if print_config else 1.0
 
-    # Column widths
-    col_widths = [4.5 * inch, 1.5 * inch, 1.5 * inch, 1.5 * inch, 1 * inch]
+    col_widths = [4.5*inch*s, 1.5*inch*s, 1.5*inch*s, 1.5*inch*s, 1.0*inch*s]
 
-    # Table header
     table_data = [[
         Paragraph("<b>Description</b>", normal_style),
         Paragraph("<b>Qty</b>", normal_style),
@@ -1257,27 +1478,41 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
         Paragraph("<b>Discount</b>", normal_style)
     ]]
 
-    # Add product rows
     for item in data:
         table_data.append([
-            Paragraph(str(item[1])),                  # Description
-            Paragraph(format_numeric(item[3])),       # Qty
-            Paragraph(format_numeric(item[5])),       # MRP
-            Paragraph(format_numeric(item[6])),       # Amount
-            Paragraph(format_numeric(item[8]))        # Discount
+            Paragraph(str(item[1]), normal_style),   # Description — wraps
+            format_numeric(item[3]),                 # Qty — plain string
+            format_numeric(item[5]),                 # MRP — plain string
+            format_numeric(item[6]),                 # Amount — plain string
+            format_numeric(item[8]),                 # Discount — plain string
         ])
 
     # Fill with empty rows if less than 4 items (for layout consistency)
     while len(table_data) < 5:
         table_data.append(["", "", "", "", ""])
 
+    def _fmtv(val):
+        try:
+            f = round(float(val), 2)
+            return '0.00' if f == 0.0 else '{:,.2f}'.format(f)
+        except (ValueError, TypeError):
+            return str(val)
+
+    def _is_zero_v(val):
+        try:
+            return round(float(val), 2) == 0.0
+        except (ValueError, TypeError):
+            return False
+
     # Add financial rows
-    table_data.extend([
-        ["Total Quantity", "", "", "", format_numeric(total_qty)],
-        ["Sub Total", "", "", "", format_numeric(sub_total)],
-        ["Total Discount", "", "", "", f"-{format_numeric(discount_amt)}"],
-        ["Cess Amt", "", "", "", format_numeric(cess_amount)],
-    ])
+    fin_rows = [["Total Quantity", "", "", "", _fmtv(total_qty)]]
+    fin_rows.append(["Sub Total", "", "", "", _fmtv(sub_total)])
+    if not _is_zero_v(discount_amt):
+        disc_val = round(float(discount_amt), 2)
+        fin_rows.append(["Total Discount", "", "", "", '-{:,.2f}'.format(abs(disc_val))])
+    if not _is_zero_v(cess_amount):
+        fin_rows.append(["Cess Amt", "", "", "", _fmtv(cess_amount)])
+    table_data.extend(fin_rows)
 
     # GST handling based on tax type
     if show_gst:
@@ -1289,47 +1524,39 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
             if float(total_sgst) > 0:
                 table_data.append(["SGST", "", "", "", format_numeric(total_sgst)])
 
-    # Round Off, Bill Total, and Amount in Words
+    # Round Off (hide if zero), Bill Total, Amount in Words
+    if not _is_zero_v(round_0ff):
+        r0ff = round(float(round_0ff), 2)
+        r0ff_str = ('+' if r0ff > 0 else '') + '{:,.2f}'.format(r0ff)
+        table_data.append(["Round Off", "", "", "", r0ff_str])
     table_data.extend([
-        ["Round Off", "", "", "", format_numeric(round_0ff)],
-        ["Bill Total", "", "", "", format_numeric(bill_total)],
+        ["Bill Total", "", "", "", _fmtv(bill_total)],
         [Paragraph(f"<b>Amount in Words:</b> {amount_in_words}", normal_style), "", "", "", ""]
     ])
 
     # Create table
     table = Table(table_data, colWidths=col_widths)
 
-    # Styling
     table.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
-
-        # Header row
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f0f0f0')),
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-
-        # Divider above totals
-        ('LINEABOVE', (0, len(data)+1), (-1, len(data)+1), 1, colors.black),  # Above "Total Quantity"
-
-        # Divider before final rows (Round Off)
-        ('LINEABOVE', (0, -3), (-1, -3), 1, colors.black),  # Above Bill Total
-
-        # Divider before amount in words
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
+        ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEABOVE', (0, len(data)+1), (-1, len(data)+1), 1, colors.black),
+        ('LINEABOVE', (0, -3), (-1, -3), 1, colors.black),
         ('LINEABOVE', (0, -2), (-1, -2), 0.5, colors.grey),
-
-        # Right-align all numeric columns
         ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
-
-        # Left-align Description and Amount in Words
         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-
-        # Amount in words spans all columns
         ('SPAN', (0, -1), (-1, -1)),
-
-        # Make final two rows bold
         ('FONTNAME', (0, -2), (-1, -2), 'Helvetica-Bold'),
         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
     ]))
-
     return table
 
 
@@ -1737,127 +1964,179 @@ def payment_receipt_voucher_table(data):
     
     return table
 
-def payment_customer_details(cust_name, billing_address, phone, email):
+def payment_customer_details(cust_name, billing_address, phone, email, print_config=None):
     styles = getSampleStyleSheet()
-    style_normal = styles['Normal']
-    
-    # Create structured content for payment receipts
-    customer_content = Paragraph(
-        f"<b>{cust_name}</b><br/>"
-        f"{billing_address}<br/>"
-        f"<b>Phone:</b> {phone}<br/>"
-        f"<b>Email:</b> {email}",
-        style_normal
-    )
-    
-    table_data = [
-        [customer_content]
-    ]
-    
-    table = Table(table_data, colWidths=[10*inch])
+    fs = _get_font_size(print_config)
+    style_normal = ParagraphStyle('pay_cust_normal', parent=styles['Normal'], fontSize=fs)
+    s = get_width_scale(print_config) if print_config else 1.0
+
+    def _s(v):
+        if v is None:
+            return ''
+        t = str(v).strip()
+        return '' if t.lower() in ('none', 'n/a', 'null', '-') else t
+
+    lines = [f"<b>{_s(cust_name) or '—'}</b>"]
+    if _s(billing_address):
+        lines.append(_s(billing_address))
+    if _s(phone):
+        lines.append(f"<b>Phone:</b> {_s(phone)}")
+    if _s(email):
+        lines.append(f"<b>Email:</b> {_s(email)}")
+
+    customer_content = Paragraph('<br/>'.join(lines), style_normal)
+
+    table = Table([[customer_content]], colWidths=[10 * inch * s])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
-    
     return table
 
-def payment_details_table(payment_data):
-    style_normal = getSampleStyleSheet()['Normal']
-    
-    # Column widths similar to sale order
-    col_widths = [1.5*inch, 1.5*inch, 1.5*inch, 2*inch, 2*inch, 1.5*inch]
-    
-    # Table headers
-    table_data = [
-        [
-            Paragraph("<b>Invoice No.</b>", style_normal),
-            Paragraph("<b>Invoice Date</b>", style_normal),
-            Paragraph("<b>Payment Method</b>", style_normal),
-            Paragraph("<b>Reference No.</b>", style_normal),
-            Paragraph("<b>Amount Paid</b>", style_normal),
-            Paragraph("<b>Total Amount</b>", style_normal)
-        ]
-    ]
-    
-    # Add payment rows
+def payment_details_table(payment_data, print_config=None):
+    styles = getSampleStyleSheet()
+    fs = _get_font_size(print_config)
+    style_normal = ParagraphStyle('pay_normal', parent=styles['Normal'], fontSize=fs)
+    header_color = get_header_color(print_config) if print_config else colors.skyblue
+    s = get_width_scale(print_config) if print_config else 1.0
+
+    col_config = (print_config or {}).get('column_config') if print_config else None
+    col_keys = ['invoice_no', 'invoice_date', 'payment_method', 'reference_no', 'amount_paid', 'total_amount']
+    col_labels = {
+        'invoice_no': 'Invoice No.', 'invoice_date': 'Invoice Date',
+        'payment_method': 'Payment Method', 'reference_no': 'Reference No.',
+        'amount_paid': 'Amount Paid', 'total_amount': 'Total Amount',
+    }
+    NUMERIC_KEYS = {'amount_paid', 'total_amount'}
+
+    if col_config:
+        cfg_map = {c['key']: c for c in col_config}
+        visible_keys = [k for k in col_keys if cfg_map.get(k, {}).get('visible', True)]
+        required = {'invoice_no', 'amount_paid', 'total_amount'}
+        for k in required:
+            if k not in visible_keys:
+                visible_keys.append(k)
+        for c in col_config:
+            if c['key'] in col_keys:
+                col_labels[c['key']] = c.get('label') or col_labels[c['key']]
+    else:
+        visible_keys = col_keys
+
+    num_cols   = len(visible_keys)
+    total_w    = 10.0 * inch * s
+    col_widths = [total_w / num_cols] * num_cols
+
+    table_data = [[Paragraph(f"<b>{col_labels[k]}</b>", style_normal) for k in visible_keys]]
+
+    def _fmt_date(v):
+        """Convert ISO datetime to DD/MM/YYYY or DD/MM/YYYY HH:MM:SS.
+        Time is only shown if it is not midnight (00:00:00)."""
+        if not v:
+            return ''
+        s = str(v).strip().replace('T', ' ')
+        p = s.split(' ')
+        date_part, time_part = p[0], (p[1] if len(p) > 1 else '')
+        try:
+            d = date_part.split('-')
+            if len(d) == 3 and len(d[0]) == 4:
+                out = f"{d[2]}/{d[1]}/{d[0]}"
+                if time_part and time_part not in ('00:00:00', '00:00'):
+                    out += f" {time_part}"
+                return out
+        except Exception:
+            pass
+        return s
+
+    def _cell(payment, key):
+        mapping = {
+            'invoice_no':     payment.get('invoice_no', ''),
+            'invoice_date':   _fmt_date(payment.get('invoice_date', '')),
+            'payment_method': payment.get('payment_method', ''),
+            'reference_no':   payment.get('cheque_no') or '',
+            'amount_paid':    format_numeric(payment.get('amount', 0)),
+            'total_amount':   format_numeric(payment.get('total', 0)),
+        }
+        val = str(mapping.get(key, ''))
+        # Numeric cells as plain strings (no mid-number wrap)
+        if key in NUMERIC_KEYS:
+            return val
+        return Paragraph(val, style_normal)
+
     for payment in payment_data:
-        row = [
-            Paragraph(payment['invoice_no'], style_normal),
-            Paragraph(payment['invoice_date'], style_normal),
-            Paragraph(payment['payment_method'], style_normal),
-            Paragraph(payment.get('cheque_no', 'N/A'), style_normal),
-            Paragraph(format_numeric(payment['amount']), style_normal),
-            Paragraph(format_numeric(payment['total']), style_normal)
-        ]
-        table_data.append(row)
-    
-    # Ensure minimum rows for spacing
+        table_data.append([_cell(payment, k) for k in visible_keys])
+
     while len(table_data) < 7:
-        table_data.append([" "] * 6)
-    
+        table_data.append([' '] * num_cols)
+
     table = Table(table_data, colWidths=col_widths)
-    table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+
+    # Build vertical lines dynamically (one per column)
+    line_cmds = [('LINEBEFORE', (i, 0), (i, -1), 1, colors.black) for i in range(num_cols)]
+    line_cmds.append(('LINEAFTER', (num_cols - 1, 0), (num_cols - 1, -1), 1, colors.black))
+
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
         ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (5, 1), (5, -1), 'RIGHT'),  # Amount right-aligned
-        
-        # Vertical lines between all columns
-        ('LINEBEFORE', (0, 0), (0, -1), 1, colors.black),  # First column
-        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),  # Second column
-        ('LINEBEFORE', (2, 0), (2, -1), 1, colors.black),  # Third column
-        ('LINEBEFORE', (3, 0), (3, -1), 1, colors.black),  # Fourth column
-        ('LINEBEFORE', (4, 0), (4, -1), 1, colors.black),  # Fifth column
-        ('LINEBEFORE', (5, 0), (5, -1), 1, colors.black),  # Fifth column
-        ('LINEAFTER', (5, 0), (5, -1), 1, colors.black),
-        
-        ('LINEABOVE', (0,0), (-1,0), 1, colors.black),
-        
-        # Horizontal line only below header and above last row
-        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),  # Below header
-        ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),  # Above last row
-        
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+        ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        
-        # Remove all other horizontal lines
-        ('TOPPADDING', (0, 1), (-1, -2), 8),  # Add some padding between rows
-    ]))
-    
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+    ] + line_cmds
+
+    # Right-align numeric columns dynamically
+    for ci, key in enumerate(visible_keys):
+        if key in NUMERIC_KEYS:
+            style_cmds.append(('ALIGN', (ci, 1), (ci, -1), 'RIGHT'))
+
+    table.setStyle(TableStyle(style_cmds))
     return table
 
-def payment_amount_summary(outstanding, amount_in_words):
-    print("outstanding--->>", outstanding)
+def payment_amount_summary(outstanding, amount_in_words, print_config=None):
     styles = getSampleStyleSheet()
-    normal_style = styles['Normal']
-    bold_style = styles['Heading3']
-    
-    # Amount in words
+    fs = _get_font_size(print_config)
+    normal_style = ParagraphStyle('pay_summary_normal', parent=styles['Normal'], fontSize=fs)
+    s = get_width_scale(print_config) if print_config else 1.0
+
+    # Format outstanding as proper currency (not raw float)
+    try:
+        outstanding_fmt = '{:,.2f}'.format(round(float(outstanding), 2))
+    except (ValueError, TypeError):
+        outstanding_fmt = str(outstanding)
+
     amount_paragraph = Paragraph(
         f"<b>Paid Amount in Words:</b> {amount_in_words}",
         normal_style
     )
-
-    Outstanding_paragraph = Paragraph(
-        f"<b>Outstanding Balance:</b> {outstanding}",
+    outstanding_paragraph = Paragraph(
+        f"<b>Outstanding Balance:</b> {outstanding_fmt}",
         normal_style
     )
-        
-    # Combine both sections
-    combined = Table([
-        [amount_paragraph, Outstanding_paragraph]
-    ], colWidths=[6*inch, 4*inch])
-    
+
+    combined = Table(
+        [[amount_paragraph, outstanding_paragraph]],
+        colWidths=[6 * inch * s, 4 * inch * s]
+    )
     combined.setStyle(TableStyle([
         ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ('PADDING', (0, 0), (-1, -1), 10),
+        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
+        ('LEFTPADDING', (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
-    
     return combined
 
 from reportlab.platypus import Table, TableStyle, Paragraph
@@ -1866,12 +2145,18 @@ from reportlab.lib import colors
 from reportlab.lib.units import inch
 
 
-def ledger_details_table(ledger_data):
+def ledger_details_table(ledger_data, print_config=None):
     styles = getSampleStyleSheet()
-    normal = styles['Normal']
-    bold = styles['Heading4']
+    fs = _get_font_size(print_config)
+    normal = ParagraphStyle('ledger_normal', parent=styles['Normal'], fontSize=fs)
+    bold   = ParagraphStyle('ledger_bold',   parent=styles['Normal'], fontSize=fs, fontName='Helvetica-Bold')
+    header_color = get_header_color(print_config) if print_config else colors.HexColor('#f0f0f0')
+    s = get_width_scale(print_config) if print_config else 1.0
 
-    # Table header
+    # Column widths scale with paper size
+    # voucher_no needs 1.7" to fit "SO-INV-XXXX-XXXXX" without wrapping
+    col_widths = [1.2*inch*s, 1.7*inch*s, 3.0*inch*s, 1.2*inch*s, 1.2*inch*s, 1.7*inch*s]
+
     table_data = [[
         Paragraph("<b>Date</b>", bold),
         Paragraph("<b>Voucher No</b>", bold),
@@ -1881,113 +2166,93 @@ def ledger_details_table(ledger_data):
         Paragraph("<b>Balance</b>", bold),
     ]]
 
-    # Table rows
     for row in ledger_data:
         table_data.append([
             Paragraph(row.get('date', ''), normal),
             Paragraph(row.get('voucher_no', ''), normal),
             Paragraph(row.get('description', ''), normal),
-            Paragraph(f"{row.get('debit', 0):,.2f}", normal),
-            Paragraph(f"{row.get('credit', 0):,.2f}", normal),
-            Paragraph(f"{row.get('balance', 0):,.2f}", normal),
+            # Numeric cells as plain strings — no mid-number wrap
+            f"{(row.get('debit') or 0):,.2f}",
+            f"{(row.get('credit') or 0):,.2f}",
+            f"{(row.get('balance') or 0):,.2f}",
         ])
 
-    table = Table(
-        table_data,
-        colWidths=[1.2*inch, 1.4*inch, 3.5*inch, 1.2*inch, 1.2*inch, 1.5*inch]
-    )
-
+    table = Table(table_data, colWidths=col_widths)
     table.setStyle(TableStyle([
-        # Header background
-        ('BACKGROUND', (0, 0), (-1, 0), colors.whitesmoke),
-
-        # ✅ Vertical lines for entire table
+        ('BACKGROUND', (0, 0), (-1, 0), header_color),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
         ('LINEBEFORE', (0, 0), (-1, -1), 0.8, colors.black),
-        ('LINEAFTER', (0, 0), (-1, -1), 0.8, colors.black),
-
-        # ✅ Header horizontal borders ONLY
+        ('LINEAFTER', (-1, 0), (-1, -1), 0.8, colors.black),
         ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
-
-        # ❌ No horizontal lines for data rows (intentionally omitted)
-
-        # Alignment
-        ('ALIGN', (3, 1), (-1, -1), 'RIGHT'),
+        ('LINEBELOW', (0, -1), (-1, -1), 0.8, colors.black),
+        ('ALIGN', (3, 0), (-1, -1), 'RIGHT'),  # Debit/Credit/Balance right-aligned
+        ('ALIGN', (0, 0), (2, -1), 'LEFT'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-
-        # Padding
         ('LEFTPADDING', (0, 0), (-1, -1), 6),
         ('RIGHTPADDING', (0, 0), (-1, -1), 6),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
     ]))
-
-
     return table
 
-def ledger_amount_summary(total_debit, total_credit, closing_balance, balance_in_words):
+
+def ledger_amount_summary(total_debit, total_credit, closing_balance, balance_in_words, print_config=None):
     styles = getSampleStyleSheet()
-    normal_style = styles['Normal']
+    fs = _get_font_size(print_config)
+    normal_style = ParagraphStyle('ledger_sum_normal', parent=styles['Normal'], fontSize=fs)
+    s = get_width_scale(print_config) if print_config else 1.0
 
-    debit_para = Paragraph(
-        f"<b>Total Debit:</b> {total_debit:,.2f}",
-        normal_style
+    debit_para   = Paragraph(f"<b>Total Debit:</b> {total_debit:,.2f}", normal_style)
+    credit_para  = Paragraph(f"<b>Total Credit:</b> {total_credit:,.2f}", normal_style)
+    balance_para = Paragraph(f"<b>Closing Balance:</b> {closing_balance:,.2f}", normal_style)
+    words_para   = Paragraph(f"<b>Balance in Words:</b> {balance_in_words}", normal_style)
+
+    summary_table = Table(
+        [[debit_para, credit_para], [balance_para, words_para]],
+        colWidths=[5 * inch * s, 5 * inch * s]
     )
-
-    credit_para = Paragraph(
-        f"<b>Total Credit:</b> {total_credit:,.2f}",
-        normal_style
-    )
-
-    balance_para = Paragraph(
-        f"<b>Closing Balance:</b> {closing_balance:,.2f}",
-        normal_style
-    )
-
-    words_para = Paragraph(
-        f"<b>Balance in Words:</b> {balance_in_words}",
-        normal_style
-    )
-
-    summary_table = Table([
-        [debit_para, credit_para],
-        [balance_para, words_para]
-    ], colWidths=[5*inch, 5*inch])
-
     summary_table.setStyle(TableStyle([
-        ('BOX', (0, 0), (-1, -1), 1, colors.black),
-        ('PADDING', (0, 0), (-1, -1), 10),
+        ('BOX',    (0, 0), (-1, -1), 1, colors.black),
+        ('LINEBEFORE', (1, 0), (1, -1), 1, colors.black),
+        ('LINEBELOW',  (0, 0), (-1, 0), 0.5, colors.HexColor('#CCCCCC')),
+        ('LEFTPADDING',  (0, 0), (-1, -1), 10),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+        ('TOPPADDING',   (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING',(0, 0), (-1, -1), 8),
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
     ]))
-
     return summary_table
 
-def ledger_period_details(from_date, to_date):
-    styles = getSampleStyleSheet()
+def ledger_period_details(from_date, to_date, print_config=None):
+    fs = _get_font_size(print_config)
     style = ParagraphStyle(
         'PeriodStyle',
-        parent=styles['Normal'],
-        fontSize=10,
+        parent=getSampleStyleSheet()['Normal'],
+        fontSize=fs,
         alignment=1,  # Center
         spaceAfter=10
     )
 
-    if from_date and to_date: #Ledger From : 01-04-2025 To : 22-12-2025
+    if from_date and to_date:
         text = f"<b>Period : {from_date} &nbsp; to &nbsp; {to_date} </b>"
     else:
         text = "<b>Period:</b> All Dates"
 
     return Paragraph(text, style)
 
-def ledger_doc_details(ledgername, ledger_name, number_lbl, date_lbl, doc_date): 
-    col_widths = [5*inch, 5*inch]
+def ledger_doc_details(ledgername, ledger_name, number_lbl, date_lbl, doc_date, print_config=None):
+    s = get_width_scale(print_config) if print_config else 1.0
+    col_widths = [5*inch*s, 5*inch*s]
     table_data_1 = [
         [f'{ledger_name} : {number_lbl}', f'{date_lbl} : {doc_date}'],
     ]
-    
+
     table = Table(table_data_1, colWidths=col_widths)
     table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.skyblue),
+        ('BACKGROUND', (0, 0), (-1, 0), get_header_color(print_config) if print_config else colors.skyblue),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
         ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
         ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
@@ -2004,53 +2269,31 @@ def ledger_doc_details(ledgername, ledger_name, number_lbl, date_lbl, doc_date):
 def dc_product_total_details_inwords(
     Bill_Amount_In_Words, SubTotal, Discount_Amt, transport_charges,
     total_cgst, total_sgst, total_igst, cess_amount,
-    round_off, net_value, tax_type='Exclusive'
+    round_off, net_value, tax_type='Exclusive', print_config=None
 ):
     """Totals section for Delivery Challan — no Party Old Balance, Transport Charges label."""
-    styles = getSampleStyleSheet()
-    normal_style = styles['Normal']
-    bill_amount_paragraph = Paragraph(f"<b>Bill Amount In Words:</b> {Bill_Amount_In_Words}", normal_style)
-
-    disc_display = f"-{Discount_Amt}" if float(Discount_Amt or 0) > 0 else "0.0"
-    financials_data = [
-        [Paragraph("<b>Sub Total:</b>", normal_style), Paragraph(f"<b>{SubTotal}</b>", normal_style)],
-        [Paragraph("<b>Total Discount:</b>", normal_style), Paragraph(f"<b>{disc_display}</b>", normal_style)],
-        [Paragraph("<b>Transport Charges:</b>", normal_style), Paragraph(f"<b>{transport_charges}</b>", normal_style)],
-    ]
-
-    if tax_type != 'Inclusive':
-        if total_igst > 0:
-            financials_data.append([Paragraph("<b>IGST:</b>", normal_style), Paragraph(f"<b>{total_igst}</b>", normal_style)])
-        elif total_cgst > 0 and total_sgst > 0:
-            financials_data.append([Paragraph("<b>CGST:</b>", normal_style), Paragraph(f"<b>{total_cgst}</b>", normal_style)])
-            financials_data.append([Paragraph("<b>SGST:</b>", normal_style), Paragraph(f"<b>{total_sgst}</b>", normal_style)])
-
-    financials_data.extend([
-        [Paragraph("<b>Cess AMT:</b>", normal_style), Paragraph(f"<b>{cess_amount}</b>", normal_style)],
-        [Paragraph("<b>Round Off:</b>", normal_style), Paragraph(f"<b>{round_off}</b>", normal_style)],
-        [Paragraph("<b>Net Amount:</b>", normal_style), Paragraph(f"<b>{net_value}</b>", normal_style)],
-    ])
-
-    financials_table = Table(financials_data, colWidths=[2.0 * inch, 1.3 * inch])
-    financials_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0, -1), (-1, -1), 5),
-        ('TOPPADDING', (0, -1), (-1, -1), 5),
-    ]))
-
-    table = Table([[bill_amount_paragraph, financials_table]], colWidths=[7 * inch, 3 * inch])
-    table.setStyle(TableStyle([
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica'),
-    ]))
-    return table
+    # Reuse the main totals function with Party_Old_Balance=0 and net_lbl='Net Amount'
+    return product_total_details_inwords(
+        Bill_Amount_In_Words=Bill_Amount_In_Words,
+        SubTotal=SubTotal,
+        Discount_Amt=Discount_Amt,
+        shipping_charges=transport_charges,
+        total_cgst=total_cgst,
+        total_sgst=total_sgst,
+        total_igst=total_igst,
+        cess_amount=cess_amount,
+        round_off=round_off,
+        Party_Old_Balance=0,
+        net_lbl='Net Amount',
+        net_value=net_value,
+        tax_type=tax_type,
+        print_config=print_config,
+    )
 
 
-def dc_footer_section(vehicle_name='', driver_name='', lr_no='', total_boxes=None, remarks=''):
+def dc_footer_section(vehicle_name='', driver_name='', lr_no='', total_boxes=None, remarks='', print_config=None):
     """Footer for Delivery Challan — dispatch details + dual signatory. No bank details."""
+    s = get_width_scale(print_config)
     styles = getSampleStyleSheet()
     style_normal = styles['Normal']
 
@@ -2090,7 +2333,7 @@ def dc_footer_section(vehicle_name='', driver_name='', lr_no='', total_boxes=Non
         label_para = Paragraph(label_text, sig_style)
         inner = Table(
             [[''], [label_para]],
-            colWidths=[1.8 * inch],
+            colWidths=[1.8 * inch * s],
             rowHeights=[0.02 * inch, 0.3 * inch]
         )
         inner.setStyle(TableStyle([
@@ -2103,7 +2346,7 @@ def dc_footer_section(vehicle_name='', driver_name='', lr_no='', total_boxes=Non
 
     table = Table(
         [[left_content, _sig_cell('Authorised Signatory'), _sig_cell("Receiver's Signature")]],
-        colWidths=[5.6 * inch, 2.2 * inch, 2.2 * inch],
+        colWidths=[5.6 * inch * s, 2.2 * inch * s, 2.2 * inch * s],
         rowHeights=[2.5 * inch]
     )
     table.setStyle(TableStyle([
