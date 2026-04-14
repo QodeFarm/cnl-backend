@@ -399,3 +399,16 @@ class ProductionFloorSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionFloor
         fields = '__all__'
+
+
+class DocumentPrintTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DocumentPrintTemplate
+        fields = [
+            'template_id', 'company', 'document_type', 'template_name',
+            'is_default', 'paper_size',
+            'column_config', 'section_config', 'style_config',
+            'copy_config', 'custom_text',
+            'is_active', 'is_deleted', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['template_id', 'created_at', 'updated_at']

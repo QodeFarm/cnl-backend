@@ -662,4 +662,56 @@ class ProductionFloor(models.Model):
         db_table = 'production_floors'
 
     def __str__(self):
-        return self.name    
+        return self.name
+
+
+class DocumentPrintTemplate(models.Model):
+    """
+    Stores per-company, per-document-type print template configuration.
+    Supports multiple named templates (e.g. "Standard A4", "Thermal Receipt").
+    One template per (company, document_type) can be marked as default.
+    """
+    DOCUMENT_TYPE_CHOICES = [
+        ('sale_order',      'Sale Order'),
+        ('sale_invoice',    'Sale Invoice'),
+        ('sale_return',     'Sale Return'),
+        ('delivery_challan','Delivery Challan'),
+        ('purchase_order',  'Purchase Order'),
+        ('purchase_return', 'Purchase Return'),
+        ('payment_receipt', 'Payment Receipt'),
+        ('bill_receipt',    'Bill Receipt'),
+        ('account_ledger',  'Account Ledger'),
+    ]
+
+    PAPER_SIZE_CHOICES = [
+        ('Custom_11x16', 'Custom 11×16 (Default)'),
+        ('A4',           'A4 Portrait'),
+        ('A4_Landscape', 'A4 Landscape'),
+        ('A5',           'A5 Portrait'),
+        ('Letter',       'Letter Portrait'),
+    ]
+
+    template_id   = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company       = models.ForeignKey('company.Companies', on_delete=models.PROTECT, db_column='company_id', related_name='print_templates')
+    document_type = models.CharField(max_length=50, choices=DOCUMENT_TYPE_CHOICES)
+    template_name = models.CharField(max_length=100)
+    is_default    = models.BooleanField(default=False)
+    paper_size    = models.CharField(max_length=20, choices=PAPER_SIZE_CHOICES, default='Custom_11x16')
+
+    # JSON blobs — all optional; backend falls back to defaults if empty
+    column_config  = models.JSONField(default=list, blank=True)   # [{key, label, visible, order}]
+    section_config = models.JSONField(default=dict, blank=True)   # {show_logo: true, ...}
+    style_config   = models.JSONField(default=dict, blank=True)   # {color_theme: 'blue', font_size: 'medium'}
+    copy_config    = models.JSONField(default=dict, blank=True)   # {num_copies: 1, copy_labels: [...]}
+    custom_text    = models.JSONField(default=dict, blank=True)   # {terms_conditions, notes, declaration, ...}
+
+    is_active  = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'document_print_templates'
+
+    def __str__(self):
+        return f"{self.template_name} [{self.document_type}]"    

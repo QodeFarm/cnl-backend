@@ -45,7 +45,8 @@ router.register(r'user_groups', UserGroupsViewset)
 router.register(r'user_group_members', UserGroupMembersViewset)
 
 router.register(r'flow_status', FlowStatusViews)
-router.register(r'production_floors',ProductionFloorViewSet)
+router.register(r'production_floors', ProductionFloorViewSet)
+router.register(r'document-print-templates', DocumentPrintTemplateViewSet, basename='document-print-templates')
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -53,5 +54,5 @@ urlpatterns = [
     path('generate_order_no/', generate_order_number_view, name='generate_order_no'),
     path('generate_ledger_code/', generate_ledger_code_view, name='generate_ledger_code'),
     path('document_generator/<str:pk>/<str:document_type>/', DocumentGeneratorView.as_view(), name='generate-sale-order-pdf'),
-
+    path('document-print-defaults/', DocumentPrintDefaultsView.as_view(), name='document-print-defaults'),
 ]

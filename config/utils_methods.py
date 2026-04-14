@@ -2411,7 +2411,17 @@ def extract_product_data(data, tax_type=None):
         gst_tax = 0.0 if tax_type == 'Inclusive' else float(cgst + sgst + igst)
 
         product_data.append([
-            index, product_name, total_boxes, quantity, unit_name, rate, amount, discount_percent, discount, gst_tax, total_amount
+            index,
+            product_name,
+            total_boxes,
+            round(quantity, 2),
+            unit_name,
+            round(rate, 2),
+            round(amount, 2),
+            discount_percent,
+            round(discount, 2),
+            round(gst_tax, 2),
+            round(total_amount, 2),
         ])
 
     return product_data
