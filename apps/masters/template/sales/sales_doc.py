@@ -1,6 +1,8 @@
 import json
+import copy as _copy_module
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from reportlab.platypus import PageBreak
 from apps.company.models import company_logos
 from apps.company.serializers import CompaniesSerializer
 from apps.customer.models import CustomerAddresses
@@ -8,6 +10,31 @@ from apps.finance.models import BankAccount
 from apps.masters.template.table_defination import *
 from apps.masters.utils.docs_variables import doc_data
 from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,get_related_data
+
+
+def _copy_config_for(print_config, copy_index):
+    """
+    Return a shallow-cloned print_config where copy_config.copy_labels contains
+    only the label for the given copy index.  Used to stamp each printed copy
+    with the right label (e.g. "Original", "Duplicate", "Triplicate").
+    """
+    if not print_config:
+        return None
+    cfg = _copy_module.deepcopy(print_config)
+    copy_cfg = cfg.get('copy_config') or {}
+    labels   = copy_cfg.get('copy_labels') or ['Original']
+    label    = labels[copy_index] if copy_index < len(labels) else f'Copy {copy_index + 1}'
+    cfg['copy_config'] = {'num_copies': 1, 'copy_labels': [label]}
+    return cfg
+
+
+def _num_copies(print_config):
+    """Return the configured number of copies (minimum 1)."""
+    cfg = (print_config or {}).get('copy_config') or {}
+    try:
+        return max(1, int(cfg.get('num_copies', 1)))
+    except (TypeError, ValueError):
+        return 1
 
 def sale_order_sales_invoice_data(pk, document_type, format_value=None):
     # Get the relevant data from the doc_data dictionary
@@ -110,15 +137,15 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             # Get the first company (you can modify this if you need specific company)
             company = Companies.objects.first()  # Get the first company
             print("company : ", company)
-            company_name = company.name if company else "N/A"
+            company_name = (company.name or '') if company else ''
             print("company_name : ", company_name)
-            company_gst = company.gst_tin if company else "N/A"
+            company_gst = (company.gst_tin or '') if company else ''
             print("company_gst : ", company_gst)
-            company_address = company.address if company else "N/A"
+            company_address = (company.address or '') if company else ''
             print("company_address : ", company_address)
-            company_phone = company.phone if company else "N/A"
+            company_phone = (company.phone or '') if company else ''
             print("company_phone : ", company_phone)
-            company_email = company.email if company else "N/A"
+            company_email = (company.email or '') if company else ''
             print("company_email : ", company_email)
             from django.conf import settings
             # Safe fallback
@@ -299,147 +326,106 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
 
 
 def sale_order_sales_invoice_doc(
-    elements, doc,cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
+    elements, doc, cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
     customer_name, billing_address, phone, city,
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
     bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, shipping_charges, round_0ff, cess_amount,
-    party_old_balance, net_lbl, net_value, tax_type, remarks
-):  
-    
-    # Append document details
-    elements.append(doc_details(
-       cust_bill_dtl, number_lbl, number_value, date_lbl, date_value
-    ))
-    
-    # Append customer details
-    elements.append(customer_details(
-        customer_name, billing_address, phone, city
-    ))
-    
-    # # Extract tax type from `cust_bill_dtl` (you may already have it)
-    # tax_type = cust_bill_dtl.get('tax', 'Exclusive')  # Default to Exclusive
-
-    # # Extract product data
-    # product_data = extract_product_data(['sale_order_items'], tax_type=tax_type)
-    
-    # Append product details
-    elements.append(product_details(product_data, show_gst=(tax_type != 'Inclusive')))
-
-    
-    # Append product total details
-    elements.append(product_total_details(
-        total_qty, itemstotal, final_total, total_disc_amt, show_gst=(tax_type != 'Inclusive')
-    ))
-    
-    # Append product total details in words
-    elements.append(product_total_details_inwords(
-        bill_amount_in_words, itemstotal,finalDiscount, shipping_charges,
-        total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
-        party_old_balance, net_lbl, net_value, tax_type=tax_type
-    ))
-    
-    # Append declaration
-    elements.append(declaration())
-
-    # Build the PDF
+    party_old_balance, net_lbl, net_value, tax_type, remarks, print_config=None
+):
+    copies = _num_copies(print_config)
+    for i in range(copies):
+        if i > 0:
+            elements.append(PageBreak())
+        cfg = _copy_config_for(print_config, i)
+        elements.append(doc_details(cust_bill_dtl, number_lbl, number_value, date_lbl, date_value, print_config=cfg))
+        elements.append(customer_details(customer_name, billing_address, phone, city, print_config=cfg))
+        elements.append(product_details(product_data, show_gst=(tax_type != 'Inclusive'), print_config=cfg))
+        elements.append(product_total_details(
+            total_qty, itemstotal, final_total, total_disc_amt,
+            show_gst=(tax_type != 'Inclusive'), print_config=cfg
+        ))
+        elements.append(product_total_details_inwords(
+            bill_amount_in_words, itemstotal, finalDiscount, shipping_charges,
+            total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
+            party_old_balance, net_lbl, net_value, tax_type=tax_type, print_config=cfg
+        ))
+        elements.append(declaration(print_config=cfg))
     doc.build(elements)
     
 def sales_invoice_doc(
-    elements, doc, company_logo, company_name, company_gst, company_address, company_phone, company_email, bank_name, bank_acno, bank_ifsc, bank_branch,
+    elements, doc, company_logo, company_name, company_gst, company_address, company_phone, company_email,
+    bank_name, bank_acno, bank_ifsc, bank_branch,
     number_lbl, number_value, date_lbl, date_value,
     customer_name, city, country, phone, dest, shipping_address, billing_address,
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
-    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount,shipping_charges, cess_amount, round_0ff, 
-    party_old_balance, net_lbl, net_value, tax_type, remarks
-):  
-
-    # Append document details
-    elements.append(invoice_doc_details(
-       company_logo, company_name, company_gst, company_address, company_phone, company_email, number_lbl, number_value, date_lbl, date_value
-    ))
-    
-    # Append customer details
-    elements.append(invoice_customer_details(
-        customer_name, city, country, phone, dest, shipping_address, billing_address
-    ))
-    
-    # Append product details
-    elements.append(invoice_product_details(product_data, show_gst=(tax_type != 'Inclusive')))
-    
-    # Append product total details
-    elements.append(invoice_product_total_details(
-        total_qty, itemstotal, final_total, total_disc_amt, show_gst=(tax_type != 'Inclusive')
-        # total_qty, itemstotal, final_total, total_disc_amt
-    ))
-    
-    # Append product total details in words
-    elements.append(product_total_details_inwords(
-        bill_amount_in_words, itemstotal,finalDiscount, shipping_charges,
-        total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
-        party_old_balance, net_lbl, net_value, tax_type=tax_type
-    ))
-    
-    # Add to your PDF story just like other tables
-    # elements.append(Spacer(1, 0.5*inch))  # Add some space first
-    elements.append(create_footer_section(
-        bank_name, bank_acno, bank_ifsc, bank_branch, remarks
-    ))
-
-    # Build the PDF
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, shipping_charges, cess_amount, round_0ff,
+    party_old_balance, net_lbl, net_value, tax_type, remarks, print_config=None
+):
+    copies = _num_copies(print_config)
+    for i in range(copies):
+        if i > 0:
+            elements.append(PageBreak())
+        cfg = _copy_config_for(print_config, i)
+        elements.append(invoice_doc_details(
+            company_logo, company_name, company_gst, company_address, company_phone, company_email,
+            number_lbl, number_value, date_lbl, date_value, print_config=cfg
+        ))
+        elements.append(invoice_customer_details(customer_name, city, country, phone, dest, shipping_address, billing_address, print_config=cfg))
+        elements.append(invoice_product_details(product_data, show_gst=(tax_type != 'Inclusive'), print_config=cfg))
+        elements.append(invoice_product_total_details(
+            total_qty, itemstotal, final_total, total_disc_amt,
+            show_gst=(tax_type != 'Inclusive'), print_config=cfg
+        ))
+        elements.append(product_total_details_inwords(
+            bill_amount_in_words, itemstotal, finalDiscount, shipping_charges,
+            total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
+            party_old_balance, net_lbl, net_value, tax_type=tax_type, print_config=cfg
+        ))
+        elements.append(create_footer_section(bank_name, bank_acno, bank_ifsc, bank_branch, remarks, print_config=cfg))
+        elements.append(declaration(print_config=cfg))
     doc.build(elements)
-    
+
 
 def sale_return_doc(
-    elements, doc, 
+    elements, doc,
     company_name, company_address, company_phone,
     cust_bill_dtl, number_lbl, return_no, date_lbl, date_value,
     customer_name, billing_address, phone, city,
     product_data,
     total_qty, total_amt, cess_amount, total_cgst, total_sgst, total_igst, itemstotal, finalDiscount,
     bill_amount_in_words, round_0ff,
-    party_old_balance, net_lbl, net_value, tax_type, return_reason
-):  
-    # 1. Add company header
-    elements.extend(
-        return_company_header(company_name, company_address, company_phone)
-    )
-    
-    # 2. Add document details (invoice no/date)
-    elements.append(return_doc_details(
-        cust_bill_dtl, number_lbl, return_no, date_lbl, date_value
-    ))
-    
-    # 3. Add customer details
-    elements.append(return_customer_details_with_reason(
-        customer_name, billing_address, phone, city, return_reason
-    ))
-    
-    # 2️⃣ Return Reason (mandatory, directly from pdf_data)
-    # elements.append(Paragraph(
-    #     f"<b>Return Reason:</b> {[return_reason]}", 
-    #     getSampleStyleSheet()['Normal']
-    # ))
-    
-    # 4. Add complete bordered table (products + financials)
-    elements.append(return_complete_table(
-        data=product_data,
-        total_qty=format_numeric(total_qty),
-        sub_total=format_numeric(itemstotal),
-        discount_amt=format_numeric(finalDiscount),
-        cess_amount = format_numeric(cess_amount),
-        total_cgst = format_numeric(total_cgst),
-        total_sgst = format_numeric(total_sgst),
-        total_igst = format_numeric(total_igst),
-        round_0ff = format_numeric(round_0ff),
-        bill_total=format_numeric(net_value),
-        amount_in_words=bill_amount_in_words,
-        show_gst=(tax_type != 'Inclusive')
-    ))
+    party_old_balance, net_lbl, net_value, tax_type, return_reason, print_config=None
+):
+    # Save the company header that doc_heading already added before calling us
+    heading_snapshot = list(elements)
 
-    
-    # 5. Build PDF
+    copies = _num_copies(print_config)
+    elements.clear()
+
+    for i in range(copies):
+        if i > 0:
+            elements.append(PageBreak())
+        elements.extend(heading_snapshot)
+        cfg = _copy_config_for(print_config, i)
+        elements.append(return_doc_details(cust_bill_dtl, number_lbl, return_no, date_lbl, date_value, print_config=cfg))
+        elements.append(return_customer_details_with_reason(customer_name, billing_address, phone, city, return_reason, print_config=cfg))
+        elements.append(return_complete_table(
+            data=product_data,
+            total_qty=format_numeric(total_qty),
+            sub_total=format_numeric(itemstotal),
+            discount_amt=format_numeric(finalDiscount),
+            cess_amount=format_numeric(cess_amount),
+            total_cgst=format_numeric(total_cgst),
+            total_sgst=format_numeric(total_sgst),
+            total_igst=format_numeric(total_igst),
+            round_0ff=format_numeric(round_0ff),
+            bill_total=format_numeric(net_value),
+            amount_in_words=bill_amount_in_words,
+            show_gst=(tax_type != 'Inclusive'),
+            print_config=cfg
+        ))
     doc.build(elements)
     
 
@@ -452,33 +438,40 @@ def delivery_challan_doc(
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
     bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount,
     transport_charges, cess_amount, round_0ff, net_value, tax_type,
-    vehicle_name, driver_name, lr_no, total_boxes, remarks
+    vehicle_name, driver_name, lr_no, total_boxes, remarks, print_config=None
 ):
-    from apps.masters.template.table_defination import (
-        invoice_doc_details, invoice_customer_details,
-        invoice_product_details, invoice_product_total_details,
-        dc_product_total_details_inwords, dc_footer_section
-    )
+    # Save the heading elements that doc_heading() already added before calling us
+    heading_snapshot = list(elements)
 
-    elements.append(invoice_doc_details(
-        company_logo, company_name, company_gst, company_address, company_phone, company_email,
-        number_lbl, number_value, date_lbl, date_value
-    ))
-    elements.append(invoice_customer_details(
-        customer_name, city, country, phone, '', shipping_address, billing_address
-    ))
-    elements.append(invoice_product_details(product_data, show_gst=(tax_type != 'Inclusive')))
-    elements.append(invoice_product_total_details(
-        total_qty, itemstotal, final_total, total_disc_amt, show_gst=(tax_type != 'Inclusive')
-    ))
-    elements.append(dc_product_total_details_inwords(
-        bill_amount_in_words, itemstotal, finalDiscount, transport_charges,
-        total_cgst, total_sgst, total_igst, cess_amount, round_0ff, net_value, tax_type=tax_type
-    ))
-    elements.append(dc_footer_section(
-        vehicle_name=vehicle_name, driver_name=driver_name,
-        lr_no=lr_no, total_boxes=total_boxes, remarks=remarks
-    ))
+    copies = _num_copies(print_config)
+    elements.clear()
+
+    for i in range(copies):
+        if i > 0:
+            elements.append(PageBreak())
+        # Re-add the heading for every copy so each copy is a self-contained page
+        elements.extend(heading_snapshot)
+        cfg = _copy_config_for(print_config, i)
+        elements.append(invoice_doc_details(
+            company_logo, company_name, company_gst, company_address, company_phone, company_email,
+            number_lbl, number_value, date_lbl, date_value, print_config=cfg
+        ))
+        elements.append(invoice_customer_details(customer_name, city, country, phone, '', shipping_address, billing_address, print_config=cfg))
+        elements.append(invoice_product_details(product_data, show_gst=(tax_type != 'Inclusive'), print_config=cfg))
+        elements.append(invoice_product_total_details(
+            total_qty, itemstotal, final_total, total_disc_amt,
+            show_gst=(tax_type != 'Inclusive'), print_config=cfg
+        ))
+        elements.append(dc_product_total_details_inwords(
+            bill_amount_in_words, itemstotal, finalDiscount, transport_charges,
+            total_cgst, total_sgst, total_igst, cess_amount, round_0ff, net_value,
+            tax_type=tax_type, print_config=cfg
+        ))
+        elements.append(dc_footer_section(
+            vehicle_name=vehicle_name, driver_name=driver_name,
+            lr_no=lr_no, total_boxes=total_boxes, remarks=remarks, print_config=cfg
+        ))
+        elements.append(declaration(print_config=cfg))
     doc.build(elements)
 
 
@@ -501,11 +494,11 @@ def delivery_challan_data(pk, format_value=None):
 
     # Company
     company = Companies.objects.first()
-    company_name = company.name if company else 'N/A'
-    company_gst = company.gst_tin if company else 'N/A'
-    company_address = company.address if company else 'N/A'
-    company_phone = company.phone if company else 'N/A'
-    company_email = company.email if company else 'N/A'
+    company_name = (company.name or '') if company else ''
+    company_gst = (company.gst_tin or '') if company else ''
+    company_address = (company.address or '') if company else ''
+    company_phone = (company.phone or '') if company else ''
+    company_email = (company.email or '') if company else ''
     company_logo = None
     if company and isinstance(company.logo, list) and company.logo:
         attachment_path = company.logo[0].get('attachment_path')

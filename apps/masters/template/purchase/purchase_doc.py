@@ -188,59 +188,27 @@ def purchase_data(pk, document_type, format_value=None):
 
 
 def purchase_doc(
-         elements, doc, company_name, company_address, company_phone, cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
-         customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address,
-         product_data,
-        #  pdf_data['total_qty'], pdf_data['itemstotal'],  pdf_data['total_disc_amt'], pdf_data['final_total'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'],  pdf_data['total_amt'],
-         total_qty, itemstotal, total_disc_amt, total_cgst, total_sgst, total_igst, total_amt,  final_total, total_txbl_amt, total_sub_amt, total_bill_amt,
-         destination,tax_type, shipping_mode_name, port_of_landing, port_of_discharge,
-         comp_name,
-         shipping_company_name, shipping_tracking_no , vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight,
-         comp_address, comp_phone, comp_email
+        elements, doc, company_name, company_address, company_phone, cust_bill_dtl, number_lbl, number_value, date_lbl, date_value,
+        customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address,
+        product_data,
+        total_qty, itemstotal, total_disc_amt, total_cgst, total_sgst, total_igst, total_amt, final_total, total_txbl_amt, total_sub_amt, total_bill_amt,
+        destination, tax_type, shipping_mode_name, port_of_landing, port_of_discharge,
+        comp_name,
+        shipping_company_name, shipping_tracking_no, vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight,
+        comp_address, comp_phone, comp_email, print_config=None
         ):
-    
-    # 1. Add company header
-    elements.extend(
-        return_company_header(company_name, company_address, company_phone)
-    )
 
-    # Append document details
-    elements.append(doc_details(
-       cust_bill_dtl, number_lbl, number_value, date_lbl, date_value
-    ))
-
-    # Append customer details
-    elements.append(vendor_details(
-        customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address
-    ))
-    
-    elements.append(shipping_details(
-        destination, tax_type,  shipping_mode_name, port_of_landing, port_of_discharge, date_value
-    ))
-
-    # Append product details
-    elements.append(product_details(product_data, show_gst=(tax_type != 'Inclusive')))
-
-    # Append product total details
+    elements.extend(return_company_header(company_name, company_address, company_phone))
+    elements.append(doc_details(cust_bill_dtl, number_lbl, number_value, date_lbl, date_value, print_config=print_config))
+    elements.append(vendor_details(customer_name, v_billing_address, v_shipping_address_lbl, v_shipping_address, print_config=print_config))
+    elements.append(shipping_details(destination, tax_type, shipping_mode_name, port_of_landing, port_of_discharge, date_value, print_config=print_config))
+    elements.append(product_details(product_data, show_gst=(tax_type != 'Inclusive'), print_config=print_config))
     elements.append(product_total_details_purchase(
-        # total_qty, total_amt, total_disc_amt, total_amt, show_gst=(tax_type != 'Inclusive')
-        total_qty, itemstotal, total_disc_amt, final_total, show_gst=(tax_type != 'Inclusive')
+        total_qty, itemstotal, total_disc_amt, final_total,
+        show_gst=(tax_type != 'Inclusive'), print_config=print_config
     ))
-
-    elements.append(narration_and_total(
-        comp_name, date_value, total_sub_amt, total_bill_amt
-    ))
-
-    elements.append(logistics_info(
-        shipping_company_name, shipping_tracking_no , vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight))
-
-    elements.append(purchase_declaration(
-        comp_name
-    ))
-
-    elements.append(comp_address_last_tbl(
-        comp_address, comp_phone, comp_email
-    ))
-    
-    # Build the PDF
+    elements.append(narration_and_total(comp_name, date_value, total_sub_amt, total_bill_amt, print_config=print_config))
+    elements.append(logistics_info(shipping_company_name, shipping_tracking_no, vehicle_vessel, no_of_packets, shipping_date, shipping_charges, weight, print_config=print_config))
+    elements.append(purchase_declaration(comp_name, print_config=print_config))
+    elements.append(comp_address_last_tbl(comp_address, comp_phone, comp_email, print_config=print_config))
     doc.build(elements)

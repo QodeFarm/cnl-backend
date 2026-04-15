@@ -1,4 +1,11 @@
+from apps.company.models import Companies
 from apps.customer.models import Customer
+from apps.documents.models import DocumentsGeneration
+from apps.masters.template.print_config_defaults import (
+    COLUMN_DEFINITIONS_BY_DOC_TYPE, DEFAULT_SECTION_CONFIG, DEFAULT_STYLE_CONFIG,
+    DEFAULT_COPY_CONFIG, DEFAULT_CUSTOM_TEXT, PAPER_SIZES,
+    get_default_template_config, resolve_print_config,
+)
 from apps.finance.models import JournalEntry, JournalVoucher
 from apps.masters.template.account_ledger.account_ledger import ledger_document_data, ledger_document_doc
 from apps.masters.template.billpayment_receipt.billpayment_receipt import billpayment_receipt_data, billpayment_receipt_doc
@@ -26,6 +33,7 @@ from rest_framework import viewsets
 from config.utils_methods import *
 from rest_framework import status
 from django.conf import settings
+from django.db import transaction
 from django.http import Http404, HttpResponse
 from .serializers import *
 from .filters import *
@@ -1063,6 +1071,31 @@ class TaskPrioritiesViewSet(viewsets.ModelViewSet):
 
 #===============================================PDF_creation================================
 class DocumentGeneratorView(APIView):
+    from rest_framework.permissions import IsAuthenticated
+    permission_classes = [IsAuthenticated]
+
+    def _load_print_config(self, document_type):
+        """
+        Load the default DocumentPrintTemplate for the first company and given
+        document_type, and resolve it into a config dict ready for PDF builders.
+        Falls back to system defaults if no template is configured.
+        """
+        try:
+            company = Companies.objects.first()
+            template_obj = None
+            if company:
+                template_obj = DocumentPrintTemplate.objects.filter(
+                    company=company,
+                    document_type=document_type,
+                    is_default=True,
+                    is_deleted=False,
+                    is_active=True,
+                ).first()
+            return resolve_print_config(template_obj, document_type)
+        except Exception as e:
+            logger.error("Failed to load print config for '%s': %s", document_type, str(e))
+            return get_default_template_config(document_type)
+
     def post(self, request, **kwargs):
         """ Retrieves a sale order and its related data. """
 
@@ -1073,15 +1106,27 @@ class DocumentGeneratorView(APIView):
             pk = kwargs.get('pk')
             document_type = kwargs.get('document_type')
             doc_name, file_path, relative_file_path = path_generate(document_type)
-            
-            from django.conf import settings
-            
-            print(" PATH :", f"{settings.MEDIA_URL}{relative_file_path}")
+
+            # ========== LOAD PRINT CONFIG ==========
+            print_config = self._load_print_config(document_type)
+            print("print_config loaded for:", document_type)
+            # ========== END PRINT CONFIG LOAD ==========
+
+            # ========== CONSTRUCT FULL URL ==========
+            relative_url = relative_file_path.replace('\\', '/')
+            host = request.get_host().lower()
+            if '127.0.0.1' in host or 'localhost' in host:
+                full_pdf_url = f"http://127.0.0.1:8000/public/documents/{relative_url}"
+            else:
+                full_pdf_url = f"https://apicore.cnlerp.com/public/documents/{relative_url}"
+
+            print(f"Request host: {host}")
             cdn_path = f"{settings.MEDIA_URL}{relative_file_path}"
-            
-            print("CDN PATH :", cdn_path)
-            
-#   #=======================================ReportLab Code Started============================          
+            print(f"Full PDF URL: {full_pdf_url}")
+            print(f"CDN PATH: {cdn_path}")
+            # ========== END URL CONSTRUCTION ==========
+
+#   #=======================================ReportLab Code Started============================
             if document_type == "sale_order":
                 pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)
                 # Override doc_header based on sale_estimate directly in the view
@@ -1092,38 +1137,39 @@ class DocumentGeneratorView(APIView):
                     
                 print(f"Final confirmed doc_header: {pdf_data['doc_header']}") 
 
-                elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY')
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], 'BILL OF SUPPLY', print_config=print_config)
                 sale_order_sales_invoice_doc(
-                                   elements, doc, 
+                                   elements, doc,
                                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
-                                   pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'], 
-                                   pdf_data['product_data'], 
-                                   pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
-                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'], 
-                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks']
+                                   pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'],
+                                   pdf_data['product_data'],
+                                   pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'],
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'],
+                                   pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks'],
+                                   print_config=print_config
                                 )
                 
             if document_type == "sale_invoice":
-                pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)  
-                elements, doc = doc_heading(file_path, pdf_data['doc_header'], '')
+                pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], '', print_config=print_config)
                 sales_invoice_doc(
-                                   elements, doc, 
+                                   elements, doc,
                                    pdf_data['company_logo'], pdf_data['company_name'], pdf_data['company_gst'], pdf_data['company_address'], pdf_data['company_phone'], pdf_data['company_email'],
                                    pdf_data['bank_name'], pdf_data['bank_acno'], pdf_data['bank_ifsc'], pdf_data['bank_branch'],
                                    pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
                                    pdf_data['customer_name'], pdf_data['city'], pdf_data['country'], pdf_data['phone'], pdf_data['dest'], pdf_data['shipping_address'],
                                    pdf_data['billing_address'],
                                    pdf_data['product_data'],
-                                   pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], 
-                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'],pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['cess_amount'], pdf_data['round_0ff'], #finalDiscount
+                                   pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'],
+                                   pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['cess_amount'], pdf_data['round_0ff'],
                                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['remarks'],
+                                   print_config=print_config
                                 )
-            # Add this in the DocumentGeneratorView class after the sale_invoice condition
             if document_type == "sale_return":
                 pdf_data = sale_order_sales_invoice_data(pk, document_type, format_value)
-                elements, doc = doc_heading(file_path, "BILL OF SUPPLY", '')  # Modified header for returns
+                elements, doc = doc_heading(file_path, "BILL OF SUPPLY", '', print_config=print_config)
                 sale_return_doc(
-                    elements, doc, 
+                    elements, doc,
                     pdf_data['company_name'], pdf_data['company_address'], pdf_data['company_phone'],
                     pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['return_no'],
                     pdf_data['date_lbl'], pdf_data['date_value'],
@@ -1133,11 +1179,12 @@ class DocumentGeneratorView(APIView):
                     pdf_data['total_qty'], pdf_data['total_amt'], pdf_data['cess_amount'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], pdf_data['itemstotal'],
                     pdf_data['finalDiscount'], pdf_data['bill_amount_in_words'],
                     pdf_data['round_0ff'],
-                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['return_reason']
+                    pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], pdf_data['tax_type'], pdf_data['return_reason'],
+                    print_config=print_config
                 )
             if document_type == "delivery_challan":
                 pdf_data = delivery_challan_data(pk, format_value)
-                elements, doc = doc_heading(file_path, "DELIVERY CHALLAN", '')
+                elements, doc = doc_heading(file_path, "DELIVERY CHALLAN", '', print_config=print_config)
                 delivery_challan_doc(
                     elements, doc,
                     pdf_data['company_logo'], pdf_data['company_name'], pdf_data['company_gst'], pdf_data['company_address'], pdf_data['company_phone'], pdf_data['company_email'],
@@ -1148,41 +1195,39 @@ class DocumentGeneratorView(APIView):
                     pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['finalDiscount'],
                     pdf_data['transport_charges'], pdf_data['cess_amount'], pdf_data['round_0ff'], pdf_data['net_value'], pdf_data['tax_type'],
                     pdf_data['vehicle_name'], pdf_data['driver_name'], pdf_data['lr_no'], pdf_data['total_boxes'], pdf_data['remarks'],
+                    print_config=print_config
                 )
             if document_type == "purchase_order" or document_type == "purchase_return":
                 pdf_data = purchase_data(pk, document_type, format_value)
-                # sub_header = 'Receipt Voucher'
-                elements, doc = doc_heading(file_path, "PURCHASE BILL", '')
-                purchase_doc(elements, doc, 
+                elements, doc = doc_heading(file_path, "PURCHASE BILL", '', print_config=print_config)
+                purchase_doc(elements, doc,
                                    pdf_data['comp_name'], pdf_data['comp_address'], pdf_data['comp_phone'],
                                    pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], pdf_data['date_lbl'], pdf_data['date_value'],
-                                   pdf_data['customer_name'], pdf_data['v_billing_address'], pdf_data['v_shipping_address_lbl'],  pdf_data['v_shipping_address'],
+                                   pdf_data['customer_name'], pdf_data['v_billing_address'], pdf_data['v_shipping_address_lbl'], pdf_data['v_shipping_address'],
                                    pdf_data['product_data'],
-                                   pdf_data['total_qty'], pdf_data['itemstotal'],  pdf_data['total_disc_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], pdf_data['final_total'], pdf_data['final_total'], pdf_data['total_txbl_amt'], pdf_data['total_sub_amt'], pdf_data['total_bill_amt'],
+                                   pdf_data['total_qty'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'], pdf_data['final_total'], pdf_data['final_total'], pdf_data['total_txbl_amt'], pdf_data['total_sub_amt'], pdf_data['total_bill_amt'],
                                    pdf_data['destination'], pdf_data['tax_type'], pdf_data['shipping_mode_name'], pdf_data['port_of_landing'], pdf_data['port_of_discharge'],
                                    pdf_data['comp_name'],
-                                   pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'],  pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
-                                   pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email']
+                                   pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'], pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
+                                   pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email'],
+                                   print_config=print_config
                                 )
-                
+
             if document_type == "payment_receipt":
                 pdf_data = payment_receipt_data(pk, document_type)
                 print("pdf_data--->>>", pdf_data)
                 sub_header = 'Receipt Voucher'
-                # Use same doc_heading pattern as sale order
-                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header)
-                
-                # Generate payment receipt with same structure as sale order
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header, print_config=print_config)
                 payment_receipt_doc(
                     elements, doc,
                     pdf_data['company_name'], pdf_data['company_address'], pdf_data['company_phone'],
-                    pdf_data['cust_bill_dtl'], 
-                    pdf_data['number_lbl'], 
-                    pdf_data['invoice_no'], 
-                    pdf_data['date_lbl'], 
+                    pdf_data['cust_bill_dtl'],
+                    pdf_data['number_lbl'],
+                    pdf_data['invoice_no'],
+                    pdf_data['date_lbl'],
                     pdf_data['receipt_date'],
-                    pdf_data['customer_name'], 
-                    pdf_data['billing_address'], 
+                    pdf_data['customer_name'],
+                    pdf_data['billing_address'],
                     pdf_data['phone'],
                     pdf_data['email'],
                     [{
@@ -1192,35 +1237,31 @@ class DocumentGeneratorView(APIView):
                         'cheque_no': pdf_data['cheque_no'],
                         'amount': pdf_data['amount'],
                         'total': pdf_data['total']
-                    }],  # Pass as list to match sale order's product_data structure
+                    }],
                     pdf_data['amount'],
                     pdf_data['outstanding'],
                     pdf_data['total'],
                     pdf_data['amount_in_words'],
                     pdf_data['receipt_no'],
-                    # pdf_data['net_lbl'],
-                    # pdf_data['amount']  # Using amount as net_value
+                    print_config=print_config
                 )
-            
+
             elif document_type == "bill_receipt":
                 print("We entered in bill-receipt....")
                 pdf_data = billpayment_receipt_data(pk, document_type)
                 print("pdf_data--->>>", pdf_data)
                 sub_header = 'Bill Payment Receipt Voucher'
-                # Use same doc_heading pattern as sale order
-                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header)
-                
-                # Generate payment receipt with same structure as sale order
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header, print_config=print_config)
                 billpayment_receipt_doc(
                     elements, doc,
                     pdf_data['company_name'], pdf_data['company_address'], pdf_data['company_phone'],
-                    pdf_data['cust_bill_dtl'], 
-                    pdf_data['number_lbl'], 
-                    pdf_data['invoice_no'], 
-                    pdf_data['date_lbl'], 
+                    pdf_data['cust_bill_dtl'],
+                    pdf_data['number_lbl'],
+                    pdf_data['invoice_no'],
+                    pdf_data['date_lbl'],
                     pdf_data['receipt_date'],
-                    pdf_data['vendor_name'], 
-                    pdf_data['billing_address'], 
+                    pdf_data['vendor_name'],
+                    pdf_data['billing_address'],
                     pdf_data['phone'],
                     pdf_data['email'],
                     [{
@@ -1230,70 +1271,73 @@ class DocumentGeneratorView(APIView):
                         'cheque_no': pdf_data['cheque_no'],
                         'amount': pdf_data['amount'],
                         'total': pdf_data['total']
-                    }],  # Pass as list to match sale order's product_data structure
+                    }],
                     pdf_data['amount'],
                     pdf_data['outstanding'],
                     pdf_data['total'],
                     pdf_data['amount_in_words'],
                     pdf_data['receipt_no'],
-                    # pdf_data['net_lbl'],
-                    # pdf_data['amount']  # Using amount as net_value
+                    print_config=print_config
                 )
-                
+
             elif document_type == "account_ledger":
                 print("We entered in account-ledger....")
-
                 pdf_data = ledger_document_data(request, pk, document_type)
                 print("pdf_data--->>>", pdf_data)
-
                 sub_header = 'Account Ledger Statement'
-
-                # Same doc heading pattern
-                elements, doc = doc_heading(
-                    file_path,
-                    pdf_data['doc_header'],
-                    sub_header
-                )
-
-                # Build ledger document
+                elements, doc = doc_heading(file_path, pdf_data['doc_header'], sub_header, print_config=print_config)
                 ledger_document_doc(
-                    elements,
-                    doc,
-                    # Company details
+                    elements, doc,
                     pdf_data['company_name'],
                     pdf_data['company_address'],
                     pdf_data['company_phone'],
-
-                    # Period
                     pdf_data['from_date'],
                     pdf_data['to_date'],
-
-                    # Ledger header
                     pdf_data['ledger_name'],
                     pdf_data['number_lbl'],
                     pdf_data['date_lbl'],
                     pdf_data['doc_date'],
-
-                    # Ledger table rows
                     pdf_data['ledger_data'],
-
-                    # Totals
                     pdf_data['debit_total'],
                     pdf_data['credit_total'],
                     pdf_data['closing_balance'],
-                    pdf_data['amount_in_words']
+                    pdf_data['amount_in_words'],
+                    print_config=print_config
                 )
 
+            # ========== DOCUMENT TRACKING (all document types) ==========
+            try:
+                file_size = os.path.getsize(file_path) if os.path.exists(file_path) else None
+                customer_id = pdf_data.get('customer_id') if pdf_data else None
+                customer_obj = None
+                if customer_id:
+                    try:
+                        from apps.customer.models import Customer
+                        customer_obj = Customer.objects.get(customer_id=customer_id)
+                    except Exception:
+                        pass
+                DocumentsGeneration.objects.create(
+                    document_type=document_type,
+                    document_id=str(pk),
+                    customer=customer_obj,
+                    file_name=doc_name,
+                    file_path=relative_file_path,
+                    file_url=full_pdf_url,
+                    file_size=file_size,
+                )
+            except Exception as e:
+                logger.error("Failed to create DocumentsGeneration record: %s", str(e))
+            # ========== END TRACKING ==========
 
-                
+            pdf_send_response = 'Document generated successfully'
             if flag == 'email':
                 pdf_send_response = send_pdf_via_email(pdf_data['email'], relative_file_path, document_type)
                 
             if flag == 'print':
-                # Add any print-specific modifications to your PDF here
-                response = HttpResponse(pdf_data, content_type='application/pdf')
-                response['Content-Disposition'] = 'inline; filename="document_to_print.pdf"'
-                return response
+                with open(file_path, 'rb') as pdf_file:
+                    response = HttpResponse(pdf_file.read(), content_type='application/pdf')
+                    response['Content-Disposition'] = f'inline; filename="{doc_name}"'
+                    return response
             
             elif flag == 'preview':
                 # Return the PDF file directly for preview
@@ -1305,8 +1349,6 @@ class DocumentGeneratorView(APIView):
             # elif flag == 'whatsapp':
             #     pdf_send_response = send_whatsapp_message_via_wati(phone, cdn_path)
             elif flag == 'whatsapp':
-                from django.conf import settings
-                
                 city_id = request.GET.get('city')
                 
                 # 1️⃣ Resolve phone
@@ -1608,7 +1650,7 @@ class FlowStatusViews(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = FlowStatusFilter
     ordering_fields = ['created_at']
-    
+
     #log actions
     log_actions = True
     log_module_name = "Flow Status"
@@ -1624,8 +1666,178 @@ class FlowStatusViews(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-    
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         return soft_delete(instance)
+
+
+# ─────────────────────────────────────────────────────────────────
+# DOCUMENT PRINT TEMPLATE — CRUD ViewSet
+# ─────────────────────────────────────────────────────────────────
+class DocumentPrintTemplateViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for DocumentPrintTemplate.
+    Supports per-company, per-document-type named print templates.
+    Query params: ?company=<id>  ?document_type=<type>
+    """
+    from rest_framework.permissions import IsAuthenticated
+    permission_classes   = [IsAuthenticated]
+    serializer_class     = DocumentPrintTemplateSerializer
+    filter_backends      = [DjangoFilterBackend, OrderingFilter]
+    ordering_fields      = ['created_at', 'template_name']
+
+    def get_queryset(self):
+        qs = DocumentPrintTemplate.objects.filter(is_deleted=False)
+        company       = self.request.query_params.get('company')
+        document_type = self.request.query_params.get('document_type')
+        if company:
+            qs = qs.filter(company_id=company)
+        if document_type:
+            qs = qs.filter(document_type=document_type)
+        return qs.order_by('-is_default', 'template_name')
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        """
+        If is_default=True, unset any existing default for the same (company, document_type).
+        Wrapped in atomic so the unset + insert cannot interleave with a concurrent request.
+        """
+        data = request.data
+        if data.get('is_default'):
+            DocumentPrintTemplate.objects.select_for_update().filter(
+                company_id=data.get('company'),
+                document_type=data.get('document_type'),
+                is_default=True,
+            ).update(is_default=False)
+        return create_instance(self, request, *args, **kwargs)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        if request.data.get('is_default'):
+            instance = self.get_object()
+            DocumentPrintTemplate.objects.select_for_update().filter(
+                company_id=instance.company_id,
+                document_type=instance.document_type,
+                is_default=True,
+            ).exclude(pk=instance.pk).update(is_default=False)
+        return update_instance(self, request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return soft_delete(instance)
+
+
+# ─────────────────────────────────────────────────────────────────
+# DOCUMENT PRINT DEFAULTS — returns available columns/sections/options
+# ─────────────────────────────────────────────────────────────────
+class DocumentPrintDefaultsView(APIView):
+    """
+    GET /masters/document-print-defaults/?document_type=sale_invoice
+    Returns available columns, sections, paper sizes, color themes
+    for the given document type. Used to build the settings UI.
+    """
+    from rest_framework.permissions import IsAuthenticated
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        document_type = request.query_params.get('document_type', 'sale_invoice')
+        col_defs = COLUMN_DEFINITIONS_BY_DOC_TYPE.get(document_type, [])
+
+        # Build columns array — matches frontend PrintDefaultsResponse.columns
+        columns = [
+            {
+                'key':           col['key'],
+                'label':         col['label'],
+                'default_visible': col.get('default', True),
+                'required':      col.get('required', False),
+                'order':         idx,
+            }
+            for idx, col in enumerate(col_defs)
+        ]
+
+        # Section group mapping for UI grouping
+        SECTION_GROUPS = {
+            'show_logo':             'Header',
+            'show_company_name':     'Header',
+            'show_company_address':  'Header',
+            'show_company_phone':    'Header',
+            'show_company_email':    'Header',
+            'show_gstin':            'Header',
+            'show_billing_address':  'Addresses',
+            'show_shipping_address': 'Addresses',
+            'show_subtotal':         'Totals',
+            'show_discount':         'Totals',
+            'show_shipping_charges': 'Totals',
+            'show_cess':             'Totals',
+            'show_round_off':        'Totals',
+            'show_party_balance':    'Totals',
+            'show_tax_breakdown':    'Totals',
+            'show_amount_in_words':  'Totals',
+            'show_bank_details':     'Footer',
+            'show_terms':            'Footer',
+            'show_notes':            'Footer',
+            'show_signature':        'Footer',
+            'show_declaration':      'Footer',
+        }
+
+        SECTION_LABELS = {
+            'show_logo':             'Show Logo',
+            'show_company_name':     'Show Company Name',
+            'show_company_address':  'Show Company Address',
+            'show_company_phone':    'Show Company Phone',
+            'show_company_email':    'Show Company Email',
+            'show_gstin':            'Show GSTIN',
+            'show_billing_address':  'Show Billing Address',
+            'show_shipping_address': 'Show Shipping Address',
+            'show_subtotal':         'Show Subtotal',
+            'show_discount':         'Show Discount',
+            'show_shipping_charges': 'Show Shipping Charges',
+            'show_cess':             'Show Cess',
+            'show_round_off':        'Show Round Off',
+            'show_party_balance':    'Show Party Balance',
+            'show_tax_breakdown':    'Show Tax Breakdown (CGST/SGST/IGST)',
+            'show_amount_in_words':  'Show Amount in Words',
+            'show_bank_details':     'Show Bank Details',
+            'show_terms':            'Show Terms & Conditions',
+            'show_notes':            'Show Notes',
+            'show_signature':        'Show Signature',
+            'show_declaration':      'Show Declaration',
+        }
+
+        # Build sections array — matches frontend PrintDefaultsResponse.sections
+        sections = [
+            {
+                'key':           key,
+                'label':         SECTION_LABELS.get(key, key),
+                'default_value': default_value,
+                'group':         SECTION_GROUPS.get(key, 'General'),
+            }
+            for key, default_value in DEFAULT_SECTION_CONFIG.items()
+        ]
+
+        data = {
+            'document_type': document_type,
+            'columns':       columns,
+            'sections':      sections,
+            'paper_sizes': [
+                {'value': k, 'label': v['label']}
+                for k, v in PAPER_SIZES.items()
+            ],
+            'color_themes': [
+                {'value': 'blue',   'label': 'Blue'},
+                {'value': 'green',  'label': 'Green'},
+                {'value': 'orange', 'label': 'Orange'},
+                {'value': 'grey',   'label': 'Grey'},
+                {'value': 'purple', 'label': 'Purple'},
+                {'value': 'teal',   'label': 'Teal'},
+                {'value': 'none',   'label': 'No Color'},
+            ],
+            'font_sizes': [
+                {'value': 'small',  'label': 'Small'},
+                {'value': 'medium', 'label': 'Medium'},
+                {'value': 'large',  'label': 'Large'},
+            ],
+        }
+        return build_response(1, "Document print defaults retrieved.", data, status.HTTP_200_OK)
 
