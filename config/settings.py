@@ -117,6 +117,7 @@ INSTALLED_APPS = [
     'apps.dashboard',
     'apps.auditlogs',
     'apps.ai_features',
+    'apps.documents',
 ]
 
 MIDDLEWARE = [
