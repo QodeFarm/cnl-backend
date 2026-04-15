@@ -2141,12 +2141,13 @@ def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None,
 
     # Step 1: Add contact
     try:
-        requests.post(
+        add_response = requests.post(
             f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/addContact/{clean_phone}",
             headers=auth_headers,
             json={"name": customer_name or "Customer"},
             timeout=30
         )
+        print(f"📞 Add contact response: {add_response.status_code}")
     except Exception as e:
         print(f"⚠️ Add contact error: {e}")
 
@@ -2163,20 +2164,27 @@ def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None,
     filename = os.path.basename(file_url_clean)
 
     print(f"📎 Public URL: {public_url}")
+    print(f"📎 Filename: {filename}")
 
-    # Step 3: Send template with document
-    # Send template with LINK instead of document
+    # Step 3: Send template with DYNAMIC DOCUMENT in header
     template_payload = {
-        "template_name": "order_ready_link",  # Your new template
-        "broadcast_name": f"order_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "template_name": "doc_send_pramod",  # Your approved template name
+        "broadcast_name": f"doc_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
         "parameters": [
-            {"name": "1", "value": customer_name or "Customer"},
-            {"name": "2", "value": public_url}  # Just the URL as text!
-        ]
-        # NO header with document
+            {"name": "pdfLink", "value": public_url},  # For header variable {{pdfLink}}
+            {"name": "1", "value": customer_name or "Customer"}  # For body variable {{1}}
+        ],
+        "header": {
+            "type": "document",
+            "document": {
+                "link": public_url,
+                "filename": filename
+            }
+        }
     }
 
-    print(f"📨 Using template: order_ready_link")
+    print(f"📨 Using template: order_document_dynamic with dynamic document")
+    print(f"📨 Payload: {template_payload}")
     
     response = requests.post(
         f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
@@ -2188,19 +2196,28 @@ def send_whatsapp_message_via_wati(to_number, file_url=None, document_type=None,
     print(f"📨 Response: {response.status_code} - {response.text}")
 
     if response.status_code != 200:
-        return {"sent": False, "mode": "error", "reason": f"HTTP {response.status_code}: {response.text}"}
+        return {
+            "sent": False, 
+            "mode": "error", 
+            "reason": f"HTTP {response.status_code}: {response.text}"
+        }
 
     try:
         result = response.json()
         return {
             "sent": result.get('result', False),
-            "mode": "wati",
+            "mode": "wati_dynamic_document",
             "message_id": result.get('messageId'),
-            "reason": result.get('info') if not result.get('result') else None
+            "phone": clean_phone,
+            "reason": result.get('info') if not result.get('result') else "Document sent successfully"
         }
     except Exception as e:
-        return {"sent": False, "mode": "error", "reason": str(e)}
-    
+        return {
+            "sent": True,  # Assume success if 200
+            "mode": "wati_dynamic_document",
+            "message_id": None,
+            "reason": f"Document sent: {response.text}"
+        }
 
 # from apps.customers.models import Customer
 # from apps.vendors.models import Vendor

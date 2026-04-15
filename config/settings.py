@@ -55,7 +55,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 #--------------------------------------------
 
 # # Local dev only — update this each time you restart ngrok
-# # NGROK_BASE_URL = "https://abc123.ngrok-free.app"
+# NGROK_BASE_URL = "https://abc123.ngrok-free.app"
 NGROK_BASE_URL = "https://apicore.cnlerp.com"
 
 ENABLE_WATI = True
