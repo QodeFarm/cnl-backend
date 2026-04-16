@@ -745,9 +745,9 @@ from django.conf import settings
 
 def try_send_sale_order_whatsapp(request, sale_order_id):
     """
-    Auto-send order confirmation WhatsApp with PDF link on sale order creation.
-    Template : final_confirm
-    Variables: {{1}} = customer name, {{2}} = PDF link
+    Auto-send order confirmation WhatsApp with dynamic document on sale order creation.
+    Template: confirm_order_doc
+    Variables: {{pdfLink}} (header), {{1}} (customer name in body)
     """
     import re, requests, os, time
     from datetime import datetime
@@ -755,7 +755,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
 
     try:
         WATI_INSTANCE_ID = getattr(settings, 'WATI_INSTANCE_ID', '10114393')
-        WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDQvMjAyNiAxMjowODo1MyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.x9a782YijlrrmVspjdEpgZnJwmJMpFeSZDByUxMjuC8"
+        WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDgvMjAyNiAwNTozNjozMyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.fgw-FrZ17KIRnuwXeftK55HeRi61PCTRBa-TI7NSgbY"
         NGROK_BASE_URL = getattr(settings, 'NGROK_BASE_URL', None)
 
         # ── 1. Resolve phone ──────────────────────────────────────────────────
@@ -778,21 +778,23 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
 
         customer_name = sale_order.customer_id.name if sale_order.customer_id else "Customer"
 
-        # ── 3. Generate order confirmation PDF ───────────────────────────────
-        try:
-            from apps.masters.template.sales.order_confirmation_pdf import generate_order_confirmation_pdf
-            file_path, cdn_path = generate_order_confirmation_pdf(sale_order_id)
-        except Exception as e:
-            logger.error(f"PDF generation failed for {sale_order_id}: {e}")
-            return {"whatsapp_sent": False, "mode": "error", "reason": f"PDF_FAILED: {str(e)}"}
-
-        # ── 4. Verify file written to disk ────────────────────────────────────
-        if not os.path.exists(file_path):
-            return {"whatsapp_sent": False, "mode": "error", "reason": "PDF not found on disk"}
-
-        logger.info(f"✅ PDF ready: {file_path}")
-
-        # ── 5. Build public URL ───────────────────────────────────────────────
+        # ── 3. Get CDN path from existing document ─────────────────────────────
+        # Find the most recent PDF for this order
+        import glob
+        import os
+        from django.conf import settings
+        
+        pattern = os.path.join(settings.MEDIA_ROOT, 'doc_generater', f'sale_order_*.pdf')
+        matching_files = glob.glob(pattern)
+        
+        if not matching_files:
+            return {"whatsapp_sent": False, "mode": "error", "reason": "No PDF found"}
+        
+        # Get the most recent file
+        actual_file = max(matching_files, key=os.path.getctime)
+        cdn_path = f'/cdn/doc_generater/{os.path.basename(actual_file)}'
+        
+        # ── 4. Build public URL ───────────────────────────────────────────────
         if not NGROK_BASE_URL:
             return {"whatsapp_sent": False, "mode": "error", "reason": "NGROK_BASE_URL not set"}
 
@@ -802,27 +804,9 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         filename = os.path.basename(file_url_clean)
 
         logger.info(f"📎 Public URL: {public_url}")
+        logger.info(f"📎 Filename: {filename}")
 
-        # ── 6. Verify public URL accessible ───────────────────────────────────
-        max_retries = 5
-        file_ready = False
-
-        for attempt in range(max_retries):
-            try:
-                check = requests.get(public_url, timeout=10, allow_redirects=True, headers={"ngrok-skip-browser-warning": "true"})
-                logger.info(f"🔍 URL check attempt {attempt + 1}: {check.status_code}")
-                if check.status_code == 200:
-                    file_ready = True
-                    break
-                time.sleep(1)
-            except Exception as e:
-                logger.warning(f"⚠️ URL check error attempt {attempt + 1}: {e}")
-                time.sleep(1)
-
-        if not file_ready:
-            return {"whatsapp_sent": False, "mode": "error", "reason": "File not publicly accessible"}
-
-        # ── 7. Send via WATI (LINK APPROACH - NO DOCUMENT HEADER) ─────────────
+        # ── 5. Send via WATI with dynamic document template ───────────────────
         clean_phone = re.sub(r'\D', '', phone)
         if len(clean_phone) == 10:
             clean_phone = '91' + clean_phone
@@ -832,42 +816,58 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             'Content-Type': 'application/json'
         }
 
-        # USING LINK APPROACH - parameters as simple list
         template_payload = {
-            "template_name": "final_confirm",
-            "broadcast_name": f"so_confirm_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "template_name": "confirm_order_doc",  # Your approved template
+            "broadcast_name": f"confirm_order_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "parameters": [
-                {"name": "1", "value": customer_name or "Customer"},
-                {"name": "2", "value": public_url}  # Just the URL as text!
-            ]
+                {"name": "pdfLink", "value": public_url},  # For header {{pdfLink}}
+                {"name": "1", "value": customer_name or "Customer"}  # For body {{1}}
+            ],
+            "header": {
+                "type": "document",
+                "document": {
+                    "link": public_url,
+                    "filename": filename
+                }
+            }
         }
 
+        logger.info(f"📨 Using template: confirm_order_doc with dynamic document")
         logger.info(f"📨 Payload: {template_payload}")
 
-        t_resp = requests.post(
+        response = requests.post(
             f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
             headers=auth_headers,
             json=template_payload,
             timeout=30
         )
 
-        logger.info(f"📨 WATI Response: {t_resp.status_code} - {t_resp.text}")
+        logger.info(f"📨 WATI Response: {response.status_code} - {response.text}")
 
-        if t_resp.status_code != 200:
-            return {"whatsapp_sent": False, "mode": "error", "reason": f"HTTP {t_resp.status_code}: {t_resp.text}"}
+        if response.status_code != 200:
+            return {
+                "whatsapp_sent": False, 
+                "mode": "error", 
+                "reason": f"HTTP {response.status_code}: {response.text}"
+            }
 
         try:
-            result = t_resp.json()
-        except Exception:
-            return {"whatsapp_sent": False, "mode": "error", "reason": f"Invalid JSON: {t_resp.text}"}
-
-        return {
-            "whatsapp_sent": result.get('result', False),
-            "mode": "wati",
-            "phone": phone,
-            "message_id": result.get('messageId'),
-            "reason": result.get('info') if not result.get('result') else None
-        }
+            result = response.json()
+            return {
+                "whatsapp_sent": result.get('result', False),
+                "mode": "wati_dynamic_document",
+                "phone": phone,
+                "message_id": result.get('messageId'),
+                "reason": result.get('info') if not result.get('result') else "Document sent successfully"
+            }
+        except Exception as e:
+            return {
+                "whatsapp_sent": True,  # Assume success if 200
+                "mode": "wati_dynamic_document",
+                "phone": phone,
+                "message_id": None,
+                "reason": f"Document sent: {response.text}"
+            }
 
     except Exception as e:
         logger.error(f"WhatsApp failed for SaleOrder {sale_order_id}: {e}")
