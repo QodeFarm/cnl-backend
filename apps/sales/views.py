@@ -752,6 +752,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
     import re, requests, os, time
     from datetime import datetime
     from django.conf import settings
+    from django.core.files.base import ContentFile
 
     try:
         WATI_INSTANCE_ID = getattr(settings, 'WATI_INSTANCE_ID', '10114393')
@@ -778,19 +779,34 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
 
         customer_name = sale_order.customer_id.name if sale_order.customer_id else "Customer"
 
-        # ── 3. Get CDN path from existing document ─────────────────────────────
-        # Find the most recent PDF for this order
-        import glob
-        import os
-        from django.conf import settings
+        # ── 3. GENERATE PDF SPECIFICALLY FOR THIS ORDER ───────────────────────
+        from apps.masters.views import DocumentGeneratorView
+        from reportlab.lib.utils import simpleSplit
         
+        # Create a mock request for document generation
+        from django.test import RequestFactory
+        factory = RequestFactory()
+        mock_request = factory.post(f'/api/v1/masters/document_generator/{sale_order_id}/sale_order/')
+        mock_request.user = request.user
+        mock_request.GET = request.GET if request else {}
+        mock_request.data = {'format': 'CNL_Standard_Excl'}
+        
+        # Generate the document
+        doc_view = DocumentGeneratorView()
+        result = doc_view.post(mock_request, pk=sale_order_id, document_type="sale_order")
+        
+        # Get the CDN path from the result or generate it
+        from django.conf import settings
+        import glob
+        
+        # Find the PDF file for this specific order (by creation time and order reference)
         pattern = os.path.join(settings.MEDIA_ROOT, 'doc_generater', f'sale_order_*.pdf')
         matching_files = glob.glob(pattern)
         
         if not matching_files:
-            return {"whatsapp_sent": False, "mode": "error", "reason": "No PDF found"}
+            return {"whatsapp_sent": False, "mode": "error", "reason": "No PDF found after generation"}
         
-        # Get the most recent file
+        # Get the most recently created file (should be this order's PDF)
         actual_file = max(matching_files, key=os.path.getctime)
         cdn_path = f'/cdn/doc_generater/{os.path.basename(actual_file)}'
         
@@ -817,11 +833,11 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         }
 
         template_payload = {
-            "template_name": "confirm_order_doc",  # Your approved template
+            "template_name": "confirm_order_doc",
             "broadcast_name": f"confirm_order_{clean_phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
             "parameters": [
-                {"name": "pdfLink", "value": public_url},  # For header {{pdfLink}}
-                {"name": "1", "value": customer_name or "Customer"}  # For body {{1}}
+                {"name": "pdfLink", "value": public_url},
+                {"name": "1", "value": customer_name or "Customer"}
             ],
             "header": {
                 "type": "document",
@@ -833,7 +849,6 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         }
 
         logger.info(f"📨 Using template: confirm_order_doc with dynamic document")
-        logger.info(f"📨 Payload: {template_payload}")
 
         response = requests.post(
             f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
@@ -862,7 +877,7 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             }
         except Exception as e:
             return {
-                "whatsapp_sent": True,  # Assume success if 200
+                "whatsapp_sent": True,
                 "mode": "wati_dynamic_document",
                 "phone": phone,
                 "message_id": None,
