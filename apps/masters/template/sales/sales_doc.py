@@ -641,3 +641,46 @@ def num_val(value):
 def str_val(value):
     """Return safe string value"""
     return str(value) if value not in [None, '', []] else 'N/A'
+
+
+def generate_sale_order_pdf(sale_order_id):
+    """Generate PDF for a specific sale order and return file_path and cdn_path"""
+    # from apps.masters.template.sales_doc import sale_order_sales_invoice_data, sale_order_sales_invoice_doc
+    from reportlab.platypus import SimpleDocTemplate
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.styles import getSampleStyleSheet
+    from django.conf import settings
+    import os
+    import uuid
+    
+    # Generate unique filename
+    filename = f"sale_order_{uuid.uuid4().hex[:4]}.pdf"
+    file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', filename)
+    cdn_path = f"/cdn/doc_generater/{filename}"
+    
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    # Get PDF data
+    pdf_data = sale_order_sales_invoice_data(sale_order_id, "sale_order", 'CNL_Standard_Excl')
+    
+    # Generate PDF
+    doc = SimpleDocTemplate(file_path, pagesize=letter)
+    elements = []
+    
+    # Call your existing document builder
+    sale_order_sales_invoice_doc(
+        elements, doc,
+        pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], 
+        pdf_data['date_lbl'], pdf_data['date_value'],
+        pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'],
+        pdf_data['product_data'],
+        pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], 
+        pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'],
+        pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], 
+        pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'],
+        pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], 
+        pdf_data['tax_type'], pdf_data['remarks']
+    )
+    
+    return file_path, cdn_path

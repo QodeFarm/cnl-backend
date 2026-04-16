@@ -743,7 +743,7 @@ from django.conf import settings
 #         }
 
 
-def try_send_sale_order_whatsapp(request, sale_order_id):
+def try_send_sale_order_whatsapp(request, sale_order_id, cdn_path=None):
     """
     Auto-send order confirmation WhatsApp with dynamic document on sale order creation.
     Template: confirm_order_doc
@@ -755,63 +755,75 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
     from django.core.files.base import ContentFile
 
     try:
+        logger.info("="*60)
+        logger.info(f"🔵 STARTING WHATSAPP SEND FOR ORDER ID: {sale_order_id}")
+        logger.info("="*60)
+
         WATI_INSTANCE_ID = getattr(settings, 'WATI_INSTANCE_ID', '10114393')
         WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDgvMjAyNiAwNTozNjozMyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.fgw-FrZ17KIRnuwXeftK55HeRi61PCTRBa-TI7NSgbY"
         NGROK_BASE_URL = getattr(settings, 'NGROK_BASE_URL', None)
 
         # ── 1. Resolve phone ──────────────────────────────────────────────────
         city_id = request.GET.get('city') if request else None
+        logger.info(f"📞 Resolving phone for order: {sale_order_id}, city_id: {city_id}")
+        
         phone = resolve_phone_from_document(
             document_type="sale_order",
             pk=sale_order_id,
             city_id=city_id
         )
 
+        logger.info(f"📞 Resolved phone: {phone}")
+
         if not phone:
-            logger.warning(f"No phone found for sale order {sale_order_id}")
+            logger.warning(f"❌ No phone found for sale order {sale_order_id}")
             return {"whatsapp_sent": False, "mode": "none", "reason": "PHONE_NOT_FOUND"}
 
-        # ── 2. Fetch customer name ────────────────────────────────────────────
+        # ── 2. Fetch customer name and order details ────────────────────────────
         from apps.sales.models import SaleOrder
         sale_order = SaleOrder.objects.filter(sale_order_id=sale_order_id).first()
         if not sale_order:
+            logger.error(f"❌ Order not found: {sale_order_id}")
             return {"whatsapp_sent": False, "mode": "error", "reason": "ORDER_NOT_FOUND"}
 
         customer_name = sale_order.customer_id.name if sale_order.customer_id else "Customer"
+        order_no = sale_order.order_no if hasattr(sale_order, 'order_no') else "UNKNOWN"
+        
+        logger.info(f"📋 ORDER DETAILS:")
+        logger.info(f"   - Order ID: {sale_order_id}")
+        logger.info(f"   - Order No: {order_no}")
+        logger.info(f"   - Customer: {customer_name}")
 
-        # ── 3. GENERATE PDF SPECIFICALLY FOR THIS ORDER ───────────────────────
-        from apps.masters.views import DocumentGeneratorView
-        from reportlab.lib.utils import simpleSplit
+        # ── 3. GENERATE PDF FOR THIS SPECIFIC ORDER ─────────────────────────────
+        from apps.masters.template.sales.sales_doc import generate_sale_order_pdf
         
-        # Create a mock request for document generation
-        from django.test import RequestFactory
-        factory = RequestFactory()
-        mock_request = factory.post(f'/api/v1/masters/document_generator/{sale_order_id}/sale_order/')
-        mock_request.user = request.user
-        mock_request.GET = request.GET if request else {}
-        mock_request.data = {'format': 'CNL_Standard_Excl'}
+        logger.info(f"📁 GENERATING PDF FOR ORDER: {order_no}")
         
-        # Generate the document
-        doc_view = DocumentGeneratorView()
-        result = doc_view.post(mock_request, pk=sale_order_id, document_type="sale_order")
-        
-        # Get the CDN path from the result or generate it
-        from django.conf import settings
-        import glob
-        
-        # Find the PDF file for this specific order (by creation time and order reference)
-        pattern = os.path.join(settings.MEDIA_ROOT, 'doc_generater', f'sale_order_*.pdf')
-        matching_files = glob.glob(pattern)
-        
-        if not matching_files:
-            return {"whatsapp_sent": False, "mode": "error", "reason": "No PDF found after generation"}
-        
-        # Get the most recently created file (should be this order's PDF)
-        actual_file = max(matching_files, key=os.path.getctime)
-        cdn_path = f'/cdn/doc_generater/{os.path.basename(actual_file)}'
-        
+        try:
+            # Call your existing PDF generation function
+            file_path, cdn_path = generate_sale_order_pdf(sale_order_id)
+            logger.info(f"   ✅ PDF generated successfully")
+            logger.info(f"   - File path: {file_path}")
+            logger.info(f"   - CDN path: {cdn_path}")
+            
+            # Verify the file exists
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+                logger.info(f"   - File size: {file_size} bytes")
+                logger.info(f"   - File exists: YES")
+            else:
+                logger.error(f"   - File exists: NO - File not found!")
+                return {"whatsapp_sent": False, "mode": "error", "reason": "PDF file not created"}
+                
+        except Exception as e:
+            logger.error(f"❌ PDF generation failed: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return {"whatsapp_sent": False, "mode": "error", "reason": f"PDF_FAILED: {str(e)}"}
+
         # ── 4. Build public URL ───────────────────────────────────────────────
         if not NGROK_BASE_URL:
+            logger.error(f"❌ NGROK_BASE_URL not set in settings")
             return {"whatsapp_sent": False, "mode": "error", "reason": "NGROK_BASE_URL not set"}
 
         file_url_clean = cdn_path.replace('\\', '/')
@@ -819,13 +831,19 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
         public_url = f"{NGROK_BASE_URL.rstrip('/')}/{file_url_clean.lstrip('/')}?v={cache_bust}"
         filename = os.path.basename(file_url_clean)
 
-        logger.info(f"📎 Public URL: {public_url}")
-        logger.info(f"📎 Filename: {filename}")
+        logger.info(f"🔗 PUBLIC URL:")
+        logger.info(f"   - Full URL: {public_url}")
+        logger.info(f"   - Filename: {filename}")
 
-        # ── 5. Send via WATI with dynamic document template ───────────────────
+        # ── 5. Send via WATI ───────────────────────────────────────────────────
         clean_phone = re.sub(r'\D', '', phone)
         if len(clean_phone) == 10:
             clean_phone = '91' + clean_phone
+
+        logger.info(f"📱 SENDING WHATSAPP:")
+        logger.info(f"   - Phone: {clean_phone}")
+        logger.info(f"   - Customer: {customer_name}")
+        logger.info(f"   - Order No: {order_no}")
 
         auth_headers = {
             'Authorization': WATI_TOKEN,
@@ -848,7 +866,8 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             }
         }
 
-        logger.info(f"📨 Using template: confirm_order_doc with dynamic document")
+        logger.info(f"📨 WATI PAYLOAD:")
+        logger.info(f"   - Template: {template_payload['template_name']}")
 
         response = requests.post(
             f"https://live-mt-server.wati.io/{WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
@@ -857,7 +876,9 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
             timeout=30
         )
 
-        logger.info(f"📨 WATI Response: {response.status_code} - {response.text}")
+        logger.info(f"📨 WATI RESPONSE:")
+        logger.info(f"   - Status: {response.status_code}")
+        logger.info(f"   - Response: {response.text}")
 
         if response.status_code != 200:
             return {
@@ -868,24 +889,29 @@ def try_send_sale_order_whatsapp(request, sale_order_id):
 
         try:
             result = response.json()
+            logger.info(f"✅ WHATSAPP SENT SUCCESSFULLY for Order {order_no}!")
+            logger.info("="*60)
+            
             return {
                 "whatsapp_sent": result.get('result', False),
                 "mode": "wati_dynamic_document",
                 "phone": phone,
+                "order_no": order_no,
                 "message_id": result.get('messageId'),
-                "reason": result.get('info') if not result.get('result') else "Document sent successfully"
+                "reason": "Document sent successfully"
             }
         except Exception as e:
             return {
                 "whatsapp_sent": True,
                 "mode": "wati_dynamic_document",
                 "phone": phone,
+                "order_no": order_no,
                 "message_id": None,
                 "reason": f"Document sent: {response.text}"
             }
 
     except Exception as e:
-        logger.error(f"WhatsApp failed for SaleOrder {sale_order_id}: {e}")
+        logger.error(f"❌ WhatsApp failed for SaleOrder {sale_order_id}: {e}")
         import traceback
         traceback.print_exc()
         return {"whatsapp_sent": False, "mode": "error", "reason": str(e)}
@@ -2304,7 +2330,14 @@ class SaleOrderViewSet(APIView):
 
         # ---------------------- R E S P O N S E ----------------------------#
         # -------------------- AUTO WHATSAPP (NON-BLOCKING) --------------------
-        whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id)
+        # whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id)
+        from apps.masters.template.sales.sales_doc import generate_sale_order_pdf
+
+        # Generate PDF for this specific order
+        file_path, cdn_path = generate_sale_order_pdf(sale_order_id)
+
+        # Send WhatsApp with the generated PDF
+        whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id, cdn_path)
 
         custom_data = {
             "sale_order": new_sale_order_data,
