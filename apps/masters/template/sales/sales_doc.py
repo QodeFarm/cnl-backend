@@ -7,6 +7,7 @@ from apps.company.models import company_logos
 from apps.company.serializers import CompaniesSerializer
 from apps.customer.models import CustomerAddresses
 from apps.finance.models import BankAccount
+from apps.masters.template.print_config_defaults import get_default_template_config, resolve_print_config
 from apps.masters.template.table_defination import *
 from apps.masters.utils.docs_variables import doc_data
 from config.utils_methods import convert_amount_to_words, extract_product_data, format_phone_number,get_related_data
@@ -643,32 +644,104 @@ def str_val(value):
     return str(value) if value not in [None, '', []] else 'N/A'
 
 
+# def generate_sale_order_pdf(sale_order_id):
+#     """Generate PDF for a specific sale order and return file_path and cdn_path"""
+#     # from apps.masters.template.sales_doc import sale_order_sales_invoice_data, sale_order_sales_invoice_doc
+#     from reportlab.platypus import SimpleDocTemplate
+#     from reportlab.lib.pagesizes import letter
+#     from reportlab.lib.styles import getSampleStyleSheet
+#     from django.conf import settings
+#     import os
+#     import uuid
+    
+#     # Generate unique filename
+#     filename = f"sale_order_{uuid.uuid4().hex[:4]}.pdf"
+#     file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', filename)
+#     cdn_path = f"/cdn/doc_generater/{filename}"
+    
+#     # Ensure directory exists
+#     os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+#     # Get PDF data
+#     pdf_data = sale_order_sales_invoice_data(sale_order_id, "sale_order", 'CNL_Standard_Excl')
+    
+#     # Generate PDF
+#     doc = SimpleDocTemplate(file_path, pagesize=letter)
+#     elements = []
+    
+#     # Call your existing document builder
+#     sale_order_sales_invoice_doc(
+#         elements, doc,
+#         pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], 
+#         pdf_data['date_lbl'], pdf_data['date_value'],
+#         pdf_data['customer_name'], pdf_data['billing_address'], pdf_data['phone'], pdf_data['city'],
+#         pdf_data['product_data'],
+#         pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], 
+#         pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'],
+#         pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], 
+#         pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'],
+#         pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], 
+#         pdf_data['tax_type'], pdf_data['remarks']
+#     )
+    
+#     return file_path, cdn_path
+
 def generate_sale_order_pdf(sale_order_id):
     """Generate PDF for a specific sale order and return file_path and cdn_path"""
     # from apps.masters.template.sales_doc import sale_order_sales_invoice_data, sale_order_sales_invoice_doc
+    # from apps.masters.template.doc_heading import doc_heading
     from reportlab.platypus import SimpleDocTemplate
     from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet
     from django.conf import settings
+    from apps.company.models import Companies
+    from apps.masters.models import DocumentPrintTemplate
+    # from apps.masters.utils.print_config import resolve_print_config, get_default_template_config
     import os
     import uuid
     
-    # Generate unique filename
-    filename = f"sale_order_{uuid.uuid4().hex[:4]}.pdf"
-    file_path = os.path.join(settings.MEDIA_ROOT, 'doc_generater', filename)
+    # Create directory if it doesn't exist
+    doc_generater_dir = os.path.join(settings.MEDIA_ROOT, 'doc_generater')
+    os.makedirs(doc_generater_dir, exist_ok=True)
+    
+    # Get order details for filename
+    from apps.sales.models import SaleOrder
+    sale_order = SaleOrder.objects.filter(sale_order_id=sale_order_id).first()
+    order_no = sale_order.order_no if sale_order else str(sale_order_id)[:8]
+    
+    filename = f"sale_order_{order_no}_{uuid.uuid4().hex[:4]}.pdf"
+    file_path = os.path.join(doc_generater_dir, filename)
     cdn_path = f"/cdn/doc_generater/{filename}"
     
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    # Load print config (same as DocumentGeneratorView)
+    try:
+        company = Companies.objects.first()
+        template_obj = None
+        if company:
+            template_obj = DocumentPrintTemplate.objects.filter(
+                company=company,
+                document_type="sale_order",
+                is_default=True,
+                is_deleted=False,
+                is_active=True,
+            ).first()
+        print_config = resolve_print_config(template_obj, "sale_order")
+    except Exception as e:
+        print_config = get_default_template_config("sale_order")
     
     # Get PDF data
     pdf_data = sale_order_sales_invoice_data(sale_order_id, "sale_order", 'CNL_Standard_Excl')
     
-    # Generate PDF
+    # Determine doc header
+    doc_header = "SALES QUOTATION" if pdf_data.get('sale_estimate') == 'Yes' else "SALES ORDER"
+    
+    # Generate PDF with doc_heading (THIS ADDS THE HEADER/LOGO)
     doc = SimpleDocTemplate(file_path, pagesize=letter)
     elements = []
     
-    # Call your existing document builder
+    # Add heading first (this is what was missing!)
+    elements, doc = doc_heading(file_path, doc_header, 'BILL OF SUPPLY', print_config=print_config)
+    
+    # Now add the rest of the document
     sale_order_sales_invoice_doc(
         elements, doc,
         pdf_data['cust_bill_dtl'], pdf_data['number_lbl'], pdf_data['number_value'], 
@@ -680,7 +753,8 @@ def generate_sale_order_pdf(sale_order_id):
         pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], 
         pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'],
         pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], 
-        pdf_data['tax_type'], pdf_data['remarks']
+        pdf_data['tax_type'], pdf_data['remarks'],
+        print_config=print_config
     )
     
     return file_path, cdn_path
