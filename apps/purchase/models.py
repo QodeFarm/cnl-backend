@@ -227,7 +227,7 @@ class PurchaseInvoiceOrders(OrderNumberMixin):
         else:
             print("from edit", self.pk)
             
-    def update_paid_amount_and_pending_amount_after_bill_payment(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
+    def update_paid_amount_pending_amount_after_bill_payment(self, payment_amount, outstanding_amount, adjusted_now_amount=0):
         """
         Update the paid_amount and pending_amount in PurchaseInvoiceOrders
         whenever a Bill Payment Transaction is created.
