@@ -72,7 +72,7 @@ def update_purchase_invoice_balance_after_bill_payment(sender, instance, created
                 return
 
             # Call model method to update amounts
-            purchase_invoice_obj.update_paid_amount_and_pending_amount_after_bill_payment(
+            purchase_invoice_obj.update_paid_amount_pending_amount_after_bill_payment(
                 payment_amount=instance.adjusted_now or instance.total_amount,
                 outstanding_amount=instance.outstanding_amount,
                 adjusted_now_amount=instance.adjusted_now or 0

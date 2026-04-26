@@ -29,6 +29,21 @@ urlpatterns = [
          SendCredentialsView.as_view(), 
          name='send-customer-credentials'),
     
+    # ========== CUSTOMER FORGOT PASSWORD URLs (Public - No auth required) ==========
+    # Step 1: Request password reset email
+    path('portal/validate-token/', 
+         ValidateResetTokenView.as_view(), 
+         name='validate-reset-token'),
+    
+    path('portal/forgot-password/', 
+         SendCustomerPasswordResetEmailView.as_view(), 
+         name='customer-forgot-password'),
+    
+    # Step 2: Reset password using token from email
+    path('portal/reset-password/<str:token>/', 
+         CustomerPasswordResetView.as_view(), 
+         name='customer-reset-password'),
+    
     # NEW: Customer Portal Public URLs (No authentication required)
     path('portal/login/', 
          CustomerPortalLoginView.as_view(), 

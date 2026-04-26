@@ -3156,3 +3156,212 @@ This is an automated message. Please do not reply.
         import traceback
         traceback.print_exc()
         return False, str(e)
+    
+#reset password for customer portal user by admin
+
+# views.py
+from rest_framework.permissions import AllowAny
+
+# views.py
+
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import SendCustomerPasswordResetSerializer
+
+class SendCustomerPasswordResetEmailView(APIView):
+    """
+    Send password reset link to customer
+    Priority: Email first, WhatsApp as fallback
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request, format=None):
+        serializer = SendCustomerPasswordResetSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        
+        if serializer.is_valid():
+            reset_token = serializer.save()
+            sent_via = serializer.context.get('sent_via', 'email')
+            
+            # Create appropriate success message
+            if sent_via == 'email':
+                msg = 'Password reset link sent to your registered email address.'
+            else:
+                msg = 'Password reset link sent to your WhatsApp number.'
+            
+            return Response({
+                'count': '1', 
+                'msg': msg,
+                'sent_via': sent_via,
+                'data': []
+            }, status=status.HTTP_200_OK)
+        
+        return Response({
+            'count': '0', 
+            'msg': 'Validation Error', 
+            'data': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
+        
+# views.py - Add/Update this view
+
+# views.py - Fixed version
+
+class CustomerPasswordResetView(APIView):
+    """
+    Reset password using valid token
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request, token):
+        new_password = request.data.get('new_password')
+        confirm_password = request.data.get('confirm_password')
+        
+        # Validate passwords
+        if not new_password or not confirm_password:
+            return Response({
+                'count': '0',
+                'msg': 'Both password fields are required',
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if new_password != confirm_password:
+            return Response({
+                'count': '0',
+                'msg': 'Passwords do not match',
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if len(new_password) < 6:
+            return Response({
+                'count': '0',
+                'msg': 'Password must be at least 6 characters',
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Find the reset token
+            reset_token = CustomerPasswordReset.objects.get(
+                token=token,
+                is_used=False
+            )
+            
+            # Check if token is expired
+            if not reset_token.is_valid():
+                return Response({
+                    'count': '0',
+                    'msg': 'Reset link has expired. Please request a new one.',
+                    'data': []
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # ✅ FIX: Get Customer object using the UUID from reset_token
+            # reset_token.customer_id stores the UUID, not the Customer object
+            customer_id = reset_token.customer_id  # This is a UUID string
+            
+            # Get the actual Customer object
+            # from apps.customers.models import Customer
+            customer = Customer.objects.get(customer_id=customer_id, is_deleted=False)
+            
+            # Update password
+            from django.contrib.auth.hashers import make_password
+            customer.password = make_password(new_password)
+            customer.save()
+            
+            # Mark token as used
+            reset_token.is_used = True
+            reset_token.save()
+            
+            # Send confirmation email (optional)
+            # self._send_confirmation_email(customer)
+            
+            return Response({
+                'count': '1',
+                'msg': 'Password reset successful! Please login with your new password.',
+                'data': []
+            }, status=status.HTTP_200_OK)
+            
+        except CustomerPasswordReset.DoesNotExist:
+            return Response({
+                'count': '0',
+                'msg': 'Invalid or already used reset link',
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Customer.DoesNotExist:
+            return Response({
+                'count': '0',
+                'msg': 'Customer not found',
+                'data': []
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            print(f"Error resetting password: {str(e)}")
+            return Response({
+                'count': '0',
+                'msg': f'Error: {str(e)}',
+                'data': []
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+# views.py - Add this endpoint
+
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+
+# views.py - Add this view
+
+from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+# from apps.customers.models import CustomerPasswordReset
+
+class ValidateResetTokenView(APIView):
+    """
+    Validate if a reset token is valid
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        token = request.data.get('token')
+        
+        if not token:
+            return Response({
+                'count': '0',
+                'msg': 'Token is required',
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Check if token exists and is not used
+            reset_token = CustomerPasswordReset.objects.get(
+                token=token,
+                is_used=False
+            )
+            
+            # Check if token is expired
+            if not reset_token.is_valid():
+                return Response({
+                    'count': '0',
+                    'msg': 'Reset link has expired. Please request a new one.',
+                    'data': []
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Token is valid
+            return Response({
+                'count': '1',
+                'msg': 'Token is valid',
+                'data': {
+                    'customer_id': str(reset_token.customer_id),
+                    'expires_at': reset_token.expires_at.strftime('%Y-%m-%d %H:%M:%S')
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except CustomerPasswordReset.DoesNotExist:
+            return Response({
+                'count': '0',
+                'msg': 'Invalid or already used reset link',
+                'data': []
+            }, status=status.HTTP_400_BAD_REQUEST)
