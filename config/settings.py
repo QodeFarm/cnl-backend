@@ -58,6 +58,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # NGROK_BASE_URL = "https://abc123.ngrok-free.app"
 NGROK_BASE_URL = "https://apicore.cnlerp.com"
 
+FRONTEND_URL = "https://apicore.cnlerp.com"
+
 ENABLE_WATI = True
 
 # Environment-based configuration

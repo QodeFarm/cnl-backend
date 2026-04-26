@@ -132,6 +132,10 @@ class Customer(models.Model):
     password = models.CharField(max_length=255, null=True, blank=True)  # Store hashed password
     is_portal_user = models.BooleanField(default=False)
     last_login = models.DateTimeField(null=True, blank=True)
+    force_password_change = models.BooleanField(
+        default=False, 
+        help_text="Force customer to change password on next login"
+    )
 
     def __str__(self):   
         return f"{self.name}_{self.customer_id}"
@@ -264,3 +268,75 @@ class CustomersMstModel(models.Model):
         managed = False
         db_table = 'customer'
 
+
+#reset password token model for customer portal users
+# models.py - CORRECTED VERSION (No ForeignKey)
+
+class CustomerPasswordReset(models.Model):
+    """
+    Model to store password reset tokens for customers with UUID primary key
+    NO ForeignKey constraint - just stores the customer_id as UUID field
+    """
+    # UUID Primary Key
+    reset_id = models.UUIDField(
+        primary_key=True, 
+        default=uuid.uuid4, 
+        editable=False
+    )
+    
+    # ✅ Store customer_id as UUID field (NOT ForeignKey)
+    customer_id = models.UUIDField(
+        db_index=True,
+        help_text="Customer ID reference (no FK constraint)"
+    )
+    
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'customer_password_resets'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['customer_id']),
+            models.Index(fields=['customer_id', 'is_used']),  # Composite index for common queries
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def __str__(self):
+        return f"Reset token for customer {self.customer_id}"
+    
+    def is_valid(self):
+        from django.utils import timezone
+        return not self.is_used and self.expires_at > timezone.now()
+    
+    @classmethod
+    def create_reset_token(cls, customer_id, ip_address=None, user_agent=None):
+        """Helper method to create a reset token"""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Delete any existing unused tokens for this customer
+        cls.objects.filter(
+            customer_id=customer_id,
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).delete()
+        
+        # Create new token (valid for 24 hours)
+        return cls.objects.create(
+            customer_id=customer_id,
+            expires_at=timezone.now() + timedelta(hours=24),
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
