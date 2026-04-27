@@ -570,25 +570,31 @@ class SendCustomerPasswordResetSerializer(serializers.Serializer):
     WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDgvMjAyNiAwNTozNjozMyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.fgw-FrZ17KIRnuwXeftK55HeRi61PCTRBa-TI7NSgbY"
     
     def _get_frontend_url(self, request):
-        """Get frontend URL based on domain/subdomain - Same pattern as your reference"""
+        """Get frontend URL based on backend subdomain"""
         host = request.get_host().lower()
         
-        print(f"🌐 Request host: {host}")
+        print(f"🌐 Backend host: {host}")
         
-        if 'apicore' in host:
-            portal_url = "https://prod.cnlerp.com"
-        elif 'rudhra' in host:
-            portal_url = "https://rudhra.cnlerp.com"
-        elif 'qa' in host:
-            portal_url = "https://qa.cnlerp.com"
+        # Extract subdomain from backend host
+        parts = host.split('.')
+        subdomain = parts[0] if parts else 'rudhra'
+        
+        print(f"📌 Subdomain: {subdomain}")
+        
+        # Map backend subdomain to frontend URL
+        if subdomain == 'prod':
+            frontend_url = 'https://prod.cnlerp.com'
+        elif subdomain == 'rudhra':
+            frontend_url = 'https://rudhra.cnlerp.com'
+        elif subdomain == 'qa':
+            frontend_url = 'https://qa.cnlerp.com'
         elif 'localhost' in host or '127.0.0.1' in host:
-            portal_url = "http://localhost:4200"
+            frontend_url = 'http://localhost:4200'
         else:
-            domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
-            portal_url = f"https://{domain}"
+            frontend_url = f"https://{subdomain}.cnlerp.com"
         
-        print(f"🏠 Frontend URL: {portal_url}")
-        return portal_url
+        print(f"🏠 Frontend URL: {frontend_url}")
+        return frontend_url
     
     def validate(self, attrs):
         username = attrs.get('username')
