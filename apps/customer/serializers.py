@@ -575,7 +575,7 @@ class SendCustomerPasswordResetSerializer(serializers.Serializer):
         
         print(f"🌐 Request host: {host}")
         
-        if 'prod' in host:
+        if 'apicore' in host:
             portal_url = "https://prod.cnlerp.com"
         elif 'rudhra' in host:
             portal_url = "https://rudhra.cnlerp.com"
