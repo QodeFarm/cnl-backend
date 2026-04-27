@@ -569,6 +569,27 @@ class SendCustomerPasswordResetSerializer(serializers.Serializer):
     WATI_INSTANCE_ID = "10114393"
     WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDgvMjAyNiAwNTozNjozMyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.fgw-FrZ17KIRnuwXeftK55HeRi61PCTRBa-TI7NSgbY"
     
+    def _get_frontend_url(self, request):
+        """Get frontend URL based on domain/subdomain - Same pattern as your reference"""
+        host = request.get_host().lower()
+        
+        print(f"🌐 Request host: {host}")
+        
+        if 'apicore' in host:
+            portal_url = "https://prod.cnlerp.com"
+        elif 'rudhra' in host:
+            portal_url = "https://rudhra.cnlerp.com"
+        elif 'qa' in host:
+            portal_url = "https://qa.cnlerp.com"
+        elif 'localhost' in host or '127.0.0.1' in host:
+            portal_url = "http://localhost:4200"
+        else:
+            domain = host.split(':')[0].replace('apicore', 'prod').replace('api', 'www')
+            portal_url = f"https://{domain}"
+        
+        print(f"🏠 Frontend URL: {portal_url}")
+        return portal_url
+    
     def validate(self, attrs):
         username = attrs.get('username')
         
@@ -637,9 +658,11 @@ class SendCustomerPasswordResetSerializer(serializers.Serializer):
             user_agent=request.META.get('HTTP_USER_AGENT')
         )
         
-        # Generate reset link
-        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:4200')
+        # ✅ Get frontend URL using same pattern as reference method
+        frontend_url = self._get_frontend_url(request)
         reset_link = f"{frontend_url}/#/customer-portal/reset-password/{token}/"
+        
+        print(f"🔗 Reset link: {reset_link}")
         
         # Logic: Email first, WhatsApp as fallback
         if customer_email and customer_email.strip():
@@ -734,28 +757,18 @@ class SendCustomerPasswordResetSerializer(serializers.Serializer):
                 print(f"⚠️ Add contact error: {e}")
             
             # Step 2: Send template message
-            # ✅ Using the correct parameter format for WATI utility template
             template_payload = {
-                "template_name": "password_reset",  # Your utility template name
+                "template_name": "password_reset",
                 "broadcast_name": f"password_reset_{clean_phone}_{int(timezone.now().timestamp())}",
                 "parameters": [
-                    {
-                        "name": "1",
-                        "value": customer_name
-                    },
-                    {
-                        "name": "2", 
-                        "value": reset_link
-                    },
-                    {
-                        "name": "3",
-                        "value": "24"
-                    }
+                    {"name": "1", "value": customer_name},
+                    {"name": "2", "value": reset_link},
+                    {"name": "3", "value": "24"}
                 ]
             }
             
             print(f"📨 Sending WhatsApp template")
-            print(f"   Template: password_reset_utility")
+            print(f"   Template: password_reset")
             print(f"   Phone: {clean_phone}")
             print(f"   Parameters: {template_payload['parameters']}")
             
