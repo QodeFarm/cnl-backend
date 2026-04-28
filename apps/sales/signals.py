@@ -1,4 +1,5 @@
 from apps.customer.models import LedgerAccounts
+from apps.company.utils import get_finance_setting
 from .models import SaleCreditNotes, SaleInvoiceItems, SaleInvoiceOrders, PaymentTransactions, SaleReturnOrders
 from apps.finance.models import JournalEntryLines, ChartOfAccounts
 from django.core.exceptions import ObjectDoesNotExist
@@ -153,16 +154,18 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
                 .first()                                   # grab the first result
             )or Decimal('0.00')
             bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
-            sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
-        
-        except LedgerAccounts.DoesNotExist:
-            sale_account = None  
+            sale_account = get_finance_setting('sales_ledger_account', fallback_name='Sale Account')
+
         except (InvalidOperation, TypeError, ValueError) as e:
-            return Decimal('0.00')              
+            return Decimal('0.00')
+
+        if not sale_account:
+            logger.warning("Credit note signal: Sales Ledger Account not configured. Journal entry skipped.")
+            return
 
         # Step 3: Creating JournalEntryLines record
         JournalEntryLines.objects.create(
-            ledger_account_id=sale_account,  
+            ledger_account_id=sale_account,
             debit=0.00,
             voucher_no = instance.credit_note_number,
             credit=instance.total_amount,
@@ -185,15 +188,17 @@ def update_balance_after_return(sender, instance, created, **kwargs):
                                                                                 .values_list('balance', flat=True)         # get only the balance field
                                                                                 .first() ) or Decimal('0.00')          
                 bal_amt = Decimal(existing_balance) - Decimal(instance.total_amount)
-                sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
-            except LedgerAccounts.DoesNotExist:
-                sale_account = None  
+                sale_account = get_finance_setting('sales_ledger_account', fallback_name='Sale Account')
             except (InvalidOperation, TypeError, ValueError) as e:
-                return Decimal('0.00')          
+                return Decimal('0.00')
+
+            if not sale_account:
+                logger.warning("Sale return signal: Sales Ledger Account not configured. Journal entry skipped.")
+                return
 
             # Step 3: Creating JournalEntryLines record
             JournalEntryLines.objects.create(
-                ledger_account_id=sale_account,  
+                ledger_account_id=sale_account,
                 debit=instance.total_amount,
                 voucher_no = (instance.return_no),
                 credit=0.00,

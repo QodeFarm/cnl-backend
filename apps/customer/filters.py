@@ -19,11 +19,19 @@ class LedgerAccountsFilters(filters.FilterSet):
     pan = filters.CharFilter(lookup_expr='exact')
     address = filters.CharFilter(lookup_expr='icontains')
     ledger_group_id = filters.CharFilter(field_name='ledger_group_id__name', lookup_expr='exact')
+    ledger_group_names = filters.CharFilter(method='filter_by_group_names', label="Ledger Group Names (comma-separated)")
+    group_purpose = filters.CharFilter(field_name='ledger_group_id__purpose', lookup_expr='exact', label="Group Purpose")
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     created_at = filters.DateFromToRangeFilter()
+
+    def filter_by_group_names(self, queryset, name, value):
+        group_names = [n.strip() for n in value.split(',') if n.strip()]
+        if group_names:
+            return queryset.filter(ledger_group_id__name__in=group_names)
+        return queryset
 
     def filter_by_search(self, queryset, name, value):
         return filter_by_search(queryset, self, value)
@@ -36,10 +44,10 @@ class LedgerAccountsFilters(filters.FilterSet):
 
     def filter_by_limit(self, queryset, name, value):
         return filter_by_limit(self, queryset, value)
-    
+
     class Meta:
-        model = LedgerAccounts 
-        fields = ['name','code','inactive','type','account_no','is_loan_account','pan','address','ledger_group_id','created_at','s', 'sort','page','limit']
+        model = LedgerAccounts
+        fields = ['name','code','inactive','type','account_no','is_loan_account','pan','address','ledger_group_id','ledger_group_names','group_purpose','created_at','s', 'sort','page','limit']
 
 class CustomerFilters(filters.FilterSet):
     identification = filters.CharFilter(lookup_expr='exact')

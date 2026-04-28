@@ -7,6 +7,7 @@ baseurl = 'https://apicore.cnlerp.com/'
 companytable ='companies'
 branchestable ='branches'
 branchbankdetails = 'branch_bank_details'
+companysettings = 'company_settings'
 
 #Customer db_tables
 ledgeraccountstable = 'ledger_accounts'

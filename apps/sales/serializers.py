@@ -3,6 +3,7 @@ from apps.customer.serializers import ModCustomerAddressesSerializer, ModCustome
 from apps.products.serializers import ColorSerializer, ModProductGroupsSerializer, ModProductStockUnitsSerializer, ModproductsSerializer, SizeSerializer
 from apps.users.serializers import ModModuleSectionsSerializer
 from rest_framework import serializers
+from django.db.models import Sum
 from .models import *
 
 #----------Modified Serializers--------------------------
@@ -184,40 +185,30 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
         fields = ['sale_order_id', 'order_no', 'order_date', 'sale_estimate', 'tax', 'tax_amount', 'total_amount', 'amount', 'advance_amount', 'customer', 'products', 'sale_type', 'order_status', 'flow_status', 'remarks', 'invoice_no', 'created_at', 'updated_at', 'is_deleted']
 
     def get_sale_order_details(self, obj):
-        sale_order_items = SaleOrderItems.objects.filter(sale_order_id=obj.sale_order_id)
-        
-        amount = 0
-        
-        for saleorderamount in sale_order_items:
-            item_amount = saleorderamount.amount
-            if item_amount is not None:
-                amount += item_amount
-        
-        return amount
+        result = SaleOrderItems.objects.using(obj._state.db).filter(
+            sale_order_id=obj.sale_order_id
+        ).aggregate(total=Sum('amount'))
+        return result['total'] or 0
 
     def get_amount(self, obj):
         return self.get_sale_order_details(obj)
-    
-    def get_products(self, obj):
-        # Detect DB used by the sale order instance
-        db_alias = obj._state.db
 
-        # Fetch sale order items and their associated products
-        sale_order_items = SaleOrderItems.objects.using(db_alias).filter(sale_order_id=obj.sale_order_id)
+    def get_products(self, obj):
+        # select_related('product_id') eliminates per-item lazy FK queries
+        sale_order_items = SaleOrderItems.objects.using(obj._state.db).filter(
+            sale_order_id=obj.sale_order_id
+        ).select_related('product_id')
         products = []
-        
         for item in sale_order_items:
-            product = item.product_id 
+            product = item.product_id
             if product:
-                product_data = {
+                products.append({
                     "product_id": product.product_id,
                     "product_name": product.name,
                     "quantity": item.quantity,
                     "production_qty": item.production_qty,
-                    "work_order_created": item.work_order_created  # Include the field here
-                }
-                products.append(product_data)
-        
+                    "work_order_created": item.work_order_created,
+                })
         return products
     
     def get_invoice_no(self, obj):

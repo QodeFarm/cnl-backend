@@ -19,6 +19,7 @@ from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
 from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts
 from apps.customer.models import CustomerBalance, LedgerAccounts
+from apps.company.utils import get_finance_setting
 from rest_framework.filters import OrderingFilter
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -4113,6 +4114,20 @@ class SaleInvoiceOrdersViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
+        # Validate sale_account BEFORE any DB writes so a missing config returns 400
+        # without leaving orphaned invoice rows (plain return inside @transaction.atomic
+        # does NOT trigger rollback — only raising an exception does).
+        sale_account = get_finance_setting('sales_ledger_account', fallback_name='Sale Account')
+        if not sale_account:
+            return build_response(
+                0,
+                "Setup required: No Sales Ledger Account configured. "
+                "Go to Company → Company Settings and set the Default Sales Ledger Account, "
+                "or create a ledger account named 'Sale Account'.",
+                [],
+                status.HTTP_400_BAD_REQUEST
+            )
+
         # ---------------------- D A T A   C R E A T I O N ----------------------------#
         new_invoice_data = generic_data_creation(
             self, [sale_invoice_data], SaleInvoiceOrdersSerializer, using=using_db
@@ -4188,7 +4203,7 @@ class SaleInvoiceOrdersViewSet(APIView):
 
         new_balance = Decimal(existing_balance) + Decimal(invoice_obj.total_amount)
 
-        sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
+        # sale_account already validated before data creation — guaranteed non-None here.
 
         # Product description
         invoice_items_qs = SaleInvoiceItems.objects.filter(
@@ -4438,7 +4453,12 @@ def create_sale_invoice_journal_entry(instance):
 
     new_balance = Decimal(existing_balance) + Decimal(instance.total_amount)
 
-    sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
+    sale_account = get_finance_setting('sales_ledger_account', fallback_name='Sale Account')
+    if not sale_account:
+        raise ValueError(
+            "create_sale_invoice_journal_entry: No Sales Ledger Account configured. "
+            "Configure it in Company Settings or create a 'Sale Account' ledger account."
+        )
 
     # -------- FETCH ITEMS (CORRECT WAY) --------
     invoice_items = SaleInvoiceItems.objects.filter(

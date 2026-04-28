@@ -293,6 +293,7 @@ class JournalBookReportSerializer(serializers.Serializer):
     total_credit = serializers.DecimalField(max_digits=18, decimal_places=2)
     journal_voucher_id = serializers.UUIDField()
     is_posted = serializers.BooleanField()
+    status = serializers.CharField()
 
     def get_particulars(self, obj):
         """

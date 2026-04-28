@@ -84,16 +84,21 @@ class CustomerViews(viewsets.ModelViewSet):
     ordering_fields = ['name', 'created_at', 'updated_at']
 
     def list(self, request, *args, **kwargs):
-        # return create_instance(self, request, *args, **kwargs)
+        # ?minimal=true — lightweight dropdown list (customer_id + name only, for select fields)
+        minimal = request.query_params.get('minimal', 'false').lower() == 'true'
+        if minimal:
+            queryset = Customer.objects.filter(is_deleted=False).order_by('name')
+            serializer = CustomerDropdownSerializer(queryset, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
         summary = request.query_params.get('summary', 'false').lower() == 'true'
         if summary:
             customers = self.filter_queryset(self.get_queryset())
             data = CustomerOptionSerializer.get_customer_summary(customers)
-            
             Result = Response(data, status=status.HTTP_200_OK)
         else:
             Result = list_all_objects(self, request, *args, **kwargs)
-        
+
         return Result
 
     def create(self, request, *args, **kwargs):
@@ -1430,12 +1435,15 @@ class CustomerExcelImport(BaseExcelImportExport):
                             ledger_group_id=ledger_group
                         )
                 else:
-                    # If no group specified, use default group
-                    default_group = LedgerGroups.objects.first()
+                    # No group specified — fall back to Sundry Debtors (standard customer group)
+                    default_group = (
+                        LedgerGroups.objects.filter(name="Sundry Debtors").first()
+                        or LedgerGroups.objects.first()
+                    )
                     ledger_account = LedgerAccounts.objects.filter(name__iexact=ledger_account_name).first()
                     if not ledger_account:
                         if not default_group:
-                            raise ValueError("Cannot create LedgerAccount without a LedgerGroup")
+                            raise ValueError("Cannot create LedgerAccount: no LedgerGroups exist. Run: python manage.py seed_ledger_groups")
                         logger.info(f"Creating LedgerAccount with name='{ledger_account_name}' and default group")
                         ledger_account = LedgerAccounts.objects.create(
                             name=ledger_account_name,
@@ -1613,7 +1621,10 @@ class CustomerExcelImport(BaseExcelImportExport):
         
         if missing_ledger_accounts:
             with transaction.atomic():
-                default_group = LedgerGroups.objects.first()
+                default_group = (
+                    LedgerGroups.objects.filter(name="Sundry Debtors").first()
+                    or LedgerGroups.objects.first()
+                )
                 for ledger_lower, info in missing_ledger_accounts.items():
                     group = fk_lookups['ledger_group'].get(info['group'].lower()) if info['group'] else None
                     group = group or default_group

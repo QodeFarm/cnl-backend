@@ -152,6 +152,11 @@ class ModCustomersSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = ['customer_id', 'name', 'customer_category']
+
+class CustomerDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Customer
+        fields = ['customer_id', 'name']
         
 class CustomerAttachmentsSerializers(serializers.ModelSerializer):
     customer = ModCustomersSerializer(source='customer_id', read_only=True)

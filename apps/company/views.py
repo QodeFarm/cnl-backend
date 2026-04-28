@@ -1,8 +1,8 @@
 from django.forms import ValidationError
 from django.shortcuts import render
 from rest_framework import viewsets, status
-from .models import Companies, Branches, BranchBankDetails
-from .serializers import CompaniesSerializer, BranchesSerializer, BranchBankDetailsSerializer
+from .models import Companies, Branches, BranchBankDetails, CompanySettings
+from .serializers import CompaniesSerializer, BranchesSerializer, BranchBankDetailsSerializer, CompanySettingsSerializer
 from config.utils_methods import build_response, list_all_objects, create_instance, update_instance, soft_delete
 from config.utils_filter_methods import list_filtered_objects
 from config.utils_variables import *
@@ -56,11 +56,43 @@ class CompaniesViewSet(viewsets.ModelViewSet):
 
     def update(self, request, *args, **kwargs):
         return update_instance(self, request, *args, **kwargs)
-    
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         return soft_delete(instance)
-    
+
+
+class CompanySettingsViewSet(viewsets.ViewSet):
+    """
+    Retrieve or update the settings record for a company.
+    The record is created automatically on first GET (get_or_create).
+    URL pk = company_id (UUID).
+
+    GET  /api/v1/company/company-settings/{company_id}/
+    PATCH /api/v1/company/company-settings/{company_id}/
+    """
+
+    def retrieve(self, request, pk=None):
+        try:
+            company = Companies.objects.get(pk=pk)
+        except Companies.DoesNotExist:
+            return build_response(0, "Company not found.", [], status.HTTP_404_NOT_FOUND)
+        cfg, _ = CompanySettings.objects.get_or_create(company_id=company)
+        return build_response(1, "Settings retrieved successfully.", CompanySettingsSerializer(cfg).data, status.HTTP_200_OK)
+
+    def partial_update(self, request, pk=None):
+        try:
+            company = Companies.objects.get(pk=pk)
+        except Companies.DoesNotExist:
+            return build_response(0, "Company not found.", [], status.HTTP_404_NOT_FOUND)
+        cfg, _ = CompanySettings.objects.get_or_create(company_id=company)
+        serializer = CompanySettingsSerializer(cfg, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return build_response(1, "Settings updated successfully.", serializer.data, status.HTTP_200_OK)
+        return build_response(0, "Validation error.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+
+
 class BranchesViewSet(viewsets.ModelViewSet):
     queryset = Branches.objects.all()
     serializer_class = BranchesSerializer

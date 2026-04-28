@@ -45,8 +45,8 @@ urlpatterns = [
     # Main Journal Voucher CRUD (with lines and attachments)
     path('journal_vouchers/', JournalVoucherView.as_view(), name='journal_vouchers-list-create'),
     path('journal_vouchers/<str:pk>/', JournalVoucherView.as_view(), name='journal_vouchers-detail-update-delete'),
-    # Post voucher to ledger
-    path('journal_vouchers/<str:pk>/post/', JournalVoucherPostView.as_view(), name='journal_vouchers-post'),
+    # Cancel a voucher (removes ledger impact, marks status='Cancelled')
+    path('journal_vouchers/<str:pk>/cancel/', JournalVoucherCancelView.as_view(), name='journal_vouchers-cancel'),
     # Pull from expense claim
     # path('journal_vouchers/pull_expense_claim/<str:expense_claim_id>/', PullFromExpenseClaimView.as_view(), name='journal_vouchers-pull-expense-claim'),
     

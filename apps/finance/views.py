@@ -2,7 +2,6 @@ import datetime
 from decimal import Decimal
 import logging
 from django.forms import IntegerField
-from requests import request
 from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
 from apps.customer.models import CustomerAddresses
@@ -24,9 +23,9 @@ from rest_framework.filters import OrderingFilter
 from rest_framework.response import Response
 from .models import Journal
 from .serializers import JournalSerializer
-from uuid import uuid4
+from uuid import uuid4, UUID
 from rest_framework.decorators import action
-from django.db.models import Sum, F, Value, DecimalField, ExpressionWrapper, When,Case,DurationField,IntegerField,Q
+from django.db.models import Sum, F, Value, DecimalField, DateField, ExpressionWrapper, When,Case,DurationField,IntegerField,Q
 from django.db.models.functions import Coalesce,Cast
 from datetime import date
 # Set up basic configuration for logging
@@ -286,7 +285,7 @@ class JournalEntryLinesAPIView(APIView):
         # ---------------------------
         is_uuid = True
         try:
-            uuid.UUID(str(input_id))
+            UUID(str(input_id))
         except ValueError:
             is_uuid = False
 
@@ -303,21 +302,30 @@ class JournalEntryLinesAPIView(APIView):
             queryset = JournalEntryLines.objects.filter(
                 customer_id=input_id,
                 is_deleted=False
-            ).order_by('created_at')  # ASC: oldest first (chronological)
+            ).order_by(
+                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
+                F('created_at')
+            )  # entry_date for JV date order; created_at as tiebreaker
 
         elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
             account_type = 'vendor'
             queryset = JournalEntryLines.objects.filter(
                 vendor_id=input_id,
                 is_deleted=False
-            ).order_by('created_at')  # ASC: oldest first (chronological)
+            ).order_by(
+                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
+                F('created_at')
+            )  # entry_date for JV date order; created_at as tiebreaker
 
         elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
             account_type = 'ledger'
             queryset = JournalEntryLines.objects.filter(
                 ledger_account_id=input_id,
                 is_deleted=False
-            ).order_by('created_at')  # ASC: oldest first (chronological)
+            ).order_by(
+                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
+                F('created_at')
+            )  # entry_date for JV date order; created_at as tiebreaker
 
         else:
             # ---------------------------
@@ -340,7 +348,10 @@ class JournalEntryLinesAPIView(APIView):
                         city_id=city_id
                     ).values_list('customer_id', flat=True),
                     is_deleted=False
-                ).order_by('created_at')  # ASC: oldest first (chronological)
+                ).order_by(
+                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
+                F('created_at')
+            )  # entry_date for JV date order; created_at as tiebreaker
 
             elif input_id == 'vendor_id':
                 account_type = 'vendor'
@@ -349,7 +360,10 @@ class JournalEntryLinesAPIView(APIView):
                         city_id=city_id
                     ).values_list('vendor_id', flat=True),
                     is_deleted=False
-                ).order_by('created_at')  # ASC: oldest first (chronological)
+                ).order_by(
+                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
+                F('created_at')
+            )  # entry_date for JV date order; created_at as tiebreaker
 
             else:
                 return build_response(
@@ -388,50 +402,60 @@ class JournalEntryLinesAPIView(APIView):
         end = start + limit
 
         # ---------------------------
-        # STEP 7: CALCULATE RUNNING BALANCE
-        # Fetch ALL records, calculate balance, then paginate
+        # STEP 7: ACCOUNT-WIDE AGGREGATES VIA DB (no full record load)
         # ---------------------------
-        all_records = list(filtered_queryset)
-        running_balance = Decimal('0.00')
-        opening_balance = Decimal('0.00')
-        closing_balance = Decimal('0.00')
+        agg = filtered_queryset.aggregate(
+            total_debit=Sum('debit'),
+            total_credit=Sum('credit'),
+        )
+        total_debit_sum  = Decimal(str(agg['total_debit']  or '0.00'))
+        total_credit_sum = Decimal(str(agg['total_credit'] or '0.00'))
 
-        # Calculate running balance for ALL records
-        for idx, record in enumerate(all_records):
-            # For Customer: Debit increases balance (they owe us), Credit decreases (they paid)
-            # For Vendor: Credit increases balance (we owe them), Debit decreases (we paid)
+        if account_type == 'vendor':
+            final_balance = total_credit_sum - total_debit_sum
+        else:
+            final_balance = total_debit_sum - total_credit_sum
+
+        # ---------------------------
+        # STEP 8: OPENING BALANCE (sum of rows strictly before this page)
+        # Fetches only PKs of pre-page rows, then aggregates — avoids loading all rows.
+        # For typical date-filtered ledgers this is a small set.
+        # ---------------------------
+        opening_balance = Decimal('0.00')
+        if start > 0:
+            pre_pks = list(
+                filtered_queryset
+                .values_list('journal_entry_line_id', flat=True)[:start]
+            )
+            if pre_pks:
+                pre_agg = JournalEntryLines.objects.filter(
+                    journal_entry_line_id__in=pre_pks
+                ).aggregate(pre_debit=Sum('debit'), pre_credit=Sum('credit'))
+                pre_debit  = Decimal(str(pre_agg['pre_debit']  or '0.00'))
+                pre_credit = Decimal(str(pre_agg['pre_credit'] or '0.00'))
+                if account_type == 'vendor':
+                    opening_balance = pre_credit - pre_debit
+                else:
+                    opening_balance = pre_debit - pre_credit
+
+        # ---------------------------
+        # STEP 9: FETCH ONLY CURRENT PAGE
+        # ---------------------------
+        paginated_records = list(filtered_queryset[start:end])
+
+        # Running balance loop over at most `limit` records (typically 10)
+        running_balance = opening_balance
+        for record in paginated_records:
             if account_type == 'vendor':
                 running_balance += Decimal(str(record.credit)) - Decimal(str(record.debit))
             else:
-                # Customer or Ledger Account
                 running_balance += Decimal(str(record.debit)) - Decimal(str(record.credit))
-            
             record.running_balance = running_balance
 
-        # Calculate opening balance (balance BEFORE current page starts)
-        if start > 0 and len(all_records) > 0:
-            # Opening balance = running balance of the record just before this page
-            opening_balance = all_records[start - 1].running_balance if start <= len(all_records) else Decimal('0.00')
-        else:
-            opening_balance = Decimal('0.00')
-
-        # Get closing balance (balance at end of current page OR final balance)
-        if len(all_records) > 0:
-            # If this is the last page or beyond, closing = final balance
-            if end >= len(all_records):
-                closing_balance = all_records[-1].running_balance
-            else:
-                closing_balance = all_records[end - 1].running_balance
-        else:
-            closing_balance = Decimal('0.00')
+        closing_balance = running_balance  # balance after last row on this page
 
         # ---------------------------
-        # STEP 8: PAGINATE AFTER BALANCE CALCULATION
-        # ---------------------------
-        paginated_records = all_records[start:end]
-
-        # ---------------------------
-        # STEP 9: SERIALIZATION WITH RUNNING BALANCE
+        # STEP 10: SERIALIZATION WITH RUNNING BALANCE
         # ---------------------------
         serializer = JournalEntryLinesSerializer(paginated_records, many=True)
         data = serializer.data
@@ -439,7 +463,7 @@ class JournalEntryLinesAPIView(APIView):
         # Inject running_balance into serialized data
         for idx, row in enumerate(data):
             row['running_balance'] = str(paginated_records[idx].running_balance)
-        
+
         # Collect invoice numbers from journal entries
         invoice_nos = [
             row.get("voucher_no")
@@ -484,8 +508,21 @@ class JournalEntryLinesAPIView(APIView):
                         + "\n".join(product_lines)
                     )
 
+        # Resolve human-readable account name for the ledger header
+        account_name = ''
+        try:
+            if is_uuid:
+                if account_type == 'customer':
+                    account_name = Customer.objects.get(pk=input_id).name
+                elif account_type == 'vendor':
+                    account_name = Vendor.objects.get(pk=input_id).name
+                elif account_type == 'ledger':
+                    account_name = LedgerAccounts.objects.get(pk=input_id).name
+        except Exception:
+            pass
+
         # ---------------------------
-        # STEP 10: RESPONSE WITH OPENING & CLOSING BALANCE
+        # STEP 11: RESPONSE
         # ---------------------------
         return Response({
             'count': len(paginated_records),
@@ -495,7 +532,12 @@ class JournalEntryLinesAPIView(APIView):
             'limit': limit,
             'totalCount': total_count,
             'opening_balance': str(opening_balance),
-            'closing_balance': str(closing_balance)
+            'closing_balance': str(closing_balance),
+            'total_debit':     str(total_debit_sum),
+            'total_credit':    str(total_credit_sum),
+            'final_balance':   str(final_balance),
+            'account_name':    account_name,
+            'account_type':    account_type or '',
         }, status=status.HTTP_200_OK)
 
 
@@ -891,7 +933,10 @@ class ExpenseItemView(APIView):
                 for line in ledger_lines:
                     debit = Decimal(str(line.debit)) if line.debit else Decimal('0.00')
                     credit = Decimal(str(line.credit)) if line.credit else Decimal('0.00')
-                    running_balance = running_balance + debit - credit
+                    if line.vendor_id:
+                        running_balance = running_balance + credit - debit
+                    else:
+                        running_balance = running_balance + debit - credit
 
                     if line.balance != running_balance:
                         JournalEntryLines.objects.filter(
@@ -986,7 +1031,10 @@ class ExpenseItemView(APIView):
                     for line in ledger_lines:
                         debit = Decimal(str(line.debit)) if line.debit else Decimal('0.00')
                         credit = Decimal(str(line.credit)) if line.credit else Decimal('0.00')
-                        running_balance = running_balance + debit - credit
+                        if line.vendor_id:
+                            running_balance = running_balance + credit - debit
+                        else:
+                            running_balance = running_balance + debit - credit
 
                         if line.balance != running_balance:
                             JournalEntryLines.objects.filter(
@@ -1001,7 +1049,7 @@ class ExpenseItemView(APIView):
     	
 class GeneralAccountsListAPIView(APIView):
     def get(self, request):
-        accounts = LedgerAccounts.objects.filter(type__in=['Bank', 'Cash'], is_deleted=False)
+        accounts = LedgerAccounts.objects.filter(type__in=['Bank', 'Cash', 'General'], is_deleted=False)
         serializer = GeneralAccountSerializer(accounts, many=True)
         return Response({
             "count": len(serializer.data),
@@ -1110,8 +1158,11 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
                 for line in account_lines:
                     debit = Decimal(str(line.debit)) if line.debit else Decimal('0.00')
                     credit = Decimal(str(line.credit)) if line.credit else Decimal('0.00')
-                    running_balance = running_balance + debit - credit
-                    
+                    if line.vendor_id:
+                        running_balance = running_balance + credit - debit
+                    else:
+                        running_balance = running_balance + debit - credit
+
                     if line.balance != running_balance:
                         JournalEntryLines.objects.filter(
                             journal_entry_line_id=line.journal_entry_line_id
@@ -1405,8 +1456,11 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
                 for line in ledger_lines:
                     debit = Decimal(str(line.debit)) if line.debit else Decimal('0.00')
                     credit = Decimal(str(line.credit)) if line.credit else Decimal('0.00')
-                    running_balance = running_balance + debit - credit
-                    
+                    if line.vendor_id:
+                        running_balance = running_balance + credit - debit
+                    else:
+                        running_balance = running_balance + debit - credit
+
                     if line.balance != running_balance:
                         JournalEntryLines.objects.filter(
                             journal_entry_line_id=line.journal_entry_line_id
@@ -1679,8 +1733,11 @@ class JournalEntryView(APIView):
                 for line in ledger_lines:
                     debit = Decimal(str(line.debit)) if line.debit else Decimal('0.00')
                     credit = Decimal(str(line.credit)) if line.credit else Decimal('0.00')
-                    running_balance = running_balance + debit - credit
-                    
+                    if line.vendor_id:
+                        running_balance = running_balance + credit - debit
+                    else:
+                        running_balance = running_balance + debit - credit
+
                     # Only update if balance changed
                     if line.balance != running_balance:
                         line.balance = running_balance
@@ -1948,6 +2005,129 @@ Key Rule: Total Debit = Total Credit (Always balanced)
 """
 
 
+def _create_ledger_entries_from_voucher(pk):
+    """
+    Auto-post a JournalVoucher to the Account Ledger (JournalEntryLines).
+
+    Called from JournalVoucherView.create() and .update() so that every saved
+    voucher is immediately reflected in the ledger — no separate.
+
+    Precondition for update(): caller must have already soft-deleted the old
+    JournalEntryLines for this voucher_no before calling this function.
+
+    Design decisions (ERP-grade):
+    - Uses select_related to avoid N+1 DB hits on party/ledger lookups.
+    - Runs a single bulk_create for all new JournalEntryLines.
+    - Running balance is computed in-memory per unique party/account key so
+      concurrent vouchers for the same account don't race (the caller holds
+      @transaction.atomic; the starting balance is read inside the same
+      transaction so no phantom-read risk on MySQL REPEATABLE READ).
+    - Tally-style description: each line shows the CONTRA party, not itself.
+    """
+    voucher = JournalVoucher.objects.get(pk=pk)
+    voucher_lines = list(
+        JournalVoucherLine.objects
+        .filter(journal_voucher_id=pk)
+        .select_related('customer_id', 'vendor_id', 'ledger_account_id')
+        .order_by('created_at')   # deterministic order for running balance
+    )
+
+    if not voucher_lines:
+        return
+
+    # One JournalEntry header per posting (new header on every create/update)
+    journal_entry = JournalEntry.objects.create(
+        entry_date=voucher.voucher_date,
+        voucher_type='CommonVoucher',
+        reference=voucher.voucher_no,
+        description=voucher.narration,
+    )
+
+    entries_to_create = []
+    # key: (customer_id pk, vendor_id pk, ledger_account_id pk) — all as str or None
+    running_balances = {}
+
+    def _party_name(line):
+        if line.customer_id:       return line.customer_id.name
+        if line.vendor_id:         return line.vendor_id.name
+        if line.ledger_account_id: return line.ledger_account_id.name
+        return ''
+
+    for line in voucher_lines:
+        debit  = line.amount if line.entry_type == 'Debit'  else Decimal('0.00')
+        credit = line.amount if line.entry_type == 'Credit' else Decimal('0.00')
+
+        # Unique key per party+account combination (UUID strings — safe dict keys)
+        balance_key = (
+            str(line.customer_id_id)       if line.customer_id_id       else None,
+            str(line.vendor_id_id)         if line.vendor_id_id         else None,
+            str(line.ledger_account_id_id),
+        )
+
+        if balance_key not in running_balances:
+            # Seed from true aggregate sum — immune to stale stored-balance values
+            qs = JournalEntryLines.objects.filter(is_deleted=False)
+            if line.customer_id_id:
+                qs = qs.filter(customer_id=line.customer_id_id)
+            elif line.vendor_id_id:
+                qs = qs.filter(vendor_id=line.vendor_id_id)
+            else:
+                qs = qs.filter(ledger_account_id=line.ledger_account_id_id)
+            agg = qs.aggregate(total_debit=Sum('debit'), total_credit=Sum('credit'))
+            td = Decimal(str(agg['total_debit']  or '0.00'))
+            tc = Decimal(str(agg['total_credit'] or '0.00'))
+            if line.vendor_id_id:
+                running_balances[balance_key] = tc - td
+            else:
+                running_balances[balance_key] = td - tc
+
+        # Liability (vendor): credit = owed more, debit = paid off
+        # Asset / Receivable (customer, ledger): debit = owed more, credit = paid off
+        if line.vendor_id_id:
+            running_balances[balance_key] += credit - debit
+        else:
+            running_balances[balance_key] += debit - credit
+
+        # Tally-style: show the CONTRA party in the description
+        contra_lines = [
+            l for l in voucher_lines
+            if l.journal_voucher_line_id != line.journal_voucher_line_id
+            and l.entry_type != line.entry_type
+        ]
+        if len(contra_lines) == 1:
+            contra_name = _party_name(contra_lines[0])
+        elif contra_lines:
+            names = [_party_name(l) for l in contra_lines[:2] if _party_name(l)]
+            contra_name = ', '.join(names) + (' & others' if len(contra_lines) > 2 else '')
+        else:
+            contra_name = _party_name(line)
+
+        description = (
+            line.remark
+            or voucher.narration
+            or f"Journal Entry – {contra_name} ({voucher.voucher_no})"
+        )
+
+        entries_to_create.append(JournalEntryLines(
+            journal_entry_id=journal_entry,
+            ledger_account_id=line.ledger_account_id,
+            voucher_no=voucher.voucher_no,
+            entry_date=voucher.voucher_date,
+            debit=debit,
+            credit=credit,
+            balance=running_balances[balance_key],
+            description=description,
+            customer_id=line.customer_id,
+            vendor_id=line.vendor_id,
+            is_deleted=False,
+        ))
+
+    JournalEntryLines.objects.bulk_create(entries_to_create)
+
+    # Keep is_posted=True for backward compatibility with any existing queries
+    JournalVoucher.objects.filter(pk=pk).update(is_posted=True)
+
+
 class JournalVoucherView(APIView):
     """
     API View for handling Journal Voucher CRUD operations.
@@ -2121,13 +2301,20 @@ class JournalVoucherView(APIView):
         if attachments_data:
             new_attachments = generic_data_creation(self, attachments_data, JournalVoucherAttachmentSerializer, {'journal_voucher_id': voucher_id})
 
+        # Auto-post to Account Ledger immediately on submit (no separate "Post" step)
+        try:
+            _create_ledger_entries_from_voucher(voucher_id)
+        except Exception as e:
+            logger.error(f"Ledger entry creation failed for voucher {new_voucher.get('voucher_no')}: {str(e)}")
+            raise  # re-raise so @transaction.atomic rolls back everything cleanly
+
         custom_data = {
             "journal_voucher": new_voucher,
             "voucher_lines": new_lines,
             "attachments": new_attachments,
         }
-        
-        logger.info(f"Journal Voucher created: {new_voucher.get('voucher_no')}")
+
+        logger.info(f"Journal Voucher created and posted: {new_voucher.get('voucher_no')}")
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
 
     @transaction.atomic
@@ -2151,6 +2338,8 @@ class JournalVoucherView(APIView):
         if journal_voucher_data:
             journal_voucher_data['journal_voucher_id'] = pk
             instance = JournalVoucher.objects.get(pk=pk)
+            if instance.status == 'Cancelled':
+                return build_response(0, "Cannot edit a cancelled voucher.", [], status.HTTP_400_BAD_REQUEST)
             serializer = JournalVoucherSerializer(instance, data=journal_voucher_data, partial=False)
             if not serializer.is_valid():
                 errors["journal_voucher"] = serializer.errors
@@ -2225,41 +2414,51 @@ class JournalVoucherView(APIView):
                 main_model_related_field='journal_voucher_id', current_model_pk_field='attachment_id'
             )
 
+        # Sync Account Ledger: soft-delete old entries then recreate from new lines.
+        # Using voucher_no (immutable) to identify the old JournalEntryLines.
+        voucher_no = instance.voucher_no
+        JournalEntryLines.objects.filter(
+            voucher_no=voucher_no, is_deleted=False
+        ).update(is_deleted=True)
+        try:
+            _create_ledger_entries_from_voucher(pk)
+        except Exception as e:
+            logger.error(f"Ledger re-sync failed for voucher {voucher_no}: {str(e)}")
+            raise  # rolls back the whole @transaction.atomic block
+
         custom_data = {
             "journal_voucher": updated_voucher,
             "voucher_lines": updated_lines,
             "attachments": updated_attachments,
         }
-        
-        logger.info(f"Journal Voucher updated: {updated_voucher.get('voucher_no')}")
+
+        logger.info(f"Journal Voucher updated and ledger re-synced: {updated_voucher.get('voucher_no')}")
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
     @transaction.atomic
     def delete(self, request, pk, *args, **kwargs):
         """
-        Soft delete Journal Voucher.
-        Sets is_deleted = True instead of hard delete.
-        Also soft-deletes corresponding JournalEntryLines (Account Ledger entries).
+        Soft-delete Journal Voucher and its Account Ledger entries.
+        No `is_posted` guard — any non-deleted voucher can be removed.
+        Cancelled vouchers can also be deleted to clean up the list.
         """
         try:
             instance = self.get_object(pk)
             if instance is None:
                 return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-            
-            # Check if voucher is already posted to ledger
-            if instance.is_posted:
-                return build_response(0, "Cannot delete a posted voucher. Please reverse it first.", [], status.HTTP_400_BAD_REQUEST)
-            
-            # Soft delete the voucher (signal will handle JournalEntryLines deletion)
+
+            voucher_no = instance.voucher_no
+
+            # Soft-delete the JournalVoucher (signal also fires, but we do it explicitly for clarity)
             instance.is_deleted = True
             instance.save()
-            
-            # Explicitly soft-delete corresponding JournalEntryLines for safety
-            # This ensures Account Ledger entries are marked as deleted
-            from apps.finance.signals import delete_ledger_entries_for_voucher
-            deleted_count = delete_ledger_entries_for_voucher(instance.voucher_no)
-            
-            logger.info(f"Journal Voucher deleted: {instance.voucher_no}, Ledger entries deleted: {deleted_count}")
+
+            # Soft-delete all Account Ledger entries for this voucher
+            deleted_count = JournalEntryLines.objects.filter(
+                voucher_no=voucher_no, is_deleted=False
+            ).update(is_deleted=True)
+
+            logger.info(f"Journal Voucher deleted: {voucher_no}, ledger entries removed: {deleted_count}")
             return build_response(1, "Record deleted successfully", [], status.HTTP_200_OK)
         except Exception as e:
             logger.error(f"Error deleting Journal Voucher: {str(e)}")
@@ -2299,67 +2498,122 @@ class JournalVoucherLineViewSet(viewsets.ModelViewSet):
         return build_response(1, "Record deleted successfully", [], status.HTTP_200_OK)
 
 
-class JournalVoucherPostView(APIView):
+class JournalVoucherCancelView(APIView):
     """
-    Post Journal Voucher to Ledger.
-    Creates corresponding JournalEntryLines for ledger reports.
-    
-    This is called when user clicks "Post" to make the voucher final.
+    Cancel a Journal Voucher — Tally/SAP-style reversal approach.
+
+    Cancellation does NOT remove existing JournalEntryLines.
+    Instead it creates equal-and-opposite REVERSAL entries so the net
+    ledger impact becomes zero while the full audit trail is preserved.
+
+    Account Ledger shows:
+        JV-001  Dr ₹5000  (original)
+        JV-001  Cr ₹5000  Cancellation of JV-001   ← new reversal row
+
+    Delete (separate action) is the only operation that removes ledger rows.
     """
-    
+
     @transaction.atomic
     def post(self, request, pk, *args, **kwargs):
-        """
-        Post voucher to ledger - creates JournalEntryLines
-        """
         try:
-            voucher = JournalVoucher.objects.get(pk=pk)
-            
-            if voucher.is_posted:
-                return build_response(0, "Voucher already posted", [], status.HTTP_400_BAD_REQUEST)
-            
+            # Row-level lock prevents concurrent double-cancel
+            voucher = JournalVoucher.objects.select_for_update().get(pk=pk)
+
             if voucher.is_deleted:
-                return build_response(0, "Cannot post a deleted voucher", [], status.HTTP_400_BAD_REQUEST)
-            
-            # Get voucher lines
-            voucher_lines = JournalVoucherLine.objects.filter(journal_voucher_id=pk)
-            
-            if not voucher_lines.exists():
-                return build_response(0, "No line items found in voucher", [], status.HTTP_400_BAD_REQUEST)
-            
-            # Create JournalEntry for this voucher
-            journal_entry = JournalEntry.objects.create(
-                entry_date=voucher.voucher_date,
-                voucher_type='CommonVoucher',
-                reference=voucher.reference_no,
-                description=voucher.narration
+                return build_response(0, "Voucher does not exist", [], status.HTTP_404_NOT_FOUND)
+
+            if voucher.status == 'Cancelled':
+                return build_response(0, "Voucher is already cancelled", [], status.HTTP_400_BAD_REQUEST)
+
+            # Fetch the original ledger entries — these are NOT touched
+            original_entries = list(
+                JournalEntryLines.objects
+                .filter(voucher_no=voucher.voucher_no, is_deleted=False)
+                .order_by('created_at')
             )
-            
-            # Create JournalEntryLines for each voucher line
-            for line in voucher_lines:
-                JournalEntryLines.objects.create(
-                    journal_entry_id=journal_entry,
-                    ledger_account_id=line.ledger_account_id,
-                    voucher_no=voucher.voucher_no,
-                    debit=line.amount if line.entry_type == 'Debit' else Decimal('0.00'),
-                    credit=line.amount if line.entry_type == 'Credit' else Decimal('0.00'),
-                    description=line.remark or voucher.narration,
-                    customer_id=line.customer_id,
-                    vendor_id=line.vendor_id
+
+            if original_entries:
+                # Create a new JournalEntry header for the reversal posting
+                reversal_journal = JournalEntry.objects.create(
+                    entry_date=voucher.voucher_date,
+                    voucher_type='CommonVoucher',
+                    reference=voucher.voucher_no,
+                    description=f"Cancellation of {voucher.voucher_no}",
                 )
-            
-            # Mark voucher as posted
-            voucher.is_posted = True
-            voucher.save()
-            
-            logger.info(f"Journal Voucher posted to ledger: {voucher.voucher_no}")
-            return build_response(1, "Voucher posted to ledger successfully", {"voucher_no": voucher.voucher_no, "journal_entry_id": str(journal_entry.journal_entry_id)}, status.HTTP_200_OK)
-            
+
+                reversal_rows = []
+                running_balances = {}
+
+                for entry in original_entries:
+                    # Swap: original Debit becomes reversal Credit, and vice-versa
+                    rev_debit  = entry.credit
+                    rev_credit = entry.debit
+
+                    balance_key = (
+                        str(entry.customer_id_id)       if entry.customer_id_id       else None,
+                        str(entry.vendor_id_id)         if entry.vendor_id_id         else None,
+                        str(entry.ledger_account_id_id) if entry.ledger_account_id_id else None,
+                    )
+
+                    if balance_key not in running_balances:
+                        # Seed from true aggregate sum — immune to stale stored-balance values
+                        qs = JournalEntryLines.objects.filter(is_deleted=False)
+                        if entry.customer_id_id:
+                            qs = qs.filter(customer_id=entry.customer_id_id)
+                        elif entry.vendor_id_id:
+                            qs = qs.filter(vendor_id=entry.vendor_id_id)
+                        elif entry.ledger_account_id_id:
+                            qs = qs.filter(ledger_account_id=entry.ledger_account_id_id)
+                        agg = qs.aggregate(total_debit=Sum('debit'), total_credit=Sum('credit'))
+                        td = Decimal(str(agg['total_debit']  or '0.00'))
+                        tc = Decimal(str(agg['total_credit'] or '0.00'))
+                        if entry.vendor_id_id:
+                            running_balances[balance_key] = tc - td
+                        else:
+                            running_balances[balance_key] = td - tc
+
+                    # Same direction logic as _create_ledger_entries_from_voucher
+                    if entry.vendor_id_id:
+                        running_balances[balance_key] += rev_credit - rev_debit
+                    else:
+                        running_balances[balance_key] += rev_debit - rev_credit
+
+                    reversal_rows.append(JournalEntryLines(
+                        journal_entry_id=reversal_journal,
+                        ledger_account_id=entry.ledger_account_id,
+                        voucher_no=voucher.voucher_no,
+                        entry_date=voucher.voucher_date,
+                        debit=rev_debit,
+                        credit=rev_credit,
+                        balance=running_balances[balance_key],
+                        description=f"Cancellation of {voucher.voucher_no}",
+                        customer_id=entry.customer_id,
+                        vendor_id=entry.vendor_id,
+                        is_deleted=False,
+                    ))
+
+                JournalEntryLines.objects.bulk_create(reversal_rows)
+                logger.info(
+                    f"Reversal entries created for {voucher.voucher_no}: "
+                    f"{len(reversal_rows)} rows"
+                )
+
+            # Mark voucher as cancelled — original JournalEntryLines are untouched
+            voucher.status = 'Cancelled'
+            voucher.save(update_fields=['status', 'updated_at'])
+
+            logger.info(f"Journal Voucher cancelled: {voucher.voucher_no}")
+            return build_response(
+                1, "Voucher cancelled successfully",
+                {"voucher_no": voucher.voucher_no},
+                status.HTTP_200_OK
+            )
+
         except JournalVoucher.DoesNotExist:
             return build_response(0, "Voucher not found", [], status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            logger.error(f"Error posting voucher: {str(e)}")
-            return build_response(0, f"Error posting voucher: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Error cancelling voucher: {str(e)}")
+            return build_response(0, f"Error cancelling voucher: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 #No Need This Api
 
@@ -2587,6 +2841,7 @@ class JournalBookReportView(APIView):
                     'narration': voucher.narration,
                     'reference_no': voucher.reference_no,
                     'is_posted': voucher.is_posted,
+                    'status': voucher.status,
                     'total_debit': voucher.total_debit,
                     'total_credit': voucher.total_credit,
                     'lines': lines_data,
