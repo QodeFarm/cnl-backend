@@ -509,3 +509,385 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
             'registration_date', 'username', 'last_login'
         ]
         read_only_fields = fields  # Make all fields read-only
+        
+#-------------------customer password changes and resets serializers-----------------------
+# serializers.py (in your customers app)
+
+from rest_framework import serializers
+from django.contrib.auth.hashers import make_password
+from django.utils import timezone
+from datetime import timedelta
+import uuid
+
+# serializers.py - UPDATED VERSION
+
+# serializers.py
+
+from rest_framework import serializers
+from django.contrib.auth.hashers import make_password
+from django.utils import timezone
+from datetime import timedelta
+import uuid
+
+# serializers.py - Fixed version
+
+from rest_framework import serializers
+from django.contrib.auth.hashers import make_password
+from django.utils import timezone
+from datetime import timedelta
+import uuid
+from django.conf import settings
+# from apps.customers.models import Customer, CustomerAddresses, CustomerPasswordReset
+
+# serializers.py - Validate by username
+
+from rest_framework import serializers
+from django.contrib.auth.hashers import make_password
+from django.utils import timezone
+from datetime import timedelta
+import uuid
+from django.conf import settings
+# from apps.customers.models import Customer, CustomerAddresses, CustomerPasswordReset
+
+# serializers.py
+
+# serializers.py - Fixed version
+
+# serializers.py - Clean version without URL shortening
+
+from rest_framework import serializers
+from django.contrib.auth.hashers import make_password
+from django.utils import timezone
+from datetime import timedelta
+import uuid
+import requests
+import re
+from django.conf import settings
+# from apps.customers.models import Customer, CustomerAddresses, CustomerPasswordReset
+
+class SendCustomerPasswordResetSerializer(serializers.Serializer):
+    """Serializer for sending password reset via Email or WhatsApp"""
+    
+    username = serializers.CharField(required=True)
+    
+    # WATI Configuration
+    WATI_INSTANCE_ID = "10114393"
+    WATI_TOKEN = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1bmlxdWVfbmFtZSI6ImFkbWluQGNubGVycC5jb20iLCJuYW1laWQiOiJhZG1pbkBjbmxlcnAuY29tIiwiZW1haWwiOiJhZG1pbkBjbmxlcnAuY29tIiwiYXV0aF90aW1lIjoiMDQvMDgvMjAyNiAwNTozNjozMyIsInRlbmFudF9pZCI6IjEwMTE0MzkzIiwiZGJfbmFtZSI6Im10LXByb2QtVGVuYW50cyIsImh0dHA6Ly9zY2hlbWFzLm1pY3Jvc29mdC5jb20vd3MvMjAwOC8wNi9pZGVudGl0eS9jbGFpbXMvcm9sZSI6IkFETUlOSVNUUkFUT1IiLCJleHAiOjI1MzQwMjMwMDgwMCwiaXNzIjoiQ2xhcmVfQUkiLCJhdWQiOiJDbGFyZV9BSSJ9.fgw-FrZ17KIRnuwXeftK55HeRi61PCTRBa-TI7NSgbY"
+    
+    def _get_frontend_url(self, request):
+        """Get frontend URL based on backend subdomain"""
+        host = request.get_host().lower()
+        
+        print(f"🌐 Backend host: {host}")
+        
+        # Extract subdomain from backend host
+        parts = host.split('.')
+        subdomain = parts[0] if parts else 'rudhra'
+        
+        print(f"📌 Subdomain: {subdomain}")
+        
+        # Map backend subdomain to frontend URL
+        if subdomain == 'prod':
+            frontend_url = 'https://prod.cnlerp.com'
+        elif subdomain == 'rudhra':
+            frontend_url = 'https://rudhra.cnlerp.com'
+        elif subdomain == 'qa':
+            frontend_url = 'https://qa.cnlerp.com'
+        elif 'localhost' in host or '127.0.0.1' in host:
+            frontend_url = 'http://localhost:4200'
+        else:
+            frontend_url = f"https://{subdomain}.cnlerp.com"
+        
+        print(f"🏠 Frontend URL: {frontend_url}")
+        return frontend_url
+    
+    def validate(self, attrs):
+        username = attrs.get('username')
+        
+        try:
+            # Find customer by username
+            customer = Customer.objects.filter(
+                username__iexact=username,
+                is_deleted=False,
+                is_portal_user=True
+            ).first()
+            
+            if not customer:
+                raise serializers.ValidationError("No customer found with this username")
+            
+            # Get customer contact details
+            customer_address = CustomerAddresses.objects.filter(
+                customer_id=customer.customer_id,
+                is_deleted=False
+            ).first()
+            
+            if not customer_address:
+                raise serializers.ValidationError("No contact details found for this customer")
+            
+            # Store details
+            self.context['customer'] = customer
+            self.context['customer_id'] = customer.customer_id
+            self.context['customer_name'] = customer.name
+            self.context['customer_username'] = customer.username
+            self.context['customer_email'] = customer_address.email
+            self.context['customer_phone'] = customer_address.phone
+            
+            print(f"🔍 Customer found: {customer.name}")
+            print(f"   Email: {customer_address.email or 'Not found'}")
+            print(f"   Phone: {customer_address.phone or 'Not found'}")
+            
+        except Exception as e:
+            raise serializers.ValidationError(f"Error: {str(e)}")
+        
+        return attrs
+    
+    def save(self, **kwargs):
+        """Create reset token and send via available channel"""
+        customer_id = self.context.get('customer_id')
+        customer_name = self.context.get('customer_name')
+        customer_username = self.context.get('customer_username')
+        customer_email = self.context.get('customer_email')
+        customer_phone = self.context.get('customer_phone')
+        request = self.context.get('request')
+        
+        # Delete existing unused tokens
+        CustomerPasswordReset.objects.filter(
+            customer_id=customer_id,
+            is_used=False,
+            expires_at__gt=timezone.now()
+        ).delete()
+        
+        # Create new reset token
+        token = uuid.uuid4()
+        expires_at = timezone.now() + timedelta(hours=24)
+        
+        reset_token = CustomerPasswordReset.objects.create(
+            customer_id=customer_id,
+            token=token,
+            expires_at=expires_at,
+            ip_address=request.META.get('REMOTE_ADDR'),
+            user_agent=request.META.get('HTTP_USER_AGENT')
+        )
+        
+        # ✅ Get frontend URL using same pattern as reference method
+        frontend_url = self._get_frontend_url(request)
+        reset_link = f"{frontend_url}/#/customer-portal/reset-password/{token}/"
+        
+        print(f"🔗 Reset link: {reset_link}")
+        
+        # Logic: Email first, WhatsApp as fallback
+        if customer_email and customer_email.strip():
+            print(f"📧 Email found, sending reset link to {customer_email}")
+            self._send_reset_email(
+                customer_name=customer_name,
+                customer_username=customer_username,
+                email=customer_email,
+                reset_link=reset_link
+            )
+            self.context['sent_via'] = 'email'
+            
+        elif customer_phone and customer_phone.strip():
+            print(f"📱 No email found, sending WhatsApp to {customer_phone}")
+            success = self._send_reset_whatsapp_via_wati(
+                customer_name=customer_name,
+                phone=customer_phone,
+                reset_link=reset_link,
+                token=token
+            )
+            
+            if success:
+                self.context['sent_via'] = 'whatsapp'
+            else:
+                raise serializers.ValidationError(
+                    "Unable to send reset link. WhatsApp delivery failed. Please contact support."
+                )
+        else:
+            raise serializers.ValidationError(
+                "No email or phone number found. Please contact support."
+            )
+        
+        return reset_token
+    
+    def _send_reset_email(self, customer_name, customer_username, email, reset_link):
+        """Send password reset email"""
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        subject = "Reset Your Customer Portal Password"
+        message = f"""
+        Hello {customer_name},
+        
+        You requested to reset your password for the Customer Portal.
+        
+        Username: {customer_username}
+        
+        Click the link below to set a new password:
+        
+        {reset_link}
+        
+        This link is valid for 24 hours.
+        
+        If you didn't request this, please ignore this email.
+        
+        Thanks,
+        ERP Support Team
+        """
+        
+        send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+        print(f"✅ Password reset email sent to {customer_name} ({email})")
+    
+    def _send_reset_whatsapp_via_wati(self, customer_name, phone, reset_link, token):
+        """
+        Send password reset link via WATI using utility template
+        """
+        try:
+            # Clean phone number
+            clean_phone = re.sub(r'\D', '', phone)
+            if len(clean_phone) == 10:
+                clean_phone = '91' + clean_phone
+            
+            print(f"📱 Clean phone: {phone} -> {clean_phone}")
+            print(f"🔗 Reset link: {reset_link}")
+            
+            # Headers
+            auth_headers = {
+                'Authorization': self.WATI_TOKEN,
+                'Content-Type': 'application/json'
+            }
+            
+            # Step 1: Add contact
+            try:
+                add_response = requests.post(
+                    f"https://live-mt-server.wati.io/{self.WATI_INSTANCE_ID}/api/v1/addContact/{clean_phone}",
+                    headers=auth_headers,
+                    json={"name": customer_name or "Customer"},
+                    timeout=30
+                )
+                print(f"📞 Add contact response: {add_response.status_code}")
+            except Exception as e:
+                print(f"⚠️ Add contact error: {e}")
+            
+            # Step 2: Send template message
+            template_payload = {
+                "template_name": "password_reset",
+                "broadcast_name": f"password_reset_{clean_phone}_{int(timezone.now().timestamp())}",
+                "parameters": [
+                    {"name": "1", "value": customer_name},
+                    {"name": "2", "value": reset_link},
+                    {"name": "3", "value": "24"}
+                ]
+            }
+            
+            print(f"📨 Sending WhatsApp template")
+            print(f"   Template: password_reset")
+            print(f"   Phone: {clean_phone}")
+            print(f"   Parameters: {template_payload['parameters']}")
+            
+            response = requests.post(
+                f"https://live-mt-server.wati.io/{self.WATI_INSTANCE_ID}/api/v1/sendTemplateMessage?whatsappNumber={clean_phone}",
+                headers=auth_headers,
+                json=template_payload,
+                timeout=30
+            )
+            
+            print(f"📨 Response status: {response.status_code}")
+            print(f"📨 Response body: {response.text}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('result'):
+                    print(f"✅ WhatsApp template sent successfully!")
+                    print(f"   Message ID: {result.get('messageId', 'N/A')}")
+                    return True
+                else:
+                    print(f"❌ Template failed: {result.get('info', 'Unknown error')}")
+                    return False
+            else:
+                print(f"❌ WhatsApp failed: {response.status_code}")
+                return False
+            
+        except Exception as e:
+            print(f"❌ WATI error: {str(e)}")
+            return False
+
+class CustomerPasswordResetSerializer(serializers.Serializer):
+    """Serializer for resetting customer password using token"""
+    new_password = serializers.CharField(max_length=100, min_length=6, required=True)
+    confirm_password = serializers.CharField(max_length=100, required=True)
+    
+    def validate(self, attrs):
+        new_password = attrs.get('new_password')
+        confirm_password = attrs.get('confirm_password')
+        
+        if new_password != confirm_password:
+            raise serializers.ValidationError("Passwords do not match")
+        
+        if len(new_password) < 6:
+            raise serializers.ValidationError("Password must be at least 6 characters")
+        
+        return attrs
+    
+    def save(self, **kwargs):
+        """Reset customer password"""
+        token = self.context.get('token')
+        
+        try:
+            # ✅ Find the reset token by token UUID
+            reset_token = CustomerPasswordReset.objects.get(
+                token=token,
+                is_used=False
+            )
+            
+            # Check if token is expired
+            if not reset_token.is_valid():
+                raise serializers.ValidationError("Reset link has expired")
+            
+            # ✅ Get customer by customer_id (UUID field)
+            customer = Customer.objects.get(
+                customer_id=reset_token.customer_id,
+                is_deleted=False
+            )
+            
+            # Update password
+            new_password = self.validated_data.get('new_password')
+            customer.password = make_password(new_password)
+            customer.save()
+            
+            # Mark token as used
+            reset_token.is_used = True
+            reset_token.save()
+            
+            # Send confirmation email
+            self._send_confirmation_email(customer)
+            
+            return customer
+            
+        except CustomerPasswordReset.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired reset link")
+        except Customer.DoesNotExist:
+            raise serializers.ValidationError("Customer not found")
+    
+    def _send_confirmation_email(self, customer):
+        """Send confirmation that password was changed"""
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        subject = "Your Customer Portal Password Has Been Changed"
+        message = f"""
+        Hello {customer.name},
+        
+        Your customer portal password has been successfully changed.
+        
+        If you did not make this change, please contact our support team immediately.
+        
+        Thanks,
+        ERP Support Team
+        """
+        
+        send_mail(
+            subject,
+            message,
+            settings.DEFAULT_FROM_EMAIL,
+            [customer.email],
+            fail_silently=True,
+        )

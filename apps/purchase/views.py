@@ -8,6 +8,7 @@ from apps.auditlogs.utils import log_user_action
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.finance.models import JournalEntryLines
+from apps.finance.serializers import JournalEntryLinesSerializer
 from apps.finance.views import JournalEntryLinesAPIView
 from apps.purchase.filters import BillPaymentTransactionsReportFilter, PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
 from apps.purchase.filters import OutstandingPurchaseFilter, PurchaseInvoiceOrdersFilter, PurchaseOrderItemsFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter, PurchasesByVendorReportFilter, PurchasesbyVendorReportFilter, StockReplenishmentReportFilter
@@ -1866,7 +1867,84 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.core.exceptions import ObjectDoesNotExist
 import uuid, traceback
 
-
+# In your utils.py or helpers.py
+def create_journal_entry_line_for_vendor(vendor_id, account_id, amount, description, balance, payment_receipt_no, **kwargs):
+    """
+    Create a journal entry line for vendor bill payment
+    Mirrors create_journal_entry_line for customers
+    """
+    
+    # Get additional parameters
+    invoice_no = kwargs.get('invoice_no')
+    payment_method = kwargs.get('payment_method')
+    vendor_name = kwargs.get('vendor_name')
+    
+    # If description is not provided, generate one based on context
+    if not description:
+        if invoice_no and amount:
+            if balance == 0:
+                # Full payment scenario
+                description = f"Full settlement of Bill {invoice_no} - Payment #{payment_receipt_no}"
+                if payment_method:
+                    description = f"Full settlement of Bill {invoice_no} via {payment_method} - Payment #{payment_receipt_no}"
+            else:
+                # Partial payment scenario
+                description = f"Partial payment of ₹{amount:,.2f} against Bill {invoice_no} - Outstanding: ₹{balance:,.2f} - Payment #{payment_receipt_no}"
+                if payment_method:
+                    description = f"Partial payment via {payment_method} against Bill {invoice_no} - Outstanding: ₹{balance:,.2f} - Payment #{payment_receipt_no}"
+        else:
+            # Advance payment scenario
+            vendor_part = f" to {vendor_name}" if vendor_name else ""
+            description = f"Advance payment made{vendor_part} - Payment #{payment_receipt_no}"
+            if payment_method:
+                description = f"Advance payment made{vendor_part} via {payment_method} - Payment #{payment_receipt_no}"
+    
+    print(f"💰 Creating Vendor Journal Entry - Amount: {amount}, Balance: {balance}, Payment: {payment_receipt_no}")
+    print(f"📝 Description: {description}")
+    print(f"📄 Invoice No: {invoice_no}")
+    print(f"🏢 Vendor ID: {vendor_id}")
+    print(f"📒 Account ID: {account_id}")
+    
+    # Prepare entry data for vendor (NOTE: Using DEBIT for vendor payments)
+    entry_data = {
+        "vendor_id": vendor_id,  # Changed from customer_id
+        "ledger_account_id": account_id,
+        "debit": 0,  # Vendor payment is DEBIT (money going out)
+        "credit": amount,  # No credit for vendor payment
+        "description": description,
+        "balance": balance,
+        "voucher_no": payment_receipt_no,  # Using payment_receipt_no as voucher_no
+        "transaction_type": "BILL_PAYMENT",
+        "payment_method": payment_method,
+        "invoice_no": invoice_no
+    }
+    
+    # Use your JournalEntryLines serializer (create one for vendor if needed)
+    # Option 1: If you have a separate serializer for vendor journal entries
+    # from your_app.serializers import VendorJournalEntryLinesSerializer
+    serializer = JournalEntryLinesSerializer(data=entry_data)
+    
+    # Option 2: If you're using the same JournalEntryLines model but with vendor fields
+    # Make sure your JournalEntryLines model has both customer_id and vendor_id fields (nullable)
+    # from your_app.serializers import JournalEntryLinesSerializer
+    # serializer = JournalEntryLinesSerializer(data=entry_data)
+    
+    if serializer.is_valid():
+        saved_entry = serializer.save()
+        print(f"✅ Vendor Journal Entry Created Successfully with ID: {saved_entry.journal_entry_line_id}")
+        return {
+            "message": "Journal entry created successfully", 
+            "id": str(saved_entry.journal_entry_line_id),
+            "data": saved_entry
+        }
+    else:
+        print("❌ Serializer Errors:", serializer.errors)
+        return {
+            "message": "Serializer validation failed", 
+            "error": serializer.errors,
+            "data": None
+        }
+        
 class BillPaymentTransactionAPIView(APIView):
     """
     Handles retrieval of Bill Payment Transactions.
@@ -1921,32 +1999,43 @@ class BillPaymentTransactionAPIView(APIView):
     - adjustNow → one-to-one invoice payment
     - non-adjustNow → bulk payment allocation across invoices
     """
-
+    
+    """
+    Vendor Bill Payment API - Mirrors Customer Payment API exactly
+    """
+    
     def post(self, request):
         data = request.data
+        
+        # ---------------------------------------------------------------------
+        # 1️⃣ Handle vendor as STRING or OBJECT (same as customer)
+        # ---------------------------------------------------------------------
         vendor_data = data.get('vendor')
         
-        # account_data = data.get('ledger_account')
+        if not vendor_data:
+            return build_response(1, "Vendor data is required.", None, status.HTTP_400_BAD_REQUEST)
         
-        # Handle both string and dict cases
-        if isinstance(vendor_data, dict):
-            vendor_id = vendor_data.get('vendor_id') or vendor_data.get('id')
+        # If frontend sends: "vendor": "uuid"
+        if isinstance(vendor_data, str):
+            vendor_id = vendor_data.replace('-', '')
         else:
-            vendor_id = vendor_data
+            vendor_id = vendor_data.get('vendor_id')
             if not vendor_id:
-                return build_response(1, "vendor ID is required.", None, status.HTTP_400_BAD_REQUEST)
+                return build_response(1, "Vendor ID is required.", None, status.HTTP_400_BAD_REQUEST)
             vendor_id = vendor_id.replace('-', '')
-            
+        
         # Validate vendor_id
         try:
             uuid.UUID(vendor_id)
             Vendor.objects.get(pk=vendor_id)
         except (ValueError, TypeError, Vendor.DoesNotExist) as e:
             return build_response(1, "Invalid vendor ID format OR Vendor does not exist.", str(e), status.HTTP_404_NOT_FOUND)
-
-
+        
+        # ---------------------------------------------------------------------
+        # 2️⃣ Ledger Account Handling (string or object) - SAME
+        # ---------------------------------------------------------------------
         ledger_account_data = data.get('ledger_account_id')
-
+        
         if isinstance(ledger_account_data, str):
             ledger_account_id = ledger_account_data.replace('-', '')
         elif isinstance(ledger_account_data, dict):
@@ -1956,202 +2045,136 @@ class BillPaymentTransactionAPIView(APIView):
             ledger_account_id = ledger_account_id.replace('-', '')
         else:
             return build_response(1, "'ledger_account' must be a string or object.", None, status.HTTP_400_BAD_REQUEST)
-
-        # Validate FK object properly
+        
         try:
             uuid.UUID(ledger_account_id)
-            ledger_account_instance = LedgerAccounts.objects.get(pk=ledger_account_id)
+            ledger_account = LedgerAccounts.objects.get(pk=ledger_account_id)
         except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
             return build_response(1, "Invalid Ledger Account ID format OR Ledger Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
-
-        # This is the correct FK object to use everywhere
-        account_id = ledger_account_instance.ledger_account_id
-
         
-        # vendor_id = vendor_data.get('vendor_id').replace('-', '')
-        # account_id = account_data.get('account_id').replace('-', '')
+        account_id = ledger_account_id
+        
+        # ---------------------------------------------------------------------
+        # Description and basic fields
+        # ---------------------------------------------------------------------
         description = data.get('description')
         payment_method = data.get('payment_method', 'CASH')
         payment_receipt_no = data.get('payment_receipt_no')
-
-        # # Validate ledger_account_id
-        # try:
-        #     uuid.UUID(ledger_account_id)
-        #     LedgerAccounts.objects.get(pk=ledger_account_id)
-        # except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
-        #     return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
-
         
         # Fetch Pending status
         try:
             pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
         except ObjectDoesNotExist:
-            return build_response(1, "Required order status 'Pending' not found.", None, status.HTTP_404_NOT_FOUND)
-
-        # ========= Case 1: AdjustNow (specific invoice) =========
+            return build_response(1, "Required order statuses 'Pending' not found.", None, status.HTTP_404_NOT_FOUND)
+        
+        # ---------------------------------------------------------------------
+        # adjustNow BLOCK - FOR SPECIFIC BILLS (same logic as customer)
+        # ---------------------------------------------------------------------
         if data.get('adjustNow'):
             data_list = request.data
+            
             if isinstance(data_list, dict):
                 data_list = [data_list]
+            
             results = []
-
+            
             try:
                 with transaction.atomic():
-                    for data in data_list:
+                    # Store common data from original request
+                    original_payment_receipt_no = data.get('payment_receipt_no')
+                    original_payment_method = data.get('payment_method')
+                    
+                    for bill_data in data_list:
+                        # Get bill number from request data
+                        request_bill_no = bill_data.get('bill_no')
+                        print(f"🔍 Processing bill from request: {request_bill_no}")
+                        
+                        # Validate adjustNow
                         try:
-                            input_adjustNow = Decimal(data.get('adjustNow', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                            input_adjustNow = Decimal(bill_data.get('adjustNow', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
                             if input_adjustNow <= 0:
                                 return build_response(0, "Adjust Now Amount Must Be Positive.", None, status.HTTP_406_NOT_ACCEPTABLE)
                         except (ValueError, TypeError):
                             return build_response(0, "Invalid Adjust Now Amount Provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
-
+                        
+                        # Fetch purchase invoice (instead of sale invoice)
                         try:
-                            invoice = PurchaseInvoiceOrders.objects.get(invoice_no=data.get('bill_no'))
+                            invoice = PurchaseInvoiceOrders.objects.get(invoice_no=request_bill_no)
                             total_amount = invoice.total_amount
-                            bal_amt = invoice.pending_amount
+                            bal_amt = invoice.pending_amount  # Note: pending_amount (not balance_amount)
+                            print(f"✅ Found invoice in DB: {invoice}")
+                            print(f"📊 Current invoice state - Total: {invoice.total_amount}, Paid: {invoice.paid_amount}, Pending: {invoice.pending_amount}")
                         except PurchaseInvoiceOrders.DoesNotExist:
-                            return build_response(1, f"Purchase Invoice with bill no '{data.get('bill_no')}' does not exist.", None, status.HTTP_404_NOT_FOUND)
-
-                        if invoice.order_status_id.status_name != "Completed":
-                            if Decimal(bal_amt).quantize(Decimal('0.01')) == Decimal(data.get('outstanding_amount', 0)).quantize(Decimal('0.01')):
-                                outstanding_amount = Decimal(data.get('outstanding_amount', 0))
-                                if outstanding_amount == 0:
-                                    return build_response(0, "No Outstanding Amount", None, status.HTTP_400_BAD_REQUEST)
-
-                                if input_adjustNow > outstanding_amount:
-                                    allocated_amount = outstanding_amount
-                                    new_outstanding = Decimal("0.00")
-                                    remaining_payment = input_adjustNow - outstanding_amount
-                                else:
-                                    allocated_amount = input_adjustNow
-                                    new_outstanding = outstanding_amount - input_adjustNow
-                                    remaining_payment = Decimal("0.00")
-                                    
-                                # Create Payment Transaction
-                                vendor_instance = Vendor.objects.get(pk=vendor_id)
-                                ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
-
-                                bill_payment = BillPaymentTransactions.objects.create(
-                                    payment_receipt_no=payment_receipt_no,
-                                    payment_method=payment_method,
-                                    total_amount=total_amount,
-                                    amount=allocated_amount,   # ✅ Add this line
-                                    outstanding_amount=new_outstanding,
-                                    adjusted_now=allocated_amount,
-                                    payment_status=data.get('payment_status', 'Completed'),
-                                    purchase_invoice=invoice,
-                                    bill_no=invoice.invoice_no,
-                                    vendor=vendor_instance,
-                                    ledger_account_id=ledger_account_instance
-                                )
-                                
-                                #log action
-                                if new_outstanding == 0:
-                                    log_user_action(
-                                        set_db('default'),
-                                        request.user,
-                                        "CREATE & UPDATE",
-                                        "Bill Payments & Purchase Invoice",
-                                        invoice.purchase_invoice_id,
-                                        f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
-                                    )
-                                else:
-                                    log_user_action(
-                                        set_db('default'),
-                                        request.user,
-                                        "CREATE",
-                                        "Bill Payments",
-                                        bill_payment.transaction_id,
-                                        f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
-                                    )
-
-                                completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
-                                if completed_status:
-                                    PurchaseInvoiceOrders.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(order_status_id=completed_status.order_status_id)
-                                    BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
-
-                                journal_entry_line_response = JournalEntryLinesAPIView.post(
-                                    self, vendor_id, ledger_account_id, input_adjustNow, description, remaining_payment, payment_receipt_no
-                                )
-                                vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
-
-                                results.append({
-                                    "Transaction ID": str(bill_payment.transaction_id),
-                                    "Total Invoice Amount": str(total_amount),
-                                    "Allocated Amount": str(allocated_amount),
-                                    "New Outstanding": str(new_outstanding),
-                                    "Bill Payment Receipt No": bill_payment.payment_receipt_no,
-                                    "Remaining Payment": str(remaining_payment),
-                                    "account_id": str(account_id),
-                                    "journal_entry_line": journal_entry_line_response.data.get("message"),
-                                    "vendor_balance": vendor_balance_response.data.get("message")
-                                })
-                            else:
-                                return build_response(0, f"Wrong outstanding_amount given, correct amount is {bal_amt}", None, status.HTTP_400_BAD_REQUEST)
-                        else:
-                            return build_response(0, "Invoice Already Completed", None, status.HTTP_400_BAD_REQUEST)
-
-            except Exception as e:
-                traceback.print_exc()
-                return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-            return build_response(len(results), "Bill Payment transactions processed successfully", results, status.HTTP_201_CREATED)
-
-        # ========= Case 2: Non-adjustNow (bulk allocation) =========
-        else:
-            try:
-                input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                if input_amount <= 0:
-                    return build_response(0, "Amount must be positive.", None, status.HTTP_406_NOT_ACCEPTABLE)
-            except (ValueError, TypeError):
-                return build_response(0, "Invalid Amount Provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
-
-            try:
-                with transaction.atomic():
-                    # Fetch all pending purchase invoices for this vendor
-                    invoices = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"]).order_by('invoice_date')  # Oldest invoice first
-                    if not invoices.exists():
-                        return build_response(0, "No pending invoices found for this vendor.", None, status.HTTP_400_BAD_REQUEST)
-
-                    results = []
-                    remaining_payment = input_amount
-
-                    for invoice in invoices:
-                        if remaining_payment <= 0:
-                            break
-
-                        outstanding = Decimal(invoice.pending_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                        if outstanding <= 0:
-                            continue
-
-                        if remaining_payment >= outstanding:
-                            allocated_amount = outstanding
+                            return build_response(1, f"Purchase Invoice with bill no '{request_bill_no}' does not exist.", None, status.HTTP_404_NOT_FOUND)
+                        
+                        # Verify outstanding amount
+                        try:
+                            outstanding_amount = Decimal(bill_data.get('outstanding_amount', 0))
+                        except (ValueError, TypeError):
+                            return build_response(0, "Invalid Outstanding Amount Provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
+                        
+                        # Compare with database
+                        db_outstanding = Decimal(bal_amt).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                        provided_outstanding = outstanding_amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                        
+                        if db_outstanding != provided_outstanding:
+                            return build_response(
+                                0, 
+                                f"Wrong outstanding_amount for Bill {invoice.invoice_no}. "
+                                f"Provided: ₹{provided_outstanding}, Correct: ₹{db_outstanding}", 
+                                None, 
+                                status.HTTP_400_BAD_REQUEST
+                            )
+                        
+                        # Check if invoice is already completed
+                        if invoice.order_status_id.status_name == "Completed":
+                            return build_response(0, f"Bill {invoice.invoice_no} Already Completed", None, status.HTTP_400_BAD_REQUEST)
+                        
+                        if outstanding_amount == 0:
+                            return build_response(0, f"No Outstanding Amount for Bill {invoice.invoice_no}", None, status.HTTP_400_BAD_REQUEST)
+                        
+                        # Allocate payment (SAME LOGIC)
+                        if input_adjustNow > outstanding_amount:
+                            allocated_amount = outstanding_amount
                             new_outstanding = Decimal("0.00")
-                            remaining_payment -= outstanding
+                            remaining_payment = input_adjustNow - outstanding_amount
+                            payment_status = "Completed"
                         else:
-                            allocated_amount = remaining_payment
-                            new_outstanding = outstanding - remaining_payment
+                            allocated_amount = input_adjustNow
+                            new_outstanding = outstanding_amount - input_adjustNow
                             remaining_payment = Decimal("0.00")
-
-                        # Create Payment Transaction
+                            payment_status = "Partial"
+                        
+                        # Create Bill Payment Transaction
                         vendor_instance = Vendor.objects.get(pk=vendor_id)
                         ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
                         
                         bill_payment = BillPaymentTransactions.objects.create(
-                            payment_receipt_no=payment_receipt_no,
-                            payment_method=payment_method,
-                            total_amount=invoice.total_amount,
-                            amount=allocated_amount,   # ✅ Add this line
+                            payment_receipt_no=original_payment_receipt_no,
+                            payment_method=original_payment_method,
+                            total_amount=total_amount,
                             outstanding_amount=new_outstanding,
                             adjusted_now=allocated_amount,
-                            payment_status='Completed' if new_outstanding == 0 else 'Pending',
+                            payment_status=payment_status,
                             purchase_invoice=invoice,
                             bill_no=invoice.invoice_no,
                             vendor=vendor_instance,
                             ledger_account_id=ledger_account_instance
                         )
                         
-                        #log action
+                        print(f"✅ Created bill payment transaction for Invoice: {invoice.invoice_no}")
+                        
+                        # ✅ Update the invoice using model method (CREATE THIS METHOD)
+                        invoice.update_paid_amount_pending_amount_after_bill_payment(
+                            payment_amount=allocated_amount,
+                            outstanding_amount=new_outstanding
+                        )
+                        
+                        # Refresh invoice from database
+                        invoice.refresh_from_db()
+                        print(f"📊 Updated invoice state - Total: {invoice.total_amount}, Paid: {invoice.paid_amount}, Pending: {invoice.pending_amount}")
+                        
+                        # Log action
                         if new_outstanding == 0:
                             log_user_action(
                                 set_db('default'),
@@ -2159,63 +2182,547 @@ class BillPaymentTransactionAPIView(APIView):
                                 "CREATE & UPDATE",
                                 "Bill Payments & Purchase Invoice",
                                 invoice.purchase_invoice_id,
-                                f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
+                                f"{bill_payment.payment_receipt_no} - Payment of ₹{allocated_amount} made & {invoice.invoice_no} - Bill marked as Completed by {request.user.username}"
                             )
+                            
+                            # Update invoice status to Completed
+                            completed_status = OrderStatuses.objects.using('default').filter(status_name='Completed').first()
+                            if completed_status:
+                                PurchaseInvoiceOrders.objects.filter(
+                                    purchase_invoice_id=invoice.purchase_invoice_id
+                                ).update(order_status_id=completed_status.order_status_id)
+                                
+                                BillPaymentTransactions.objects.filter(
+                                    purchase_invoice_id=invoice.purchase_invoice_id
+                                ).update(payment_status="Completed")
                         else:
                             log_user_action(
                                 set_db('default'),
                                 request.user,
                                 "CREATE",
-                                "Bill Payments",
+                                "Bill Payment Transaction",
                                 bill_payment.transaction_id,
-                                f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
+                                f"{bill_payment.payment_receipt_no} - Partial payment of ₹{allocated_amount} created by {request.user.username}"
                             )
                         
-                        # invoice.update_paid_amount_and_pending_amount_after_bill_payment(
-                        #     payment_amount=allocated_amount,
-                        #     outstanding_amount=new_outstanding
-                        # )
-
-
-                        # if invoice.pending_amount == 0:
-                        #     completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
-                        #     if completed_status:
-                        #         invoice.order_status_id = completed_status
-                        #         BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
-
-                        # invoice.save()
-
-                        if new_outstanding == 0:
-                            completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
-                            if completed_status:
-                                PurchaseInvoiceOrders.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(order_status_id=completed_status.order_status_id)
-                                BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
-
+                        # ✅ Create journal entry line with formatted description
+                        description = f"Bill payment {original_payment_receipt_no} for Invoice {invoice.invoice_no}"
+                        print(f"📝 Creating journal entry for Bill: {invoice.invoice_no} with description: {description}")
+                        
+                        # Create journal entry for VENDOR (not customer)
+                        journal_entry_line_response = create_journal_entry_line_for_vendor(
+                            vendor_id,
+                            account_id,
+                            allocated_amount,
+                            description,
+                            new_outstanding,
+                            original_payment_receipt_no,
+                            invoice_no=invoice.invoice_no,
+                            payment_method=original_payment_method,
+                            vendor_name=vendor_instance.name
+                        )
+                        
+                        # Update vendor balance with remaining payment (if any)
+                        if remaining_payment > 0:
+                            vendor_balance_response = VendorBalanceView.post(
+                                self, request, vendor_id, remaining_payment
+                            )
+                            balance_message = vendor_balance_response.data.get("message")
+                        else:
+                            balance_message = "No remaining payment"
+                        
                         results.append({
                             "Transaction ID": str(bill_payment.transaction_id),
-                            "Invoice No": invoice.invoice_no,
-                            "Total Invoice Amount": str(invoice.total_amount),
+                            "Bill No": invoice.invoice_no,
+                            "Total Bill Amount": str(total_amount),
                             "Allocated Amount": str(allocated_amount),
+                            "Previous Outstanding": str(outstanding_amount),
                             "New Outstanding": str(new_outstanding),
+                            "Payment Receipt No": bill_payment.payment_receipt_no,
+                            "Payment Status": payment_status,
                             "Remaining Payment": str(remaining_payment),
-                            "Payment Status": bill_payment.payment_status,
+                            "journal_entry": journal_entry_line_response.get("message"),
+                            "vendor_balance": balance_message
                         })
-
-                    # Post journal + update balance
-                    journal_entry_line_response = JournalEntryLinesAPIView.post(
-                        self, vendor_id, ledger_account_id, input_amount, description, remaining_payment, payment_receipt_no
-                    )
-                    vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
-
+                    
+                    return build_response(len(results), "Bill payment transactions processed successfully", results, status.HTTP_201_CREATED)
+                    
             except Exception as e:
                 traceback.print_exc()
-                return build_response(1, "Error processing bulk bill payments", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        # ---------------------------------------------------------------------
+        # AMOUNT (normal flow) BLOCK - BULK ALLOCATION TO OLDEST BILLS
+        # ---------------------------------------------------------------------
+        try:
+            input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            if input_amount <= 0:
+                return build_response(1, "Amount must be positive", None, status.HTTP_406_NOT_ACCEPTABLE)
+        except (ValueError, TypeError):
+            return build_response(1, "Invalid amount provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
+        
+        # Get pending bills (not completed or cancelled)
+        invoices = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id).exclude(
+            order_status_id__status_name__in=["Completed", "Cancelled"]
+        ).order_by('invoice_date')
+        
+        if not invoices.exists():
+            return build_response(0, "No pending bills found for this vendor.", None, status.HTTP_400_BAD_REQUEST)
+        
+        remaining_amount = input_amount
+        payment_transactions_created = []
+        
+        # Get pending invoices
+        pending_invoices = PurchaseInvoiceOrders.objects.filter(
+            vendor_id=vendor_id,
+            order_status_id=pending_status
+        ).order_by('invoice_date')
+        
+        pending_invoice_ids = pending_invoices.values_list('purchase_invoice_id', flat=True)
+        
+        # Get existing payments for these invoices
+        invoices_with_partial_payments = BillPaymentTransactions.objects.filter(
+            purchase_invoice_id__in=pending_invoice_ids,
+            vendor_id=vendor_id
+        ).values('purchase_invoice_id').annotate(total_paid=Sum('amount')).order_by('purchase_invoice_id')
+        
+        invoice_dict = {inv.purchase_invoice_id: inv for inv in pending_invoices}
+        
+        for ip in invoices_with_partial_payments:
+            purchase_invoice_id = ip['purchase_invoice_id']
+            if purchase_invoice_id in invoice_dict:
+                invoice_dict[purchase_invoice_id].total_paid = ip['total_paid']
+            else:
+                invoice_dict[purchase_invoice_id] = PurchaseInvoiceOrders.objects.get(purchase_invoice_id=purchase_invoice_id)
+                invoice_dict[purchase_invoice_id].total_paid = ip['total_paid']
+        
+        invoices_sorted = sorted(invoice_dict.values(), key=lambda x: x.created_at)
+        
+        if invoices_sorted:
+            with transaction.atomic():
+                for purchase_invoice in invoices_sorted:
+                    if remaining_amount <= 0:
+                        break
+                    
+                    total_paid = getattr(purchase_invoice, 'total_paid', Decimal('0.00')) or Decimal('0.00')
+                    
+                    payment_transaction_latest = BillPaymentTransactions.objects.filter(
+                        purchase_invoice_id=purchase_invoice.purchase_invoice_id
+                    ).order_by('-created_at').first()
+                    
+                    if payment_transaction_latest:
+                        current_outstanding = max(payment_transaction_latest.outstanding_amount, Decimal('0.00'))
+                    else:
+                        current_outstanding = max(purchase_invoice.total_amount - total_paid, Decimal('0.00'))
+                    
+                    if current_outstanding <= 0:
+                        continue
+                    
+                    allocated_amount = min(remaining_amount, current_outstanding)
+                    new_outstanding = current_outstanding - allocated_amount
+                    remaining_amount -= allocated_amount
+                    
+                    vendor_instance = Vendor.objects.get(pk=vendor_id)
+                    ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+                    
+                    payment_txn = BillPaymentTransactions.objects.create(
+                        payment_receipt_no=data.get('payment_receipt_no'),
+                        payment_method=data.get('payment_method'),
+                        cheque_no=data.get('cheque_no'),
+                        total_amount=purchase_invoice.total_amount,
+                        amount=allocated_amount,
+                        outstanding_amount=new_outstanding,
+                        payment_status=data.get('payment_status', 'Pending'),
+                        vendor=vendor_instance,
+                        purchase_invoice_id=purchase_invoice.purchase_invoice_id,
+                        bill_no=purchase_invoice.invoice_no,
+                        ledger_account_id=ledger_account_instance
+                    )
+                    
+                    # Update invoice using model method
+                    purchase_invoice.update_paid_amount_pending_amount_after_bill_payment(
+                        payment_amount=allocated_amount,
+                        outstanding_amount=new_outstanding
+                    )
+                    
+                    # Refresh invoice
+                    purchase_invoice.refresh_from_db()
+                    
+                    # Log action
+                    if new_outstanding == 0:
+                        log_user_action(
+                            set_db('default'),
+                            request.user,
+                            "CREATE & UPDATE",
+                            "Bill Payments & Purchase Invoice",
+                            purchase_invoice.purchase_invoice_id,
+                            f"{payment_txn.payment_receipt_no} - Payment transaction record created & {purchase_invoice.invoice_no} - Bill marked as Completed by {request.user.username}"
+                        )
+                    else:
+                        log_user_action(
+                            set_db('default'),
+                            request.user,
+                            "CREATE",
+                            "Bill Payment Transaction",
+                            payment_txn.transaction_id,
+                            f"{payment_txn.payment_receipt_no} - Payment created by {request.user.username}"
+                        )
+                    
+                    payment_transactions_created.append(payment_txn)
+                    
+                    if new_outstanding == Decimal('0.00'):
+                        completed_status = OrderStatuses.objects.using('default').filter(status_name='Completed').first()
+                        if completed_status:
+                            PurchaseInvoiceOrders.objects.filter(
+                                purchase_invoice_id=purchase_invoice.purchase_invoice_id
+                            ).update(order_status_id=completed_status.order_status_id)
+                            
+                            BillPaymentTransactions.objects.filter(
+                                purchase_invoice_id=purchase_invoice.purchase_invoice_id
+                            ).update(payment_status="Completed")
+                
+                # Create journal entry
+                if len(payment_transactions_created) == 1:
+                    invoice = payment_transactions_created[0].purchase_invoice
+                    description = f"Bill payment {data.get('payment_receipt_no')} for Invoice {invoice.invoice_no}"
+                else:
+                    invoice_nos = [txn.bill_no for txn in payment_transactions_created]
+                    if len(invoice_nos) <= 3:
+                        description = f"Bill payment {data.get('payment_receipt_no')} for Invoices: {', '.join(invoice_nos)}"
+                    else:
+                        description = f"Bill payment {data.get('payment_receipt_no')} for {len(invoice_nos)} invoices"
+                
+                journal_entry_line_response = create_journal_entry_line_for_vendor(
+                    vendor_id,
+                    account_id,
+                    input_amount,
+                    description,
+                    remaining_amount,
+                    data.get('payment_receipt_no')
+                )
+                
+                vendor_balance_response = VendorBalanceView.post(
+                    self, request, vendor_id, remaining_amount
+                )
+                
+                response_data = {
+                    "payment_transactions": [
+                        {
+                            "Transaction ID": str(txn.transaction_id),
+                            "Payment Receipt No": txn.payment_receipt_no,
+                            "Total Bill Amount": str(txn.total_amount),
+                            "Amount": str(txn.amount),
+                            "Outstanding Amount": str(txn.outstanding_amount),
+                            "Purchase Invoice Id": txn.purchase_invoice_id,
+                            "Bill No": txn.bill_no,
+                            "vendor_id": str(vendor_id),
+                            "account_id": str(account_id),
+                            "journal_entry_line": journal_entry_line_response.get("message"),
+                            "vendor_balance": vendor_balance_response.data.get("message")
+                        }
+                        for txn in payment_transactions_created
+                    ],
+                    "remaining_payment": str(remaining_amount)
+                }
+                
+                return build_response(len(payment_transactions_created), "Bill payment transactions processed successfully", response_data, status.HTTP_201_CREATED)
+        else:
+            return build_response(0, "No pending or outstanding bills for this vendor", None, status.HTTP_400_BAD_REQUEST)
 
-            return build_response(len(results), "Bill Payment transactions processed successfully", {
-                "processed_invoices": results,
-                "journal_entry_line": journal_entry_line_response.data.get("message"),
-                "vendor_balance": vendor_balance_response.data.get("message")
-            }, status.HTTP_201_CREATED)
+    # def post(self, request):
+    #     data = request.data
+    #     vendor_data = data.get('vendor')
+        
+    #     # account_data = data.get('ledger_account')
+        
+    #     # Handle both string and dict cases
+    #     if isinstance(vendor_data, dict):
+    #         vendor_id = vendor_data.get('vendor_id') or vendor_data.get('id')
+    #     else:
+    #         vendor_id = vendor_data
+    #         if not vendor_id:
+    #             return build_response(1, "vendor ID is required.", None, status.HTTP_400_BAD_REQUEST)
+    #         vendor_id = vendor_id.replace('-', '')
+            
+    #     # Validate vendor_id
+    #     try:
+    #         uuid.UUID(vendor_id)
+    #         Vendor.objects.get(pk=vendor_id)
+    #     except (ValueError, TypeError, Vendor.DoesNotExist) as e:
+    #         return build_response(1, "Invalid vendor ID format OR Vendor does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+
+    #     ledger_account_data = data.get('ledger_account_id')
+
+    #     if isinstance(ledger_account_data, str):
+    #         ledger_account_id = ledger_account_data.replace('-', '')
+    #     elif isinstance(ledger_account_data, dict):
+    #         ledger_account_id = ledger_account_data.get("ledger_account_id")
+    #         if not ledger_account_id:
+    #             return build_response(1, "Ledger Account ID is required.", None, status.HTTP_400_BAD_REQUEST)
+    #         ledger_account_id = ledger_account_id.replace('-', '')
+    #     else:
+    #         return build_response(1, "'ledger_account' must be a string or object.", None, status.HTTP_400_BAD_REQUEST)
+
+    #     # Validate FK object properly
+    #     try:
+    #         uuid.UUID(ledger_account_id)
+    #         ledger_account_instance = LedgerAccounts.objects.get(pk=ledger_account_id)
+    #     except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+    #         return build_response(1, "Invalid Ledger Account ID format OR Ledger Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+    #     # This is the correct FK object to use everywhere
+    #     account_id = ledger_account_instance.ledger_account_id
+
+        
+    #     # vendor_id = vendor_data.get('vendor_id').replace('-', '')
+    #     # account_id = account_data.get('account_id').replace('-', '')
+    #     description = data.get('description')
+    #     payment_method = data.get('payment_method', 'CASH')
+    #     payment_receipt_no = data.get('payment_receipt_no')
+
+    #     # # Validate ledger_account_id
+    #     # try:
+    #     #     uuid.UUID(ledger_account_id)
+    #     #     LedgerAccounts.objects.get(pk=ledger_account_id)
+    #     # except (ValueError, TypeError, LedgerAccounts.DoesNotExist) as e:
+    #     #     return build_response(1, "Invalid account ID format OR Chart Of Account does not exist.", str(e), status.HTTP_404_NOT_FOUND)
+
+        
+    #     # Fetch Pending status
+    #     try:
+    #         pending_status = OrderStatuses.objects.get(status_name="Pending").order_status_id
+    #     except ObjectDoesNotExist:
+    #         return build_response(1, "Required order status 'Pending' not found.", None, status.HTTP_404_NOT_FOUND)
+
+    #     # ========= Case 1: AdjustNow (specific invoice) =========
+    #     if data.get('adjustNow'):
+    #         data_list = request.data
+    #         if isinstance(data_list, dict):
+    #             data_list = [data_list]
+    #         results = []
+
+    #         try:
+    #             with transaction.atomic():
+    #                 for data in data_list:
+    #                     try:
+    #                         input_adjustNow = Decimal(data.get('adjustNow', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    #                         if input_adjustNow <= 0:
+    #                             return build_response(0, "Adjust Now Amount Must Be Positive.", None, status.HTTP_406_NOT_ACCEPTABLE)
+    #                     except (ValueError, TypeError):
+    #                         return build_response(0, "Invalid Adjust Now Amount Provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
+
+    #                     try:
+    #                         invoice = PurchaseInvoiceOrders.objects.get(invoice_no=data.get('bill_no'))
+    #                         total_amount = invoice.total_amount
+    #                         bal_amt = invoice.pending_amount
+    #                     except PurchaseInvoiceOrders.DoesNotExist:
+    #                         return build_response(1, f"Purchase Invoice with bill no '{data.get('bill_no')}' does not exist.", None, status.HTTP_404_NOT_FOUND)
+
+    #                     if invoice.order_status_id.status_name != "Completed":
+    #                         if Decimal(bal_amt).quantize(Decimal('0.01')) == Decimal(data.get('outstanding_amount', 0)).quantize(Decimal('0.01')):
+    #                             outstanding_amount = Decimal(data.get('outstanding_amount', 0))
+    #                             if outstanding_amount == 0:
+    #                                 return build_response(0, "No Outstanding Amount", None, status.HTTP_400_BAD_REQUEST)
+
+    #                             if input_adjustNow > outstanding_amount:
+    #                                 allocated_amount = outstanding_amount
+    #                                 new_outstanding = Decimal("0.00")
+    #                                 remaining_payment = input_adjustNow - outstanding_amount
+    #                             else:
+    #                                 allocated_amount = input_adjustNow
+    #                                 new_outstanding = outstanding_amount - input_adjustNow
+    #                                 remaining_payment = Decimal("0.00")
+                                    
+    #                             # Create Payment Transaction
+    #                             vendor_instance = Vendor.objects.get(pk=vendor_id)
+    #                             ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+
+    #                             bill_payment = BillPaymentTransactions.objects.create(
+    #                                 payment_receipt_no=payment_receipt_no,
+    #                                 payment_method=payment_method,
+    #                                 total_amount=total_amount,
+    #                                 amount=allocated_amount,   # ✅ Add this line
+    #                                 outstanding_amount=new_outstanding,
+    #                                 adjusted_now=allocated_amount,
+    #                                 payment_status=data.get('payment_status', 'Completed'),
+    #                                 purchase_invoice=invoice,
+    #                                 bill_no=invoice.invoice_no,
+    #                                 vendor=vendor_instance,
+    #                                 ledger_account_id=ledger_account_instance
+    #                             )
+                                
+    #                             #log action
+    #                             if new_outstanding == 0:
+    #                                 log_user_action(
+    #                                     set_db('default'),
+    #                                     request.user,
+    #                                     "CREATE & UPDATE",
+    #                                     "Bill Payments & Purchase Invoice",
+    #                                     invoice.purchase_invoice_id,
+    #                                     f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
+    #                                 )
+    #                             else:
+    #                                 log_user_action(
+    #                                     set_db('default'),
+    #                                     request.user,
+    #                                     "CREATE",
+    #                                     "Bill Payments",
+    #                                     bill_payment.transaction_id,
+    #                                     f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
+    #                                 )
+
+    #                             completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
+    #                             if completed_status:
+    #                                 PurchaseInvoiceOrders.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(order_status_id=completed_status.order_status_id)
+    #                                 BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
+
+    #                             journal_entry_line_response = JournalEntryLinesAPIView.post(
+    #                                 self, vendor_id, ledger_account_id, input_adjustNow, description, remaining_payment, payment_receipt_no
+    #                             )
+    #                             vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
+
+    #                             results.append({
+    #                                 "Transaction ID": str(bill_payment.transaction_id),
+    #                                 "Total Invoice Amount": str(total_amount),
+    #                                 "Allocated Amount": str(allocated_amount),
+    #                                 "New Outstanding": str(new_outstanding),
+    #                                 "Bill Payment Receipt No": bill_payment.payment_receipt_no,
+    #                                 "Remaining Payment": str(remaining_payment),
+    #                                 "account_id": str(account_id),
+    #                                 "journal_entry_line": journal_entry_line_response.data.get("message"),
+    #                                 "vendor_balance": vendor_balance_response.data.get("message")
+    #                             })
+    #                         else:
+    #                             return build_response(0, f"Wrong outstanding_amount given, correct amount is {bal_amt}", None, status.HTTP_400_BAD_REQUEST)
+    #                     else:
+    #                         return build_response(0, "Invoice Already Completed", None, status.HTTP_400_BAD_REQUEST)
+
+    #         except Exception as e:
+    #             traceback.print_exc()
+    #             return build_response(1, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         return build_response(len(results), "Bill Payment transactions processed successfully", results, status.HTTP_201_CREATED)
+
+    #     # ========= Case 2: Non-adjustNow (bulk allocation) =========
+    #     else:
+    #         try:
+    #             input_amount = Decimal(data.get('amount', 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    #             if input_amount <= 0:
+    #                 return build_response(0, "Amount must be positive.", None, status.HTTP_406_NOT_ACCEPTABLE)
+    #         except (ValueError, TypeError):
+    #             return build_response(0, "Invalid Amount Provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
+
+    #         try:
+    #             with transaction.atomic():
+    #                 # Fetch all pending purchase invoices for this vendor
+    #                 invoices = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"]).order_by('invoice_date')  # Oldest invoice first
+    #                 if not invoices.exists():
+    #                     return build_response(0, "No pending invoices found for this vendor.", None, status.HTTP_400_BAD_REQUEST)
+
+    #                 results = []
+    #                 remaining_payment = input_amount
+
+    #                 for invoice in invoices:
+    #                     if remaining_payment <= 0:
+    #                         break
+
+    #                     outstanding = Decimal(invoice.pending_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    #                     if outstanding <= 0:
+    #                         continue
+
+    #                     if remaining_payment >= outstanding:
+    #                         allocated_amount = outstanding
+    #                         new_outstanding = Decimal("0.00")
+    #                         remaining_payment -= outstanding
+    #                     else:
+    #                         allocated_amount = remaining_payment
+    #                         new_outstanding = outstanding - remaining_payment
+    #                         remaining_payment = Decimal("0.00")
+
+    #                     # Create Payment Transaction
+    #                     vendor_instance = Vendor.objects.get(pk=vendor_id)
+    #                     ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+                        
+    #                     bill_payment = BillPaymentTransactions.objects.create(
+    #                         payment_receipt_no=payment_receipt_no,
+    #                         payment_method=payment_method,
+    #                         total_amount=invoice.total_amount,
+    #                         amount=allocated_amount,   # ✅ Add this line
+    #                         outstanding_amount=new_outstanding,
+    #                         adjusted_now=allocated_amount,
+    #                         payment_status='Completed' if new_outstanding == 0 else 'Pending',
+    #                         purchase_invoice=invoice,
+    #                         bill_no=invoice.invoice_no,
+    #                         vendor=vendor_instance,
+    #                         ledger_account_id=ledger_account_instance
+    #                     )
+                        
+    #                     #log action
+    #                     if new_outstanding == 0:
+    #                         log_user_action(
+    #                             set_db('default'),
+    #                             request.user,
+    #                             "CREATE & UPDATE",
+    #                             "Bill Payments & Purchase Invoice",
+    #                             invoice.purchase_invoice_id,
+    #                             f"{bill_payment.payment_receipt_no} - Payment transaction record created & {invoice.invoice_no} - Invoice marked as Completed by {request.user.username}"
+    #                         )
+    #                     else:
+    #                         log_user_action(
+    #                             set_db('default'),
+    #                             request.user,
+    #                             "CREATE",
+    #                             "Bill Payments",
+    #                             bill_payment.transaction_id,
+    #                             f"{bill_payment.payment_receipt_no} - Payment created by {request.user.username}"
+    #                         )
+                        
+    #                     # invoice.update_paid_amount_and_pending_amount_after_bill_payment(
+    #                     #     payment_amount=allocated_amount,
+    #                     #     outstanding_amount=new_outstanding
+    #                     # )
+
+
+    #                     # if invoice.pending_amount == 0:
+    #                     #     completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
+    #                     #     if completed_status:
+    #                     #         invoice.order_status_id = completed_status
+    #                     #         BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
+
+    #                     # invoice.save()
+
+    #                     if new_outstanding == 0:
+    #                         completed_status = OrderStatuses.objects.filter(status_name='Completed').first()
+    #                         if completed_status:
+    #                             PurchaseInvoiceOrders.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(order_status_id=completed_status.order_status_id)
+    #                             BillPaymentTransactions.objects.filter(purchase_invoice_id=invoice.purchase_invoice_id).update(payment_status="Completed")
+
+    #                     results.append({
+    #                         "Transaction ID": str(bill_payment.transaction_id),
+    #                         "Invoice No": invoice.invoice_no,
+    #                         "Total Invoice Amount": str(invoice.total_amount),
+    #                         "Allocated Amount": str(allocated_amount),
+    #                         "New Outstanding": str(new_outstanding),
+    #                         "Remaining Payment": str(remaining_payment),
+    #                         "Payment Status": bill_payment.payment_status,
+    #                     })
+
+    #                 # Post journal + update balance
+    #                 journal_entry_line_response = JournalEntryLinesAPIView.post(
+    #                     self, vendor_id, ledger_account_id, input_amount, description, remaining_payment, payment_receipt_no
+    #                 )
+    #                 vendor_balance_response = VendorBalanceView.post(self, request, vendor_id, remaining_payment)
+
+    #         except Exception as e:
+    #             traceback.print_exc()
+    #             return build_response(1, "Error processing bulk bill payments", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    #         return build_response(len(results), "Bill Payment transactions processed successfully", {
+    #             "processed_invoices": results,
+    #             "journal_entry_line": journal_entry_line_response.data.get("message"),
+    #             "vendor_balance": vendor_balance_response.data.get("message")
+    #         }, status.HTTP_201_CREATED)
             
     def put(self, request, transaction_id):
         with transaction.atomic():
