@@ -594,10 +594,13 @@ def generate_ledger_group_code(parent_group_id=None):
     
     if parent_group_id is None:
         # Root level - increment by 10000000
+        # Cast to integer for ordering — string sort breaks above 9 root groups
+        from django.db.models.functions import Cast
+        from django.db.models import IntegerField
         last_root = LedgerGroups.objects.filter(
             under_group_id__isnull=True,
             code__isnull=False
-        ).order_by('-code').first()
+        ).annotate(code_int=Cast('code', IntegerField())).order_by('-code_int').first()
         
         if last_root and last_root.code:
             try:
@@ -638,11 +641,13 @@ def generate_ledger_group_code(parent_group_id=None):
             else:  # Deeper levels
                 increment = 10
             
-            # Get last sibling code
+            # Get last sibling code — cast to integer to avoid string sort issues
+            from django.db.models.functions import Cast
+            from django.db.models import IntegerField
             last_sibling = LedgerGroups.objects.filter(
                 under_group_id=parent_group_id,
                 code__isnull=False
-            ).order_by('-code').first()
+            ).annotate(code_int=Cast('code', IntegerField())).order_by('-code_int').first()
             
             if last_sibling and last_sibling.code:
                 try:
@@ -685,11 +690,13 @@ def generate_ledger_account_code(ledger_group_id):
             
         base_code = int(ledger_group.code)
         
-        # Get the last account code under this group
+        # Get the last account code under this group — cast to integer to avoid string sort issues
+        from django.db.models.functions import Cast
+        from django.db.models import IntegerField
         last_account = LedgerAccounts.objects.filter(
             ledger_group_id=ledger_group_id,
             code__isnull=False
-        ).order_by('-code').first()
+        ).annotate(code_int=Cast('code', IntegerField())).order_by('-code_int').first()
         
         if last_account and last_account.code:
             try:

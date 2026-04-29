@@ -348,11 +348,13 @@ CREATE TABLE IF NOT EXISTS ledger_groups (
     ledger_group_id CHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     code VARCHAR(50),
-    inactive BOOLEAN,
-    under_group VARCHAR(255),
-    nature ENUM('Asset', 'Liability', 'Income', 'Expense') NOT NULL,
+    inactive BOOLEAN DEFAULT FALSE,
+    under_group_id CHAR(36) DEFAULT NULL,
+    nature VARCHAR(50) NOT NULL DEFAULT 'Asset',
+    is_deleted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (under_group_id) REFERENCES ledger_groups(ledger_group_id) ON DELETE SET NULL
 );
 
 /* Ledger Accounts Table */

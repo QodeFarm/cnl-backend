@@ -123,6 +123,7 @@ class JournalEntryLines(models.Model):
     customer_id  = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, db_column='customer_id')
     vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, db_column='vendor_id')
     balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
+    entry_date = models.DateField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -453,7 +454,9 @@ class JournalVoucher(OrderNumberMixin):
     total_credit = models.DecimalField(max_digits=18, decimal_places=2, default=0.00)
     
     # Status tracking
-    is_posted = models.BooleanField(default=False)  # Whether posted to ledger
+    is_posted = models.BooleanField(default=False)  # Kept for backward compat; always True after creation
+    STATUS_CHOICES = [('Submitted', 'Submitted'), ('Cancelled', 'Cancelled')]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Submitted')
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

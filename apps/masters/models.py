@@ -70,19 +70,40 @@ class Statuses(models.Model):
 class LedgerGroups(models.Model):
     NATURE_CHOICES = [
         ('Asset', 'Asset'),
+        ('FixedAsset', 'Fixed Asset'),
+        ('AccountsReceivable', 'Accounts Receivable'),
+        ('CashBank', 'Cash / Bank'),
+        ('CurrentAsset', 'Current Asset'),
         ('Liability', 'Liability'),
+        ('AccountsPayable', 'Accounts Payable'),
+        ('CurrentLiability', 'Current Liability'),
         ('Income', 'Income'),
+        ('Sales', 'Sales'),
         ('Expense', 'Expense'),
+        ('DirectExpense', 'Direct Expense'),
+        ('Purchase', 'Purchase'),
     ]
-    
+
+    # PURPOSE_CHOICES: system-level classification used for context-aware filtering.
+    # Unlike 'name' (which users can rename), 'purpose' is a stable internal flag —
+    # exactly how AlignBooks/Tally/SAP filter ledger accounts per context.
+    PURPOSE_CHOICES = [
+        ('AccountsReceivable', 'Accounts Receivable'),  # Customer debtors (Sundry Debtors etc.)
+        ('AccountsPayable', 'Accounts Payable'),         # Vendor creditors (Sundry Creditors etc.)
+        ('Cash', 'Cash'),                                # Physical cash accounts
+        ('Bank', 'Bank'),                                # Bank accounts
+        ('General', 'General'),                          # All other accounts (default)
+    ]
+
     ledger_group_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     code = models.CharField(max_length=50, null=True, default=None)
     inactive = models.BooleanField(default=False, null=True)
-    under_group_id = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, 
-                                      default=None, related_name='child_groups', 
+    under_group_id = models.ForeignKey('self', on_delete=models.SET_NULL, null=True,
+                                      default=None, related_name='child_groups',
                                       db_column='under_group_id')
     nature = models.CharField(max_length=50, choices=NATURE_CHOICES, default='Asset')
+    purpose = models.CharField(max_length=50, choices=PURPOSE_CHOICES, default='General')
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

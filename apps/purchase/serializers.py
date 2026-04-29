@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from django.db.models import Sum
 from .models import *
 from .serializers import *
 from apps.vendor.serializers import ModVendorSerializer,ModVendorAgentSerializer,VendorAddressSerializer,ModVendorPaymentTermsSerializer
@@ -138,35 +139,28 @@ class PurchaseOrdersOptionsSerializer(serializers.ModelSerializer):
         return serializer.data
     
     def get_purchase_order_details(self, obj):
-        purchase_order_items = PurchaseorderItems.objects.filter(purchase_order_id=obj.purchase_order_id)
-        
-        amount = 0
-        
-        for purchaseorderamount in purchase_order_items:
-            item_amount = purchaseorderamount.amount
-            if item_amount is not None:
-                amount += item_amount
-        
-        return amount
-    
+        result = PurchaseorderItems.objects.using(obj._state.db).filter(
+            purchase_order_id=obj.purchase_order_id
+        ).aggregate(total=Sum('amount'))
+        return result['total'] or 0
+
     def get_amount(self, obj):
         return self.get_purchase_order_details(obj)
-    
+
     def get_products(self, obj):
-        # Fetch sale order items and their associated products
-        purchase_order_items = PurchaseorderItems.objects.filter(purchase_order_id=obj.purchase_order_id)
+        # select_related('product_id') eliminates per-item lazy FK queries
+        purchase_order_items = PurchaseorderItems.objects.using(obj._state.db).filter(
+            purchase_order_id=obj.purchase_order_id
+        ).select_related('product_id')
         products = []
-        
         for item in purchase_order_items:
-            product = item.product_id 
+            product = item.product_id
             if product:
-                product_data = {
+                products.append({
                     "product_id": product.product_id,
                     "product_name": product.name,
                     "quantity": item.quantity,
-                }
-                products.append(product_data)
-        
+                })
         return products
 
 class PurchaseReturnOrdersOptionsSerializer(serializers.ModelSerializer):

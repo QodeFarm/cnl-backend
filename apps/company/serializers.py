@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Companies, Branches, BranchBankDetails 
+from .models import Companies, Branches, BranchBankDetails, CompanySettings
 from apps.masters.serializers import ModCitySerializer, ModStateSerializer, ModCountrySerializer, ModStatusesSerializer 
 import os
 from django.conf import settings
@@ -52,4 +52,20 @@ class BranchBankDetailsSerializer(serializers.ModelSerializer):
     branch = ModBranchesSerializer(source='branch_id', read_only = True)
     class Meta:
         model = BranchBankDetails
+        fields = '__all__'
+
+
+class CompanySettingsSerializer(serializers.ModelSerializer):
+    # Read-only display names — used by the frontend to show the selected account name
+    sales_account_name         = serializers.CharField(source='sales_ledger_account.name',    read_only=True, default=None)
+    purchase_account_name      = serializers.CharField(source='purchase_ledger_account.name', read_only=True, default=None)
+    receivables_account_name   = serializers.CharField(source='receivables_account.name',     read_only=True, default=None)
+    payables_account_name      = serializers.CharField(source='payables_account.name',        read_only=True, default=None)
+    cash_account_name          = serializers.CharField(source='cash_account.name',            read_only=True, default=None)
+    bank_account_name          = serializers.CharField(source='bank_account.name',            read_only=True, default=None)
+    discount_account_name      = serializers.CharField(source='discount_account.name',        read_only=True, default=None)
+    round_off_account_name     = serializers.CharField(source='round_off_account.name',       read_only=True, default=None)
+
+    class Meta:
+        model  = CompanySettings
         fields = '__all__'

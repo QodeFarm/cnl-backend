@@ -60,8 +60,9 @@ class LedgerGroupsFilters(filters.FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')
     code = filters.CharFilter(lookup_expr='exact')
     inactive = filters.BooleanFilter()
-    under_group = filters.CharFilter(lookup_expr='exact')
-    nature = filters.CharFilter(lookup_expr='exact')
+    ledger_group_id = filters.CharFilter(field_name='ledger_group_id', lookup_expr='exact')
+    under_group = filters.CharFilter(field_name='under_group_id__name', lookup_expr='icontains')
+    nature = filters.CharFilter(lookup_expr='icontains')
     s = filters.CharFilter(method='filter_by_search', label="Search")
     sort = filters.CharFilter(method='filter_by_sort', label="Sort")
     page = filters.NumberFilter(method='filter_by_page', label="Page")
@@ -79,10 +80,10 @@ class LedgerGroupsFilters(filters.FilterSet):
 
     def filter_by_limit(self, queryset, name, value):
         return filter_by_limit(self, queryset, value)
-    
+
     class Meta:
-        model = LedgerGroups 
-        fields = ['name','code','inactive','under_group','nature','created_at','s', 'sort','page','limit']
+        model = LedgerGroups
+        fields = ['ledger_group_id','name','code','inactive','under_group','nature','created_at','s', 'sort','page','limit']
 
 class FirmStatusesFilters(filters.FilterSet):
     name = filters.CharFilter(lookup_expr='icontains')

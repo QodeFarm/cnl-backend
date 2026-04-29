@@ -73,7 +73,9 @@ def calculate_new_balance(existing_balance, debit_amount, credit_amount):
     return Decimal(existing_balance) + Decimal(debit_amount) - Decimal(credit_amount)
 
 
-@receiver(post_save, sender=JournalVoucherLine)
+# Disabled: Approach B design — ledger entries are created only when user clicks
+# "Post to Ledger" via JournalVoucherPostView. Draft saves must NOT touch JournalEntryLines.
+# @receiver(post_save, sender=JournalVoucherLine)
 def create_ledger_entry_on_voucher_line_save(sender, instance, created, **kwargs):
     """
     Signal to create/update JournalEntryLines when a JournalVoucherLine is saved.
@@ -170,7 +172,8 @@ def create_ledger_entry_on_voucher_line_save(sender, instance, created, **kwargs
         logger.error(f"Error creating/updating JournalEntryLine: {str(e)}")
 
 
-@receiver(pre_delete, sender=JournalVoucherLine)
+# Disabled: unposted voucher lines have no JournalEntryLines to clean up (Approach B).
+# @receiver(pre_delete, sender=JournalVoucherLine)
 def soft_delete_ledger_entry_on_voucher_line_delete(sender, instance, **kwargs):
     """
     Signal to soft-delete JournalEntryLines when a JournalVoucherLine is deleted.

@@ -7,6 +7,7 @@ from django.db.models import Sum, F
 
 from .models import PurchaseInvoiceOrders, BillPaymentTransactions
 from apps.finance.models import JournalEntryLines, LedgerAccounts
+from apps.company.utils import get_finance_setting
 import logging
 
 # Setup logging
@@ -35,11 +36,11 @@ def update_pending_amount_after_invoice_creation(sender, instance, created, **kw
         # Vendor owes us (increase payable)
         new_balance = Decimal(existing_balance) + Decimal(instance.total_amount)
 
-        # Fetch Purchase Account
-        try:
-            purchase_account = LedgerAccounts.objects.get(name__iexact="Purchase Account", is_deleted=False)
-        except LedgerAccounts.DoesNotExist:
-            purchase_account = None
+        # Fetch Purchase Account from company settings (falls back to name-based lookup)
+        purchase_account = get_finance_setting('purchase_ledger_account', fallback_name='Purchase Account')
+        if not purchase_account:
+            logger.warning("Purchase invoice signal: Purchase Ledger Account not configured. Journal entry skipped.")
+            return
 
         # Create Journal Entry
         JournalEntryLines.objects.create(

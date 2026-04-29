@@ -3,7 +3,7 @@ from django.db import transaction
 from django.forms import ValidationError
 from django.shortcuts import render,get_object_or_404
 from django.http import  Http404
-from requests import Response
+from rest_framework.response import Response
 from rest_framework import viewsets,status
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
@@ -18,7 +18,7 @@ from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorBalance, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from apps.masters.models import FirmStatuses, GstCategories, PriceCategories, Territory, Transporters
 from config.utils_methods import BaseBulkUpdateView
-from .serializers import VendorBalanceSerializer, VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer
+from .serializers import VendorBalanceSerializer, VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer, VendorDropdownSerializer
 from config.utils_methods import delete_multi_instance, soft_delete, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
 from django_filters.rest_framework import DjangoFilterBackend 
@@ -193,9 +193,15 @@ class VendorViewSet(APIView):
                 result = validate_input_pk(self, kwargs['pk'])
                 return result if result else self.retrieve(self, request, *args, **kwargs)
 
+            # ?minimal=true — lightweight dropdown list (vendor_id + name only, for select fields)
+            if request.query_params.get("minimal", "false").lower() == "true":
+                queryset = Vendor.objects.filter(is_deleted=False).order_by('name')
+                serializer = VendorDropdownSerializer(queryset, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
             if request.query_params.get("summary", "false").lower() == "true":
                 return self.get_summary_data(request)
-            
+
             if request.query_params.get("vendor_summary_report", "false").lower() == "true":
                 return self.get_vendor_summary_report(request)
                 
@@ -1082,12 +1088,15 @@ class VendorExcelImport(BaseExcelImportExport):
                             ledger_group_id=ledger_group
                         )
                 else:
-                    # If no group specified, use default group
-                    default_group = LedgerGroups.objects.first()
+                    # No group specified — fall back to Sundry Creditors (standard vendor group)
+                    default_group = (
+                        LedgerGroups.objects.filter(name="Sundry Creditors").first()
+                        or LedgerGroups.objects.first()
+                    )
                     ledger_account = LedgerAccounts.objects.filter(name__iexact=ledger_account_name).first()
                     if not ledger_account:
                         if not default_group:
-                            raise ValueError("Cannot create LedgerAccount without a LedgerGroup")
+                            raise ValueError("Cannot create LedgerAccount: no LedgerGroups exist. Run: python manage.py seed_ledger_groups")
                         logger.info(f"Creating LedgerAccount with name='{ledger_account_name}' and default group")
                         ledger_account = LedgerAccounts.objects.create(
                             name=ledger_account_name,
@@ -1263,7 +1272,10 @@ class VendorExcelImport(BaseExcelImportExport):
         
         if missing_ledger_accounts:
             with transaction.atomic():
-                default_group = LedgerGroups.objects.first()
+                default_group = (
+                    LedgerGroups.objects.filter(name="Sundry Creditors").first()
+                    or LedgerGroups.objects.first()
+                )
                 for ledger_lower, info in missing_ledger_accounts.items():
                     group = fk_lookups['ledger_group'].get(info['group'].lower()) if info['group'] else None
                     group = group or default_group

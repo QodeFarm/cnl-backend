@@ -5,7 +5,7 @@ import uuid,os # type: ignore
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from config.utils_methods import EncryptedTextField 
-from config.utils_variables import companytable, branchestable, branchbankdetails
+from config.utils_variables import companytable, branchestable, branchbankdetails, companysettings
 
 def company_logos(instance, filename):
     # Get the file extension
@@ -140,6 +140,67 @@ class Branches(models.Model):
     
     class Meta:
         db_table = branchestable
+
+class CompanySettings(models.Model):
+    """
+    One-to-one configuration record per company.
+    Stores default ledger accounts for automated journal entries.
+    Add new nullable FK fields here as new modules require defaults
+    (e.g., default_warehouse_id for Inventory in the future).
+    """
+    settings_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company_id = models.OneToOneField(Companies, on_delete=models.CASCADE,db_column='company_id', related_name='settings')
+    # Finance: default ledger accounts for automated journal entries
+    sales_ledger_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='sales_ledger_account_id'
+    )
+    purchase_ledger_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='purchase_ledger_account_id'
+    )
+    receivables_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='receivables_account_id'
+    )
+    payables_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='payables_account_id'
+    )
+    cash_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='cash_account_id'
+    )
+    bank_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='bank_account_id'
+    )
+    discount_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='discount_account_id'
+    )
+    round_off_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='round_off_account_id'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Settings for {self.company_id.name}"
+
+    class Meta:
+        db_table = companysettings
+
 
 class BranchBankDetails(models.Model):
     bank_detail_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

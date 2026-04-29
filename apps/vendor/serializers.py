@@ -12,6 +12,11 @@ class ModVendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerial
         model = Vendor
         fields = ['vendor_id','name','code']
 
+class VendorDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Vendor
+        fields = ['vendor_id', 'name']
+
 class VendorCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = VendorCategory

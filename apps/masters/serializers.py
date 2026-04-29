@@ -48,7 +48,7 @@ class StatusesSerializer(serializers.ModelSerializer):
 class ModLedgerGroupsSerializer(serializers.ModelSerializer):
     class Meta:
         model = LedgerGroups
-        fields = ['ledger_group_id', 'name', 'code']
+        fields = ['ledger_group_id', 'name', 'code', 'purpose']
 
 class LedgerGroupsSerializer(serializers.ModelSerializer):
     under_group = ModLedgerGroupsSerializer(source='under_group_id', read_only=True)

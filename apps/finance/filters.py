@@ -322,8 +322,6 @@ class JournalEntryLinesListFilter(filters.FilterSet):
     ledger_account = filters.CharFilter(field_name='ledger_account_id__name', lookup_expr='icontains')
     voucher_no = filters.CharFilter(lookup_expr='icontains')
     debit = filters.RangeFilter()
-    voucher_no = filters.CharFilter( lookup_expr='icontains')
-    debit = filters.RangeFilter()
     credit = filters.RangeFilter()
     balance = filters.RangeFilter()
     description = filters.CharFilter(lookup_expr='icontains')
@@ -347,7 +345,7 @@ class JournalEntryLinesListFilter(filters.FilterSet):
 
         # Get active PK from URL
         # pk = self.request.parser_context.get('kwargs', {}).get('pk')
-        pk = self.request.resolver_match.kwargs.get('pk')
+        pk = self.request.resolver_match.kwargs.get('input_id')
 
         if pk == 'customer_id':
             return queryset.filter(
@@ -741,7 +739,8 @@ class JournalVoucherFilter(filters.FilterSet):
     reference_no = filters.CharFilter(lookup_expr='icontains')
     narration = filters.CharFilter(lookup_expr='icontains')
     expense_claim_id = filters.CharFilter(method=filter_uuid)
-    is_posted = filters.BooleanFilter()
+    is_posted = filters.BooleanFilter()  # kept for backward compatibility
+    status = filters.ChoiceFilter(choices=JournalVoucher.STATUS_CHOICES)
     total_debit = filters.RangeFilter()
     total_credit = filters.RangeFilter()
     created_at = filters.DateFromToRangeFilter()
@@ -769,8 +768,8 @@ class JournalVoucherFilter(filters.FilterSet):
     class Meta:
         model = JournalVoucher
         # voucher_no should be at 0th index for summary ordering
-        fields = ['voucher_no', 'voucher_date', 'voucher_type', 'reference_no', 'narration', 
-                  'expense_claim_id', 'is_posted', 'total_debit', 'total_credit', 
+        fields = ['voucher_no', 'voucher_date', 'voucher_type', 'reference_no', 'narration',
+                  'expense_claim_id', 'is_posted', 'status', 'total_debit', 'total_credit',
                   'created_at', 'period_name', 's', 'sort', 'page', 'limit']
 
 
@@ -822,7 +821,8 @@ class JournalBookReportFilter(filters.FilterSet):
     voucher_date = filters.DateFromToRangeFilter()
     voucher_type = filters.ChoiceFilter(choices=JournalVoucher.VOUCHER_TYPE_CHOICES)
     narration = filters.CharFilter(lookup_expr='icontains')
-    is_posted = filters.BooleanFilter()
+    is_posted = filters.BooleanFilter()  # kept for backward compatibility
+    status = filters.ChoiceFilter(choices=JournalVoucher.STATUS_CHOICES)
     ledger_account_id = filters.CharFilter(method='filter_by_ledger_account')
     customer_id = filters.CharFilter(method='filter_by_customer')
     vendor_id = filters.CharFilter(method='filter_by_vendor')
@@ -861,6 +861,6 @@ class JournalBookReportFilter(filters.FilterSet):
 
     class Meta:
         model = JournalVoucher
-        fields = ['voucher_no', 'voucher_date', 'voucher_type', 'narration', 'is_posted',
-                  'ledger_account_id', 'customer_id', 'vendor_id', 'period_name','created_at',
+        fields = ['voucher_no', 'voucher_date', 'voucher_type', 'narration', 'is_posted', 'status',
+                  'ledger_account_id', 'customer_id', 'vendor_id', 'period_name', 'created_at',
                   's', 'sort', 'page', 'limit']
