@@ -4468,7 +4468,7 @@ class SaleInvoiceOrdersViewSet(APIView):
                     variation.quantity = F('quantity') - deduct_qty
                     variation.save(using=using_db, update_fields=['quantity'])
                     
-                    logger.info(f"✅ Variation {variation.variation_id} quantity reduced by {deduct_qty}")
+                    logger.info(f"✅ Variation {variation.product_variation_id} quantity reduced by {deduct_qty}")
                     remaining_qty -= deduct_qty
 
                 # 4️⃣ Create blocked inventory record
