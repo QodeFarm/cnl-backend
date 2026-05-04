@@ -4037,6 +4037,218 @@ class SaleInvoiceOrdersViewSet(APIView):
     #     )
     #     return build_response(1, "Sale Invoice created successfully", custom_data, status.HTTP_201_CREATED)
     
+    # @transaction.atomic
+    # def create(self, request, *args, **kwargs):
+    #     given_data = request.data
+
+    #     using_db = 'default'
+    #     set_db(using_db)
+
+    #     # Extract payload
+    #     sale_invoice_data = given_data.pop('sale_invoice_order', None)
+    #     sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
+    #     order_attachments_data = given_data.pop('order_attachments', None)
+    #     order_shipments_data = given_data.pop('order_shipments', None)
+    #     custom_fields_data = given_data.pop('custom_field_values', None)
+        
+    #     # ---------------- CLEAN EMPTY SALE ORDER ITEMS ---------------- #
+    #     sale_invoice_items_data = [
+    #         item for item in sale_invoice_items_data
+    #         if item.get("product_id") and item.get("quantity")
+    #     ]
+    #     #----------------------------------------------------------
+
+    #     # ---------------------- VALIDATION ----------------------------------#
+    #     invoice_error, item_error, attachment_error, shipment_error, custom_error = [], [], [], [], []
+
+    #     if sale_invoice_data:
+    #         invoice_error = validate_payload_data(
+    #             self, sale_invoice_data, SaleInvoiceOrdersSerializer, using=using_db
+    #         )
+    #         validate_order_type(sale_invoice_data, invoice_error, OrderTypes, look_up='order_type')
+            
+    #     if sale_invoice_items_data:
+    #         item_error = validate_multiple_data(
+    #             self, sale_invoice_items_data, SaleInvoiceItemsSerializer,
+    #             ['sale_invoice_id'], using_db=using_db
+    #         )
+
+    #     if order_attachments_data:
+    #         attachment_error = validate_multiple_data(
+    #             self, order_attachments_data, OrderAttachmentsSerializer,
+    #             ['order_id', 'order_type_id'], using_db=using_db
+    #         )
+
+    #     if order_shipments_data:
+    #         if len(order_shipments_data) > 1:
+    #             shipment_error = validate_multiple_data(
+    #                 self, [order_shipments_data], OrderShipmentsSerializer,
+    #                 ['order_id', 'order_type_id'], using_db=using_db
+    #             )
+    #         else:
+    #             order_shipments_data = {}
+    #             shipment_error = []
+
+    #     if custom_fields_data:
+    #         custom_error = validate_multiple_data(
+    #             self, custom_fields_data, CustomFieldValueSerializer,
+    #             ['custom_id'], using_db=using_db
+    #         )
+
+    #     if not sale_invoice_data or not sale_invoice_items_data:
+    #         logger.error("Sale invoice and items & CustomFields are mandatory but not provided.")
+    #         return build_response(
+    #             0,
+    #             "Sale invoice and items & CustomFields are mandatory",
+    #             [],
+    #             status.HTTP_400_BAD_REQUEST
+    #         )
+
+    #     errors = {}
+    #     if invoice_error: errors["sale_invoice_order"] = invoice_error
+    #     if item_error: errors["sale_invoice_items"] = item_error
+    #     if attachment_error: errors["order_attachments"] = attachment_error
+    #     if shipment_error: errors["order_shipments"] = shipment_error
+    #     if custom_error: errors["custom_field_values"] = custom_error
+
+    #     if errors:
+    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+    #     # ---------------------- D A T A   C R E A T I O N ----------------------------#
+    #     new_invoice_data = generic_data_creation(
+    #         self, [sale_invoice_data], SaleInvoiceOrdersSerializer, using=using_db
+    #     )[0]
+
+    #     sale_invoice_id = new_invoice_data.get("sale_invoice_id", None)
+    #     logger.info(f'SaleInvoiceOrder - created in {using_db} DB')
+
+    #     # Update child data with invoice_id
+    #     if sale_invoice_id:
+    #         update_fields = {'sale_invoice_id': sale_invoice_id}
+    #         invoice_items = generic_data_creation(
+    #             self,
+    #             sale_invoice_items_data,
+    #             SaleInvoiceItemsSerializer,
+    #             update_fields,
+    #             using=using_db
+    #         )
+    #         logger.info(f'SaleInvoiceItems - created in {using_db} DB')
+
+    #     order_type_val = sale_invoice_data.get('order_type')
+    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
+    #     type_id = order_type.order_type_id if order_type else None
+
+    #     update_fields = {'order_id': sale_invoice_id, 'order_type_id': type_id}
+    #     if order_attachments_data:
+    #         order_attachments = generic_data_creation(
+    #             self, order_attachments_data, OrderAttachmentsSerializer,
+    #             update_fields, using=using_db
+    #         )
+    #         logger.info(f'OrderAttachments - created in {using_db} DB')
+    #     else:
+    #         order_attachments = []
+
+    #     if order_shipments_data:
+    #         order_shipments = generic_data_creation(
+    #             self, [order_shipments_data], OrderShipmentsSerializer,
+    #             update_fields, using=using_db
+    #         )
+    #         logger.info(f'OrderShipments - created in {using_db} DB')
+    #     else:
+    #         order_shipments = []
+
+    #     if custom_fields_data:
+    #         update_fields = {'custom_id': sale_invoice_id}
+    #         custom_fields = generic_data_creation(
+    #             self, custom_fields_data, CustomFieldValueSerializer,
+    #             update_fields, using=using_db
+    #         )
+    #         logger.info(f'CustomFieldValues - created in {using_db} DB')
+    #     else:
+    #         custom_fields = []
+
+    #     # ---------------------- J O U R N A L   E N T R Y ----------------------------#
+    #     from decimal import Decimal
+
+    #     invoice_obj = SaleInvoiceOrders.objects.get(
+    #         sale_invoice_id=sale_invoice_id
+    #     )
+
+    #     # Set pending amount
+    #     invoice_obj.pending_amount = invoice_obj.total_amount
+    #     invoice_obj.save(update_fields=['pending_amount'])
+
+    #     # Previous balance
+    #     existing_balance = (
+    #         JournalEntryLines.objects
+    #         .filter(customer_id=invoice_obj.customer_id)
+    #         .order_by('is_deleted', '-created_at')
+    #         .values_list('balance', flat=True)
+    #         .first()
+    #     ) or Decimal('0.00')
+
+    #     new_balance = Decimal(existing_balance) + Decimal(invoice_obj.total_amount)
+
+    #     sale_account = LedgerAccounts.objects.get(name__iexact="Sale Account")
+
+    #     # Product description
+    #     invoice_items_qs = SaleInvoiceItems.objects.filter(
+    #         sale_invoice_id=sale_invoice_id
+    #     )
+
+    #     # product_lines = []
+    #     product_lines = []
+    #     for idx, item in enumerate(invoice_items_qs, start=1):
+    #         product_lines.append(
+    #             f"{idx}) {item.product_id.name} – Qty: {item.quantity:.2f} @ {item.rate:.2f}"
+    #         )
+
+    #     products_description = "\n".join(product_lines)
+
+    #     # products_description = "\n".join(product_lines)
+
+    #     description = (
+    #         f"Goods sold to {invoice_obj.customer_id.name}\n"
+    #         f"{products_description}"
+    #     )
+
+    #     JournalEntryLines.objects.create(
+    #         ledger_account_id=sale_account,
+    #         debit=invoice_obj.total_amount,
+    #         credit=Decimal('0.00'),
+    #         voucher_no=invoice_obj.invoice_no,
+    #         description=description,
+    #         customer_id=invoice_obj.customer_id,
+    #         balance=new_balance
+    #     )
+
+    #     # ---------------------- R E S P O N S E ----------------------------#
+    #     custom_data = {
+    #         "sale_invoice_order": new_invoice_data,
+    #         "sale_invoice_items": invoice_items,
+    #         "order_attachments": order_attachments,
+    #         "order_shipments": order_shipments,
+    #         "custom_field_values": custom_fields
+    #     }
+        
+    #     saleinvocie_no = sale_invoice_data.get("invoice_no")
+
+    #     log_user_action(
+    #         using_db,
+    #         request.user,
+    #         "CREATE",
+    #         "Sale Invoice",
+    #         sale_invoice_id,
+    #         f"{saleinvocie_no} - Sale Invoice Record Created by {request.user.username}"
+    #     )
+
+    #     return build_response(
+    #         1,
+    #         "Sale Invoice created successfully",
+    #         custom_data,
+    #         status.HTTP_201_CREATED
+    #     )
+    
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         given_data = request.data
@@ -4051,7 +4263,7 @@ class SaleInvoiceOrdersViewSet(APIView):
         order_shipments_data = given_data.pop('order_shipments', None)
         custom_fields_data = given_data.pop('custom_field_values', None)
         
-        # ---------------- CLEAN EMPTY SALE ORDER ITEMS ---------------- #
+        # ---------------- CLEAN EMPTY SALE INVOICE ITEMS ---------------- #
         sale_invoice_items_data = [
             item for item in sale_invoice_items_data
             if item.get("product_id") and item.get("quantity")
@@ -4181,6 +4393,106 @@ class SaleInvoiceOrdersViewSet(APIView):
         else:
             custom_fields = []
 
+        # ===================== INVENTORY BLOCKING FOR INVOICE ===================== #
+        # Check if this invoice is linked to a Sale Order
+        # sale_order_id = sale_invoice_data.get("sale_order_id")  # Get from payload
+        
+        # IMPORTANT: Only calculate inventory if sale_order_id is NULL/None/Empty
+        # If sale_order_id has a value, inventory was already calculated at Sale Order level
+        # ===================== INVENTORY BLOCKING FOR INVOICE ===================== #
+        # Check if this invoice is linked to a Sale Order
+        sale_order_id = sale_invoice_data.get("sale_order_id")  # Get from payload
+
+        # IMPORTANT: Only calculate inventory if sale_order_id is NULL/None/Empty
+        if not sale_order_id:
+            logger.info(f"No linked Sale Order found for Invoice {sale_invoice_id}. Calculating inventory...")
+            
+            # REMOVED the sale_estimate condition - ALWAYS block inventory for standalone invoices
+            block_config = InventoryBlockConfig.objects.using(using_db).filter(
+                product_id__isnull=True
+            ).first()
+
+            block_duration_hours = getattr(block_config, "block_duration_hours", 24)
+            expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+
+            blocked_inventory_data = []
+            invoice_obj = SaleInvoiceOrders.objects.using(using_db).get(
+                sale_invoice_id=sale_invoice_id
+            )
+
+            for item in sale_invoice_items_data:
+                product_id = item.get("product_id")
+                ordered_qty = int(item.get("quantity", 0))
+
+                if not product_id or ordered_qty <= 0:
+                    continue
+
+                product = Products.objects.using(using_db).select_for_update().filter(
+                    product_id=product_id
+                ).first()
+
+                if not product:
+                    return build_response(
+                        0,
+                        f"Product with ID {product_id} not found.",
+                        [],
+                        status.HTTP_404_NOT_FOUND
+                    )
+
+                # 1️⃣ Calculate available quantity
+                available_qty = min(product.balance or 0, ordered_qty)
+
+                if available_qty <= 0:
+                    logger.warning(f"No available inventory for product {product_id}. Required: {ordered_qty}, Available: {product.balance or 0}")
+                    continue
+
+                # 2️⃣ Reduce PRODUCT BALANCE
+                product.balance = F('balance') - available_qty
+                product.save(using=using_db, update_fields=['balance'])
+                
+                logger.info(f"✅ Product {product_id} balance reduced from {product.balance + available_qty} to {product.balance}")
+
+                # 3️⃣ Reduce VARIATION QUANTITY (FIFO)
+                remaining_qty = available_qty
+
+                variations = ProductVariation.objects.using(using_db).filter(
+                    product_id=product_id,
+                    quantity__gt=0
+                ).order_by('created_at')
+
+                for variation in variations:
+                    if remaining_qty <= 0:
+                        break
+
+                    deduct_qty = min(variation.quantity, remaining_qty)
+                    variation.quantity = F('quantity') - deduct_qty
+                    variation.save(using=using_db, update_fields=['quantity'])
+                    
+                    logger.info(f"✅ Variation {variation.variation_id} quantity reduced by {deduct_qty}")
+                    remaining_qty -= deduct_qty
+
+                # 4️⃣ Create blocked inventory record
+                blocked_inventory_data.append(
+                    BlockedInventory(
+                        sale_order_id=None,
+                        sale_invoice_id=invoice_obj,
+                        product_id=product,
+                        blocked_qty=available_qty,
+                        source_type='SALE_INVOICE',
+                        expiration_time=expiration_time,
+                        is_expired=False
+                    )
+                )
+
+            if blocked_inventory_data:
+                BlockedInventory.objects.using(using_db).bulk_create(blocked_inventory_data)
+                logger.info(f"✅ Inventory blocked for Invoice {sale_invoice_id}. Blocked {len(blocked_inventory_data)} items.")
+            else:
+                logger.info(f"No inventory to block for Invoice {sale_invoice_id}")
+        else:
+            logger.info(f"Invoice {sale_invoice_id} is linked to Sale Order {sale_order_id}. Skipping inventory calculation.")
+        # ======================================================================= #
+
         # ---------------------- J O U R N A L   E N T R Y ----------------------------#
         from decimal import Decimal
 
@@ -4210,7 +4522,6 @@ class SaleInvoiceOrdersViewSet(APIView):
             sale_invoice_id=sale_invoice_id
         )
 
-        # product_lines = []
         product_lines = []
         for idx, item in enumerate(invoice_items_qs, start=1):
             product_lines.append(
@@ -4218,8 +4529,6 @@ class SaleInvoiceOrdersViewSet(APIView):
             )
 
         products_description = "\n".join(product_lines)
-
-        # products_description = "\n".join(product_lines)
 
         description = (
             f"Goods sold to {invoice_obj.customer_id.name}\n"
@@ -4245,7 +4554,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             "custom_field_values": custom_fields
         }
         
-        saleinvocie_no = sale_invoice_data.get("invoice_no")
+        saleinvoice_no = sale_invoice_data.get("invoice_no")
 
         log_user_action(
             using_db,
@@ -4253,7 +4562,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             "CREATE",
             "Sale Invoice",
             sale_invoice_id,
-            f"{saleinvocie_no} - Sale Invoice Record Created by {request.user.username}"
+            f"{saleinvoice_no} - Sale Invoice Record Created by {request.user.username}"
         )
 
         return build_response(
