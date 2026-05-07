@@ -544,7 +544,7 @@ CREATE TABLE IF NOT EXISTS customer_attachments (
 CREATE TABLE IF NOT EXISTS customer_addresses (
     customer_address_id CHAR(36) PRIMARY KEY,
     customer_id CHAR(36) NOT NULL,
-    address_type ENUM('Billing', 'Shipping'),
+    address_type ENUM('Billing', 'Shipping', 'Communication'),
     address VARCHAR(255),
     city_id CHAR(36) NOT NULL,
 	state_id CHAR(36) NOT NULL,
@@ -1014,7 +1014,7 @@ CREATE TABLE IF NOT EXISTS vendor_attachments (
 CREATE TABLE IF NOT EXISTS vendor_addresses (
     vendor_address_id CHAR(36) PRIMARY KEY,
     vendor_id CHAR(36) NOT NULL,
-    address_type ENUM('Billing', 'Shipping'),
+    address_type ENUM('Billing', 'Shipping', 'Communication'),
     address VARCHAR(255),
     city_id CHAR(36) NOT NULL,
 	state_id CHAR(36) NOT NULL,

@@ -422,36 +422,30 @@ def generate_order_number(order_type_prefix, model_class=None, field_name=None, 
     
     prefix = override_prefix if override_prefix else order_type_prefix
     
-    # 🔹 CUSTOMER → DB-based, no cache
+    # 🔹 CUSTOMER → DB-based, single query instead of loading all records
     if prefix == "CUST":
         if model_class and field_name:
             filter_kwargs = {f"{field_name}__startswith": prefix}
-            records = model_class.objects.filter(**filter_kwargs).values_list(field_name, flat=True)
-
+            last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
             last_number = 0
-            for code in records:
+            if last_record:
                 try:
-                    num = int(code.split('-')[-1])
-                    last_number = max(last_number, num)
+                    last_number = int(getattr(last_record, field_name).split('-')[-1])
                 except Exception:
-                    continue
-
+                    last_number = 0
             return f"{prefix}-{last_number + 1:05d}"
-        
-    # 🔹 VENDOR → DB-based, no cache
+
+    # 🔹 VENDOR → DB-based, single query instead of loading all records
     if prefix == "VEND":
         if model_class and field_name:
             filter_kwargs = {f"{field_name}__startswith": prefix}
-            records = model_class.objects.filter(**filter_kwargs).values_list(field_name, flat=True)
-
+            last_record = model_class.objects.filter(**filter_kwargs).order_by(f"-{field_name}").first()
             last_number = 0
-            for code in records:
+            if last_record:
                 try:
-                    num = int(code.split('-')[-1])
-                    last_number = max(last_number, num)
+                    last_number = int(getattr(last_record, field_name).split('-')[-1])
                 except Exception:
-                    continue
-
+                    last_number = 0
             return f"{prefix}-{last_number + 1:05d}"
 
     if prefix == "PRD":

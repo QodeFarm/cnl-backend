@@ -58,7 +58,12 @@ logger = logging.getLogger(__name__)
 
 
 class SaleOrderView(viewsets.ModelViewSet):
-    queryset = SaleOrder.objects.all().order_by('is_deleted', '-created_at')
+    queryset = SaleOrder.objects.select_related(
+        'customer_id', 'order_status_id', 'flow_status_id', 'sale_type_id', 'gst_type_id'
+    ).prefetch_related(
+        'saleorderitems_set__product_id',
+        'saleinvoiceorders_set',
+    ).order_by('is_deleted', '-created_at')
     serializer_class = SaleOrderSerializer
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = SaleOrderFilter

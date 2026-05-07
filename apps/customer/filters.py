@@ -62,6 +62,7 @@ class CustomerFilters(filters.FilterSet):
     code = filters.CharFilter(lookup_expr='icontains')
     gst = filters.CharFilter(lookup_expr='icontains')
     is_deleted = filters.BooleanFilter()
+    customer_common_for_sales_purchase = filters.BooleanFilter()
     created_at = filters.DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
@@ -97,7 +98,7 @@ class CustomerFilters(filters.FilterSet):
     class Meta:
         model = Customer
         #do not change "name",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['name','code','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name', 'is_deleted', 's','search','sort','page','limit']
+        fields = ['name','code','gst','ledger_account_id','created_at','email', 'phone', 'city_id','period_name', 'is_deleted', 'customer_common_for_sales_purchase', 's','search','sort','page','limit']
 
     
 class CustomerAttachmentsFilters(filters.FilterSet):

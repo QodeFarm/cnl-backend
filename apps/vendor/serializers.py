@@ -59,9 +59,18 @@ class VendorAddressSerializer(serializers.ModelSerializer):
     city = ModCitySerializer(source='city_id', read_only = True)
     state = ModStateSerializer(source='state_id', read_only = True)
     country = ModCountrySerializer(source='country_id', read_only = True)
+
     class Meta:
         model = VendorAddress
         fields = '__all__'
+        extra_kwargs = {
+            'address': {'allow_blank': True, 'allow_null': True},
+        }
+
+    def validate_address(self, value):
+        if value == '':
+            return None
+        return value
 
 
 class VendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerializer
@@ -81,6 +90,43 @@ class VendorSerializer(serializers.ModelSerializer):  #HyperlinkedModelSerialize
         model = Vendor
         fields = '__all__'
 
+    def create(self, validated_data):
+        vendor = super().create(validated_data)
+        if vendor.vendor_common_for_sales_purchase:
+            self._sync_common_customer(vendor)
+        return vendor
+
+    def update(self, instance, validated_data):
+        old_flag = instance.vendor_common_for_sales_purchase
+        vendor = super().update(instance, validated_data)
+        # Auto-create customer only when flag is newly turned ON
+        if vendor.vendor_common_for_sales_purchase and not old_flag:
+            self._sync_common_customer(vendor)
+        return vendor
+
+    def _sync_common_customer(self, vendor):
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            from apps.customer.models import Customer
+            # Check by name + flag — ledger_account_id is a shared group account
+            # (e.g. "Sundry Creditors") so it cannot be used as a unique link
+            exists = Customer.objects.filter(
+                name=vendor.name,
+                customer_common_for_sales_purchase=True,
+                is_deleted=False
+            ).exists()
+            if not exists:
+                Customer.objects.create(
+                    name=vendor.name,
+                    print_name=vendor.print_name or vendor.name,
+                    ledger_account_id=vendor.ledger_account_id,
+                    customer_common_for_sales_purchase=True,
+                )
+                logger.info(f"Auto-created customer for common vendor: {vendor.name}")
+        except Exception as e:
+            logger.warning(f"Could not auto-create customer for vendor '{vendor.name}': {e}")
+
 class VendorsOptionsSerializer(serializers.ModelSerializer):
     email = serializers.SerializerMethodField()
     phone = serializers.SerializerMethodField()
@@ -91,7 +137,7 @@ class VendorsOptionsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Vendor
-        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category', 'ledger_account', 'created_at','vendor_addresses', 'updated_at', 'is_deleted'] 
+        fields = ['vendor_id', 'name', 'phone', 'email', 'city', 'gst_no', 'vendor_category', 'ledger_account', 'created_at','vendor_addresses', 'updated_at', 'is_deleted', 'vendor_common_for_sales_purchase']
 
     def get_vendor_address_details(self, obj):
         addresses = VendorAddress.objects.filter(vendor_id=obj.vendor_id)
