@@ -61,10 +61,29 @@ class InventoryBlockConfig(models.Model):
 
        
 class BlockedInventory(models.Model):
+    SOURCE_TYPE_CHOICES = [
+        ('SALE_ORDER', 'SALE_ORDER'),
+        ('SALE_INVOICE', 'SALE_INVOICE'),
+    ]
     block_id = models.AutoField(primary_key=True)
-    sale_order_id = models.ForeignKey('sales.SaleOrder', on_delete=models.PROTECT, db_column='sale_order_id')
+    # sale_order_id = models.ForeignKey('sales.SaleOrder', on_delete=models.PROTECT, db_column='sale_order_id')
+    sale_order_id = models.ForeignKey(
+        'sales.SaleOrder', 
+        on_delete=models.PROTECT, 
+        db_column='sale_order_id',
+        null=True, 
+        blank=True
+    )
+    sale_invoice_id = models.ForeignKey(
+        'sales.SaleInvoiceOrders', 
+        on_delete=models.PROTECT, 
+        db_column='sale_invoice_id',
+        null=True, 
+        blank=True
+    )
     product_id = models.ForeignKey('products.Products', on_delete=models.PROTECT, db_column='product_id')
     blocked_qty = models.IntegerField(default=0)
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES, default='SALE_ORDER')
     expiration_time = models.DateTimeField(help_text="Timestamp when the block expires")
     is_expired = models.BooleanField(default=False, help_text="True if block duration has passed")
     created_at = models.DateTimeField(auto_now_add=True)
