@@ -70,7 +70,7 @@ class CustomerSerializer(serializers.ModelSerializer):
             if password:
                 from django.contrib.auth.hashers import make_password
                 validated_data['password'] = make_password(password)
-            
+
             # Auto-generate username if not provided
             if not validated_data.get('username'):
                 name = validated_data.get('name', '')
@@ -80,10 +80,15 @@ class CustomerSerializer(serializers.ModelSerializer):
             validated_data['username'] = None
             validated_data['password'] = None
             validated_data['is_portal_user'] = False
-        
-        return super().create(validated_data)
+
+        customer = super().create(validated_data)
+        if customer.customer_common_for_sales_purchase:
+            self._sync_common_vendor(customer)
+        return customer
 
     def update(self, instance, validated_data):
+        old_flag = instance.customer_common_for_sales_purchase
+
         # Handle password update
         if 'password' in validated_data:
             password = validated_data.get('password')
@@ -93,18 +98,45 @@ class CustomerSerializer(serializers.ModelSerializer):
             else:
                 # If empty password provided, remove it from update (keep existing)
                 validated_data.pop('password')
-        
+
         # Handle username auto-generation if needed
         if validated_data.get('is_portal_user') and not validated_data.get('username'):
             name = validated_data.get('name', instance.name)
             validated_data['username'] = self.generate_username_from_name(name)
-        
+
         # If turning off portal access, clear credentials
         if 'is_portal_user' in validated_data and not validated_data['is_portal_user']:
             validated_data['username'] = None
             validated_data['password'] = None
-        
-        return super().update(instance, validated_data)
+
+        customer = super().update(instance, validated_data)
+        # Auto-create vendor only when flag is newly turned ON
+        if customer.customer_common_for_sales_purchase and not old_flag:
+            self._sync_common_vendor(customer)
+        return customer
+
+    def _sync_common_vendor(self, customer):
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            from apps.vendor.models import Vendor
+            # Check by name + flag — ledger_account_id is a shared group account
+            # (e.g. "Sundry Debtors") so it cannot be used as a unique link
+            exists = Vendor.objects.filter(
+                name=customer.name,
+                vendor_common_for_sales_purchase=True,
+                is_deleted=False
+            ).exists()
+            if not exists:
+                Vendor.objects.create(
+                    name=customer.name,
+                    print_name=customer.print_name or customer.name,
+                    ledger_account_id=customer.ledger_account_id,
+                    vendor_common_for_sales_purchase=True,
+                )
+                logger.info(f"Auto-created vendor for common customer: {customer.name}")
+        except Exception as e:
+            logger.warning(f"Could not auto-create vendor for customer '{customer.name}': {e}")
 
     def generate_username_from_name(self, name):
         """Generate username from customer name"""
@@ -169,9 +201,19 @@ class CustomerAddressesSerializers(serializers.ModelSerializer):
     city = ModCitySerializer(source='city_id', read_only=True)
     state = ModStateSerializer(source='state_id', read_only=True)
     country = ModCountrySerializer(source='country_id', read_only=True)
+
     class Meta:
         model = CustomerAddresses
         fields = '__all__'
+        extra_kwargs = {
+            'address': {'allow_blank': True, 'allow_null': True},
+        }
+
+    def validate_address(self, value):
+        # Convert empty string to None so the nullable DB column accepts it
+        if value == '':
+            return None
+        return value
 
 class ModCustomerAddressesSerializer(serializers.ModelSerializer):
     class Meta:
@@ -207,7 +249,7 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Customer
-        fields = ['customer_id', 'name', 'code', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code', 'customer_category', 'is_deleted']
+        fields = ['customer_id', 'name', 'code', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code', 'customer_category', 'is_deleted', 'customer_common_for_sales_purchase']
 
     def get_customer_details(self, obj):
         addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)

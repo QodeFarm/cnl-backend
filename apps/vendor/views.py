@@ -777,6 +777,14 @@ class VendorViewSet(APIView):
         vendor_id = new_vendor_data[0].get("vendor_id", None)  # Fetch vendor_id from new instance
         logger.info('Vendor - created*')
 
+        # Auto-create linked Customer if vendor is common for sales & purchase
+        if vendors_data.get('vendor_common_for_sales_purchase'):
+            try:
+                vendor_obj = Vendor.objects.get(vendor_id=vendor_id)
+                VendorSerializer()._sync_common_customer(vendor_obj)
+            except Exception as e:
+                logger.warning(f"Could not sync common customer for vendor {vendor_id}: {e}")
+
         # Create Vendor Attachments
         update_fields = {'vendor_id': vendor_id}
         if vendor_attachments_data:
@@ -878,8 +886,18 @@ class VendorViewSet(APIView):
        
         # Update the 'Vendor'
         if vendors_data:
+            old_flag = Vendor.objects.filter(vendor_id=pk).values_list('vendor_common_for_sales_purchase', flat=True).first()
+            new_flag = vendors_data.get('vendor_common_for_sales_purchase', False)
             update_fields = []# No need to update any fields
             Vendor_data = update_multi_instances(self, pk, [vendors_data], Vendor, VendorSerializer, update_fields,main_model_related_field='vendor_id', current_model_pk_field='vendor_id')
+
+            # Auto-create linked Customer whenever flag is ON (sync is idempotent)
+            if new_flag:
+                try:
+                    vendor_obj = Vendor.objects.get(vendor_id=pk)
+                    VendorSerializer()._sync_common_customer(vendor_obj)
+                except Exception as e:
+                    logger.warning(f"Could not sync common customer for vendor {pk}: {e}")
 
         # Update VendorAttachment Data
         update_fields = {'vendor_id':pk}

@@ -185,6 +185,10 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
         fields = ['sale_order_id', 'order_no', 'order_date', 'sale_estimate', 'tax', 'tax_amount', 'total_amount', 'amount', 'advance_amount', 'customer', 'products', 'sale_type', 'order_status', 'flow_status', 'remarks', 'invoice_no', 'created_at', 'updated_at', 'is_deleted']
 
     def get_sale_order_details(self, obj):
+        # Use prefetched items if available (avoids N+1 query per row)
+        if hasattr(obj, '_prefetched_objects_cache') and 'saleorderitems_set' in obj._prefetched_objects_cache:
+            items = obj.saleorderitems_set.all()
+            return sum((item.amount or 0) for item in items)
         result = SaleOrderItems.objects.using(obj._state.db).filter(
             sale_order_id=obj.sale_order_id
         ).aggregate(total=Sum('amount'))
@@ -194,10 +198,13 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
         return self.get_sale_order_details(obj)
 
     def get_products(self, obj):
-        # select_related('product_id') eliminates per-item lazy FK queries
-        sale_order_items = SaleOrderItems.objects.using(obj._state.db).filter(
-            sale_order_id=obj.sale_order_id
-        ).select_related('product_id')
+        # Use prefetched items if available (avoids N+1 query per row)
+        if hasattr(obj, '_prefetched_objects_cache') and 'saleorderitems_set' in obj._prefetched_objects_cache:
+            sale_order_items = obj.saleorderitems_set.all()
+        else:
+            sale_order_items = SaleOrderItems.objects.using(obj._state.db).filter(
+                sale_order_id=obj.sale_order_id
+            ).select_related('product_id')
         products = []
         for item in sale_order_items:
             product = item.product_id
@@ -210,20 +217,17 @@ class SaleOrderOptionsSerializer(serializers.ModelSerializer):
                     "work_order_created": item.work_order_created,
                 })
         return products
-    
+
     def get_invoice_no(self, obj):
-        # Detect DB used by the sale order instance
+        # Use prefetched invoices if available (avoids N+1 query per row)
+        if hasattr(obj, '_prefetched_objects_cache') and 'saleinvoiceorders_set' in obj._prefetched_objects_cache:
+            invoices = obj.saleinvoiceorders_set.all()
+            return [inv.invoice_no for inv in invoices] or None
         db_alias = obj._state.db
-        
-    # Retrieve all associated SaleInvoiceOrders instances
         sale_invoices = SaleInvoiceOrders.objects.using(db_alias).filter(sale_order_id=obj.sale_order_id)
-        
         if sale_invoices.exists():
-            # Collect all invoice numbers and return as a list
             return [invoice.invoice_no for invoice in sale_invoices]
-        else:
-            # Return None if no invoices are associated
-            return None
+        return None
 
         
     # @staticmethod

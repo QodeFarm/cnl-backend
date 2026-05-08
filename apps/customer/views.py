@@ -822,6 +822,14 @@ class CustomerCreateViews(APIView):
         customer_id = new_customer_data[0].get("customer_id", None)
         logger.info('Customer - created*')
 
+        # Auto-create linked Vendor if customer is common for sales & purchase
+        if customer_data.get('customer_common_for_sales_purchase'):
+            try:
+                customer_obj = Customer.objects.get(customer_id=customer_id)
+                CustomerSerializer()._sync_common_vendor(customer_obj)
+            except Exception as e:
+                logger.warning(f"Could not sync common vendor for customer {customer_id}: {e}")
+
         # NEW: Store plain password temporarily for response if needed
         plain_password = customer_data.get('password') if is_portal_user else None
 
@@ -985,8 +993,18 @@ class CustomerCreateViews(APIView):
             
             # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
             if customer_data:
+                old_flag = Customer.objects.filter(customer_id=pk).values_list('customer_common_for_sales_purchase', flat=True).first()
+                new_flag = customer_data.get('customer_common_for_sales_purchase', False)
                 update_fields = []# No need to update any fields
                 customer_data = update_multi_instances(self, pk, [customer_data], Customer, CustomerSerializer, update_fields,main_model_related_field='customer_id', current_model_pk_field='customer_id')
+
+                # Auto-create linked Vendor whenever flag is ON (sync is idempotent)
+                if new_flag:
+                    try:
+                        customer_obj = Customer.objects.get(customer_id=pk)
+                        CustomerSerializer()._sync_common_vendor(customer_obj)
+                    except Exception as e:
+                        logger.warning(f"Could not sync common vendor for customer {pk}: {e}")
 
             # Update CustomerAttachment Data
             update_fields = {'customer_id':pk}

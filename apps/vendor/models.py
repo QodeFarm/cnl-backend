@@ -177,9 +177,10 @@ class VendorAddress(models.Model):
     vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, db_column='vendor_id')
     ADDRESS_TYPE_CHOICES = [
         ('Billing', 'Billing'),
-        ('Shipping', 'Shipping')
-        ]
-    address_type = models.CharField(max_length=10, choices=ADDRESS_TYPE_CHOICES, null=True, default=None)
+        ('Shipping', 'Shipping'),
+        ('Communication', 'Communication'),
+    ]
+    address_type = models.CharField(max_length=15, choices=ADDRESS_TYPE_CHOICES, null=True, default=None)
     address = models.CharField(max_length=255, null=True, default=None)
     city_id = models.ForeignKey('masters.City', on_delete=models.PROTECT, null=True, db_column = 'city_id')
     state_id = models.ForeignKey('masters.State', on_delete=models.PROTECT, null=True,db_column = 'state_id')
