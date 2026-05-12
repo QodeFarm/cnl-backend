@@ -6,7 +6,13 @@ from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
 from apps.customer.models import CustomerAddresses
 from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter, JournalBookReportFilter
-from apps.sales.models import SaleInvoiceItems, SaleInvoiceOrders
+from apps.sales.models import (
+    SaleInvoiceItems, SaleInvoiceOrders, SaleOrder, SaleReturnOrders,
+    SaleCreditNotes, SaleDebitNotes, DeliveryChallans, PaymentTransactions,
+)
+from apps.purchase.models import (
+    PurchaseOrders, PurchaseInvoiceOrders, PurchaseReturnOrders, BillPaymentTransactions,
+)
 from apps.vendor.models import VendorAddress
 from config.utils_db_router import set_db
 from .models import *
@@ -507,6 +513,62 @@ class JournalEntryLinesAPIView(APIView):
                         f"Goods sold to {invoice.customer_id.name}\n"
                         + "\n".join(product_lines)
                     )
+
+        # ---------------------------
+        # SOURCE DOCUMENT RESOLUTION
+        # Attach source_type + source_id to each row based on voucher_no prefix
+        # so the frontend can open the correct edit form on double-click.
+        # ---------------------------
+        _PREFIX_MAP = [
+            # (prefix,          source_type,           model_class,               number_field,          pk_field)
+            ('SO-INV-',  'sale_invoice',       SaleInvoiceOrders,      'invoice_no',           'sale_invoice_id'),
+            ('SOO-INV-', 'sale_invoice',       SaleInvoiceOrders,      'invoice_no',           'sale_invoice_id'),
+            ('SR-',      'sale_return',        SaleReturnOrders,       'return_no',            'sale_return_id'),
+            ('CN-',      'credit_note',        SaleCreditNotes,        'credit_note_number',   'credit_note_id'),
+            ('DN-',      'debit_note',         SaleDebitNotes,         'debit_note_number',    'debit_note_id'),
+            ('DC-',      'delivery_challan',   DeliveryChallans,       'challan_no',           'delivery_challan_id'),
+            ('PTR-',     'payment_receipt',    PaymentTransactions,    'payment_receipt_no',   'transaction_id'),
+            ('SO-',      'sale_order',         SaleOrder,              'order_no',             'sale_order_id'),
+            ('SOO-',     'sale_order',         SaleOrder,              'order_no',             'sale_order_id'),
+            ('PO-INV-',  'purchase_invoice',   PurchaseInvoiceOrders,  'invoice_no',           'purchase_invoice_id'),
+            ('PR-',      'purchase_return',    PurchaseReturnOrders,   'return_no',            'purchase_return_id'),
+            ('BPR-',     'bill_payment',       BillPaymentTransactions,'payment_receipt_no',   'transaction_id'),
+            ('PO-',      'purchase_order',     PurchaseOrders,         'order_no',             'purchase_order_id'),
+            ('JV-',      'journal_voucher',    JournalVoucher,         'voucher_no',           'journal_voucher_id'),
+            ('JE-',      'journal_entry',      JournalEntry,           'voucher_no',           'journal_entry_id'),
+        ]
+
+        # Group voucher numbers by prefix
+        _bucket = {}  # source_type -> list of voucher numbers
+        _prefix_meta = {}  # source_type -> (model_class, number_field, pk_field)
+
+        for row in data:
+            vno = row.get('voucher_no') or ''
+            for prefix, src_type, model_cls, num_field, pk_field in _PREFIX_MAP:
+                if vno.startswith(prefix):
+                    _bucket.setdefault(src_type, []).append(vno)
+                    _prefix_meta[src_type] = (model_cls, num_field, pk_field, prefix)
+                    break
+
+        # Batch-query each source model once
+        _lookup = {}  # source_type -> {voucher_no: str(pk)}
+        for src_type, vouchers in _bucket.items():
+            model_cls, num_field, pk_field, _prefix = _prefix_meta[src_type]
+            qs = model_cls.objects.filter(**{f'{num_field}__in': vouchers}).values(num_field, pk_field)
+            _lookup[src_type] = {str(r[num_field]): str(r[pk_field]) for r in qs}
+
+        # Inject source_type / source_id into every row
+        for row in data:
+            vno = row.get('voucher_no') or ''
+            row['source_type'] = None
+            row['source_id'] = None
+            for prefix, src_type, model_cls, num_field, pk_field in _PREFIX_MAP:
+                if vno.startswith(prefix):
+                    pk = _lookup.get(src_type, {}).get(vno)
+                    if pk:
+                        row['source_type'] = src_type
+                        row['source_id'] = pk
+                    break
 
         # Resolve human-readable account name for the ledger header
         account_name = ''
