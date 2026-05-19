@@ -874,6 +874,35 @@ class EmployeeView(APIView):
             logger.error("Employee is mandatory but not provided.")
             return build_response(0, "Employee is mandatory", [], status.HTTP_400_BAD_REQUEST)
         else:
+
+            # ---------------------- P I C T U R E   V A L I D A T I O N ----------------------#
+            picture_data = employee_data.get('picture', None)
+
+            if not picture_data:
+                return build_response(
+                    0,
+                    "Employee Govt ID proof picture is mandatory.",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+            if not isinstance(picture_data, list):
+                return build_response(
+                    0,
+                    "'picture' field in employee must be a list.",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+            for attachment in picture_data:
+                if not all(key in attachment for key in ['uid', 'name', 'attachment_name', 'file_size', 'attachment_path']):
+                    return build_response(
+                        0,
+                        "Missing required fields in some picture data.",
+                        [],
+                        status.HTTP_400_BAD_REQUEST
+                    )
+
             employee_error = validate_payload_data(self, employee_data, EmployeesSerializer)
 
             if employee_error:
@@ -889,9 +918,9 @@ class EmployeeView(APIView):
 
         # Hence the data is validated , further it can be created.
         custom_data = {
-            'employee':{},
-            'employee_leave_balance':[]
-            }
+            'employee': {},
+            'employee_leave_balance': []
+        }
 
         # Create Employees Data
         new_employee_data = generic_data_creation(self, [employee_data], EmployeesSerializer)
@@ -909,22 +938,111 @@ class EmployeeView(APIView):
             # Create EmployeeLeaveBalance records for each leave type
             for leave_type in leave_types:
                 balance_payload = {
-                "employee_id":employee_id,
-                "leave_type_id":leave_type.get('leave_type_id'),
-                "leave_balance":leave_type.get('max_days_allowed'),
-                "year":get_current_year(),
+                    "employee_id": employee_id,
+                    "leave_type_id": leave_type.get('leave_type_id'),
+                    "leave_balance": leave_type.get('max_days_allowed'),
+                    "year": get_current_year(),
                 }
 
-                employee_leave_balance = generic_data_creation(self, [balance_payload], EmployeeLeaveBalanceSerializer)
+                employee_leave_balance = generic_data_creation(
+                    self,
+                    [balance_payload],
+                    EmployeeLeaveBalanceSerializer
+                )
+
                 # Append the created leave balance to custom_data
                 custom_data["employee_leave_balance"].append(employee_leave_balance[0])
 
             logger.info('EmployeeLeaveBalance - created*')
 
         else:
-            return build_response(0, "EmployeeLeaveBalance record creation failed.", [], status.HTTP_400_BAD_REQUEST)
+            return build_response(
+                0,
+                "EmployeeLeaveBalance record creation failed.",
+                [],
+                status.HTTP_400_BAD_REQUEST
+            )
 
-        return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
+        return build_response(
+            1,
+            "Record created successfully",
+            custom_data,
+            status.HTTP_201_CREATED
+        )
+    
+    # @transaction.atomic
+    # def create(self, request, *args, **kwargs):
+    #     # Extracting data from the request
+    #     given_data = request.data
+
+    #     # ---------------------- D A T A   V A L I D A T I O N ----------------------------------#
+    #     """
+    #     All the data in request will be validated here. it will handle the following errors:
+    #     - Invalid data types
+    #     - Invalid foreign keys
+    #     - nulls in required fields
+    #     """
+    #     errors = {}        
+
+    #     # Validate Employees Data
+    #     employee_data = given_data.pop('employee', None)  # parent_data
+
+    #     # Ensure mandatory data is present
+    #     if not employee_data:
+    #         logger.error("Employee is mandatory but not provided.")
+    #         return build_response(0, "Employee is mandatory", [], status.HTTP_400_BAD_REQUEST)
+    #     else:
+    #         employee_error = validate_payload_data(self, employee_data, EmployeesSerializer)
+
+    #         if employee_error:
+    #             errors["employee"] = employee_error
+
+    #     if errors:
+    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+    #     # ---------------------- D A T A   C R E A T I O N ----------------------------#
+    #     """
+    #     After the data is validated, this validated data is created as new instances.
+    #     """
+
+    #     # Hence the data is validated , further it can be created.
+    #     custom_data = {
+    #         'employee':{},
+    #         'employee_leave_balance':[]
+    #         }
+
+    #     # Create Employees Data
+    #     new_employee_data = generic_data_creation(self, [employee_data], EmployeesSerializer)
+    #     employee_data = new_employee_data[0]
+    #     custom_data["employee"] = employee_data
+    #     logger.info('Employee - created*')
+
+    #     # Fetch employee_id from the new instance
+    #     employee_id = employee_data.get("employee_id", None)
+
+    #     if employee_id:  # Ensure employee_id is valid
+    #         # Fetch leave types data
+    #         leave_types = LeaveTypes.objects.values('leave_type_name', 'leave_type_id', 'max_days_allowed')
+
+    #         # Create EmployeeLeaveBalance records for each leave type
+    #         for leave_type in leave_types:
+    #             balance_payload = {
+    #             "employee_id":employee_id,
+    #             "leave_type_id":leave_type.get('leave_type_id'),
+    #             "leave_balance":leave_type.get('max_days_allowed'),
+    #             "year":get_current_year(),
+    #             }
+
+    #             employee_leave_balance = generic_data_creation(self, [balance_payload], EmployeeLeaveBalanceSerializer)
+    #             # Append the created leave balance to custom_data
+    #             custom_data["employee_leave_balance"].append(employee_leave_balance[0])
+
+    #         logger.info('EmployeeLeaveBalance - created*')
+
+    #     else:
+    #         return build_response(0, "EmployeeLeaveBalance record creation failed.", [], status.HTTP_400_BAD_REQUEST)
+
+    #     return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
     
     # Handling put requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"put\" not allowed."]
