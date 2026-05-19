@@ -5,6 +5,7 @@ from django.http import Http404
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets
 from apps.auditlogs.utils import log_user_action
+from apps.company.utils import get_finance_setting
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.finance.models import JournalEntryLines
@@ -1206,116 +1207,323 @@ class PurchaseInvoiceOrderViewSet(APIView):
     @transaction.atomic
     def update(self, request, pk, *args, **kwargs):
 
+        from decimal import Decimal
+        from django.db.models import Sum
+
         #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
-        """
-        All the data in request will be validated here. it will handle the following errors:
-        - Invalid data types
-        - Invalid foreign keys
-        - nulls in required fields
-        """
-        # Get the given data from request
+
         given_data = request.data
 
+        # ---------------------- OLD PURCHASE INVOICE AMOUNT ----------------------------#
+        old_invoice_obj = PurchaseInvoiceOrders.objects.get(purchase_invoice_id=pk)
+        old_total_amount = old_invoice_obj.total_amount or Decimal('0.00')
+
         # Validated PurchaseInvoiceOrders Data
-        purchase_invoice_orders_data = given_data.pop('purchase_invoice_orders', None) # parent_data
+        purchase_invoice_orders_data = given_data.pop('purchase_invoice_orders', None)
         if purchase_invoice_orders_data:
             purchase_invoice_orders_data['purchase_invoice_id'] = pk
-            invoice_order_error = validate_multiple_data(self, purchase_invoice_orders_data , PurchaseInvoiceOrdersSerializer,['invoice_no'])
-            # validate the 'order_type' in 'purchase_invoice_orders' data
-            validate_order_type(purchase_invoice_orders_data, invoice_order_error, OrderTypes,look_up='order_type')
+            invoice_order_error = validate_multiple_data(
+                self,
+                purchase_invoice_orders_data,
+                PurchaseInvoiceOrdersSerializer,
+                ['invoice_no']
+            )
+            validate_order_type(
+                purchase_invoice_orders_data,
+                invoice_order_error,
+                OrderTypes,
+                look_up='order_type'
+            )
 
         # Validated PurchaseInvoiceItem Data
         purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
-        
+
         if purchase_invoice_items_data:
             purchase_invoice_items_data = [
                 item for item in purchase_invoice_items_data
                 if item.get("product_id") and item.get("quantity")
             ]
-        
+
         if purchase_invoice_items_data:
             exclude_fields = ['purchase_invoice_id']
-            invoice_item_error = validate_put_method_data(self, purchase_invoice_items_data, PurchaseInvoiceItemSerializer, exclude_fields, PurchaseInvoiceItem, current_model_pk_field='purchase_invoice_item_id')
+            invoice_item_error = validate_put_method_data(
+                self,
+                purchase_invoice_items_data,
+                PurchaseInvoiceItemSerializer,
+                exclude_fields,
+                PurchaseInvoiceItem,
+                current_model_pk_field='purchase_invoice_item_id'
+            )
 
         # Validated OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
-        exclude_fields = ['order_id','order_type_id']
+        exclude_fields = ['order_id', 'order_type_id']
+
         if order_attachments_data:
-            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
+            attachment_error = validate_put_method_data(
+                self,
+                order_attachments_data,
+                OrderAttachmentsSerializer,
+                exclude_fields,
+                OrderAttachments,
+                current_model_pk_field='attachment_id'
+            )
         else:
-            attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
+            attachment_error = []
 
         # Validated OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
+
         if order_shipments_data:
-            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+            shipments_error = validate_put_method_data(
+                self,
+                order_shipments_data,
+                OrderShipmentsSerializer,
+                exclude_fields,
+                OrderShipments,
+                current_model_pk_field='shipment_id'
+            )
         else:
-            shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
+            shipments_error = []
 
         # Validated CustomFieldValues Data
         custom_field_values_data = given_data.pop('custom_field_values', None)
+
         if custom_field_values_data:
             exclude_fields = ['custom_id']
-            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+            custom_field_values_error = validate_put_method_data(
+                self,
+                custom_field_values_data,
+                CustomFieldValueSerializer,
+                exclude_fields,
+                CustomFieldValue,
+                current_model_pk_field='custom_field_value_id'
+            )
         else:
             custom_field_values_error = []
 
         # Ensure mandatory data is present
         if not purchase_invoice_orders_data or not purchase_invoice_items_data:
             logger.error("Purchase invoice order and Purchase invoice items & CustomFields are mandatory but not provided.")
-            return build_response(0, "Purchase invoice order and Purchase invoice items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
-        
+            return build_response(
+                0,
+                "Purchase invoice order and Purchase invoice items & CustomFields are mandatory",
+                [],
+                status.HTTP_400_BAD_REQUEST
+            )
+
         errors = {}
+
         if invoice_order_error:
             errors["purchase_invoice_orders"] = invoice_order_error
+
         if invoice_item_error:
             errors["purchase_invoice_items"] = invoice_item_error
+
         if attachment_error:
             errors['order_attachments'] = attachment_error
+
         if shipments_error:
             errors['order_shipments'] = shipments_error
+
         if custom_field_values_error:
             errors['custom_field_values'] = custom_field_values_error
+
         if errors:
-            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)        
-      
+            return build_response(
+                0,
+                "ValidationError :",
+                errors,
+                status.HTTP_400_BAD_REQUEST
+            )
+
         # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
-        # update PurchaseInvoiceOrders
+
+        # Update PurchaseInvoiceOrders
         if purchase_invoice_orders_data:
-            update_fields = [] # No need to update any fields
-            purchaseinvoiceorder_data = update_multi_instances(self, pk, purchase_invoice_orders_data, PurchaseInvoiceOrders, PurchaseInvoiceOrdersSerializer, update_fields,main_model_related_field='purchase_invoice_id', current_model_pk_field='purchase_invoice_id')
-            purchaseinvoiceorder_data = purchaseinvoiceorder_data[0] if len(purchaseinvoiceorder_data)==1 else purchaseinvoiceorder_data
+            update_fields = []
+            purchaseinvoiceorder_data = update_multi_instances(
+                self,
+                pk,
+                purchase_invoice_orders_data,
+                PurchaseInvoiceOrders,
+                PurchaseInvoiceOrdersSerializer,
+                update_fields,
+                main_model_related_field='purchase_invoice_id',
+                current_model_pk_field='purchase_invoice_id'
+            )
+            purchaseinvoiceorder_data = purchaseinvoiceorder_data[0] if len(purchaseinvoiceorder_data) == 1 else purchaseinvoiceorder_data
 
-        # Update the 'PurchaseInvoiceItem'
-        update_fields = {'purchase_invoice_id':pk}
-        invoice_items_data = update_multi_instances(self, pk, purchase_invoice_items_data, PurchaseInvoiceItem, PurchaseInvoiceItemSerializer, update_fields, main_model_related_field='purchase_invoice_id', current_model_pk_field='purchase_invoice_item_id')
+        # Update PurchaseInvoiceItem
+        update_fields = {'purchase_invoice_id': pk}
+        invoice_items_data = update_multi_instances(
+            self,
+            pk,
+            purchase_invoice_items_data,
+            PurchaseInvoiceItem,
+            PurchaseInvoiceItemSerializer,
+            update_fields,
+            main_model_related_field='purchase_invoice_id',
+            current_model_pk_field='purchase_invoice_item_id'
+        )
 
-        # Get 'order_type_id' from 'OrderTypes' model
+        # Get order_type_id from OrderTypes model
         order_type_val = purchase_invoice_orders_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
         type_id = order_type.order_type_id
 
-        # Update the 'order_attchments'
-        update_fields = {'order_id':pk, 'order_type_id':type_id}
-        attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
+        # Update order attachments
+        update_fields = {'order_id': pk, 'order_type_id': type_id}
+        attachment_data = update_multi_instances(
+            self,
+            pk,
+            order_attachments_data,
+            OrderAttachments,
+            OrderAttachmentsSerializer,
+            update_fields,
+            main_model_related_field='order_id',
+            current_model_pk_field='attachment_id'
+        )
 
-        # Update the 'shipments'
-        shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
-        shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
+        # Update shipments
+        shipment_data = update_multi_instances(
+            self,
+            pk,
+            order_shipments_data,
+            OrderShipments,
+            OrderShipmentsSerializer,
+            update_fields,
+            main_model_related_field='order_id',
+            current_model_pk_field='shipment_id'
+        )
+        shipment_data = shipment_data[0] if len(shipment_data) == 1 else shipment_data
 
         # Update CustomFieldValues Data
         if custom_field_values_data:
-            custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+            custom_field_values_data = update_multi_instances(
+                self,
+                pk,
+                custom_field_values_data,
+                CustomFieldValue,
+                CustomFieldValueSerializer,
+                {},
+                main_model_related_field='custom_id',
+                current_model_pk_field='custom_field_value_id'
+            )
+
+        # ---------------------- J O U R N A L   E N T R Y   U P D A T E ----------------------------#
+
+        # ---------------------- J O U R N A L   E N T R Y   U P D A T E ----------------------------#
+
+        updated_invoice_obj = PurchaseInvoiceOrders.objects.get(
+            purchase_invoice_id=pk
+        )
+
+        new_total_amount = updated_invoice_obj.total_amount or Decimal('0.00')
+        difference_amount = Decimal(new_total_amount) - Decimal(old_total_amount)
+
+        updated_invoice_obj.pending_amount = new_total_amount
+        updated_invoice_obj.save(update_fields=['pending_amount'])
+
+        if difference_amount != Decimal('0.00'):
+
+            purchase_account = get_finance_setting(
+                'purchase_ledger_account',
+                fallback_name='Purchase Account'
+            )
+
+            if not purchase_account:
+                return build_response(
+                    0,
+                    "Setup required: No Purchase Ledger Account configured. "
+                    "Go to Company → Company Settings and set the Default Purchase Ledger Account, "
+                    "or create a ledger account named 'Purchase Account'.",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+
+            existing_balance = (
+                JournalEntryLines.objects
+                .filter(vendor_id=updated_invoice_obj.vendor_id, is_deleted=False)
+                .order_by('-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+
+            # In your ERP vendor ledger:
+            # Debit increases vendor payable balance
+            # Credit decreases vendor payable balance
+            if difference_amount > 0:
+                debit_amount = difference_amount
+                credit_amount = Decimal('0.00')
+                new_balance = Decimal(existing_balance) + difference_amount
+            else:
+                debit_amount = Decimal('0.00')
+                credit_amount = abs(difference_amount)
+                new_balance = Decimal(existing_balance) - abs(difference_amount)
+
+            invoice_items_qs = PurchaseInvoiceItem.objects.filter(
+                purchase_invoice_id=pk
+            )
+
+            product_lines = []
+            for idx, item in enumerate(invoice_items_qs, start=1):
+                product_lines.append(
+                    f"{idx}) {item.product_id.name} – Qty: {item.quantity:.2f} @ {item.rate:.2f}"
+                )
+
+            products_description = "\n".join(product_lines)
+
+            description = (
+                f"Purchase Invoice Updated for {updated_invoice_obj.vendor_id.name}\n"
+                f"Old Amount: {old_total_amount}\n"
+                f"New Amount: {new_total_amount}\n"
+                f"Difference Amount: {difference_amount}\n"
+                f"{products_description}"
+            )
+
+            JournalEntryLines.objects.create(
+                ledger_account_id=purchase_account,
+                debit=debit_amount,
+                credit=credit_amount,
+                voucher_no=updated_invoice_obj.invoice_no,
+                description=description,
+                vendor_id=updated_invoice_obj.vendor_id,
+                balance=new_balance
+            )
+
+            # Correct vendor closing balance = total credit - total debit
+            totals = JournalEntryLines.objects.filter(
+                vendor_id=updated_invoice_obj.vendor_id,
+                is_deleted=False
+            ).aggregate(
+                total_debit=Sum('debit'),
+                total_credit=Sum('credit')
+            )
+
+            total_debit = totals.get('total_debit') or Decimal('0.00')
+            total_credit = totals.get('total_credit') or Decimal('0.00')
+            new_balance = Decimal(total_credit) - Decimal(total_debit)
+
+            latest_journal_line = JournalEntryLines.objects.filter(
+                vendor_id=updated_invoice_obj.vendor_id,
+                is_deleted=False
+            ).order_by('-created_at').first()
+
+            if latest_journal_line:
+                latest_journal_line.balance = new_balance
+                latest_journal_line.save(update_fields=['balance'])
 
         custom_data = {
-            "purchase_invoice_orders":purchaseinvoiceorder_data,
-            "purchase_invoice_items":invoice_items_data if invoice_items_data else [],
-            "order_attachments":attachment_data if attachment_data else [],
-            "order_shipments":shipment_data if shipment_data else {},
-            "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
+            "purchase_invoice_orders": purchaseinvoiceorder_data,
+            "purchase_invoice_items": invoice_items_data if invoice_items_data else [],
+            "order_attachments": attachment_data if attachment_data else [],
+            "order_shipments": shipment_data if shipment_data else {},
+            "custom_field_values": custom_field_values_data if custom_field_values_data else []
         }
+
         invoiceno = purchase_invoice_orders_data.get("invoice_no")
-        # Log the Create
+
         log_user_action(
             set_db('default'),
             request.user,
@@ -1325,7 +1533,136 @@ class PurchaseInvoiceOrderViewSet(APIView):
             f"{invoiceno} - Purchase Invoice Order Record Updated by {request.user.username}"
         )
 
-        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+        return build_response(
+            1,
+            "Records updated successfully",
+            custom_data,
+            status.HTTP_200_OK
+        )
+    
+    # @transaction.atomic
+    # def update(self, request, pk, *args, **kwargs):
+
+    #     #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+    #     """
+    #     All the data in request will be validated here. it will handle the following errors:
+    #     - Invalid data types
+    #     - Invalid foreign keys
+    #     - nulls in required fields
+    #     """
+    #     # Get the given data from request
+    #     given_data = request.data
+
+    #     # Validated PurchaseInvoiceOrders Data
+    #     purchase_invoice_orders_data = given_data.pop('purchase_invoice_orders', None) # parent_data
+    #     if purchase_invoice_orders_data:
+    #         purchase_invoice_orders_data['purchase_invoice_id'] = pk
+    #         invoice_order_error = validate_multiple_data(self, purchase_invoice_orders_data , PurchaseInvoiceOrdersSerializer,['invoice_no'])
+    #         # validate the 'order_type' in 'purchase_invoice_orders' data
+    #         validate_order_type(purchase_invoice_orders_data, invoice_order_error, OrderTypes,look_up='order_type')
+
+    #     # Validated PurchaseInvoiceItem Data
+    #     purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+        
+    #     if purchase_invoice_items_data:
+    #         purchase_invoice_items_data = [
+    #             item for item in purchase_invoice_items_data
+    #             if item.get("product_id") and item.get("quantity")
+    #         ]
+        
+    #     if purchase_invoice_items_data:
+    #         exclude_fields = ['purchase_invoice_id']
+    #         invoice_item_error = validate_put_method_data(self, purchase_invoice_items_data, PurchaseInvoiceItemSerializer, exclude_fields, PurchaseInvoiceItem, current_model_pk_field='purchase_invoice_item_id')
+
+    #     # Validated OrderAttchments Data
+    #     order_attachments_data = given_data.pop('order_attachments', None)
+    #     exclude_fields = ['order_id','order_type_id']
+    #     if order_attachments_data:
+    #         attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id')
+    #     else:
+    #         attachment_error = [] # Since 'order_attachments' is optional, so making an error is empty list
+
+    #     # Validated OrderShipments Data
+    #     order_shipments_data = given_data.pop('order_shipments', None)
+    #     if order_shipments_data:
+    #         shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id')
+    #     else:
+    #         shipments_error = [] # Since 'order_shipments' is optional, so making an error is empty list
+
+    #     # Validated CustomFieldValues Data
+    #     custom_field_values_data = given_data.pop('custom_field_values', None)
+    #     if custom_field_values_data:
+    #         exclude_fields = ['custom_id']
+    #         custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id')
+    #     else:
+    #         custom_field_values_error = []
+
+    #     # Ensure mandatory data is present
+    #     if not purchase_invoice_orders_data or not purchase_invoice_items_data:
+    #         logger.error("Purchase invoice order and Purchase invoice items & CustomFields are mandatory but not provided.")
+    #         return build_response(0, "Purchase invoice order and Purchase invoice items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
+        
+    #     errors = {}
+    #     if invoice_order_error:
+    #         errors["purchase_invoice_orders"] = invoice_order_error
+    #     if invoice_item_error:
+    #         errors["purchase_invoice_items"] = invoice_item_error
+    #     if attachment_error:
+    #         errors['order_attachments'] = attachment_error
+    #     if shipments_error:
+    #         errors['order_shipments'] = shipments_error
+    #     if custom_field_values_error:
+    #         errors['custom_field_values'] = custom_field_values_error
+    #     if errors:
+    #         return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)        
+      
+    #     # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+    #     # update PurchaseInvoiceOrders
+    #     if purchase_invoice_orders_data:
+    #         update_fields = [] # No need to update any fields
+    #         purchaseinvoiceorder_data = update_multi_instances(self, pk, purchase_invoice_orders_data, PurchaseInvoiceOrders, PurchaseInvoiceOrdersSerializer, update_fields,main_model_related_field='purchase_invoice_id', current_model_pk_field='purchase_invoice_id')
+    #         purchaseinvoiceorder_data = purchaseinvoiceorder_data[0] if len(purchaseinvoiceorder_data)==1 else purchaseinvoiceorder_data
+
+    #     # Update the 'PurchaseInvoiceItem'
+    #     update_fields = {'purchase_invoice_id':pk}
+    #     invoice_items_data = update_multi_instances(self, pk, purchase_invoice_items_data, PurchaseInvoiceItem, PurchaseInvoiceItemSerializer, update_fields, main_model_related_field='purchase_invoice_id', current_model_pk_field='purchase_invoice_item_id')
+
+    #     # Get 'order_type_id' from 'OrderTypes' model
+    #     order_type_val = purchase_invoice_orders_data.get('order_type')
+    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
+    #     type_id = order_type.order_type_id
+
+    #     # Update the 'order_attchments'
+    #     update_fields = {'order_id':pk, 'order_type_id':type_id}
+    #     attachment_data = update_multi_instances(self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='attachment_id')
+
+    #     # Update the 'shipments'
+    #     shipment_data = update_multi_instances(self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer, update_fields, main_model_related_field='order_id', current_model_pk_field='shipment_id')
+    #     shipment_data = shipment_data[0] if len(shipment_data)==1 else shipment_data
+
+    #     # Update CustomFieldValues Data
+    #     if custom_field_values_data:
+    #         custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
+
+    #     custom_data = {
+    #         "purchase_invoice_orders":purchaseinvoiceorder_data,
+    #         "purchase_invoice_items":invoice_items_data if invoice_items_data else [],
+    #         "order_attachments":attachment_data if attachment_data else [],
+    #         "order_shipments":shipment_data if shipment_data else {},
+    #         "custom_field_values": custom_field_values_data if custom_field_values_data else []  # Add custom field values to response
+    #     }
+    #     invoiceno = purchase_invoice_orders_data.get("invoice_no")
+    #     # Log the Create
+    #     log_user_action(
+    #         set_db('default'),
+    #         request.user,
+    #         "UPDATE",
+    #         "Purchase Invoice",
+    #         pk,
+    #         f"{invoiceno} - Purchase Invoice Order Record Updated by {request.user.username}"
+    #     )
+
+    #     return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
 #=====================PurchaseReturnOrders========================================================
 class PurchaseReturnOrderViewSet(APIView):

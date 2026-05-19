@@ -96,6 +96,7 @@ class Employees(models.Model):
     department_id = models.ForeignKey(Departments, on_delete=models.PROTECT, db_column='department_id', null=True, default=None)
     shift_id = models.ForeignKey(Shifts, on_delete=models.PROTECT, db_column='shift_id', null=True, default=None)
     manager_id = models.ForeignKey('self', on_delete=models.PROTECT, db_column='manager_id', null=True, default=None)
+    picture = models.JSONField(null=True, default=None)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

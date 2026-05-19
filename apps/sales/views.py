@@ -4581,6 +4581,177 @@ class SaleInvoiceOrdersViewSet(APIView):
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
 
+    # @transaction.atomic
+    # def update(self, request, pk, *args, **kwargs):
+    #     # ------------------------------ C H E C K  D A T A B A S E ------------------------------ #
+    #     db_to_use = None
+    #     errors = {}
+    #     try:
+    #         # Check in mstcnl DB
+    #         MstcnlSaleInvoiceOrder.objects.using('mstcnl').get(sale_invoice_id=pk)
+    #         # Instead of update, return custom response
+    #         return build_response(
+    #             0,
+    #             "Update is not allowed, please contact Product team.",
+    #             errors,
+    #             status.HTTP_400_BAD_REQUEST
+    #         )
+
+    #     except ObjectDoesNotExist:
+    #         try:
+    #             # Check if sale_invoice_id exists in the default (devcnl) database
+    #             SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
+    #             set_db('default')
+    #             db_to_use = 'default'
+    #             # keep using default models + serializers
+    #         except ObjectDoesNotExist:
+    #             logger.error(f"Sale Invoice Order with id {pk} not found in any database.")
+    #             return build_response(0, f"Sale Invoice order with id {pk} not found", [], status.HTTP_404_NOT_FOUND)
+
+    #     # ------------------------------ D A T A   V A L I D A T I O N ------------------------------ #
+    #     given_data = request.data
+
+    #     # Validate SaleInvoiceOrders Data
+    #     sale_invoice_order_data = given_data.pop('sale_invoice_order', None)
+    #     if sale_invoice_order_data:
+    #         sale_invoice_order_data['sale_invoice_id'] = pk
+    #         order_error = validate_multiple_data(self, [sale_invoice_order_data], SaleInvoiceOrdersSerializer, ['invoice_no'], using_db=db_to_use)
+    #         validate_order_type(sale_invoice_order_data, order_error, OrderTypes, look_up='order_type')
+        
+    #     # Validate SaleInvoiceItems Data
+    #     sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
+        
+    #     # ------------------ IMPORTANT NEW LOGIC ------------------ #
+    #     # Filter out empty UI rows (only keep rows with real product)
+    #     if sale_invoice_items_data:
+    #         sale_invoice_items_data = [
+    #             item for item in sale_invoice_items_data
+    #             if item.get("product_id") and item.get("quantity")
+    #         ]
+    #     #-----------------------------------------------------------------------
+    #     if sale_invoice_items_data:
+    #         exclude_fields = ['sale_invoice_id']
+    #         item_error = validate_put_method_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, exclude_fields, SaleInvoiceItems, current_model_pk_field='sale_invoice_item_id', db_to_use=db_to_use)
+    #     else:
+    #         item_error = []
+
+    #     # Validate OrderAttachments Data
+    #     order_attachments_data = given_data.pop('order_attachments', None)
+    #     exclude_fields = ['order_id', 'order_type_id']
+    #     if order_attachments_data:
+    #         attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id', db_to_use=db_to_use)
+    #     else:
+    #         attachment_error = []
+
+    #     # Validate OrderShipments Data
+    #     order_shipments_data = given_data.pop('order_shipments', None)
+    #     if order_shipments_data:
+    #         shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id', db_to_use=db_to_use)
+    #     else:
+    #         shipments_error = []
+
+    #     # Validate CustomFieldValues Data
+    #     custom_field_values_data = given_data.pop('custom_field_values', None)
+    #     if custom_field_values_data:
+    #         exclude_fields = ['custom_id']
+    #         custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id', db_to_use=db_to_use)
+    #     else:
+    #         custom_field_values_error = []
+
+    #     # Ensure mandatory data is present
+    #     if not sale_invoice_order_data or not sale_invoice_items_data:
+    #         logger.error("Sale invoice order and sale invoice items & CustomFields are mandatory but not provided.")
+    #         return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
+
+    #     # Collect all errors
+        
+    #     if order_error:
+    #         errors["sale_invoice_order"] = order_error
+    #     if item_error:
+    #         errors["sale_invoice_items"] = item_error
+    #     if attachment_error:
+    #         errors["order_attachments"] = attachment_error
+    #     if shipments_error:
+    #         errors["order_shipments"] = shipments_error
+    #     if custom_field_values_error:
+    #         errors["custom_field_values"] = custom_field_values_error
+    #     if errors:
+    #         return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+
+    #     # ------------------------------ D A T A   U P D A T I O N ------------------------------ #
+
+    #     order_type_val = sale_invoice_order_data.get('order_type')
+    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
+    #     if not order_type:
+    #         logger.error(f"Order type '{order_type_val}' not found in OrderTypes.")
+    #         return build_response(0, f"Invalid order_type '{order_type_val}' provided", [], status.HTTP_400_BAD_REQUEST)
+
+    #     type_id = order_type.order_type_id
+        
+    #     if sale_invoice_order_data:
+    #         update_fields = []
+    #         sale_invoice_order_data = update_multi_instances(
+    #             self, pk, sale_invoice_order_data, SaleInvoiceOrders, SaleInvoiceOrdersSerializer,
+    #             update_fields, main_model_related_field='sale_invoice_id',
+    #             current_model_pk_field='sale_invoice_id', using_db=db_to_use
+    #         )
+    #         sale_invoice_order_data = sale_invoice_order_data[0] if len(sale_invoice_order_data) == 1 else sale_invoice_order_data
+        
+    #     # Update SaleInvoiceItems
+    #     update_fields = {'sale_invoice_id': pk}
+    #     invoice_items_data = update_multi_instances(
+    #         self, pk, sale_invoice_items_data, SaleInvoiceItems, SaleInvoiceItemsSerializer,
+    #         update_fields, main_model_related_field='sale_invoice_id',
+    #         current_model_pk_field='sale_invoice_item_id', using_db=db_to_use
+    #     )
+
+    #     # Update OrderAttachments
+    #     update_fields = {'order_id': pk, 'order_type_id': type_id}
+    #     attachment_data = update_multi_instances(
+    #         self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer,
+    #         update_fields, main_model_related_field='order_id',
+    #         current_model_pk_field='attachment_id', using_db=db_to_use
+    #     )
+
+    #     # Update OrderShipments
+    #     shipment_data = update_multi_instances(
+    #         self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
+    #         update_fields, main_model_related_field='order_id',
+    #         current_model_pk_field='shipment_id', using_db=db_to_use
+    #     )
+    #     shipment_data = shipment_data[0] if len(shipment_data) == 1 else shipment_data
+
+    #     # Update CustomFieldValues
+    #     if custom_field_values_data:
+    #         custom_field_values_data = update_multi_instances(
+    #             self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer,
+    #             {}, main_model_related_field='custom_id',
+    #             current_model_pk_field='custom_field_value_id', using_db=db_to_use
+    #         )
+
+    #     # Build Response
+    #     custom_data = {
+    #         "sale_invoice_order": sale_invoice_order_data,
+    #         "sale_invoice_items": invoice_items_data if invoice_items_data else [],
+    #         "order_attachments": attachment_data if attachment_data else [],
+    #         "order_shipments": shipment_data if shipment_data else {},
+    #         "custom_field_values": custom_field_values_data if custom_field_values_data else []
+    #     }
+        
+    #     saleinvoice_no = sale_invoice_order_data.get("invoice_no")
+        
+    #     # Log the Create
+    #     log_user_action(
+    #         db_to_use,
+    #         request.user,
+    #         "UPDATE",
+    #         "Sale Invoice",
+    #         pk,
+    #         f"{saleinvoice_no} - Sale Invoice Record Updated by {request.user.username}"
+    #     )
+
+    #     return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+    
     @transaction.atomic
     def update(self, request, pk, *args, **kwargs):
         # ------------------------------ C H E C K  D A T A B A S E ------------------------------ #
@@ -4589,24 +4760,32 @@ class SaleInvoiceOrdersViewSet(APIView):
         try:
             # Check in mstcnl DB
             MstcnlSaleInvoiceOrder.objects.using('mstcnl').get(sale_invoice_id=pk)
-            # Instead of update, return custom response
             return build_response(
                 0,
                 "Update is not allowed, please contact Product team.",
                 errors,
                 status.HTTP_400_BAD_REQUEST
             )
-
         except ObjectDoesNotExist:
             try:
-                # Check if sale_invoice_id exists in the default (devcnl) database
-                SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
+                sale_invoice = SaleInvoiceOrders.objects.using('default').get(sale_invoice_id=pk)
                 set_db('default')
                 db_to_use = 'default'
-                # keep using default models + serializers
             except ObjectDoesNotExist:
                 logger.error(f"Sale Invoice Order with id {pk} not found in any database.")
                 return build_response(0, f"Sale Invoice order with id {pk} not found", [], status.HTTP_404_NOT_FOUND)
+
+        # ------------------------------ G E T   O L D   V A L U E S ------------------------------ #
+        # IMPORTANT: Capture old state BEFORE any updates
+        old_invoice_total = sale_invoice.total_amount
+        old_items = list(SaleInvoiceItems.objects.using(db_to_use).filter(
+            sale_invoice_id=pk
+        ).values('sale_invoice_item_id', 'product_id', 'quantity', 'rate', 'amount'))
+        
+        # Create a dictionary for quick lookup
+        old_items_dict = {
+            item['sale_invoice_item_id']: item for item in old_items
+        }
 
         # ------------------------------ D A T A   V A L I D A T I O N ------------------------------ #
         given_data = request.data
@@ -4621,20 +4800,16 @@ class SaleInvoiceOrdersViewSet(APIView):
         # Validate SaleInvoiceItems Data
         sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
         
-        # ------------------ IMPORTANT NEW LOGIC ------------------ #
-        # Filter out empty UI rows (only keep rows with real product)
         if sale_invoice_items_data:
             sale_invoice_items_data = [
                 item for item in sale_invoice_items_data
                 if item.get("product_id") and item.get("quantity")
             ]
-        #-----------------------------------------------------------------------
-        if sale_invoice_items_data:
             exclude_fields = ['sale_invoice_id']
             item_error = validate_put_method_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, exclude_fields, SaleInvoiceItems, current_model_pk_field='sale_invoice_item_id', db_to_use=db_to_use)
         else:
             item_error = []
-
+            
         # Validate OrderAttachments Data
         order_attachments_data = given_data.pop('order_attachments', None)
         exclude_fields = ['order_id', 'order_type_id']
@@ -4660,11 +4835,10 @@ class SaleInvoiceOrdersViewSet(APIView):
 
         # Ensure mandatory data is present
         if not sale_invoice_order_data or not sale_invoice_items_data:
-            logger.error("Sale invoice order and sale invoice items & CustomFields are mandatory but not provided.")
-            return build_response(0, "Sale order and sale order items & CustomFields are mandatory", [], status.HTTP_400_BAD_REQUEST)
+            logger.error("Sale invoice order and sale invoice items are mandatory.")
+            return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
 
-        # Collect all errors
-        
+        # Collect all errors (keep your existing error collection)
         if order_error:
             errors["sale_invoice_order"] = order_error
         if item_error:
@@ -4678,16 +4852,17 @@ class SaleInvoiceOrdersViewSet(APIView):
         if errors:
             return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
 
-        # ------------------------------ D A T A   U P D A T I O N ------------------------------ #
-
+        # ------------------------------ D A T A   U P D A T E ------------------------------ #
+        
         order_type_val = sale_invoice_order_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
         if not order_type:
-            logger.error(f"Order type '{order_type_val}' not found in OrderTypes.")
+            logger.error(f"Order type '{order_type_val}' not found.")
             return build_response(0, f"Invalid order_type '{order_type_val}' provided", [], status.HTTP_400_BAD_REQUEST)
 
         type_id = order_type.order_type_id
         
+        # Update main invoice
         if sale_invoice_order_data:
             update_fields = []
             sale_invoice_order_data = update_multi_instances(
@@ -4697,7 +4872,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             )
             sale_invoice_order_data = sale_invoice_order_data[0] if len(sale_invoice_order_data) == 1 else sale_invoice_order_data
         
-        # Update SaleInvoiceItems
+        # Update SaleInvoiceItems (capture changes)
         update_fields = {'sale_invoice_id': pk}
         invoice_items_data = update_multi_instances(
             self, pk, sale_invoice_items_data, SaleInvoiceItems, SaleInvoiceItemsSerializer,
@@ -4705,6 +4880,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             current_model_pk_field='sale_invoice_item_id', using_db=db_to_use
         )
 
+        # [Keep your existing updates for attachments, shipments, custom fields...]
         # Update OrderAttachments
         update_fields = {'order_id': pk, 'order_type_id': type_id}
         attachment_data = update_multi_instances(
@@ -4728,29 +4904,267 @@ class SaleInvoiceOrdersViewSet(APIView):
                 {}, main_model_related_field='custom_id',
                 current_model_pk_field='custom_field_value_id', using_db=db_to_use
             )
-
-        # Build Response
+        # ------------------------------ C R I T I C A L :  J O U R N A L   A D J U S T M E N T ------------------------------ #
+        
+        # Get the updated invoice with new total
+        updated_invoice = SaleInvoiceOrders.objects.using(db_to_use).get(sale_invoice_id=pk)
+        new_invoice_total = updated_invoice.total_amount
+        
+        # Calculate difference
+        total_difference = new_invoice_total - old_invoice_total
+        
+        if total_difference != 0:
+            # Get sales ledger account (reuse your existing validation)
+            sale_account = get_finance_setting('sales_ledger_account', fallback_name='Sale Account')
+            if not sale_account:
+                return build_response(
+                    0,
+                    "Setup required: No Sales Ledger Account configured.",
+                    [],
+                    status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Calculate quantity changes for each product
+            quantity_changes = []
+            for new_item in sale_invoice_items_data:
+                old_item = old_items_dict.get(new_item.get('sale_invoice_item_id'))
+                if old_item:
+                    old_qty = old_item['quantity']
+                    new_qty = new_item['quantity']
+                    qty_diff = new_qty - old_qty
+                    
+                    if qty_diff != 0:
+                        quantity_changes.append({
+                            'product_id': new_item['product_id'],
+                            'old_quantity': old_qty,
+                            'new_quantity': new_qty,
+                            'difference': qty_diff,
+                            'rate': new_item.get('rate', old_item['rate']),
+                            'amount_difference': qty_diff * new_item.get('rate', old_item['rate'])
+                        })
+            
+            # ========== METHOD 1: Create Adjustment Journal Entry ==========
+            # This is the simplest and most audit-friendly approach
+            
+            if total_difference > 0:
+                # Additional revenue - Debit Customer, Credit Sales
+                description = f"ADJUSTMENT: Invoice {updated_invoice.invoice_no} - Amount increased by {total_difference}"
+                debit_amount = total_difference
+                credit_amount = Decimal('0.00')
+                
+                # Add quantity change details
+                if quantity_changes:
+                    qty_details = "\n".join([
+                        f"  • Product {c['product_id']}: {c['old_quantity']} → {c['new_quantity']} (+{c['difference']} units)"
+                        for c in quantity_changes
+                    ])
+                    description = f"{description}\nQuantity changes:\n{qty_details}"
+                    
+            elif total_difference < 0:
+                # Revenue reduction - Debit Sales, Credit Customer
+                description = f"ADJUSTMENT: Invoice {updated_invoice.invoice_no} - Amount decreased by {abs(total_difference)}"
+                debit_amount = Decimal('0.00')
+                credit_amount = abs(total_difference)
+                
+                if quantity_changes:
+                    qty_details = "\n".join([
+                        f"  • Product {c['product_id']}: {c['old_quantity']} → {c['new_quantity']} ({c['difference']} units)"
+                        for c in quantity_changes
+                    ])
+                    description = f"{description}\nQuantity changes:\n{qty_details}"
+            
+            # Get current customer balance
+            current_balance = (
+                JournalEntryLines.objects
+                .using(db_to_use)
+                .filter(customer_id=updated_invoice.customer_id)
+                .order_by('-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+            
+            # Calculate new balance after adjustment
+            new_balance = current_balance + total_difference
+            
+            # Create adjustment journal entry
+            adjustment_entry = JournalEntryLines.objects.using(db_to_use).create(
+                ledger_account_id=sale_account,
+                debit=debit_amount,
+                credit=credit_amount,
+                voucher_no=updated_invoice.invoice_no,
+                description=description,
+                customer_id=updated_invoice.customer_id,
+                balance=new_balance,
+                # Add these fields if your model has them (optional but recommended)
+                # adjustment_type='INVOICE_UPDATE',
+                # parent_invoice_id=pk,
+                # adjustment_date=timezone.now()
+            )
+            
+            logger.info(f"Journal adjustment created for Invoice {pk}: {total_difference} (Old: {old_invoice_total}, New: {new_invoice_total})")
+            
+            # ========== METHOD 2: Handle Inventory Adjustments (If standalone invoice) ==========
+            # Check if this invoice has linked sale order
+            sale_order_id = updated_invoice.sale_order_id
+            
+            if not sale_order_id and quantity_changes:
+                # This is a standalone invoice with inventory blocking
+                # Need to adjust inventory based on quantity changes
+                
+                for change in quantity_changes:
+                    if change['difference'] > 0:
+                        # Additional quantity - block more inventory
+                        logger.info(f"Additional inventory needed for product {change['product_id']}: +{change['difference']} units")
+                        # Call your inventory blocking logic here
+                        block_additional_inventory(updated_invoice, change, db_to_use)
+                        
+                    elif change['difference'] < 0:
+                        # Reduced quantity - release some inventory
+                        logger.info(f"Release inventory for product {change['product_id']}: {abs(change['difference'])} units")
+                        # Call your inventory release logic here
+                        release_blocked_inventory(updated_invoice, change, db_to_use)
+            
+            # Update invoice pending amount
+            updated_invoice.pending_amount = new_invoice_total - updated_invoice.paid_amount
+            updated_invoice.save(update_fields=['pending_amount'])
+            
+        else:
+            logger.info(f"No financial impact for Invoice {pk} update - total amount unchanged")
+        
+        # ------------------------------ R E S P O N S E ------------------------------ #
+        
         custom_data = {
             "sale_invoice_order": sale_invoice_order_data,
             "sale_invoice_items": invoice_items_data if invoice_items_data else [],
             "order_attachments": attachment_data if attachment_data else [],
             "order_shipments": shipment_data if shipment_data else {},
-            "custom_field_values": custom_field_values_data if custom_field_values_data else []
+            "custom_field_values": custom_field_values_data if custom_field_values_data else [],
+            "journal_adjustment": {
+                "old_total": str(old_invoice_total),
+                "new_total": str(new_invoice_total),
+                "difference": str(total_difference),
+                "adjusted": total_difference != 0
+            } if total_difference != 0 else None
         }
         
         saleinvoice_no = sale_invoice_order_data.get("invoice_no")
         
-        # Log the Create
         log_user_action(
             db_to_use,
             request.user,
             "UPDATE",
             "Sale Invoice",
             pk,
-            f"{saleinvoice_no} - Sale Invoice Record Updated by {request.user.username}"
+            f"{saleinvoice_no} - Sale Invoice Record Updated by {request.user.username} (Amount changed: {old_invoice_total} → {new_invoice_total})"
         )
-
+        
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
+
+
+# Helper functions for inventory adjustment
+def block_additional_inventory(invoice, quantity_change, db_to_use):
+    """Block additional inventory when quantity increases"""
+    from decimal import Decimal
+    from django.db.models import F
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    product_id = quantity_change['product_id']
+    additional_qty = quantity_change['difference']
+    
+    # Get block configuration
+    block_config = InventoryBlockConfig.objects.using(db_to_use).filter(
+        product_id__isnull=True
+    ).first()
+    block_duration_hours = getattr(block_config, "block_duration_hours", 24)
+    expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+    
+    # Lock product for update
+    product = Products.objects.using(db_to_use).select_for_update().filter(
+        product_id=product_id
+    ).first()
+    
+    if not product:
+        logger.error(f"Product {product_id} not found for additional blocking")
+        return
+    
+    # Check available quantity
+    available_qty = min(product.balance or 0, additional_qty)
+    
+    if available_qty <= 0:
+        logger.warning(f"No available inventory for product {product_id}")
+        return
+    
+    # Reduce product balance
+    product.balance = F('balance') - available_qty
+    product.save(using=db_to_use, update_fields=['balance'])
+    
+    # Reduce variations (FIFO)
+    remaining_qty = available_qty
+    variations = ProductVariation.objects.using(db_to_use).filter(
+        product_id=product_id,
+        quantity__gt=0
+    ).order_by('created_at')
+    
+    for variation in variations:
+        if remaining_qty <= 0:
+            break
+        deduct_qty = min(variation.quantity, remaining_qty)
+        variation.quantity = F('quantity') - deduct_qty
+        variation.save(using=db_to_use, update_fields=['quantity'])
+        remaining_qty -= deduct_qty
+    
+    # Create blocked inventory record
+    BlockedInventory.objects.using(db_to_use).create(
+        sale_order_id=None,
+        sale_invoice_id=invoice,
+        product_id=product,
+        blocked_qty=available_qty,
+        source_type='SALE_INVOICE_ADJUSTMENT',
+        expiration_time=expiration_time,
+        is_expired=False
+    )
+    
+    logger.info(f"Additional inventory blocked for Invoice {invoice.sale_invoice_id}: +{available_qty} units of product {product_id}")
+
+
+def release_blocked_inventory(invoice, quantity_change, db_to_use):
+    """Release blocked inventory when quantity decreases"""
+    product_id = quantity_change['product_id']
+    reduced_qty = abs(quantity_change['difference'])
+    
+    # Get blocked inventory records for this invoice and product
+    blocked_records = BlockedInventory.objects.using(db_to_use).filter(
+        sale_invoice_id=invoice,
+        product_id=product_id,
+        is_expired=False
+    ).order_by('created_at')
+    
+    remaining_to_release = reduced_qty
+    
+    for blocked in blocked_records:
+        if remaining_to_release <= 0:
+            break
+        
+        release_qty = min(blocked.blocked_qty, remaining_to_release)
+        
+        # Return quantity to product balance
+        product = Products.objects.using(db_to_use).select_for_update().get(
+            product_id=product_id
+        )
+        product.balance = F('balance') + release_qty
+        product.save(using=db_to_use, update_fields=['balance'])
+        
+        # Update or delete blocked record
+        if release_qty == blocked.blocked_qty:
+            blocked.delete()
+        else:
+            blocked.blocked_qty = F('blocked_qty') - release_qty
+            blocked.save(using=db_to_use, update_fields=['blocked_qty'])
+        
+        remaining_to_release -= release_qty
+        
+        logger.info(f"Inventory released for Invoice {invoice.sale_invoice_id}: {release_qty} units of product {product_id}")
 
 
 from decimal import Decimal

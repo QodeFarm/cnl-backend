@@ -67,6 +67,13 @@ class ModEmployeesSerializer(serializers.ModelSerializer):
         model = Employees
         fields = ['employee_id','first_name','last_name','email','phone','gender','manager_id']
 		
+class PictureSerializer(serializers.Serializer):
+    uid = serializers.CharField(max_length=255)
+    name = serializers.CharField(max_length=255)
+    attachment_name = serializers.CharField(max_length=255)
+    file_size = serializers.IntegerField()
+    attachment_path = serializers.CharField(max_length=255)
+  
 class EmployeesSerializer(serializers.ModelSerializer):
     job_type = ModJobTypesSerializer(source='job_type_id',read_only=True)
     designation = ModDesignationsSerializer(source='designation_id',read_only=True)
@@ -75,9 +82,12 @@ class EmployeesSerializer(serializers.ModelSerializer):
     shift = ModShiftsSerializer(source = 'shift_id',read_only=True)
     manager = ModEmployeesSerializer(source = 'manager_id',read_only=True)
     full_name = serializers.CharField(read_only=True)
+    
+    picture = PictureSerializer(required=True, allow_null=False, many=True)
     class Meta:
         model = Employees
         fields = '__all__'
+
 
 
 class ModEmployeeSalarySerializer(serializers.ModelSerializer):
