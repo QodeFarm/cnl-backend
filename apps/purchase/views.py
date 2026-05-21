@@ -1204,21 +1204,351 @@ class PurchaseInvoiceOrderViewSet(APIView):
     def put(self, request, *args, **kwargs):
         return self.update(request, *args, **kwargs)
     
+    # @transaction.atomic
+    # def update(self, request, pk, *args, **kwargs):
+
+    #     from decimal import Decimal
+    #     from django.db.models import Sum
+
+    #     #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
+
+    #     given_data = request.data
+
+    #     # ---------------------- OLD PURCHASE INVOICE AMOUNT ----------------------------#
+    #     old_invoice_obj = PurchaseInvoiceOrders.objects.get(purchase_invoice_id=pk)
+    #     old_total_amount = old_invoice_obj.total_amount or Decimal('0.00')
+
+    #     # Validated PurchaseInvoiceOrders Data
+    #     purchase_invoice_orders_data = given_data.pop('purchase_invoice_orders', None)
+    #     if purchase_invoice_orders_data:
+    #         purchase_invoice_orders_data['purchase_invoice_id'] = pk
+    #         invoice_order_error = validate_multiple_data(
+    #             self,
+    #             purchase_invoice_orders_data,
+    #             PurchaseInvoiceOrdersSerializer,
+    #             ['invoice_no']
+    #         )
+    #         validate_order_type(
+    #             purchase_invoice_orders_data,
+    #             invoice_order_error,
+    #             OrderTypes,
+    #             look_up='order_type'
+    #         )
+
+    #     # Validated PurchaseInvoiceItem Data
+    #     purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
+
+    #     if purchase_invoice_items_data:
+    #         purchase_invoice_items_data = [
+    #             item for item in purchase_invoice_items_data
+    #             if item.get("product_id") and item.get("quantity")
+    #         ]
+
+    #     if purchase_invoice_items_data:
+    #         exclude_fields = ['purchase_invoice_id']
+    #         invoice_item_error = validate_put_method_data(
+    #             self,
+    #             purchase_invoice_items_data,
+    #             PurchaseInvoiceItemSerializer,
+    #             exclude_fields,
+    #             PurchaseInvoiceItem,
+    #             current_model_pk_field='purchase_invoice_item_id'
+    #         )
+
+    #     # Validated OrderAttchments Data
+    #     order_attachments_data = given_data.pop('order_attachments', None)
+    #     exclude_fields = ['order_id', 'order_type_id']
+
+    #     if order_attachments_data:
+    #         attachment_error = validate_put_method_data(
+    #             self,
+    #             order_attachments_data,
+    #             OrderAttachmentsSerializer,
+    #             exclude_fields,
+    #             OrderAttachments,
+    #             current_model_pk_field='attachment_id'
+    #         )
+    #     else:
+    #         attachment_error = []
+
+    #     # Validated OrderShipments Data
+    #     order_shipments_data = given_data.pop('order_shipments', None)
+
+    #     if order_shipments_data:
+    #         shipments_error = validate_put_method_data(
+    #             self,
+    #             order_shipments_data,
+    #             OrderShipmentsSerializer,
+    #             exclude_fields,
+    #             OrderShipments,
+    #             current_model_pk_field='shipment_id'
+    #         )
+    #     else:
+    #         shipments_error = []
+
+    #     # Validated CustomFieldValues Data
+    #     custom_field_values_data = given_data.pop('custom_field_values', None)
+
+    #     if custom_field_values_data:
+    #         exclude_fields = ['custom_id']
+    #         custom_field_values_error = validate_put_method_data(
+    #             self,
+    #             custom_field_values_data,
+    #             CustomFieldValueSerializer,
+    #             exclude_fields,
+    #             CustomFieldValue,
+    #             current_model_pk_field='custom_field_value_id'
+    #         )
+    #     else:
+    #         custom_field_values_error = []
+
+    #     # Ensure mandatory data is present
+    #     if not purchase_invoice_orders_data or not purchase_invoice_items_data:
+    #         logger.error("Purchase invoice order and Purchase invoice items & CustomFields are mandatory but not provided.")
+    #         return build_response(
+    #             0,
+    #             "Purchase invoice order and Purchase invoice items & CustomFields are mandatory",
+    #             [],
+    #             status.HTTP_400_BAD_REQUEST
+    #         )
+
+    #     errors = {}
+
+    #     if invoice_order_error:
+    #         errors["purchase_invoice_orders"] = invoice_order_error
+
+    #     if invoice_item_error:
+    #         errors["purchase_invoice_items"] = invoice_item_error
+
+    #     if attachment_error:
+    #         errors['order_attachments'] = attachment_error
+
+    #     if shipments_error:
+    #         errors['order_shipments'] = shipments_error
+
+    #     if custom_field_values_error:
+    #         errors['custom_field_values'] = custom_field_values_error
+
+    #     if errors:
+    #         return build_response(
+    #             0,
+    #             "ValidationError :",
+    #             errors,
+    #             status.HTTP_400_BAD_REQUEST
+    #         )
+
+    #     # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+
+    #     # Update PurchaseInvoiceOrders
+    #     if purchase_invoice_orders_data:
+    #         update_fields = []
+    #         purchaseinvoiceorder_data = update_multi_instances(
+    #             self,
+    #             pk,
+    #             purchase_invoice_orders_data,
+    #             PurchaseInvoiceOrders,
+    #             PurchaseInvoiceOrdersSerializer,
+    #             update_fields,
+    #             main_model_related_field='purchase_invoice_id',
+    #             current_model_pk_field='purchase_invoice_id'
+    #         )
+    #         purchaseinvoiceorder_data = purchaseinvoiceorder_data[0] if len(purchaseinvoiceorder_data) == 1 else purchaseinvoiceorder_data
+
+    #     # Update PurchaseInvoiceItem
+    #     update_fields = {'purchase_invoice_id': pk}
+    #     invoice_items_data = update_multi_instances(
+    #         self,
+    #         pk,
+    #         purchase_invoice_items_data,
+    #         PurchaseInvoiceItem,
+    #         PurchaseInvoiceItemSerializer,
+    #         update_fields,
+    #         main_model_related_field='purchase_invoice_id',
+    #         current_model_pk_field='purchase_invoice_item_id'
+    #     )
+
+    #     # Get order_type_id from OrderTypes model
+    #     order_type_val = purchase_invoice_orders_data.get('order_type')
+    #     order_type = get_object_or_none(OrderTypes, name=order_type_val)
+    #     type_id = order_type.order_type_id
+
+    #     # Update order attachments
+    #     update_fields = {'order_id': pk, 'order_type_id': type_id}
+    #     attachment_data = update_multi_instances(
+    #         self,
+    #         pk,
+    #         order_attachments_data,
+    #         OrderAttachments,
+    #         OrderAttachmentsSerializer,
+    #         update_fields,
+    #         main_model_related_field='order_id',
+    #         current_model_pk_field='attachment_id'
+    #     )
+
+    #     # Update shipments
+    #     shipment_data = update_multi_instances(
+    #         self,
+    #         pk,
+    #         order_shipments_data,
+    #         OrderShipments,
+    #         OrderShipmentsSerializer,
+    #         update_fields,
+    #         main_model_related_field='order_id',
+    #         current_model_pk_field='shipment_id'
+    #     )
+    #     shipment_data = shipment_data[0] if len(shipment_data) == 1 else shipment_data
+
+    #     # Update CustomFieldValues Data
+    #     if custom_field_values_data:
+    #         custom_field_values_data = update_multi_instances(
+    #             self,
+    #             pk,
+    #             custom_field_values_data,
+    #             CustomFieldValue,
+    #             CustomFieldValueSerializer,
+    #             {},
+    #             main_model_related_field='custom_id',
+    #             current_model_pk_field='custom_field_value_id'
+    #         )
+
+    #     # ---------------------- J O U R N A L   E N T R Y   U P D A T E ----------------------------#
+
+    #     # ---------------------- J O U R N A L   E N T R Y   U P D A T E ----------------------------#
+
+    #     updated_invoice_obj = PurchaseInvoiceOrders.objects.get(
+    #         purchase_invoice_id=pk
+    #     )
+
+    #     new_total_amount = updated_invoice_obj.total_amount or Decimal('0.00')
+    #     difference_amount = Decimal(new_total_amount) - Decimal(old_total_amount)
+
+    #     updated_invoice_obj.pending_amount = new_total_amount
+    #     updated_invoice_obj.save(update_fields=['pending_amount'])
+
+    #     if difference_amount != Decimal('0.00'):
+
+    #         purchase_account = get_finance_setting(
+    #             'purchase_ledger_account',
+    #             fallback_name='Purchase Account'
+    #         )
+
+    #         if not purchase_account:
+    #             return build_response(
+    #                 0,
+    #                 "Setup required: No Purchase Ledger Account configured. "
+    #                 "Go to Company → Company Settings and set the Default Purchase Ledger Account, "
+    #                 "or create a ledger account named 'Purchase Account'.",
+    #                 [],
+    #                 status.HTTP_400_BAD_REQUEST
+    #             )
+
+    #         existing_balance = (
+    #             JournalEntryLines.objects
+    #             .filter(vendor_id=updated_invoice_obj.vendor_id, is_deleted=False)
+    #             .order_by('-created_at')
+    #             .values_list('balance', flat=True)
+    #             .first()
+    #         ) or Decimal('0.00')
+
+    #         # In your ERP vendor ledger:
+    #         # Debit increases vendor payable balance
+    #         # Credit decreases vendor payable balance
+    #         if difference_amount > 0:
+    #             debit_amount = difference_amount
+    #             credit_amount = Decimal('0.00')
+    #             new_balance = Decimal(existing_balance) + difference_amount
+    #         else:
+    #             debit_amount = Decimal('0.00')
+    #             credit_amount = abs(difference_amount)
+    #             new_balance = Decimal(existing_balance) - abs(difference_amount)
+
+    #         invoice_items_qs = PurchaseInvoiceItem.objects.filter(
+    #             purchase_invoice_id=pk
+    #         )
+
+    #         product_lines = []
+    #         for idx, item in enumerate(invoice_items_qs, start=1):
+    #             product_lines.append(
+    #                 f"{idx}) {item.product_id.name} – Qty: {item.quantity:.2f} @ {item.rate:.2f}"
+    #             )
+
+    #         products_description = "\n".join(product_lines)
+
+    #         description = (
+    #             f"Purchase Invoice Updated for {updated_invoice_obj.vendor_id.name}\n"
+    #             f"Old Amount: {old_total_amount}\n"
+    #             f"New Amount: {new_total_amount}\n"
+    #             f"Difference Amount: {difference_amount}\n"
+    #             f"{products_description}"
+    #         )
+
+    #         JournalEntryLines.objects.create(
+    #             ledger_account_id=purchase_account,
+    #             debit=debit_amount,
+    #             credit=credit_amount,
+    #             voucher_no=updated_invoice_obj.invoice_no,
+    #             description=description,
+    #             vendor_id=updated_invoice_obj.vendor_id,
+    #             balance=new_balance
+    #         )
+
+    #         # Correct vendor closing balance = total credit - total debit
+    #         totals = JournalEntryLines.objects.filter(
+    #             vendor_id=updated_invoice_obj.vendor_id,
+    #             is_deleted=False
+    #         ).aggregate(
+    #             total_debit=Sum('debit'),
+    #             total_credit=Sum('credit')
+    #         )
+
+    #         total_debit = totals.get('total_debit') or Decimal('0.00')
+    #         total_credit = totals.get('total_credit') or Decimal('0.00')
+    #         new_balance = Decimal(total_credit) - Decimal(total_debit)
+
+    #         latest_journal_line = JournalEntryLines.objects.filter(
+    #             vendor_id=updated_invoice_obj.vendor_id,
+    #             is_deleted=False
+    #         ).order_by('-created_at').first()
+
+    #         if latest_journal_line:
+    #             latest_journal_line.balance = new_balance
+    #             latest_journal_line.save(update_fields=['balance'])
+
+    #     custom_data = {
+    #         "purchase_invoice_orders": purchaseinvoiceorder_data,
+    #         "purchase_invoice_items": invoice_items_data if invoice_items_data else [],
+    #         "order_attachments": attachment_data if attachment_data else [],
+    #         "order_shipments": shipment_data if shipment_data else {},
+    #         "custom_field_values": custom_field_values_data if custom_field_values_data else []
+    #     }
+
+    #     invoiceno = purchase_invoice_orders_data.get("invoice_no")
+
+    #     log_user_action(
+    #         set_db('default'),
+    #         request.user,
+    #         "UPDATE",
+    #         "Purchase Invoice",
+    #         pk,
+    #         f"{invoiceno} - Purchase Invoice Order Record Updated by {request.user.username}"
+    #     )
+
+    #     return build_response(
+    #         1,
+    #         "Records updated successfully",
+    #         custom_data,
+    #         status.HTTP_200_OK
+    #     )
+    
+    
     @transaction.atomic
     def update(self, request, pk, *args, **kwargs):
 
         from decimal import Decimal
-        from django.db.models import Sum
-
-        #----------------------------------- D A T A  V A L I D A T I O N -----------------------------#
 
         given_data = request.data
 
-        # ---------------------- OLD PURCHASE INVOICE AMOUNT ----------------------------#
-        old_invoice_obj = PurchaseInvoiceOrders.objects.get(purchase_invoice_id=pk)
-        old_total_amount = old_invoice_obj.total_amount or Decimal('0.00')
-
-        # Validated PurchaseInvoiceOrders Data
+        # ---------------------- VALIDATION ----------------------------#
         purchase_invoice_orders_data = given_data.pop('purchase_invoice_orders', None)
         if purchase_invoice_orders_data:
             purchase_invoice_orders_data['purchase_invoice_id'] = pk
@@ -1235,7 +1565,6 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 look_up='order_type'
             )
 
-        # Validated PurchaseInvoiceItem Data
         purchase_invoice_items_data = given_data.pop('purchase_invoice_items', None)
 
         if purchase_invoice_items_data:
@@ -1255,7 +1584,6 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 current_model_pk_field='purchase_invoice_item_id'
             )
 
-        # Validated OrderAttchments Data
         order_attachments_data = given_data.pop('order_attachments', None)
         exclude_fields = ['order_id', 'order_type_id']
 
@@ -1271,7 +1599,6 @@ class PurchaseInvoiceOrderViewSet(APIView):
         else:
             attachment_error = []
 
-        # Validated OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
 
         if order_shipments_data:
@@ -1286,7 +1613,6 @@ class PurchaseInvoiceOrderViewSet(APIView):
         else:
             shipments_error = []
 
-        # Validated CustomFieldValues Data
         custom_field_values_data = given_data.pop('custom_field_values', None)
 
         if custom_field_values_data:
@@ -1302,9 +1628,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
         else:
             custom_field_values_error = []
 
-        # Ensure mandatory data is present
         if not purchase_invoice_orders_data or not purchase_invoice_items_data:
-            logger.error("Purchase invoice order and Purchase invoice items & CustomFields are mandatory but not provided.")
             return build_response(
                 0,
                 "Purchase invoice order and Purchase invoice items & CustomFields are mandatory",
@@ -1316,16 +1640,12 @@ class PurchaseInvoiceOrderViewSet(APIView):
 
         if invoice_order_error:
             errors["purchase_invoice_orders"] = invoice_order_error
-
         if invoice_item_error:
             errors["purchase_invoice_items"] = invoice_item_error
-
         if attachment_error:
             errors['order_attachments'] = attachment_error
-
         if shipments_error:
             errors['order_shipments'] = shipments_error
-
         if custom_field_values_error:
             errors['custom_field_values'] = custom_field_values_error
 
@@ -1337,9 +1657,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 status.HTTP_400_BAD_REQUEST
             )
 
-        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
-
-        # Update PurchaseInvoiceOrders
+        # ---------------------- DATA UPDATE ----------------------------#
         if purchase_invoice_orders_data:
             update_fields = []
             purchaseinvoiceorder_data = update_multi_instances(
@@ -1354,7 +1672,6 @@ class PurchaseInvoiceOrderViewSet(APIView):
             )
             purchaseinvoiceorder_data = purchaseinvoiceorder_data[0] if len(purchaseinvoiceorder_data) == 1 else purchaseinvoiceorder_data
 
-        # Update PurchaseInvoiceItem
         update_fields = {'purchase_invoice_id': pk}
         invoice_items_data = update_multi_instances(
             self,
@@ -1367,12 +1684,10 @@ class PurchaseInvoiceOrderViewSet(APIView):
             current_model_pk_field='purchase_invoice_item_id'
         )
 
-        # Get order_type_id from OrderTypes model
         order_type_val = purchase_invoice_orders_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
         type_id = order_type.order_type_id
 
-        # Update order attachments
         update_fields = {'order_id': pk, 'order_type_id': type_id}
         attachment_data = update_multi_instances(
             self,
@@ -1385,7 +1700,6 @@ class PurchaseInvoiceOrderViewSet(APIView):
             current_model_pk_field='attachment_id'
         )
 
-        # Update shipments
         shipment_data = update_multi_instances(
             self,
             pk,
@@ -1398,7 +1712,6 @@ class PurchaseInvoiceOrderViewSet(APIView):
         )
         shipment_data = shipment_data[0] if len(shipment_data) == 1 else shipment_data
 
-        # Update CustomFieldValues Data
         if custom_field_values_data:
             custom_field_values_data = update_multi_instances(
                 self,
@@ -1411,108 +1724,77 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 current_model_pk_field='custom_field_value_id'
             )
 
-        # ---------------------- J O U R N A L   E N T R Y   U P D A T E ----------------------------#
-
-        # ---------------------- J O U R N A L   E N T R Y   U P D A T E ----------------------------#
-
+        # ---------------------- JOURNAL ENTRY UPDATE ----------------------------#
         updated_invoice_obj = PurchaseInvoiceOrders.objects.get(
             purchase_invoice_id=pk
         )
 
         new_total_amount = updated_invoice_obj.total_amount or Decimal('0.00')
-        difference_amount = Decimal(new_total_amount) - Decimal(old_total_amount)
 
         updated_invoice_obj.pending_amount = new_total_amount
         updated_invoice_obj.save(update_fields=['pending_amount'])
 
-        if difference_amount != Decimal('0.00'):
+        purchase_account = get_finance_setting(
+            'purchase_ledger_account',
+            fallback_name='Purchase Account'
+        )
 
-            purchase_account = get_finance_setting(
-                'purchase_ledger_account',
-                fallback_name='Purchase Account'
+        if not purchase_account:
+            return build_response(
+                0,
+                "Setup required: No Purchase Ledger Account configured. "
+                "Go to Company → Company Settings and set the Default Purchase Ledger Account, "
+                "or create a ledger account named 'Purchase Account'.",
+                [],
+                status.HTTP_400_BAD_REQUEST
             )
 
-            if not purchase_account:
-                return build_response(
-                    0,
-                    "Setup required: No Purchase Ledger Account configured. "
-                    "Go to Company → Company Settings and set the Default Purchase Ledger Account, "
-                    "or create a ledger account named 'Purchase Account'.",
-                    [],
-                    status.HTTP_400_BAD_REQUEST
-                )
+        invoice_items_qs = PurchaseInvoiceItem.objects.filter(
+            purchase_invoice_id=pk
+        )
 
-            existing_balance = (
-                JournalEntryLines.objects
-                .filter(vendor_id=updated_invoice_obj.vendor_id, is_deleted=False)
-                .order_by('-created_at')
-                .values_list('balance', flat=True)
-                .first()
-            ) or Decimal('0.00')
-
-            # In your ERP vendor ledger:
-            # Debit increases vendor payable balance
-            # Credit decreases vendor payable balance
-            if difference_amount > 0:
-                debit_amount = difference_amount
-                credit_amount = Decimal('0.00')
-                new_balance = Decimal(existing_balance) + difference_amount
-            else:
-                debit_amount = Decimal('0.00')
-                credit_amount = abs(difference_amount)
-                new_balance = Decimal(existing_balance) - abs(difference_amount)
-
-            invoice_items_qs = PurchaseInvoiceItem.objects.filter(
-                purchase_invoice_id=pk
+        product_lines = []
+        for idx, item in enumerate(invoice_items_qs, start=1):
+            product_lines.append(
+                f"{idx}) {item.product_id.name} – Qty: {item.quantity:.2f} @ {item.rate:.2f}"
             )
 
-            product_lines = []
-            for idx, item in enumerate(invoice_items_qs, start=1):
-                product_lines.append(
-                    f"{idx}) {item.product_id.name} – Qty: {item.quantity:.2f} @ {item.rate:.2f}"
-                )
+        products_description = "\n".join(product_lines)
 
-            products_description = "\n".join(product_lines)
+        description = (
+            f"Goods purchased from {updated_invoice_obj.vendor_id.name}\n"
+            f"{products_description}"
+        )
 
-            description = (
-                f"Purchase Invoice Updated for {updated_invoice_obj.vendor_id.name}\n"
-                f"Old Amount: {old_total_amount}\n"
-                f"New Amount: {new_total_amount}\n"
-                f"Difference Amount: {difference_amount}\n"
-                f"{products_description}"
-            )
+        journal_line = JournalEntryLines.objects.filter(
+            voucher_no=updated_invoice_obj.invoice_no,
+            vendor_id=updated_invoice_obj.vendor_id,
+            is_deleted=False
+        ).first()
 
+        if journal_line:
+            journal_line.ledger_account_id = purchase_account
+            journal_line.debit = new_total_amount
+            journal_line.credit = Decimal('0.00')
+            journal_line.description = description
+            journal_line.save(update_fields=[
+                'ledger_account_id',
+                'debit',
+                'credit',
+                'description'
+            ])
+        else:
             JournalEntryLines.objects.create(
                 ledger_account_id=purchase_account,
-                debit=debit_amount,
-                credit=credit_amount,
+                debit=new_total_amount,
+                credit=Decimal('0.00'),
                 voucher_no=updated_invoice_obj.invoice_no,
                 description=description,
                 vendor_id=updated_invoice_obj.vendor_id,
-                balance=new_balance
+                balance=Decimal('0.00')
             )
 
-            # Correct vendor closing balance = total credit - total debit
-            totals = JournalEntryLines.objects.filter(
-                vendor_id=updated_invoice_obj.vendor_id,
-                is_deleted=False
-            ).aggregate(
-                total_debit=Sum('debit'),
-                total_credit=Sum('credit')
-            )
-
-            total_debit = totals.get('total_debit') or Decimal('0.00')
-            total_credit = totals.get('total_credit') or Decimal('0.00')
-            new_balance = Decimal(total_credit) - Decimal(total_debit)
-
-            latest_journal_line = JournalEntryLines.objects.filter(
-                vendor_id=updated_invoice_obj.vendor_id,
-                is_deleted=False
-            ).order_by('-created_at').first()
-
-            if latest_journal_line:
-                latest_journal_line.balance = new_balance
-                latest_journal_line.save(update_fields=['balance'])
+        self._recalculate_vendor_balances(updated_invoice_obj.vendor_id.vendor_id)
 
         custom_data = {
             "purchase_invoice_orders": purchaseinvoiceorder_data,
@@ -1539,7 +1821,23 @@ class PurchaseInvoiceOrderViewSet(APIView):
             custom_data,
             status.HTTP_200_OK
         )
-    
+        
+    def _recalculate_vendor_balances(self, vendor_id):
+        entries = JournalEntryLines.objects.filter(
+            vendor_id=vendor_id,
+            is_deleted=False
+        ).order_by("created_at")
+
+        running_balance = Decimal("0.00")
+
+        for entry in entries:
+            debit = entry.debit or Decimal("0.00")
+            credit = entry.credit or Decimal("0.00")
+
+            running_balance = running_balance + Decimal(debit) - Decimal(credit)
+
+            entry.balance = running_balance
+            entry.save(update_fields=["balance"])
     # @transaction.atomic
     # def update(self, request, pk, *args, **kwargs):
 
@@ -3061,6 +3359,159 @@ class BillPaymentTransactionAPIView(APIView):
     #             "vendor_balance": vendor_balance_response.data.get("message")
     #         }, status.HTTP_201_CREATED)
             
+    # def put(self, request, transaction_id):
+    #     with transaction.atomic():
+    #         try:
+    #             pending_status = OrderStatuses.objects.get(status_name="Pending")
+    #             completed_status = OrderStatuses.objects.get(status_name="Completed")
+    #         except ObjectDoesNotExist:
+    #             return build_response(
+    #                 1,
+    #                 "Required order statuses 'Pending' or 'Completed' not found.",
+    #                 None,
+    #                 status.HTTP_404_NOT_FOUND
+    #             )
+
+    #         # Step 1: Get Bill Payment Transaction record
+    #         bill_payment = get_object_or_404(BillPaymentTransactions, transaction_id=transaction_id)
+            
+    #         # === New validation for Completed status ===
+    #         if bill_payment.payment_status == "Completed":
+    #             return build_response(
+    #                 0,
+    #                 "This transaction is already completed and cannot be updated.",
+    #                 None,
+    #                 status.HTTP_400_BAD_REQUEST
+    #             )
+                
+    #         old_amount = bill_payment.amount or Decimal("0.00")
+    #         old_adjusted = bill_payment.adjusted_now or Decimal("0.00")
+    #         old_outstanding = bill_payment.outstanding_amount or Decimal("0.00")
+
+    #         # Step 2: Extract new values
+    #         new_amount = Decimal(request.data.get("amount")).quantize(Decimal("0.01"))
+    #         adjusted_now = Decimal(request.data.get("adjusted_now", bill_payment.adjusted_now)).quantize(Decimal("0.01"))
+    #         payment_method = request.data.get("payment_method", bill_payment.payment_method)
+    #         payment_status = request.data.get("payment_status", bill_payment.payment_status)
+    #         payment_receipt_no = request.data.get("payment_receipt_no", bill_payment.payment_receipt_no)
+
+    #         # Step 3: Get related purchase invoice
+    #         invoice = bill_payment.purchase_invoice
+    #         all_txns = BillPaymentTransactions.objects.filter(purchase_invoice=invoice)
+
+    #         # Step 4: Calculate sum excluding this record to avoid duplication
+    #         total_of_amount = (
+    #             BillPaymentTransactions.objects.filter(purchase_invoice=invoice)
+    #             .exclude(payment_receipt_no=payment_receipt_no)
+    #             .aggregate(total_amount=Sum("amount"))
+    #             .get("total_amount") or Decimal("0.00")
+    #         )
+
+    #         max_allowed = invoice.total_amount - total_of_amount
+    #         if new_amount > max_allowed:
+    #             return build_response(
+    #                 1,
+    #                 f"Overpayment detected. Max allowed: ₹{max_allowed}",
+    #                 None,
+    #                 status.HTTP_422_UNPROCESSABLE_ENTITY
+    #             )
+
+    #         # === Step 5: Delta adjustment for outstanding amount ===
+    #         # payment_diff = adjusted_now - old_adjusted
+    #         # new_outstanding = (old_outstanding - payment_diff).quantize(Decimal("0.01"))
+    #         amount_diff = new_amount - old_amount
+    #         adjusted_diff = adjusted_now - old_adjusted
+
+    #         # The effective difference to subtract from outstanding
+    #         effective_diff = amount_diff if amount_diff != 0 else adjusted_diff
+
+    #         new_outstanding = (old_outstanding - effective_diff).quantize(Decimal("0.01"))
+
+    #         # Prevent negative values
+    #         if new_outstanding < 0:
+    #             new_outstanding = Decimal("0.00")
+    #         # Prevent negative values
+    #         if new_outstanding < 0:
+    #             new_outstanding = Decimal("0.00")
+
+    #         # === Step 6: Update payment transaction ===
+    #         bill_payment.amount = new_amount
+    #         bill_payment.adjusted_now = adjusted_now
+    #         bill_payment.outstanding_amount = new_outstanding
+    #         bill_payment.payment_status = payment_status
+    #         bill_payment.payment_method = payment_method
+    #         bill_payment.payment_receipt_no = payment_receipt_no
+    #         bill_payment.save()
+
+    #         # === Step 7: Update invoice totals ===
+    #         paid = all_txns.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+    #         invoice.paid_amount = paid
+    #         invoice.pending_amount = new_outstanding
+    #         invoice.order_status_id = completed_status if new_outstanding == 0 else pending_status
+    #         invoice.save(update_fields=["paid_amount", "pending_amount", "order_status_id"])
+
+    #         # === Step 8: Update Journal Entries ===
+    #         # Fetch ledger account used in original payment
+    #         account_instance = bill_payment.ledger_account_id
+
+    #         vendor_instance = bill_payment.vendor
+
+    #         # Get latest balance
+    #         existing_balance = (
+    #             JournalEntryLines.objects.filter(vendor_id=vendor_instance.vendor_id)
+    #             .order_by("-created_at")
+    #             .values_list("balance", flat=True)
+    #             .first()
+    #         ) or Decimal("0.00")
+
+    #         reversal_balance = old_amount + existing_balance
+
+    #         # Reversal entry
+    #         JournalEntryLines.objects.create(
+    #             ledger_account_id=account_instance,
+    #             debit=old_amount,
+    #             voucher_no=payment_receipt_no,
+    #             credit=Decimal("0.00"),
+    #             description=f"Reversal of wrong entry for bill receipt {payment_receipt_no} - System Generated Entry",
+    #             vendor_id=vendor_instance,
+    #             balance=reversal_balance,
+    #         )
+
+    #         time.sleep(1)
+
+    #         total_related = (
+    #             BillPaymentTransactions.objects.filter(payment_receipt_no=payment_receipt_no)
+    #             .exclude(purchase_invoice=invoice)
+    #             .aggregate(total=Sum("amount"))["total"]
+    #             or Decimal("0.00")
+    #         )
+
+    #         final_addition = total_related + new_amount
+    #         total_pending = (reversal_balance - new_amount).quantize(Decimal("0.01"))
+
+    #         # Create revision entry
+    #         JournalEntryLines.objects.create(
+    #             ledger_account_id=account_instance,
+    #             debit=Decimal("0.00"),
+    #             voucher_no=payment_receipt_no,
+    #             credit=final_addition,
+    #             description=f"Updated bill receipt {payment_receipt_no} for Invoice {invoice.invoice_no} - revision recorded",
+    #             vendor_id=vendor_instance,
+    #             balance=total_pending,
+    #         )
+
+    #         # === Step 9: Prepare response ===
+    #         response_data = {
+    #             "payment_receipt_no": bill_payment.payment_receipt_no,
+    #             "bill_no": invoice.invoice_no,
+    #             "paid_amount": invoice.paid_amount,
+    #             "pending_amount": invoice.pending_amount,
+    #             "outstanding_amount": new_outstanding,
+    #             "payment_status": payment_status,
+    #         }
+
+    #         return build_response(1, "Bill Payment Transaction updated successfully.", response_data, status.HTTP_200_OK)
+
     def put(self, request, transaction_id):
         with transaction.atomic():
             try:
@@ -3075,8 +3526,11 @@ class BillPaymentTransactionAPIView(APIView):
                 )
 
             # Step 1: Get Bill Payment Transaction record
-            bill_payment = get_object_or_404(BillPaymentTransactions, transaction_id=transaction_id)
-            
+            bill_payment = get_object_or_404(
+                BillPaymentTransactions,
+                transaction_id=transaction_id
+            )
+
             # === New validation for Completed status ===
             if bill_payment.payment_status == "Completed":
                 return build_response(
@@ -3085,17 +3539,23 @@ class BillPaymentTransactionAPIView(APIView):
                     None,
                     status.HTTP_400_BAD_REQUEST
                 )
-                
+
             old_amount = bill_payment.amount or Decimal("0.00")
             old_adjusted = bill_payment.adjusted_now or Decimal("0.00")
             old_outstanding = bill_payment.outstanding_amount or Decimal("0.00")
 
             # Step 2: Extract new values
             new_amount = Decimal(request.data.get("amount")).quantize(Decimal("0.01"))
-            adjusted_now = Decimal(request.data.get("adjusted_now", bill_payment.adjusted_now)).quantize(Decimal("0.01"))
+            adjusted_now = Decimal(
+                request.data.get("adjusted_now", bill_payment.adjusted_now)
+            ).quantize(Decimal("0.01"))
+
             payment_method = request.data.get("payment_method", bill_payment.payment_method)
             payment_status = request.data.get("payment_status", bill_payment.payment_status)
-            payment_receipt_no = request.data.get("payment_receipt_no", bill_payment.payment_receipt_no)
+            payment_receipt_no = request.data.get(
+                "payment_receipt_no",
+                bill_payment.payment_receipt_no
+            )
 
             # Step 3: Get related purchase invoice
             invoice = bill_payment.purchase_invoice
@@ -3103,13 +3563,15 @@ class BillPaymentTransactionAPIView(APIView):
 
             # Step 4: Calculate sum excluding this record to avoid duplication
             total_of_amount = (
-                BillPaymentTransactions.objects.filter(purchase_invoice=invoice)
+                BillPaymentTransactions.objects
+                .filter(purchase_invoice=invoice)
                 .exclude(payment_receipt_no=payment_receipt_no)
                 .aggregate(total_amount=Sum("amount"))
                 .get("total_amount") or Decimal("0.00")
             )
 
             max_allowed = invoice.total_amount - total_of_amount
+
             if new_amount > max_allowed:
                 return build_response(
                     1,
@@ -3119,20 +3581,13 @@ class BillPaymentTransactionAPIView(APIView):
                 )
 
             # === Step 5: Delta adjustment for outstanding amount ===
-            # payment_diff = adjusted_now - old_adjusted
-            # new_outstanding = (old_outstanding - payment_diff).quantize(Decimal("0.01"))
             amount_diff = new_amount - old_amount
             adjusted_diff = adjusted_now - old_adjusted
 
-            # The effective difference to subtract from outstanding
             effective_diff = amount_diff if amount_diff != 0 else adjusted_diff
 
             new_outstanding = (old_outstanding - effective_diff).quantize(Decimal("0.01"))
 
-            # Prevent negative values
-            if new_outstanding < 0:
-                new_outstanding = Decimal("0.00")
-            # Prevent negative values
             if new_outstanding < 0:
                 new_outstanding = Decimal("0.00")
 
@@ -3147,60 +3602,68 @@ class BillPaymentTransactionAPIView(APIView):
 
             # === Step 7: Update invoice totals ===
             paid = all_txns.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
             invoice.paid_amount = paid
             invoice.pending_amount = new_outstanding
             invoice.order_status_id = completed_status if new_outstanding == 0 else pending_status
-            invoice.save(update_fields=["paid_amount", "pending_amount", "order_status_id"])
+            invoice.save(update_fields=[
+                "paid_amount",
+                "pending_amount",
+                "order_status_id"
+            ])
 
-            # === Step 8: Update Journal Entries ===
-            # Fetch ledger account used in original payment
+            # === Step 8: Update Journal Entry Lines ===
             account_instance = bill_payment.ledger_account_id
-
             vendor_instance = bill_payment.vendor
 
-            # Get latest balance
-            existing_balance = (
-                JournalEntryLines.objects.filter(vendor_id=vendor_instance.vendor_id)
-                .order_by("-created_at")
-                .values_list("balance", flat=True)
-                .first()
-            ) or Decimal("0.00")
-
-            reversal_balance = old_amount + existing_balance
-
-            # Reversal entry
-            JournalEntryLines.objects.create(
-                ledger_account_id=account_instance,
-                debit=old_amount,
+            journal_line = JournalEntryLines.objects.filter(
                 voucher_no=payment_receipt_no,
-                credit=Decimal("0.00"),
-                description=f"Reversal of wrong entry for bill receipt {payment_receipt_no} - System Generated Entry",
                 vendor_id=vendor_instance,
-                balance=reversal_balance,
-            )
+                is_deleted=False
+            ).first()
 
-            time.sleep(1)
+            if journal_line:
+                journal_line.ledger_account_id = account_instance
+                journal_line.debit = Decimal("0.00")
+                journal_line.credit = new_amount
+                journal_line.description = (
+                    f"Bill payment receipt {payment_receipt_no} "
+                    f"for Invoice {invoice.invoice_no}"
+                )
+                journal_line.save(update_fields=[
+                    "ledger_account_id",
+                    "debit",
+                    "credit",
+                    "description"
+                ])
+            else:
+                latest_balance = (
+                    JournalEntryLines.objects
+                    .filter(
+                        vendor_id=vendor_instance,
+                        is_deleted=False
+                    )
+                    .order_by("-created_at")
+                    .values_list("balance", flat=True)
+                    .first()
+                ) or Decimal("0.00")
 
-            total_related = (
-                BillPaymentTransactions.objects.filter(payment_receipt_no=payment_receipt_no)
-                .exclude(purchase_invoice=invoice)
-                .aggregate(total=Sum("amount"))["total"]
-                or Decimal("0.00")
-            )
+                new_balance = Decimal(latest_balance) - Decimal(new_amount)
 
-            final_addition = total_related + new_amount
-            total_pending = (reversal_balance - new_amount).quantize(Decimal("0.01"))
+                JournalEntryLines.objects.create(
+                    ledger_account_id=account_instance,
+                    debit=Decimal("0.00"),
+                    credit=new_amount,
+                    voucher_no=payment_receipt_no,
+                    description=(
+                        f"Bill payment receipt {payment_receipt_no} "
+                        f"for Invoice {invoice.invoice_no}"
+                    ),
+                    vendor_id=vendor_instance,
+                    balance=new_balance,
+                )
 
-            # Create revision entry
-            JournalEntryLines.objects.create(
-                ledger_account_id=account_instance,
-                debit=Decimal("0.00"),
-                voucher_no=payment_receipt_no,
-                credit=final_addition,
-                description=f"Updated bill receipt {payment_receipt_no} for Invoice {invoice.invoice_no} - revision recorded",
-                vendor_id=vendor_instance,
-                balance=total_pending,
-            )
+            self._recalculate_vendor_balances(vendor_instance.vendor_id)
 
             # === Step 9: Prepare response ===
             response_data = {
@@ -3212,8 +3675,34 @@ class BillPaymentTransactionAPIView(APIView):
                 "payment_status": payment_status,
             }
 
-            return build_response(1, "Bill Payment Transaction updated successfully.", response_data, status.HTTP_200_OK)
+            return build_response(
+                1,
+                "Bill Payment Transaction updated successfully.",
+                response_data,
+                status.HTTP_200_OK
+            )
+            
+    def _recalculate_vendor_balances(self, vendor_id):
+        """Recalculate vendor ledger balances after bill payment journal update"""
 
+        entries = JournalEntryLines.objects.filter(
+            vendor_id=vendor_id,
+            is_deleted=False
+        ).order_by("created_at")
+
+        running_balance = Decimal("0.00")
+
+        for entry in entries:
+            debit = entry.debit or Decimal("0.00")
+            credit = entry.credit or Decimal("0.00")
+
+            # Vendor ledger:
+            # Debit increases vendor payable
+            # Credit decreases vendor payable
+            running_balance = running_balance + Decimal(debit) - Decimal(credit)
+
+            entry.balance = running_balance
+            entry.save(update_fields=["balance"])
 
 class FetchPurchaseInvoicesForPaymentReceiptTable(APIView):
     '''This API is used to fetch all information related to sales invoices for 

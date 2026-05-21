@@ -4754,11 +4754,16 @@ class SaleInvoiceOrdersViewSet(APIView):
     
     @transaction.atomic
     def update(self, request, pk, *args, **kwargs):
+        from decimal import Decimal
+        from django.db.models import Sum, F
+        from django.utils import timezone
+        from datetime import timedelta
+
         # ------------------------------ C H E C K  D A T A B A S E ------------------------------ #
         db_to_use = None
         errors = {}
+
         try:
-            # Check in mstcnl DB
             MstcnlSaleInvoiceOrder.objects.using('mstcnl').get(sale_invoice_id=pk)
             return build_response(
                 0,
@@ -4773,16 +4778,22 @@ class SaleInvoiceOrdersViewSet(APIView):
                 db_to_use = 'default'
             except ObjectDoesNotExist:
                 logger.error(f"Sale Invoice Order with id {pk} not found in any database.")
-                return build_response(0, f"Sale Invoice order with id {pk} not found", [], status.HTTP_404_NOT_FOUND)
+                return build_response(
+                    0,
+                    f"Sale Invoice order with id {pk} not found",
+                    [],
+                    status.HTTP_404_NOT_FOUND
+                )
 
         # ------------------------------ G E T   O L D   V A L U E S ------------------------------ #
-        # IMPORTANT: Capture old state BEFORE any updates
-        old_invoice_total = sale_invoice.total_amount
-        old_items = list(SaleInvoiceItems.objects.using(db_to_use).filter(
-            sale_invoice_id=pk
-        ).values('sale_invoice_item_id', 'product_id', 'quantity', 'rate', 'amount'))
-        
-        # Create a dictionary for quick lookup
+        old_invoice_total = sale_invoice.total_amount or Decimal('0.00')
+
+        old_items = list(
+            SaleInvoiceItems.objects.using(db_to_use)
+            .filter(sale_invoice_id=pk)
+            .values('sale_invoice_item_id', 'product_id', 'quantity', 'rate', 'amount')
+        )
+
         old_items_dict = {
             item['sale_invoice_item_id']: item for item in old_items
         }
@@ -4790,55 +4801,98 @@ class SaleInvoiceOrdersViewSet(APIView):
         # ------------------------------ D A T A   V A L I D A T I O N ------------------------------ #
         given_data = request.data
 
-        # Validate SaleInvoiceOrders Data
+        order_error = []
+        item_error = []
+        attachment_error = []
+        shipments_error = []
+        custom_field_values_error = []
+
         sale_invoice_order_data = given_data.pop('sale_invoice_order', None)
         if sale_invoice_order_data:
             sale_invoice_order_data['sale_invoice_id'] = pk
-            order_error = validate_multiple_data(self, [sale_invoice_order_data], SaleInvoiceOrdersSerializer, ['invoice_no'], using_db=db_to_use)
-            validate_order_type(sale_invoice_order_data, order_error, OrderTypes, look_up='order_type')
-        
-        # Validate SaleInvoiceItems Data
+            order_error = validate_multiple_data(
+                self,
+                [sale_invoice_order_data],
+                SaleInvoiceOrdersSerializer,
+                ['invoice_no'],
+                using_db=db_to_use
+            )
+            validate_order_type(
+                sale_invoice_order_data,
+                order_error,
+                OrderTypes,
+                look_up='order_type'
+            )
+
         sale_invoice_items_data = given_data.pop('sale_invoice_items', None)
-        
+
         if sale_invoice_items_data:
             sale_invoice_items_data = [
                 item for item in sale_invoice_items_data
                 if item.get("product_id") and item.get("quantity")
             ]
+
             exclude_fields = ['sale_invoice_id']
-            item_error = validate_put_method_data(self, sale_invoice_items_data, SaleInvoiceItemsSerializer, exclude_fields, SaleInvoiceItems, current_model_pk_field='sale_invoice_item_id', db_to_use=db_to_use)
-        else:
-            item_error = []
-            
-        # Validate OrderAttachments Data
+            item_error = validate_put_method_data(
+                self,
+                sale_invoice_items_data,
+                SaleInvoiceItemsSerializer,
+                exclude_fields,
+                SaleInvoiceItems,
+                current_model_pk_field='sale_invoice_item_id',
+                db_to_use=db_to_use
+            )
+
         order_attachments_data = given_data.pop('order_attachments', None)
         exclude_fields = ['order_id', 'order_type_id']
+
         if order_attachments_data:
-            attachment_error = validate_put_method_data(self, order_attachments_data, OrderAttachmentsSerializer, exclude_fields, OrderAttachments, current_model_pk_field='attachment_id', db_to_use=db_to_use)
-        else:
-            attachment_error = []
+            attachment_error = validate_put_method_data(
+                self,
+                order_attachments_data,
+                OrderAttachmentsSerializer,
+                exclude_fields,
+                OrderAttachments,
+                current_model_pk_field='attachment_id',
+                db_to_use=db_to_use
+            )
 
-        # Validate OrderShipments Data
         order_shipments_data = given_data.pop('order_shipments', None)
-        if order_shipments_data:
-            shipments_error = validate_put_method_data(self, order_shipments_data, OrderShipmentsSerializer, exclude_fields, OrderShipments, current_model_pk_field='shipment_id', db_to_use=db_to_use)
-        else:
-            shipments_error = []
 
-        # Validate CustomFieldValues Data
+        if order_shipments_data:
+            shipments_error = validate_put_method_data(
+                self,
+                order_shipments_data,
+                OrderShipmentsSerializer,
+                exclude_fields,
+                OrderShipments,
+                current_model_pk_field='shipment_id',
+                db_to_use=db_to_use
+            )
+
         custom_field_values_data = given_data.pop('custom_field_values', None)
+
         if custom_field_values_data:
             exclude_fields = ['custom_id']
-            custom_field_values_error = validate_put_method_data(self, custom_field_values_data, CustomFieldValueSerializer, exclude_fields, CustomFieldValue, current_model_pk_field='custom_field_value_id', db_to_use=db_to_use)
-        else:
-            custom_field_values_error = []
+            custom_field_values_error = validate_put_method_data(
+                self,
+                custom_field_values_data,
+                CustomFieldValueSerializer,
+                exclude_fields,
+                CustomFieldValue,
+                current_model_pk_field='custom_field_value_id',
+                db_to_use=db_to_use
+            )
 
-        # Ensure mandatory data is present
         if not sale_invoice_order_data or not sale_invoice_items_data:
             logger.error("Sale invoice order and sale invoice items are mandatory.")
-            return build_response(0, "Sale order and sale order items are mandatory", [], status.HTTP_400_BAD_REQUEST)
+            return build_response(
+                0,
+                "Sale invoice order and sale invoice items are mandatory",
+                [],
+                status.HTTP_400_BAD_REQUEST
+            )
 
-        # Collect all errors (keep your existing error collection)
         if order_error:
             errors["sale_invoice_order"] = order_error
         if item_error:
@@ -4849,217 +4903,394 @@ class SaleInvoiceOrdersViewSet(APIView):
             errors["order_shipments"] = shipments_error
         if custom_field_values_error:
             errors["custom_field_values"] = custom_field_values_error
+
         if errors:
-            return build_response(0, "ValidationError :", errors, status.HTTP_400_BAD_REQUEST)
+            return build_response(
+                0,
+                "ValidationError :",
+                errors,
+                status.HTTP_400_BAD_REQUEST
+            )
 
         # ------------------------------ D A T A   U P D A T E ------------------------------ #
-        
         order_type_val = sale_invoice_order_data.get('order_type')
         order_type = get_object_or_none(OrderTypes, name=order_type_val)
+
         if not order_type:
             logger.error(f"Order type '{order_type_val}' not found.")
-            return build_response(0, f"Invalid order_type '{order_type_val}' provided", [], status.HTTP_400_BAD_REQUEST)
+            return build_response(
+                0,
+                f"Invalid order_type '{order_type_val}' provided",
+                [],
+                status.HTTP_400_BAD_REQUEST
+            )
 
         type_id = order_type.order_type_id
-        
-        # Update main invoice
-        if sale_invoice_order_data:
-            update_fields = []
-            sale_invoice_order_data = update_multi_instances(
-                self, pk, sale_invoice_order_data, SaleInvoiceOrders, SaleInvoiceOrdersSerializer,
-                update_fields, main_model_related_field='sale_invoice_id',
-                current_model_pk_field='sale_invoice_id', using_db=db_to_use
-            )
-            sale_invoice_order_data = sale_invoice_order_data[0] if len(sale_invoice_order_data) == 1 else sale_invoice_order_data
-        
-        # Update SaleInvoiceItems (capture changes)
+
+        update_fields = []
+        sale_invoice_order_data = update_multi_instances(
+            self,
+            pk,
+            sale_invoice_order_data,
+            SaleInvoiceOrders,
+            SaleInvoiceOrdersSerializer,
+            update_fields,
+            main_model_related_field='sale_invoice_id',
+            current_model_pk_field='sale_invoice_id',
+            using_db=db_to_use
+        )
+        sale_invoice_order_data = sale_invoice_order_data[0] if len(sale_invoice_order_data) == 1 else sale_invoice_order_data
+
         update_fields = {'sale_invoice_id': pk}
         invoice_items_data = update_multi_instances(
-            self, pk, sale_invoice_items_data, SaleInvoiceItems, SaleInvoiceItemsSerializer,
-            update_fields, main_model_related_field='sale_invoice_id',
-            current_model_pk_field='sale_invoice_item_id', using_db=db_to_use
+            self,
+            pk,
+            sale_invoice_items_data,
+            SaleInvoiceItems,
+            SaleInvoiceItemsSerializer,
+            update_fields,
+            main_model_related_field='sale_invoice_id',
+            current_model_pk_field='sale_invoice_item_id',
+            using_db=db_to_use
         )
 
-        # [Keep your existing updates for attachments, shipments, custom fields...]
-        # Update OrderAttachments
         update_fields = {'order_id': pk, 'order_type_id': type_id}
         attachment_data = update_multi_instances(
-            self, pk, order_attachments_data, OrderAttachments, OrderAttachmentsSerializer,
-            update_fields, main_model_related_field='order_id',
-            current_model_pk_field='attachment_id', using_db=db_to_use
+            self,
+            pk,
+            order_attachments_data,
+            OrderAttachments,
+            OrderAttachmentsSerializer,
+            update_fields,
+            main_model_related_field='order_id',
+            current_model_pk_field='attachment_id',
+            using_db=db_to_use
         )
 
-        # Update OrderShipments
         shipment_data = update_multi_instances(
-            self, pk, order_shipments_data, OrderShipments, OrderShipmentsSerializer,
-            update_fields, main_model_related_field='order_id',
-            current_model_pk_field='shipment_id', using_db=db_to_use
+            self,
+            pk,
+            order_shipments_data,
+            OrderShipments,
+            OrderShipmentsSerializer,
+            update_fields,
+            main_model_related_field='order_id',
+            current_model_pk_field='shipment_id',
+            using_db=db_to_use
         )
         shipment_data = shipment_data[0] if len(shipment_data) == 1 else shipment_data
 
-        # Update CustomFieldValues
         if custom_field_values_data:
             custom_field_values_data = update_multi_instances(
-                self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer,
-                {}, main_model_related_field='custom_id',
-                current_model_pk_field='custom_field_value_id', using_db=db_to_use
+                self,
+                pk,
+                custom_field_values_data,
+                CustomFieldValue,
+                CustomFieldValueSerializer,
+                {},
+                main_model_related_field='custom_id',
+                current_model_pk_field='custom_field_value_id',
+                using_db=db_to_use
             )
-        # ------------------------------ C R I T I C A L :  J O U R N A L   A D J U S T M E N T ------------------------------ #
-        
-        # Get the updated invoice with new total
-        updated_invoice = SaleInvoiceOrders.objects.using(db_to_use).get(sale_invoice_id=pk)
-        new_invoice_total = updated_invoice.total_amount
-        
-        # Calculate difference
-        total_difference = new_invoice_total - old_invoice_total
-        
-        if total_difference != 0:
-            # Get sales ledger account (reuse your existing validation)
-            sale_account = get_finance_setting('sales_ledger_account', fallback_name='Sale Account')
-            if not sale_account:
-                return build_response(
-                    0,
-                    "Setup required: No Sales Ledger Account configured.",
-                    [],
-                    status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Calculate quantity changes for each product
-            quantity_changes = []
-            for new_item in sale_invoice_items_data:
-                old_item = old_items_dict.get(new_item.get('sale_invoice_item_id'))
-                if old_item:
-                    old_qty = old_item['quantity']
-                    new_qty = new_item['quantity']
-                    qty_diff = new_qty - old_qty
-                    
-                    if qty_diff != 0:
-                        quantity_changes.append({
-                            'product_id': new_item['product_id'],
-                            'old_quantity': old_qty,
-                            'new_quantity': new_qty,
-                            'difference': qty_diff,
-                            'rate': new_item.get('rate', old_item['rate']),
-                            'amount_difference': qty_diff * new_item.get('rate', old_item['rate'])
-                        })
-            
-            # ========== METHOD 1: Create Adjustment Journal Entry ==========
-            # This is the simplest and most audit-friendly approach
-            
-            if total_difference > 0:
-                # Additional revenue - Debit Customer, Credit Sales
-                description = f"ADJUSTMENT: Invoice {updated_invoice.invoice_no} - Amount increased by {total_difference}"
-                debit_amount = total_difference
-                credit_amount = Decimal('0.00')
-                
-                # Add quantity change details
-                if quantity_changes:
-                    qty_details = "\n".join([
-                        f"  • Product {c['product_id']}: {c['old_quantity']} → {c['new_quantity']} (+{c['difference']} units)"
-                        for c in quantity_changes
-                    ])
-                    description = f"{description}\nQuantity changes:\n{qty_details}"
-                    
-            elif total_difference < 0:
-                # Revenue reduction - Debit Sales, Credit Customer
-                description = f"ADJUSTMENT: Invoice {updated_invoice.invoice_no} - Amount decreased by {abs(total_difference)}"
-                debit_amount = Decimal('0.00')
-                credit_amount = abs(total_difference)
-                
-                if quantity_changes:
-                    qty_details = "\n".join([
-                        f"  • Product {c['product_id']}: {c['old_quantity']} → {c['new_quantity']} ({c['difference']} units)"
-                        for c in quantity_changes
-                    ])
-                    description = f"{description}\nQuantity changes:\n{qty_details}"
-            
-            # Get current customer balance
-            current_balance = (
-                JournalEntryLines.objects
-                .using(db_to_use)
-                .filter(customer_id=updated_invoice.customer_id)
-                .order_by('-created_at')
-                .values_list('balance', flat=True)
-                .first()
-            ) or Decimal('0.00')
-            
-            # Calculate new balance after adjustment
-            new_balance = current_balance + total_difference
-            
-            # Create adjustment journal entry
-            adjustment_entry = JournalEntryLines.objects.using(db_to_use).create(
+
+        # ------------------------------ UPDATED INVOICE ------------------------------ #
+        updated_invoice = SaleInvoiceOrders.objects.using(db_to_use).get(
+            sale_invoice_id=pk
+        )
+
+        new_invoice_total = updated_invoice.total_amount or Decimal('0.00')
+        total_difference = Decimal(new_invoice_total) - Decimal(old_invoice_total)
+
+        # ------------------------------ Q U A N T I T Y   C H A N G E S ------------------------------ #
+        quantity_changes = []
+
+        for new_item in sale_invoice_items_data:
+            sale_invoice_item_id = new_item.get('sale_invoice_item_id')
+            old_item = old_items_dict.get(sale_invoice_item_id)
+
+            if old_item:
+                old_qty = Decimal(str(old_item.get('quantity') or 0))
+                new_qty = Decimal(str(new_item.get('quantity') or 0))
+                qty_diff = new_qty - old_qty
+
+                if qty_diff != Decimal('0.00'):
+                    quantity_changes.append({
+                        'product_id': new_item.get('product_id'),
+                        'old_quantity': old_qty,
+                        'new_quantity': new_qty,
+                        'difference': qty_diff,
+                        'rate': Decimal(str(new_item.get('rate') or old_item.get('rate') or 0))
+                    })
+
+        # ------------------------------ J O U R N A L   E N T R Y   U P D A T E ------------------------------ #
+        sale_account = get_finance_setting(
+            'sales_ledger_account',
+            fallback_name='Sale Account'
+        )
+
+        if not sale_account:
+            return build_response(
+                0,
+                "Setup required: No Sales Ledger Account configured.",
+                [],
+                status.HTTP_400_BAD_REQUEST
+            )
+
+        invoice_items_qs = SaleInvoiceItems.objects.using(db_to_use).filter(
+            sale_invoice_id=pk
+        )
+
+        product_lines = []
+        for idx, item in enumerate(invoice_items_qs, start=1):
+            product_lines.append(
+                f"{idx}) {item.product_id.name} – Qty: {item.quantity:.2f} @ {item.rate:.2f}"
+            )
+
+        products_description = "\n".join(product_lines)
+
+        description = (
+            f"Goods sold to {updated_invoice.customer_id.name}\n"
+            f"{products_description}"
+        )
+
+        other_totals = (
+            JournalEntryLines.objects.using(db_to_use)
+            .filter(customer_id=updated_invoice.customer_id, is_deleted=False)
+            .exclude(voucher_no=updated_invoice.invoice_no)
+            .aggregate(
+                total_debit=Sum('debit'),
+                total_credit=Sum('credit')
+            )
+        )
+
+        other_debit = other_totals.get('total_debit') or Decimal('0.00')
+        other_credit = other_totals.get('total_credit') or Decimal('0.00')
+
+        new_balance = Decimal(other_debit) - Decimal(other_credit) + Decimal(new_invoice_total)
+
+        journal_line = (
+            JournalEntryLines.objects.using(db_to_use)
+            .filter(
+                voucher_no=updated_invoice.invoice_no,
+                customer_id=updated_invoice.customer_id,
+                is_deleted=False
+            )
+            .first()
+        )
+
+        if journal_line:
+            journal_line.ledger_account_id = sale_account
+            journal_line.debit = new_invoice_total
+            journal_line.credit = Decimal('0.00')
+            journal_line.description = description
+            journal_line.balance = new_balance
+            journal_line.save(
+                using=db_to_use,
+                update_fields=[
+                    'ledger_account_id',
+                    'debit',
+                    'credit',
+                    'description',
+                    'balance'
+                ]
+            )
+
+            logger.info(
+                f"Journal entry updated for Sale Invoice {updated_invoice.invoice_no}: "
+                f"{old_invoice_total} -> {new_invoice_total}"
+            )
+
+        else:
+            JournalEntryLines.objects.using(db_to_use).create(
                 ledger_account_id=sale_account,
-                debit=debit_amount,
-                credit=credit_amount,
+                debit=new_invoice_total,
+                credit=Decimal('0.00'),
                 voucher_no=updated_invoice.invoice_no,
                 description=description,
                 customer_id=updated_invoice.customer_id,
-                balance=new_balance,
-                # Add these fields if your model has them (optional but recommended)
-                # adjustment_type='INVOICE_UPDATE',
-                # parent_invoice_id=pk,
-                # adjustment_date=timezone.now()
+                balance=new_balance
             )
-            
-            logger.info(f"Journal adjustment created for Invoice {pk}: {total_difference} (Old: {old_invoice_total}, New: {new_invoice_total})")
-            
-            # ========== METHOD 2: Handle Inventory Adjustments (If standalone invoice) ==========
-            # Check if this invoice has linked sale order
-            sale_order_id = updated_invoice.sale_order_id
-            
-            if not sale_order_id and quantity_changes:
-                # This is a standalone invoice with inventory blocking
-                # Need to adjust inventory based on quantity changes
-                
-                for change in quantity_changes:
-                    if change['difference'] > 0:
-                        # Additional quantity - block more inventory
-                        logger.info(f"Additional inventory needed for product {change['product_id']}: +{change['difference']} units")
-                        # Call your inventory blocking logic here
-                        block_additional_inventory(updated_invoice, change, db_to_use)
-                        
-                    elif change['difference'] < 0:
-                        # Reduced quantity - release some inventory
-                        logger.info(f"Release inventory for product {change['product_id']}: {abs(change['difference'])} units")
-                        # Call your inventory release logic here
-                        release_blocked_inventory(updated_invoice, change, db_to_use)
-            
-            # Update invoice pending amount
-            updated_invoice.pending_amount = new_invoice_total - updated_invoice.paid_amount
-            updated_invoice.save(update_fields=['pending_amount'])
-            
+
+            logger.info(
+                f"Journal entry created for Sale Invoice {updated_invoice.invoice_no}"
+            )
+
+        # ------------------------------ I N V E N T O R Y   A D J U S T M E N T ------------------------------ #
+        sale_order_id = updated_invoice.sale_order_id
+
+        if not sale_order_id and quantity_changes:
+            for change in quantity_changes:
+                product_id = change.get('product_id')
+                qty_diff = change.get('difference')
+
+                if not product_id or qty_diff == Decimal('0.00'):
+                    continue
+
+                product = Products.objects.using(db_to_use).select_for_update().filter(
+                    product_id=product_id
+                ).first()
+
+                if not product:
+                    return build_response(
+                        0,
+                        f"Product with ID {product_id} not found.",
+                        [],
+                        status.HTTP_404_NOT_FOUND
+                    )
+
+                if qty_diff > 0:
+                    additional_qty = qty_diff
+
+                    available_qty = min(
+                        Decimal(str(product.balance or 0)),
+                        Decimal(str(additional_qty))
+                    )
+
+                    if available_qty <= 0:
+                        logger.warning(
+                            f"No available inventory for product {product_id}. "
+                            f"Required: {additional_qty}, Available: {product.balance or 0}"
+                        )
+                        continue
+
+                    product.balance = F('balance') - available_qty
+                    product.save(using=db_to_use, update_fields=['balance'])
+
+                    remaining_qty = available_qty
+
+                    variations = ProductVariation.objects.using(db_to_use).filter(
+                        product_id=product_id,
+                        quantity__gt=0
+                    ).order_by('created_at')
+
+                    for variation in variations:
+                        if remaining_qty <= 0:
+                            break
+
+                        deduct_qty = min(
+                            Decimal(str(variation.quantity or 0)),
+                            Decimal(str(remaining_qty))
+                        )
+
+                        variation.quantity = F('quantity') - deduct_qty
+                        variation.save(using=db_to_use, update_fields=['quantity'])
+
+                        remaining_qty -= deduct_qty
+
+                    block_config = InventoryBlockConfig.objects.using(db_to_use).filter(
+                        product_id__isnull=True
+                    ).first()
+
+                    block_duration_hours = getattr(block_config, "block_duration_hours", 24)
+                    expiration_time = timezone.now() + timedelta(hours=block_duration_hours)
+
+                    BlockedInventory.objects.using(db_to_use).create(
+                        sale_order_id=None,
+                        sale_invoice_id=updated_invoice,
+                        product_id=product,
+                        blocked_qty=available_qty,
+                        source_type='SALE_INVOICE',
+                        expiration_time=expiration_time,
+                        is_expired=False
+                    )
+
+                    logger.info(
+                        f"Additional inventory blocked for Sale Invoice {pk}: "
+                        f"Product {product_id}, Qty {available_qty}"
+                    )
+
+                elif qty_diff < 0:
+                    release_qty_total = abs(qty_diff)
+                    remaining_to_release = release_qty_total
+
+                    blocked_records = BlockedInventory.objects.using(db_to_use).filter(
+                        sale_invoice_id=updated_invoice,
+                        product_id=product_id,
+                        is_expired=False
+                    ).order_by('-created_at')
+
+                    for blocked in blocked_records:
+                        if remaining_to_release <= 0:
+                            break
+
+                        release_qty = min(
+                            Decimal(str(blocked.blocked_qty or 0)),
+                            Decimal(str(remaining_to_release))
+                        )
+
+                        product.balance = F('balance') + release_qty
+                        product.save(using=db_to_use, update_fields=['balance'])
+
+                        if release_qty == Decimal(str(blocked.blocked_qty or 0)):
+                            blocked.delete()
+                        else:
+                            blocked.blocked_qty = F('blocked_qty') - release_qty
+                            blocked.save(using=db_to_use, update_fields=['blocked_qty'])
+
+                        remaining_to_release -= release_qty
+
+                        logger.info(
+                            f"Inventory released for Sale Invoice {pk}: "
+                            f"Product {product_id}, Qty {release_qty}"
+                        )
+
         else:
-            logger.info(f"No financial impact for Invoice {pk} update - total amount unchanged")
-        
+            if sale_order_id:
+                logger.info(
+                    f"Sale Invoice {pk} linked with Sale Order {sale_order_id}. "
+                    f"Inventory update skipped."
+                )
+
+        # ------------------------------ P E N D I N G   A M O U N T ------------------------------ #
+        paid_amount = updated_invoice.paid_amount or Decimal('0.00')
+        updated_invoice.pending_amount = Decimal(new_invoice_total) - Decimal(paid_amount)
+        updated_invoice.save(using=db_to_use, update_fields=['pending_amount'])
+
         # ------------------------------ R E S P O N S E ------------------------------ #
-        
         custom_data = {
             "sale_invoice_order": sale_invoice_order_data,
             "sale_invoice_items": invoice_items_data if invoice_items_data else [],
             "order_attachments": attachment_data if attachment_data else [],
             "order_shipments": shipment_data if shipment_data else {},
             "custom_field_values": custom_field_values_data if custom_field_values_data else [],
-            "journal_adjustment": {
+            "journal_update": {
                 "old_total": str(old_invoice_total),
                 "new_total": str(new_invoice_total),
                 "difference": str(total_difference),
-                "adjusted": total_difference != 0
-            } if total_difference != 0 else None
+                "updated_same_record": True
+            },
+            "inventory_update": {
+                "is_direct_invoice": not bool(sale_order_id),
+                "quantity_changes": [
+                    {
+                        "product_id": str(change.get('product_id')),
+                        "old_quantity": str(change.get('old_quantity')),
+                        "new_quantity": str(change.get('new_quantity')),
+                        "difference": str(change.get('difference'))
+                    }
+                    for change in quantity_changes
+                ]
+            }
         }
-        
-        saleinvoice_no = sale_invoice_order_data.get("invoice_no")
-        
+
+        saleinvoice_no = updated_invoice.invoice_no
+
         log_user_action(
             db_to_use,
             request.user,
             "UPDATE",
             "Sale Invoice",
             pk,
-            f"{saleinvoice_no} - Sale Invoice Record Updated by {request.user.username} (Amount changed: {old_invoice_total} → {new_invoice_total})"
+            f"{saleinvoice_no} - Sale Invoice Record Updated by {request.user.username} "
+            f"(Amount changed: {old_invoice_total} → {new_invoice_total})"
         )
-        
-        return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
+        return build_response(
+            1,
+            "Records updated successfully",
+            custom_data,
+            status.HTTP_200_OK
+        )
 
 # Helper functions for inventory adjustment
 def block_additional_inventory(invoice, quantity_change, db_to_use):
@@ -8655,99 +8886,86 @@ class PaymentTransactionAPIView(APIView):
             txn.save()
 
     def _update_journal_entry_lines(self, payment_transaction, old_amount, new_amount, invoice):
-        """Helper method to update journal entry lines - FIXED for multiple edits"""
-        
+        """Update existing journal entry line based on voucher_no == payment_receipt_no"""
+
         customer_instance = payment_transaction.customer
         ledger_instance = payment_transaction.ledger_account_id
-        
-        print(f"📝 Updating journal entry for {payment_transaction.payment_receipt_no}: {old_amount} → {new_amount}")
-        
-        # Find the LATEST correct payment entry (not reversal)
-        latest_correct = JournalEntryLines.objects.filter(
+
+        journal_line = JournalEntryLines.objects.filter(
             voucher_no=payment_transaction.payment_receipt_no,
             customer_id=customer_instance,
-            credit__gt=0,  # Payment entries have credit > 0
-            description__icontains="for Invoice"  # Not reversal entries
-        ).order_by('-created_at').first()
-        
-        if latest_correct:
-            print(f"✅ Found latest correct entry with amount: {latest_correct.credit}")
-            
-            # Get balance before this correct entry
-            prev_balance = (JournalEntryLines.objects.filter(
-                customer_id=customer_instance,
-                created_at__lt=latest_correct.created_at
-            ).order_by('-created_at').values_list('balance', flat=True).first()) or Decimal('0.00')
-            
-            # Create reversal of the LATEST correct entry (using its amount)
-            reversal_amount = latest_correct.credit
-            print(f"🔄 Creating reversal for amount: {reversal_amount}")
-            
-            reversal = JournalEntryLines.objects.create(
-                ledger_account_id=ledger_instance,
-                debit=reversal_amount,
-                credit=0,
-                voucher_no=f"REV-{payment_transaction.payment_receipt_no}",
-                description=f"Reversal of {payment_transaction.payment_receipt_no} (edited from {reversal_amount} to {new_amount})",
-                customer_id=customer_instance,
-                balance=prev_balance,  # Back to before this payment version
-                journal_entry_id=None
+            is_deleted=False
+        ).first()
+
+        if journal_line:
+            journal_line.ledger_account_id = ledger_instance
+            journal_line.debit = Decimal('0.00')
+            journal_line.credit = new_amount
+            journal_line.description = (
+                f"Payment receipt {payment_transaction.payment_receipt_no} "
+                f"for Invoice {invoice.invoice_no}"
             )
-            
-            # Get balance after reversal
-            after_reversal = reversal.balance
-            print(f"💰 Balance after reversal: {after_reversal}")
-            
-            # Delete any old "corrected" entries that might exist
-            old_corrected = JournalEntryLines.objects.filter(
-                voucher_no=payment_transaction.payment_receipt_no,
-                customer_id=customer_instance,
-                description__icontains="(corrected)",
-                created_at__lt=latest_correct.created_at
-            )
-            if old_corrected.exists():
-                print(f"🗑️ Deleting {old_corrected.count()} old corrected entries")
-                old_corrected.delete()
-            
-            # Create new correct entry with updated amount
-            new_entry = JournalEntryLines.objects.create(
-                ledger_account_id=ledger_instance,
-                debit=0,
-                credit=new_amount,
-                voucher_no=payment_transaction.payment_receipt_no,
-                description=f"Payment receipt {payment_transaction.payment_receipt_no} for Invoice {invoice.invoice_no}",
-                customer_id=customer_instance,
-                balance=after_reversal - new_amount,
-                journal_entry_id=None
-            )
-            
-            print(f"✅ Created new entry with amount: {new_amount}, new balance: {new_entry.balance}")
-            
-            # Recalculate all subsequent balances
-            self._recalculate_subsequent_balances(
-                customer_instance.customer_id, 
-                reversal.created_at
-            )
-            
-            return f"Journal entry updated: {reversal_amount} → {new_amount}"
+            journal_line.save(update_fields=[
+                'ledger_account_id',
+                'debit',
+                'credit',
+                'description'
+            ])
+
+            self._recalculate_customer_balances(customer_instance.customer_id)
+
+            return f"Journal entry updated: {old_amount} → {new_amount}"
+
         else:
-            # If no existing entry (shouldn't happen for updates), create one
-            print("⚠️ No existing entry found, creating new one")
-            latest_balance = (JournalEntryLines.objects.filter(
-                customer_id=customer_instance
-            ).order_by('-created_at').values_list('balance', flat=True).first()) or Decimal('0.00')
-            
+            latest_balance = (
+                JournalEntryLines.objects
+                .filter(customer_id=customer_instance, is_deleted=False)
+                .order_by('-created_at')
+                .values_list('balance', flat=True)
+                .first()
+            ) or Decimal('0.00')
+
+            new_balance = Decimal(latest_balance) - Decimal(new_amount)
+
             JournalEntryLines.objects.create(
                 ledger_account_id=ledger_instance,
-                debit=0.00,
+                debit=Decimal('0.00'),
                 credit=new_amount,
                 voucher_no=payment_transaction.payment_receipt_no,
-                description=f"Payment receipt {payment_transaction.payment_receipt_no} for Invoice {invoice.invoice_no}",
+                description=(
+                    f"Payment receipt {payment_transaction.payment_receipt_no} "
+                    f"for Invoice {invoice.invoice_no}"
+                ),
                 customer_id=customer_instance,
-                balance=latest_balance - new_amount,
+                balance=new_balance,
                 journal_entry_id=None
             )
+
+            self._recalculate_customer_balances(customer_instance.customer_id)
+
             return "Journal entry created"
+        
+    def _recalculate_customer_balances(self, customer_id):
+        """Recalculate customer ledger balances after journal update"""
+
+        entries = JournalEntryLines.objects.filter(
+            customer_id=customer_id,
+            is_deleted=False
+        ).order_by('created_at')
+
+        running_balance = Decimal('0.00')
+
+        for entry in entries:
+            debit = entry.debit or Decimal('0.00')
+            credit = entry.credit or Decimal('0.00')
+
+            # Customer ledger:
+            # Debit increases receivable
+            # Credit decreases receivable
+            running_balance = running_balance + Decimal(debit) - Decimal(credit)
+
+            entry.balance = running_balance
+            entry.save(update_fields=['balance'])
 
     def _recalculate_subsequent_balances(self, customer_id, from_datetime):
         """Recalculate all balances after a given datetime to ensure consistency"""
