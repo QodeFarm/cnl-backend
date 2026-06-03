@@ -28,4 +28,12 @@ urlpatterns = [
     path('employee_leaves/<str:pk>/', EmployeeLeavesView.as_view(), name='employee-leaves-detail-update-delete'),
     path('employees/', EmployeeView.as_view(), name='employee-list-create'),
     path('employees/<str:pk>/', EmployeeView.as_view(), name='employee-detail-update-delete'),
+    # Employee Portal URLs
+    # path('api/employee/portal/login/', EmployeePortalLoginView.as_view(), name='employee_portal_login'),
+    # path('api/employee/portal/logout/', EmployeePortalLogoutView.as_view(), name='employee_portal_logout'),
+    # path('api/employee/portal/profile/', EmployeePortalProfileView.as_view(), name='employee_portal_profile'),
+    path('employee/generate-credentials/', GenerateEmployeeCredentials.as_view()),
+    path('employee/login/', EmployeePortalLoginView.as_view()),
+    path('employee/logout/', EmployeePortalLogoutView.as_view(), name='employee_logout'),
+    path('employees/generate-credentials/<uuid:employee_id>/', GenerateEmployeeCredentialsView.as_view(), name='generate_employee_credentials'),
 ]
