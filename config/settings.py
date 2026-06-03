@@ -38,6 +38,7 @@ ALLOWED_HOSTS = [
     "demo.cnlerp.com",
     "prod.cnlerp.com",  # Add frontend domain
     "rudhra.cnlerp.com",  # Add frontend domain
+    "vasusri.cnlerp.com",  # New domain
     "qa.cnlerp.com",  # Add frontend domain
     "calculatedly-handloomed-ray.ngrok-free.dev",
 ]
@@ -410,6 +411,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:4200",
     "https://prod.cnlerp.com",
     "https://rudhra.cnlerp.com",
+    "https://vasusri.cnlerp.com",  # New domain
     "https://qa.cnlerp.com",
     "https://dev.qodefarm.com",
     "https://apicore.cnlerp.com",
