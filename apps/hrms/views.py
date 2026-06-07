@@ -596,7 +596,7 @@ class EmployeeLeavesView(APIView):
             if employee_leaves_error:
                 errors["employee_leaves"] = employee_leaves_error
 
-             # Additional validation for start_date and end_date
+            # Additional validation for start_date and end_date
             start_date = employee_leaves_data.get('start_date')
             end_date = employee_leaves_data.get('end_date')
 
@@ -637,21 +637,23 @@ class EmployeeLeavesView(APIView):
 
         if leave_id:  # Ensure leave_id is valid
 
-             # Set default approvals status to 'Open'
+            # Set default approvals status to 'Open'
             status_instance = get_object_or_none(Statuses, status_name='Open')  # Assuming the default status is 'Open'
             if status_instance is not None:
                 # Directly use status_id in balance_payload
                 errors["leave_approvals"] = {"status_id": [status_instance.status_id]}
             else:
                 errors["leave_approvals"] = {"status_id": ["Invalid status_id."]}
-                return errors  # Return early if status is invalid
+                # ✅ Return proper Response
+                return build_response(0, "ValidationError: Invalid status", errors, status.HTTP_400_BAD_REQUEST)
 
             manager_id = employee_leaves_data.get("employee", {}).get("manager_id", None)  # Get manager_id from employee_leaves
 
             # Ensure manager_id exists
             if not manager_id:
                 errors["leave_approvals"] = {"approver_id": ["Manager not found."]}
-                return errors  # Return early if manager_id is missing
+                # ✅ Return proper Response
+                return build_response(0, "ValidationError: Manager not found", errors, status.HTTP_400_BAD_REQUEST)
 
             balance_payload = {
                 "leave_id": leave_id,
@@ -664,7 +666,7 @@ class EmployeeLeavesView(APIView):
             logger.info('LeaveApprovals - created')
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-    
+
     # Handling put requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"put\" not allowed."]
     def put(self, request, *args, **kwargs):
