@@ -1,11 +1,12 @@
 import logging
+from requests import Response
 from rest_framework import viewsets, status
 from django.db import transaction
 from rest_framework.views import APIView
 from django.http import  Http404
 from django.shortcuts import get_object_or_404
 from .models import JobTypes, Designations, JobCodes, Departments, Shifts, Employees, EmployeeSalary, SalaryComponents, EmployeeSalaryComponents, LeaveTypes, EmployeeLeaves, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, Swipes, Biometric
-from .serializers import JobTypesSerializer, DesignationsSerializer, JobCodesSerializer, DepartmentsSerializer, ShiftsSerializer, EmployeesSerializer, EmployeeSalarySerializer, SalaryComponentsSerializer, EmployeeSalaryComponentsSerializer, LeavesTypesSerializer, EmployeeLeavesSerializer, LeaveApprovalsSerializer, EmployeeLeaveBalanceSerializer, EmployeeAttendanceSerializer, SwipesSerializer, BiometricSerializer
+from .serializers import EmployeePortalLoginSerializer, JobTypesSerializer, DesignationsSerializer, JobCodesSerializer, DepartmentsSerializer, ShiftsSerializer, EmployeesSerializer, EmployeeSalarySerializer, SalaryComponentsSerializer, EmployeeSalaryComponentsSerializer, LeavesTypesSerializer, EmployeeLeavesSerializer, LeaveApprovalsSerializer, EmployeeLeaveBalanceSerializer, EmployeeAttendanceSerializer, SwipesSerializer, BiometricSerializer
 from config.utils_methods import build_response, generic_data_creation, get_object_or_none, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, soft_delete, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
@@ -595,7 +596,7 @@ class EmployeeLeavesView(APIView):
             if employee_leaves_error:
                 errors["employee_leaves"] = employee_leaves_error
 
-             # Additional validation for start_date and end_date
+            # Additional validation for start_date and end_date
             start_date = employee_leaves_data.get('start_date')
             end_date = employee_leaves_data.get('end_date')
 
@@ -636,21 +637,23 @@ class EmployeeLeavesView(APIView):
 
         if leave_id:  # Ensure leave_id is valid
 
-             # Set default approvals status to 'Open'
+            # Set default approvals status to 'Open'
             status_instance = get_object_or_none(Statuses, status_name='Open')  # Assuming the default status is 'Open'
             if status_instance is not None:
                 # Directly use status_id in balance_payload
                 errors["leave_approvals"] = {"status_id": [status_instance.status_id]}
             else:
                 errors["leave_approvals"] = {"status_id": ["Invalid status_id."]}
-                return errors  # Return early if status is invalid
+                # ✅ Return proper Response
+                return build_response(0, "ValidationError: Invalid status", errors, status.HTTP_400_BAD_REQUEST)
 
             manager_id = employee_leaves_data.get("employee", {}).get("manager_id", None)  # Get manager_id from employee_leaves
 
             # Ensure manager_id exists
             if not manager_id:
                 errors["leave_approvals"] = {"approver_id": ["Manager not found."]}
-                return errors  # Return early if manager_id is missing
+                # ✅ Return proper Response
+                return build_response(0, "ValidationError: Manager not found", errors, status.HTTP_400_BAD_REQUEST)
 
             balance_payload = {
                 "leave_id": leave_id,
@@ -663,7 +666,7 @@ class EmployeeLeavesView(APIView):
             logger.info('LeaveApprovals - created')
 
         return build_response(1, "Record created successfully", custom_data, status.HTTP_201_CREATED)
-    
+
     # Handling put requests for creating
     # To avoid the error this method should be written [error : "detail": "Method \"put\" not allowed."]
     def put(self, request, *args, **kwargs):
@@ -1092,3 +1095,198 @@ class EmployeeView(APIView):
             return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
         except Exception:
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+#employee portal login
+
+# Add to your existing views.py
+from django.conf import settings
+from django.utils import timezone
+
+class EmployeePortalLoginView(APIView):
+    permission_classes = []  # Public access
+    
+    def post(self, request):
+        try:
+            # Get origin for CORS
+            origin = request.headers.get('Origin', '')
+            allowed_origins = [
+                "http://localhost:4200",
+                "https://prod.cnlerp.com",
+                "https://rudhra.cnlerp.com",
+            ]
+            
+            cors_origin = origin if origin in allowed_origins else "https://prod.cnlerp.com"
+            
+            print("="*50)
+            print("🔐 EMPLOYEE LOGIN ATTEMPT")
+            print(f"📍 Origin: {origin}")
+            print("="*50)
+            
+            serializer = EmployeePortalLoginSerializer(data=request.data)
+            
+            if serializer.is_valid():
+                employee = serializer.validated_data['employee']
+                print(f"✅ Employee found: {employee.full_name}")
+                
+                # Update last login
+                employee.last_login = timezone.now()
+                employee.save()
+                
+                # Create session
+                request.session.flush()
+                request.session.cycle_key()
+                
+                # Set session data
+                request.session['employee_id'] = str(employee.employee_id)
+                request.session['employee_name'] = employee.full_name
+                request.session['username'] = employee.username
+                request.session['email'] = employee.email
+                request.session['user_role'] = 'Employee'
+                request.session['is_employee_portal'] = True
+                request.session['designation'] = str(employee.designation_id.title) if employee.designation_id else None
+                request.session['department'] = str(employee.department_id.name) if employee.department_id else None
+                
+                # Save session
+                request.session.save()
+                
+                print(f"✅ Session created: {request.session.session_key}")
+                
+                # Create response
+                response = Response({
+                    'success': True,
+                    'message': 'Login successful',
+                    'employee': {
+                        'id': str(employee.employee_id),
+                        'name': employee.full_name,
+                        'username': employee.username,
+                        'email': employee.email,
+                        'designation': employee.designation_id.title if employee.designation_id else None,
+                        'department': employee.department_id.name if employee.department_id else None,
+                        'picture': employee.picture
+                    }
+                })
+                
+                # Set cookie
+                cookie_domain = settings.SESSION_COOKIE_DOMAIN if not settings.DEBUG else None
+                
+                response.set_cookie(
+                    key='sessionid',
+                    value=request.session.session_key,
+                    max_age=settings.SESSION_COOKIE_AGE,
+                    path='/',
+                    domain=cookie_domain,
+                    secure=settings.SESSION_COOKIE_SECURE,
+                    httponly=settings.SESSION_COOKIE_HTTPONLY,
+                    samesite=settings.SESSION_COOKIE_SAMESITE
+                )
+                
+                # Set CORS headers
+                response["Access-Control-Allow-Origin"] = cors_origin
+                response["Access-Control-Allow-Credentials"] = "true"
+                response["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+                response["Access-Control-Allow-Headers"] = "Content-Type, X-CSRFToken, Authorization, X-Client-Domain"
+                
+                return response
+            
+            print(f"❌ Invalid serializer: {serializer.errors}")
+            return Response(serializer.errors, status=400)
+            
+        except Exception as e:
+            print(f"❌ Login error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({'success': False, 'message': 'Server error'}, status=500)
+
+
+class EmployeePortalLogoutView(APIView):
+    def post(self, request):
+        try:
+            request.session.flush()
+            response = Response({'success': True, 'message': 'Logged out successfully'})
+            response.delete_cookie('sessionid')
+            return response
+        except Exception as e:
+            return Response({'success': False, 'message': str(e)}, status=500)
+
+
+class EmployeePortalProfileView(APIView):
+    def get(self, request):
+        if 'employee_id' not in request.session:
+            return Response({'error': 'Not logged in'}, status=401)
+        
+        try:
+            employee = Employees.objects.get(
+                employee_id=request.session['employee_id'],
+                is_deleted=False
+            )
+            
+            serializer = EmployeesSerializer(employee)
+            return Response({
+                'success': True,
+                'employee': serializer.data
+            })
+        except Employees.DoesNotExist:
+            return Response({'error': 'Employee not found'}, status=404)
+        
+# views.py - Add this simple API
+
+from django.contrib.auth.hashers import make_password
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+class GenerateEmployeeCredentials(APIView):
+    def post(self, request):
+        employees = Employees.objects.filter(is_portal_user=True, username__isnull=True)
+        
+        results = []
+        for emp in employees:
+            username = f"{emp.first_name.lower()}.{emp.last_name.lower()}"
+            plain_password = "Welcome@123"  # Simple default password
+            
+            emp.username = username
+            emp.password = make_password(plain_password)
+            emp.save()
+            
+            results.append({
+                'name': emp.full_name,
+                'username': username,
+                'password': plain_password
+            })
+        
+        return Response({'credentials': results})
+    
+    
+import logging
+logger = logging.getLogger(__name__)
+
+class GenerateEmployeeCredentialsView(APIView):
+    """Generate username and password for employee"""
+    
+    def post(self, request, employee_id):
+        try:
+            employee = Employees.objects.get(employee_id=employee_id, is_deleted=False)
+            
+            # Generate credentials
+            username = employee.generate_username()
+            plain_password = employee.set_random_password()
+            employee.is_portal_user = True
+            employee.save()
+            
+            return Response({
+                'success': True,
+                'username': username,
+                'password': plain_password,  # Only returned once!
+                'message': 'Credentials generated successfully'
+            }, status=status.HTTP_200_OK)
+            
+        except Employees.DoesNotExist:
+            return Response({
+                'success': False,
+                'message': 'Employee not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Error generating credentials: {str(e)}")
+            return Response({
+                'success': False,
+                'message': 'Error generating credentials'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
