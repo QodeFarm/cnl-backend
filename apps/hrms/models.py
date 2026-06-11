@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from config.utils_variables import jobtypes,designations,jobcodes,departments,shifts,employees,employeesalary,salarycomponents,employeesalarycomponents,leavetypes,employeeleaves,leaveapprovals,employeeleavebalance,employeeattendance,swipes,biometric
+from config.utils_variables import jobtypes,designations,jobcodes,departments,shifts,employees,employeesalary,salarycomponents,employeesalarycomponents,leavetypes,employeeleaves,leaveapprovals,employeeleavebalance,employeeattendance,swipes,biometric,timesheets,timesheetentries,timesheetapprovals
 from phonenumber_field.modelfields import PhoneNumberField
 from django.utils.timezone import now
 
@@ -270,9 +270,150 @@ class Biometric(models.Model):
     entry_stamp = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = biometric
- 
+
     def __str__(self):
         return f"{self.biometric_id}"
+
+
+# ===================== timesheets ====================================
+
+class Timesheets(models.Model):
+    """
+    Represents a single timesheet for one employee covering a date range
+    (typically one week).  The timesheet header stores who owns the record
+    and the period it covers.  The daily breakdown lives in TimesheetEntries.
+    Approval state is tracked in TimesheetApprovals — the absence of an
+    approval record means the timesheet is still in Draft state.
+    """
+    timesheet_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    employee_id = models.ForeignKey(
+        Employees,
+        on_delete=models.PROTECT,
+        db_column='employee_id',
+        related_name='timesheets',
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    # total_hours is recomputed from TimesheetEntries on every save via the
+    # TimesheetsView; stored here so the list API never needs a slow aggregate.
+    total_hours = models.DecimalField(max_digits=10, decimal_places=2, null=True, default=None)
+    notes = models.CharField(max_length=500, null=True, blank=True, default=None)
+
+    # ----------------------- Billing fields (ad-hoc billable hours) -----------
+    # When a timesheet records chargeable work done for a client, these fields
+    # carry the billing context. They are optional so normal (internal) work is
+    # unaffected. String FK references are used to avoid cross-app circular
+    # imports (same approach as TimesheetApprovals -> 'masters.Statuses').
+    #
+    # customer_id      : the client to bill this work to.
+    # is_billable      : True when these hours are chargeable to the client.
+    # billing_rate     : agreed hourly rate (e.g. 1000.00).
+    # billable_amount  : total_hours * billing_rate, stored for fast reporting.
+    # invoiced         : 'NO' until billed, then 'YES'. Mirrors the proven
+    #                    SaleOrderItems.invoiced anti-duplicate pattern.
+    # sale_invoice_id  : link to the SaleInvoiceOrders record once invoiced.
+    customer_id = models.ForeignKey(
+        'customer.Customer',
+        on_delete=models.PROTECT,
+        db_column='customer_id',
+        related_name='timesheets',
+        null=True,
+        default=None,
+    )
+    is_billable = models.BooleanField(default=False)
+    billing_rate = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    billable_amount = models.DecimalField(max_digits=18, decimal_places=2, null=True, default=None)
+    invoiced = models.CharField(max_length=10, default='NO')
+    sale_invoice_id = models.ForeignKey(
+        'sales.SaleInvoiceOrders',
+        on_delete=models.SET_NULL,
+        db_column='sale_invoice_id',
+        related_name='source_timesheets',
+        null=True,
+        default=None,
+    )
+
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = timesheets
+        # Prevent an employee from having two timesheets for the same period.
+        constraints = [
+            models.UniqueConstraint(
+                fields=['employee_id', 'start_date', 'end_date'],
+                condition=models.Q(is_deleted=False),
+                name='unique_active_timesheet_per_employee_period',
+            )
+        ]
+
+    def __str__(self):
+        return f"Timesheet {self.timesheet_id} | Employee: {self.employee_id} | {self.start_date} to {self.end_date}"
+
+
+class TimesheetEntries(models.Model):
+    """
+    One row per working day within a Timesheets period.
+    hours_worked must be between 0.01 and 24.00.
+    work_date must fall within the parent timesheet's start_date / end_date.
+    """
+    entry_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    timesheet_id = models.ForeignKey(
+        Timesheets,
+        on_delete=models.PROTECT,
+        db_column='timesheet_id',
+        related_name='entries',
+    )
+    work_date = models.DateField()
+    hours_worked = models.DecimalField(max_digits=5, decimal_places=2)
+    description = models.CharField(max_length=500, null=True, blank=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = timesheetentries
+
+    def __str__(self):
+        return f"Entry {self.entry_id} | {self.work_date} | {self.hours_worked}h"
+
+
+class TimesheetApprovals(models.Model):
+    """
+    Created when an employee submits a timesheet for manager review.
+    Before this record exists the timesheet is in 'Draft' state.
+    Status transitions: Open → Approved | Open → Rejected → (employee edits) → Open.
+    Mirrors the LeaveApprovals pattern exactly.
+    """
+    timesheet_approval_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    timesheet_id = models.ForeignKey(
+        Timesheets,
+        on_delete=models.PROTECT,
+        db_column='timesheet_id',
+        related_name='approvals',
+    )
+    # status_id references masters.Statuses — same FK pattern as LeaveApprovals.
+    status_id = models.ForeignKey(
+        'masters.Statuses',
+        on_delete=models.PROTECT,
+        db_column='status_id',
+    )
+    approver_id = models.ForeignKey(
+        Employees,
+        on_delete=models.PROTECT,
+        db_column='approver_id',
+        related_name='timesheet_approvals_as_approver',
+    )
+    approval_date = models.DateField(null=True, default=None)
+    rejection_reason = models.CharField(max_length=500, null=True, blank=True, default=None)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = timesheetapprovals
+
+    def __str__(self):
+        return f"Approval {self.timesheet_approval_id} | Status: {self.status_id}"

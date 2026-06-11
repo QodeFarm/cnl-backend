@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from apps.hrms.models import Departments, Designations, EmployeeSalaryComponents, Employees, EmployeeSalary, EmployeeLeaves, JobCodes, JobTypes, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, LeaveTypes, SalaryComponents, Shifts, Swipes
+from apps.hrms.models import Departments, Designations, EmployeeSalaryComponents, Employees, EmployeeSalary, EmployeeLeaves, JobCodes, JobTypes, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, LeaveTypes, SalaryComponents, Shifts, Swipes, Timesheets, TimesheetEntries, TimesheetApprovals
 from config.utils_methods import filter_uuid
 from django_filters import DateFromToRangeFilter
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
@@ -451,5 +451,204 @@ class LeaveTypesFilter(filters.FilterSet):
         return filter_by_limit(self, queryset, value)
     
     class Meta:
-        model = LeaveTypes 
+        model = LeaveTypes
         fields = ['leave_type_name','description','max_days_allowed','created_at','s', 'sort','page','limit']
+
+
+# ===================== timesheets ====================================
+
+class TimesheetsFilter(filters.FilterSet):
+    """
+    Filter set for the Timesheets model.
+
+    Supports:
+      - employee_id   : exact UUID match
+      - employee      : partial name match on employee's full_name
+      - department    : partial match on the employee's department name
+                        (allows HR to filter all timesheets for a department)
+      - start_date    : exact date match
+      - end_date      : exact date match
+      - created_at    : date-range filter (from / to)
+      - period_name   : shortcut period e.g. "This Week", "This Month"
+      - s             : global search across key fields
+      - sort / page / limit : standard pagination helpers
+    """
+    employee_id = filters.CharFilter(method=filter_uuid)
+    employee = filters.CharFilter(
+        field_name='employee_id__full_name',
+        lookup_expr='icontains',
+    )
+    department = filters.CharFilter(
+        field_name='employee_id__department_id__department_name',
+        lookup_expr='icontains',
+    )
+    # --- billing filters ---
+    customer_id = filters.CharFilter(method=filter_uuid)
+    customer = filters.CharFilter(
+        field_name='customer_id__name',
+        lookup_expr='icontains',
+    )
+    is_billable = filters.BooleanFilter()
+    invoiced = filters.CharFilter(lookup_expr='exact')
+    start_date = filters.DateFilter()
+    end_date = filters.DateFilter()
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(
+        choices=PERIOD_NAME_CHOICES,
+        method='filter_by_period_name',
+    )
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = Timesheets
+        # NOTE: 'employee' must be first — the summary/ordering logic in
+        # filter_by_page relies on the 0th index field for descending default sort.
+        fields = [
+            'employee', 'employee_id', 'department',
+            'customer', 'customer_id', 'is_billable', 'invoiced',
+            'start_date', 'end_date',
+            'created_at', 'period_name',
+            's', 'sort', 'page', 'limit',
+        ]
+
+
+class TimesheetEntriesFilter(filters.FilterSet):
+    """
+    Filter set for TimesheetEntries.
+
+    Supports:
+      - timesheet_id  : exact UUID match on the parent timesheet
+      - employee      : partial name match traversing timesheet → employee
+      - work_date     : exact date match
+      - created_at    : date-range filter
+      - period_name / s / sort / page / limit : standard helpers
+    """
+    timesheet_id = filters.CharFilter(method=filter_uuid)
+    employee = filters.CharFilter(
+        field_name='timesheet_id__employee_id__full_name',
+        lookup_expr='icontains',
+    )
+    work_date = filters.DateFilter()
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(
+        choices=PERIOD_NAME_CHOICES,
+        method='filter_by_period_name',
+    )
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = TimesheetEntries
+        fields = [
+            'timesheet_id', 'employee', 'work_date',
+            'created_at', 'period_name',
+            's', 'sort', 'page', 'limit',
+        ]
+
+
+class TimesheetApprovalsFilter(filters.FilterSet):
+    """
+    Filter set for TimesheetApprovals.
+
+    Supports:
+      - timesheet_approval_id : exact UUID match
+      - timesheet_id          : exact UUID match on the parent timesheet
+      - employee              : partial name match traversing approval → timesheet → employee
+      - status_id             : partial match on status_name
+      - status_name           : alias of status_id filter (convenience)
+      - approver              : partial name match on approver's full_name
+      - approver_id           : exact UUID match on the approver
+      - approval_date         : exact date match
+      - created_at            : date-range filter
+      - period_name / s / sort / page / limit : standard helpers
+    """
+    timesheet_approval_id = filters.CharFilter(method=filter_uuid)
+    timesheet_id = filters.CharFilter(method=filter_uuid)
+    employee = filters.CharFilter(
+        field_name='timesheet_id__employee_id__full_name',
+        lookup_expr='icontains',
+    )
+    status_id = filters.CharFilter(
+        field_name='status_id__status_name',
+        lookup_expr='icontains',
+    )
+    status_name = filters.CharFilter(
+        field_name='status_id__status_name',
+        lookup_expr='icontains',
+    )
+    approver = filters.CharFilter(
+        field_name='approver_id__full_name',
+        lookup_expr='icontains',
+    )
+    approver_id = filters.CharFilter(method=filter_uuid)
+    approval_date = filters.DateFilter()
+    created_at = DateFromToRangeFilter()
+    period_name = filters.ChoiceFilter(
+        choices=PERIOD_NAME_CHOICES,
+        method='filter_by_period_name',
+    )
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_period_name(self, queryset, name, value):
+        return filter_by_period_name(self, queryset, self.data, value)
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = TimesheetApprovals
+        # 'employee' first — same reasoning as TimesheetsFilter.
+        fields = [
+            'employee', 'timesheet_approval_id', 'timesheet_id',
+            'status_id', 'status_name',
+            'approver', 'approver_id', 'approval_date',
+            'created_at', 'period_name',
+            's', 'sort', 'page', 'limit',
+        ]
