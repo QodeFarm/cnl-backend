@@ -54,7 +54,9 @@ class EmployeeSalaryFilter(filters.FilterSet):
     salary_currency = filters.CharFilter(lookup_expr='icontains') 
     salary_start_date = filters.DateFilter()
     salary_end_date = filters.DateFilter() 
-    employee_id = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
+    # employee_id = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
+    employee_name = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains', label='Employee Name')
+    employee_id = filters.CharFilter(field_name='employee_id', lookup_expr='exact', label='Employee ID')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")
@@ -80,7 +82,7 @@ class EmployeeSalaryFilter(filters.FilterSet):
     class Meta:
         model = EmployeeSalary
         #do not change "salary_amount",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields =['salary_amount','salary_currency','salary_start_date','salary_end_date','employee_id','created_at','period_name','s','sort','page','limit']
+        fields =['salary_amount','salary_currency','salary_start_date','salary_end_date','employee_name', 'employee_id','created_at','period_name','s','sort','page','limit']
 
 class EmployeeLeavesFilter(filters.FilterSet):
     start_date = filters.DateFilter()

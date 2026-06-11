@@ -645,3 +645,47 @@ class TimesheetApprovalsSerializer(serializers.ModelSerializer):
             return obj.timesheet_id.total_hours
         except Exception:
             return None
+        
+        
+ #employee portal login
+# Add to your existing serializers.py
+from django.contrib.auth.hashers import check_password
+
+# serializers.py
+from django.contrib.auth.hashers import check_password
+
+class EmployeePortalLoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    
+    def validate(self, data):
+        username = data.get('username')
+        password = data.get('password')
+        
+        print(f"🔍 Validating username: {username}")
+        
+        try:
+            employee = Employees.objects.get(
+                username=username, 
+                is_portal_user=True, 
+                is_deleted=False
+            )
+            print(f"✅ Employee found: {employee.full_name}")
+            print(f"📝 Stored password hash: {employee.password[:50]}...")
+            
+            # Check password
+            if not employee.password:
+                print("❌ Password is None in database")
+                raise serializers.ValidationError("Password not set. Please generate credentials first.")
+            
+            if not check_password(password, employee.password):
+                print("❌ Password check failed")
+                raise serializers.ValidationError("Invalid credentials")
+            
+            print("✅ Password verified successfully")
+            data['employee'] = employee
+            return data
+            
+        except Employees.DoesNotExist:
+            print(f"❌ Employee not found with username: {username}")
+            raise serializers.ValidationError("Invalid credentials or account not activated")       

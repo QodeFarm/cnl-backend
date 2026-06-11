@@ -100,13 +100,70 @@ class Employees(models.Model):
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    username = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    password = models.CharField(max_length=255, null=True, blank=True)  # Store hashed password
+    is_portal_user = models.BooleanField(default=True)  # Enable portal access
+    last_login = models.DateTimeField(null=True, blank=True)
+    force_password_change = models.BooleanField(default=False)
 
     class Meta:
         db_table = employees
         
+    # def save(self, *args, **kwargs):
+    #     self.full_name = f"{self.first_name} {self.last_name}".strip()
+    #     super().save(*args, **kwargs)    
+    
+    # apps/hrms/models.py - Add these methods if not exists
+
+    def generate_username(self):
+        """Generate username from first_name.last_name"""
+        import re
+        
+        # If username already exists for this employee, just return it
+        if self.username:
+            return self.username
+        
+        # Generate new username only if it doesn't exist
+        username = f"{self.first_name.lower()}.{self.last_name.lower()}"
+        username = re.sub(r'[^a-zA-Z0-9.]', '', username)
+        
+        # Check if username exists for OTHER employees (not this one)
+        base_username = username
+        counter = 1
+        while Employees.objects.filter(username=username).exclude(employee_id=self.employee_id).exists():
+            # If conflict, try different combination
+            if counter == 1:
+                # Try swapping first and last name
+                username = f"{self.last_name.lower()}.{self.first_name.lower()}"
+                username = re.sub(r'[^a-zA-Z0-9.]', '', username)
+            else:
+                # Add number only if both combinations are taken
+                username = f"{base_username}{counter}"
+            counter += 1
+        
+        return username
+
+    def generate_random_password(self, length=10):
+        """Generate random alphanumeric password"""
+        import string, random
+        characters = string.ascii_letters + string.digits
+        return ''.join(random.choice(characters) for _ in range(length))
+
+    def set_random_password(self):
+        """Generate and set hashed password"""
+        from django.contrib.auth.hashers import make_password
+        plain_password = self.generate_random_password()
+        self.password = make_password(plain_password)
+        return plain_password
+    
     def save(self, *args, **kwargs):
+        # Auto-generate username if not provided
+        if self.is_portal_user and not self.username:
+            self.username = self.generate_username()
+        
         self.full_name = f"{self.first_name} {self.last_name}".strip()
-        super().save(*args, **kwargs)    
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name}"  

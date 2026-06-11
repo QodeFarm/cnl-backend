@@ -54,4 +54,12 @@ urlpatterns = [
     path('timesheets/<str:pk>/submit/', TimesheetSubmitView.as_view(), name='timesheet-submit'),
     path('timesheets/<str:pk>/approve/', TimesheetApproveView.as_view(), name='timesheet-approve'),
     path('timesheets/<str:pk>/reject/', TimesheetRejectView.as_view(), name='timesheet-reject'),
+    # Employee Portal URLs
+    # path('api/employee/portal/login/', EmployeePortalLoginView.as_view(), name='employee_portal_login'),
+    # path('api/employee/portal/logout/', EmployeePortalLogoutView.as_view(), name='employee_portal_logout'),
+    # path('api/employee/portal/profile/', EmployeePortalProfileView.as_view(), name='employee_portal_profile'),
+    path('employee/generate-credentials/', GenerateEmployeeCredentials.as_view()),
+    path('employee/login/', EmployeePortalLoginView.as_view()),
+    path('employee/logout/', EmployeePortalLogoutView.as_view(), name='employee_logout'),
+    path('employees/generate-credentials/<uuid:employee_id>/', GenerateEmployeeCredentialsView.as_view(), name='generate_employee_credentials'),
 ]
