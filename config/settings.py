@@ -458,6 +458,7 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
     'x-customer-portal',  # Add this explicitly
     'x-client-domain', 
+    'x-skip-error-interceptor',
 ]
 
 # Preflight max age (cache preflight response)
