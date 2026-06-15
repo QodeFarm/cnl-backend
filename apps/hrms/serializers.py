@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from rest_framework import serializers
 from apps.masters.models import Statuses
-from .models import JobTypes, Designations, JobCodes, Departments, Shifts, Employees, EmployeeSalary, SalaryComponents, EmployeeSalaryComponents, LeaveTypes, EmployeeLeaves, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, Swipes, Biometric
+from .models import JobTypes, Designations, JobCodes, Departments, Shifts, Employees, EmployeeSalary, SalaryComponents, EmployeeSalaryComponents, LeaveTypes, EmployeeLeaves, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, Swipes, Biometric, Timesheets, TimesheetEntries, TimesheetApprovals
 from datetime import timedelta
 import logging
 
@@ -454,7 +454,200 @@ class BiometricSerializer(serializers.ModelSerializer):
         model = Biometric
         fields = '__all__'
 
-#employee portal login
+
+# ===================== timesheets ====================================
+
+class ModTimesheetsSerializer(serializers.ModelSerializer):
+    """Minimal representation used when a timesheet is embedded inside another
+    serializer (e.g. inside TimesheetApprovalsSerializer)."""
+    class Meta:
+        model = Timesheets
+        fields = ['timesheet_id', 'start_date', 'end_date', 'total_hours', 'notes']
+
+
+class TimesheetsSerializer(serializers.ModelSerializer):
+    """
+    Full timesheet serializer.
+
+    Read-only nested fields:
+      - employee  : expanded employee object for display purposes.
+      - customer  : expanded client object (id + name) for billing display.
+
+    Write fields (flat IDs):
+      - employee_id : FK — send the UUID directly when creating/updating.
+      - customer_id : FK — send the client UUID when the work is billable.
+
+    Validation rules enforced here:
+      1. end_date must be >= start_date.
+      2. No duplicate active timesheet for the same employee + period.
+         (The DB constraint is the final guard; this gives a friendly message.)
+    """
+    employee = ModEmployeesSerializer(source='employee_id', read_only=True)
+    # Lightweight nested client (id + name). Implemented as a method field so we
+    # do not import a Customer serializer across apps (keeps imports clean and
+    # avoids any circular-import risk).
+    customer = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Timesheets
+        fields = '__all__'
+        # Disable DRF's auto-generated UniqueTogetherValidator (built from the
+        # model's UniqueConstraint). That validator cannot exclude the record
+        # being edited, so it wrongly blocks every UPDATE. We perform our own
+        # duplicate-period check in validate() below, which correctly excludes
+        # the current record on update.
+        validators = []
+
+    def validate(self, data):
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        employee = data.get('employee_id')
+
+        # --- date order check ---
+        if start_date and end_date:
+            if end_date < start_date:
+                raise serializers.ValidationError({
+                    'date_validation': "end_date must be on or after start_date."
+                })
+
+        # --- duplicate period check (excludes the current record on update) ---
+        if start_date and end_date and employee:
+            existing_qs = Timesheets.objects.filter(
+                employee_id=employee,
+                start_date=start_date,
+                end_date=end_date,
+                is_deleted=False,
+            )
+
+            # Determine the current record's PK so we never flag it against itself.
+            # - On a normal update the instance is set.
+            # - In this project's update flow the PK arrives inside the payload
+            #   as 'timesheet_id', so fall back to that.
+            current_pk = None
+            if self.instance is not None:
+                current_pk = self.instance.pk
+            elif getattr(self, 'initial_data', None):
+                current_pk = self.initial_data.get('timesheet_id')
+
+            if current_pk:
+                existing_qs = existing_qs.exclude(pk=current_pk)
+
+            if existing_qs.exists():
+                raise serializers.ValidationError({
+                    'duplicate_validation': (
+                        "An active timesheet already exists for this employee "
+                        "covering the same period."
+                    )
+                })
+
+        return data
+
+    def get_customer(self, obj):
+        """Return a minimal client object {customer_id, name} for display, or None."""
+        client = obj.customer_id  # FK attribute returns the related Customer instance
+        if client:
+            return {'customer_id': str(client.customer_id), 'name': client.name}
+        return None
+
+
+class ModTimesheetEntriesSerializer(serializers.ModelSerializer):
+    """Minimal representation used for embedding entries in responses."""
+    class Meta:
+        model = TimesheetEntries
+        fields = ['entry_id', 'work_date', 'hours_worked', 'description']
+
+
+class TimesheetEntriesSerializer(serializers.ModelSerializer):
+    """
+    Full timesheet entry serializer.
+
+    Read-only nested fields:
+      - timesheet : expanded timesheet header for context.
+
+    Validation rules enforced here:
+      1. hours_worked must be between 0.01 and 24.00.
+      2. work_date must fall within the parent timesheet's start_date / end_date.
+         (work_date vs period check only runs when timesheet_id is available.)
+    """
+    timesheet = ModTimesheetsSerializer(source='timesheet_id', read_only=True)
+
+    class Meta:
+        model = TimesheetEntries
+        fields = '__all__'
+
+    def validate(self, data):
+        hours_worked = data.get('hours_worked')
+        work_date = data.get('work_date')
+        timesheet = data.get('timesheet_id')
+
+        # --- hours range check ---
+        if hours_worked is not None:
+            if hours_worked <= 0 or hours_worked > 24:
+                raise serializers.ValidationError({
+                    'hours_validation': "hours_worked must be between 0.01 and 24.00."
+                })
+
+        # --- work_date within timesheet period check ---
+        if work_date and timesheet:
+            if work_date < timesheet.start_date or work_date > timesheet.end_date:
+                raise serializers.ValidationError({
+                    'date_range_validation': (
+                        f"work_date {work_date} must fall within the timesheet period "
+                        f"({timesheet.start_date} to {timesheet.end_date})."
+                    )
+                })
+
+        return data
+
+
+class ModTimesheetApprovalsSerializer(serializers.ModelSerializer):
+    """Minimal representation used when embedding an approval inside another
+    serializer (e.g. inside the timesheet detail response)."""
+    class Meta:
+        model = TimesheetApprovals
+        fields = ['timesheet_approval_id', 'approval_date', 'rejection_reason', 'status_id']
+
+
+class TimesheetApprovalsSerializer(serializers.ModelSerializer):
+    """
+    Full timesheet approval serializer.
+
+    Read-only nested fields:
+      - status    : expanded status object (status_id, status_name).
+      - timesheet : expanded timesheet header.
+      - approver  : expanded approver employee object.
+
+    Also exposes total_hours directly from the related timesheet so the
+    approvals list does not need a separate API call to show hours worked.
+    """
+    status = ModStatusSerializer(source='status_id', read_only=True)
+    timesheet = ModTimesheetsSerializer(source='timesheet_id', read_only=True)
+    approver = ModEmployeesSerializer(source='approver_id', read_only=True)
+    # Convenience field: surface the employee who owns the timesheet.
+    employee = serializers.SerializerMethodField()
+    total_hours = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TimesheetApprovals
+        fields = '__all__'
+
+    def get_employee(self, obj):
+        """Return the employee who owns the related timesheet."""
+        try:
+            emp = obj.timesheet_id.employee_id
+            return ModEmployeesSerializer(emp).data
+        except Exception:
+            return {}
+
+    def get_total_hours(self, obj):
+        """Return total_hours from the related timesheet for quick display."""
+        try:
+            return obj.timesheet_id.total_hours
+        except Exception:
+            return None
+        
+        
+ #employee portal login
 # Add to your existing serializers.py
 from django.contrib.auth.hashers import check_password
 
@@ -495,4 +688,4 @@ class EmployeePortalLoginSerializer(serializers.Serializer):
             
         except Employees.DoesNotExist:
             print(f"❌ Employee not found with username: {username}")
-            raise serializers.ValidationError("Invalid credentials or account not activated")
+            raise serializers.ValidationError("Invalid credentials or account not activated")       

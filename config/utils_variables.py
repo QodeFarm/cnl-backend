@@ -164,6 +164,9 @@ employeeleavebalance = 'employee_leave_balance'
 employeeattendance = 'employee_attendance'
 swipes = 'swipes'
 biometric = 'biometric'
+timesheets = 'timesheets'
+timesheetentries = 'timesheet_entries'
+timesheetapprovals = 'timesheet_approvals'
 
 # Production
 bom = 'bom'
