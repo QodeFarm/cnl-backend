@@ -2215,11 +2215,17 @@ class EmployeePortalLoginView(APIView):
     def post(self, request):
         try:
             # Get origin for CORS
+            # Get origin for CORS
             origin = request.headers.get('Origin', '')
             allowed_origins = [
                 "http://localhost:4200",
+                "http://127.0.0.1:4200",
                 "https://prod.cnlerp.com",
                 "https://rudhra.cnlerp.com",
+                "https://vasusri.cnlerp.com",  # ADD THIS
+                "https://qa.cnlerp.com",       # ADD THIS
+                "https://apicore.cnlerp.com",  # ADD THIS
+                "https://dev.qodefarm.com",
             ]
             
             cors_origin = origin if origin in allowed_origins else "https://prod.cnlerp.com"
