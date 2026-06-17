@@ -74,19 +74,80 @@ class PictureSerializer(serializers.Serializer):
     file_size = serializers.IntegerField()
     attachment_path = serializers.CharField(max_length=255)
   
-class EmployeesSerializer(serializers.ModelSerializer):
-    job_type = ModJobTypesSerializer(source='job_type_id',read_only=True)
-    designation = ModDesignationsSerializer(source='designation_id',read_only=True)
-    job_code = ModJobCodesSerializer(source='job_code_id',read_only=True)
-    department = ModDepartmentsSerializer(source='department_id',read_only=True)
-    shift = ModShiftsSerializer(source = 'shift_id',read_only=True)
-    manager = ModEmployeesSerializer(source = 'manager_id',read_only=True)
-    full_name = serializers.CharField(read_only=True)
+# class EmployeesSerializer(serializers.ModelSerializer):
+#     job_type = ModJobTypesSerializer(source='job_type_id',read_only=True)
+#     designation = ModDesignationsSerializer(source='designation_id',read_only=True)
+#     job_code = ModJobCodesSerializer(source='job_code_id',read_only=True)
+#     department = ModDepartmentsSerializer(source='department_id',read_only=True)
+#     shift = ModShiftsSerializer(source = 'shift_id',read_only=True)
+#     manager = ModEmployeesSerializer(source = 'manager_id',read_only=True)
+#     full_name = serializers.CharField(read_only=True)
     
-    picture = PictureSerializer(required=True, allow_null=False, many=True)
+#     picture = PictureSerializer(required=True, allow_null=False, many=True)
+#     class Meta:
+#         model = Employees
+#         fields = '__all__'
+
+class EmployeesSerializer(serializers.ModelSerializer):
+    job_type = ModJobTypesSerializer(source='job_type_id', read_only=True)
+    designation = ModDesignationsSerializer(source='designation_id', read_only=True)
+    job_code = ModJobCodesSerializer(source='job_code_id', read_only=True)
+    department = ModDepartmentsSerializer(source='department_id', read_only=True)
+    shift = ModShiftsSerializer(source='shift_id', read_only=True)
+    manager = ModEmployeesSerializer(source='manager_id', read_only=True)
+    full_name = serializers.CharField(read_only=True)
+    picture = PictureSerializer(required=False, allow_null=True, many=True)
+    
     class Meta:
         model = Employees
         fields = '__all__'
+        
+    def validate_username(self, value):
+        """
+        Validate that the username is unique, excluding the current instance
+        """
+        if self.instance and self.instance.username == value:
+            return value
+        if Employees.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username already exists")
+        return value
+    
+    def validate_email(self, value):
+        """
+        Validate that the email is unique, excluding the current instance
+        This allows employees to change their email as long as it's not used by someone else
+        """
+        # If we have an instance (update operation)
+        if self.instance:
+            # If the email hasn't changed, it's valid
+            if self.instance.email == value:
+                return value
+            # If the email has changed, check if it's used by any OTHER employee
+            if Employees.objects.filter(email=value).exclude(employee_id=self.instance.employee_id).exists():
+                raise serializers.ValidationError("Email already exists")
+        else:
+            # For new employees, check if email already exists
+            if Employees.objects.filter(email=value).exists():
+                raise serializers.ValidationError("Email already exists")
+        return value
+    
+    def validate(self, data):
+        """
+        Additional cross-field validation
+        """
+        # Check if username is being updated and if it already exists (excluding current instance)
+        username = data.get('username')
+        if username and self.instance:
+            if Employees.objects.filter(username=username).exclude(employee_id=self.instance.employee_id).exists():
+                raise serializers.ValidationError({"username": "Username already exists"})
+        
+        # Check if email is being updated and if it already exists (excluding current instance)
+        email = data.get('email')
+        if email and self.instance:
+            if Employees.objects.filter(email=email).exclude(employee_id=self.instance.employee_id).exists():
+                raise serializers.ValidationError({"email": "Email already exists"})
+        
+        return data
 
 
 
@@ -665,6 +726,9 @@ class EmployeePortalLoginSerializer(serializers.Serializer):
         print(f"🔍 Validating username: {username}")
         
         try:
+            # Use the model name correctly (Employees or Employee based on your model)
+            # from apps.hrms.models import Employees  # or Employees
+            
             employee = Employees.objects.get(
                 username=username, 
                 is_portal_user=True, 
@@ -688,4 +752,4 @@ class EmployeePortalLoginSerializer(serializers.Serializer):
             
         except Employees.DoesNotExist:
             print(f"❌ Employee not found with username: {username}")
-            raise serializers.ValidationError("Invalid credentials or account not activated")       
+            raise serializers.ValidationError("Invalid credentials or account not activated")
