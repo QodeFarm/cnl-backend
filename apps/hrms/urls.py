@@ -62,4 +62,7 @@ urlpatterns = [
     path('employee/login/', EmployeePortalLoginView.as_view()),
     path('employee/logout/', EmployeePortalLogoutView.as_view(), name='employee_logout'),
     path('employees/generate-credentials/<uuid:employee_id>/', GenerateEmployeeCredentialsView.as_view(), name='generate_employee_credentials'),
+    path('employees/send-credentials/<uuid:employee_id>/', 
+         SendEmployeeCredentialsView.as_view(), 
+         name='send-employee-credentials'),
 ]

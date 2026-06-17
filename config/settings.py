@@ -266,13 +266,30 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-#E-Mail Config
+# #E-Mail Config
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_USE_TLS = True
+# EMAIL_PORT = 587
+# EMAIL_HOST_USER = "qodefarm7@gmail.com" 
+# EMAIL_HOST_PASSWORD= "osap irhp jqzl ehre" 
+# ============================================
+# EMAIL CONFIGURATION - Hostinger Mail
+# ============================================
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_USE_TLS = True
+EMAIL_HOST = 'smtp.hostinger.com'
 EMAIL_PORT = 587
-EMAIL_HOST_USER = "qodefarm7@gmail.com" 
-EMAIL_HOST_PASSWORD= "osap irhp jqzl ehre" 
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+EMAIL_HOST_USER = "admin@cnlerp.com"
+EMAIL_HOST_PASSWORD = "Cnlerp@321"  # REPLACE THIS!
+
+# Optional: Set a default from email
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+SERVER_EMAIL = EMAIL_HOST_USER
+
+# For better deliverability
+EMAIL_TIMEOUT = 60  # seconds
 
 
 # REST_FRAMEWORK = {    
@@ -406,17 +423,27 @@ SESSION_SAVE_EVERY_REQUEST = True
 #     "http://127.0.0.1:8000",
 # ]
 # Add all your production domains
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:4200",
+#     "http://127.0.0.1:4200",
+#     "https://prod.cnlerp.com",
+#     "https://rudhra.cnlerp.com",
+#     "https://vasusri.cnlerp.com",  # New domain
+#     "https://qa.cnlerp.com",
+#     "https://dev.qodefarm.com",
+#     "https://apicore.cnlerp.com",
+# ]
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:4200",
     "http://127.0.0.1:4200",
     "https://prod.cnlerp.com",
     "https://rudhra.cnlerp.com",
-    "https://vasusri.cnlerp.com",  # New domain
+    "https://vasusri.cnlerp.com",
     "https://qa.cnlerp.com",
-    "https://dev.qodefarm.com",
     "https://apicore.cnlerp.com",
+    "https://dev.qodefarm.com",
 ]
-
 # CSRF_COOKIE_SAMESITE = 'Lax'
 # CSRF_COOKIE_HTTPONLY = False
 # CSRF_COOKIE_SECURE = False

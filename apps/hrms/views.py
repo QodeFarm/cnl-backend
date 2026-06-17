@@ -1062,42 +1062,56 @@ class EmployeeView(APIView):
         - Invalid foreign keys
         - nulls in required fields
         """
+        try:
+            # Get the existing employee instance
+            existing_employee = Employees.objects.select_related(
+                'job_type_id', 'designation_id', 'job_code_id', 
+                'department_id', 'shift_id', 'manager_id'
+            ).get(employee_id=pk)
+        except Employees.DoesNotExist:
+            logger.error(f"Employee with ID {pk} not found")
+            return build_response(0, "Employee not found", [], status.HTTP_404_NOT_FOUND)
+        
         # Get the given data from request
         given_data = request.data
-
+        
         # Validated Employees Data
         employee_data = given_data.pop('employee', None)
-        if employee_data:
-            employee_data['employee_id'] = pk
-            employee_error = validate_payload_data(self, employee_data , EmployeesSerializer)
-
+        
         # Ensure mandatory data is present
         if not employee_data:
             logger.error("Employee data mandatory but not provided.")
             return build_response(0, "Employee data mandatory but not provided.", [], status.HTTP_400_BAD_REQUEST)
         
-        errors = {}
-        if employee_error:
-            errors["employee"] = employee_error
-        if errors:
-            return build_response(0, "ValidationError :",errors, status.HTTP_400_BAD_REQUEST)
-            
-            # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
+        # Add the employee_id to the data (though not needed for validation with instance)
+        employee_data['employee_id'] = pk
+        
+        # Create serializer with existing instance for validation
+        serializer = EmployeesSerializer(existing_employee, data=employee_data, partial=True)
+        
+        if not serializer.is_valid():
+            errors = serializer.errors
+            logger.error(f"Validation errors: {errors}")
+            return build_response(0, "ValidationError", errors, status.HTTP_400_BAD_REQUEST)
+        
+        # ------------------------------ D A T A   U P D A T I O N -----------------------------------------#
         try:
-            # Update the 'Employees'
-            if employee_data:
-                update_fields = []# No need to update any fields
-                emp_data = update_multi_instances(self, pk, [employee_data], Employees, EmployeesSerializer, update_fields,main_model_related_field='employee_id', current_model_pk_field='employee_id')
-
-            custom_data = [
-                {"employee":emp_data[0]},
+            # Save the updated employee
+            updated_employee = serializer.save()
+            
+            # Prepare response data
+            response_data = [
+                {
+                    "employee": EmployeesSerializer(updated_employee).data
+                }
             ]
-
-            return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
-        except Exception:
-            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+            
+            return build_response(1, "Records updated successfully", response_data, status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Error updating employee: {str(e)}")
+            return build_response(0, f"An error occurred: {str(e)}", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 # ==============================================================================
 #  TIMESHEETS  —  ViewSets (simple CRUD) + APIView (full lifecycle)
 # ==============================================================================
@@ -2215,16 +2229,15 @@ class EmployeePortalLoginView(APIView):
     def post(self, request):
         try:
             # Get origin for CORS
-            # Get origin for CORS
             origin = request.headers.get('Origin', '')
             allowed_origins = [
                 "http://localhost:4200",
                 "http://127.0.0.1:4200",
                 "https://prod.cnlerp.com",
                 "https://rudhra.cnlerp.com",
-                "https://vasusri.cnlerp.com",  # ADD THIS
-                "https://qa.cnlerp.com",       # ADD THIS
-                "https://apicore.cnlerp.com",  # ADD THIS
+                "https://vasusri.cnlerp.com",
+                "https://qa.cnlerp.com",
+                "https://apicore.cnlerp.com",
                 "https://dev.qodefarm.com",
             ]
             
@@ -2256,16 +2269,29 @@ class EmployeePortalLoginView(APIView):
                 request.session['email'] = employee.email
                 request.session['user_role'] = 'Employee'
                 request.session['is_employee_portal'] = True
-                request.session['designation'] = str(employee.designation_id.title) if employee.designation_id else None
-                request.session['department'] = str(employee.department_id.name) if employee.department_id else None
+                
+                # If designation_id and department_id are direct integer fields
+                if hasattr(employee, 'designation_id'):
+                    request.session['designation_id'] = str(employee.designation_id) if employee.designation_id else None
+                else:
+                    request.session['designation_id'] = None
+                    
+                if hasattr(employee, 'department_id'):
+                    request.session['department_id'] = str(employee.department_id) if employee.department_id else None
+                else:
+                    request.session['department_id'] = None
                 
                 # Save session
                 request.session.save()
                 
                 print(f"✅ Session created: {request.session.session_key}")
                 
-                # Create response
-                response = Response({
+                # Get the actual IDs
+                designation_id = str(employee.designation_id) if hasattr(employee, 'designation_id') and employee.designation_id else None
+                department_id = str(employee.department_id) if hasattr(employee, 'department_id') and employee.department_id else None
+                
+                # Create response with proper data
+                response_data = {
                     'success': True,
                     'message': 'Login successful',
                     'employee': {
@@ -2273,11 +2299,15 @@ class EmployeePortalLoginView(APIView):
                         'name': employee.full_name,
                         'username': employee.username,
                         'email': employee.email,
-                        'designation': employee.designation_id.title if employee.designation_id else None,
-                        'department': employee.department_id.name if employee.department_id else None,
-                        'picture': employee.picture
+                        'designation_id': designation_id,
+                        'department_id': department_id,
+                        'picture': employee.picture if hasattr(employee, 'picture') else None,
                     }
-                })
+                }
+                
+                print(f"📤 Response data: {response_data}")
+                
+                response = Response(response_data)
                 
                 # Set cookie
                 cookie_domain = settings.SESSION_COOKIE_DOMAIN if not settings.DEBUG else None
@@ -2309,7 +2339,6 @@ class EmployeePortalLoginView(APIView):
             import traceback
             traceback.print_exc()
             return Response({'success': False, 'message': 'Server error'}, status=500)
-
 
 class EmployeePortalLogoutView(APIView):
     def post(self, request):
@@ -2403,3 +2432,385 @@ class GenerateEmployeeCredentialsView(APIView):
                 'success': False,
                 'message': 'Error generating credentials'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)        
+
+# apps/hrms/views.py or apps/employees/views.py
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth.hashers import make_password
+from django.core.mail import send_mail
+from django.conf import settings
+from django.template.loader import render_to_string
+import logging
+
+logger = logging.getLogger(__name__)
+
+class SendEmployeeCredentialsView(APIView):
+    """Send generated credentials to employee"""
+    
+    def post(self, request, employee_id):
+        try:
+            logger.info(f"Processing credentials for employee: {employee_id}")
+            
+            # Get employee
+            employee = Employees.objects.get(employee_id=employee_id)
+            logger.info(f"Employee found: {employee.employee_id} - {employee.first_name} {employee.last_name}")
+            
+            # Check if employee has portal access
+            if not employee.is_portal_user:
+                logger.warning(f"Employee {employee.employee_id} does not have portal access")
+                return Response({
+                    'success': False,
+                    'message': 'Employee portal access is not enabled. Please enable portal access first.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            if not employee.username:
+                logger.warning(f"Employee {employee.employee_id} does not have username")
+                return Response({
+                    'success': False,
+                    'message': 'Please generate credentials first'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            method = request.GET.get('method', 'email')
+            logger.info(f"Selected method: {method}")
+            
+            # Get email and phone
+            employee_email = employee.email
+            phone_number = employee.phone
+            
+            logger.info(f"Email: {employee_email}")
+            logger.info(f"Phone: {phone_number}")
+            
+            # Generate new password
+            plain_password = employee.generate_random_password()
+            employee.password = make_password(plain_password)
+            employee.save()
+            
+            # Also update User model if it exists
+            if hasattr(employee, 'user') and employee.user:
+                employee.user.password = make_password(plain_password)
+                employee.user.save()
+            
+            logger.info(f"New password generated for employee: {employee.employee_id}")
+            
+            portal_url = get_employee_portal_url(request)
+            logger.info(f"Portal URL: {portal_url}")
+            
+            if method == 'email':
+                if not employee_email:
+                    logger.error(f"Cannot send email: No email found for employee {employee.employee_id}")
+                    return Response({
+                        'success': False,
+                        'message': 'No email address found. Please add an email for the employee.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                logger.info(f"Attempting to send email to: {employee_email}")
+                logger.info(f"Using from email: {settings.DEFAULT_FROM_EMAIL}")
+                
+                try:
+                    success, result = send_employee_credentials_email(
+                        employee, plain_password, portal_url, employee_email, request
+                    )
+                    
+                    if success:
+                        logger.info(f"✅ Email sent successfully to {employee_email}")
+                        return Response({
+                            'success': True,
+                            'message': 'Credentials sent via email successfully',
+                            'mode': 'email',
+                            'email': employee_email
+                        })
+                    else:
+                        logger.error(f"❌ Email failed: {result}")
+                        return Response({
+                            'success': False,
+                            'message': f'Email failed: {result}'
+                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                        
+                except Exception as email_error:
+                    logger.error(f"❌ Email sending exception: {str(email_error)}")
+                    import traceback
+                    traceback.print_exc()
+                    return Response({
+                        'success': False,
+                        'message': f'Email error: {str(email_error)}'
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            elif method == 'whatsapp':
+                if not phone_number or phone_number == '+91':
+                    logger.warning(f"No valid phone number found for employee {employee.employee_id}")
+                    return Response({
+                        'success': False,
+                        'message': 'No valid phone number found. Please add a phone number for the employee.'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Import WhatsApp service
+                try:
+                    # from .services.whatsapp_service import send_employee_credentials_whatsapp
+                    success, result = send_employee_credentials_whatsapp(
+                        employee, plain_password, portal_url, phone_number, request
+                    )
+                    
+                    if success:
+                        logger.info(f"WhatsApp message sent to {phone_number}")
+                        return Response({
+                            'success': True,
+                            'message': 'Credentials sent via WhatsApp',
+                            'mode': 'whatsapp',
+                            'phone': phone_number
+                        })
+                    else:
+                        logger.error(f"WhatsApp failed: {result}")
+                        return Response({
+                            'success': False,
+                            'message': f'WhatsApp failed: {result}'
+                        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                except ImportError:
+                    logger.error("WhatsApp service not available")
+                    return Response({
+                        'success': False,
+                        'message': 'WhatsApp service is not configured. Please use email.'
+                    }, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+            
+            else:
+                return Response({
+                    'success': False,
+                    'message': f'Invalid method: {method}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+        except Employees.DoesNotExist:
+            logger.error(f"Employee not found: {employee_id}")
+            return Response({
+                'success': False,
+                'message': 'Employee not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'success': False,
+                'message': f'Error: {str(e)}'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def get_employee_portal_url(request):
+    """Get dynamic portal URL for employee portal"""
+    if not request:
+        return "https://rudhra.cnlerp.com/#/employee_portal_login"
+    
+    # Get frontend domain from headers
+    frontend_domain = (
+        request.META.get('HTTP_ORIGIN') or 
+        request.META.get('HTTP_REFERER') or 
+        ''
+    )
+    
+    if frontend_domain:
+        # Clean the domain (remove protocol, port, trailing slashes)
+        domain = (
+            frontend_domain
+            .replace('https://', '')
+            .replace('http://', '')
+            .split(':')[0]
+            .rstrip('/')
+        )
+        
+        # Domain to portal URL mapping
+        if 'rudhra' in domain:
+            return "https://rudhra.cnlerp.com/#/employee-portal/login"
+        elif 'qa' in domain:
+            return "https://qa.cnlerp.com/#/employee-portal/login"
+        elif 'localhost' in domain or '127.0.0.1' in domain:
+            return "http://localhost:4200/#/employee-portal/login"
+        else:
+            # For any other domain (custom client domains)
+            return f"https://{domain}/#/employee-portal/login"
+    
+    # Fallback to API host
+    api_host = request.get_host()
+    if 'rudhra' in api_host:
+        return "https://rudhra.cnlerp.com/#/employee-portal/login"
+    elif 'qa' in api_host:
+        return "https://qa.cnlerp.com/#/employee-portal/login"
+    else:
+        return "https://prod.cnlerp.com/#/employee-portal/login"
+
+import logging
+from django.core.mail import send_mail
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+def send_employee_credentials_email(employee, plain_password, portal_url, employee_email, request=None):
+    """
+    Send login credentials via email to employee
+    """
+    try:
+        employee_name = f"{employee.first_name} {employee.last_name}"
+        username = employee.username
+        password = plain_password
+        
+        company_name = "CNL ERP"
+        
+        logger.info(f"Preparing email for {employee_name} to {employee_email}")
+        logger.info(f"Using email host: {settings.EMAIL_HOST}")
+        logger.info(f"From email: {settings.DEFAULT_FROM_EMAIL}")
+        
+        if not employee_email:
+            logger.error(f"No email provided for employee {employee.employee_id}")
+            return False, "No email address provided"
+        
+        subject = f"Welcome to {company_name} Employee Portal - Your Login Credentials"
+        
+        # Email content
+        email_body = f"""
+Welcome to {company_name} Employee Portal!
+
+Hello {employee_name},
+
+Your employee portal account has been created successfully.
+
+Login Credentials:
+Username: {username}
+Password: {password}
+
+Access your portal here:
+{portal_url}
+
+Important:
+- Change password after first login
+- Keep credentials secure
+- Do not share your password with anyone
+
+Employee Details:
+- Employee ID: {employee.employee_id}
+- Department: {employee.department_id.department_name if employee.department_id else 'N/A'}
+- Designation: {employee.designation_id.designation_name if employee.designation_id else 'N/A'}
+
+For support, contact HR at:
+Email: hr@cnlerp.com
+Phone: +91 95050 24999
+
+Thank you for being part of {company_name}!
+
+---
+This is an automated message. Please do not reply.
+"""
+        
+        # Send email using send_mail
+        try:
+            result = send_mail(
+                subject=subject,
+                message=email_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[employee_email],
+                fail_silently=False,
+            )
+            
+            if result == 1:
+                logger.info(f"✅ Credentials email sent successfully to {employee_email}")
+                return True, {"sent": True, "email": employee_email}
+            else:
+                logger.error(f"❌ Email send returned {result}")
+                return False, f"Email send returned {result}"
+                
+        except Exception as send_error:
+            logger.error(f"❌ Error during send: {str(send_error)}")
+            import traceback
+            traceback.print_exc()
+            return False, str(send_error)
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to send credentials email: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False, str(e)
+    
+# apps/hrms/services/whatsapp_service.py
+
+import logging
+import requests
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+def send_employee_credentials_whatsapp(employee, plain_password, portal_url, phone_number, request=None):
+    """
+    Send login credentials via WhatsApp to employee
+    """
+    try:
+        employee_name = f"{employee.first_name} {employee.last_name}"
+        username = employee.username
+        password = plain_password
+        
+        company_name = "CNL ERP"
+        
+        logger.info(f"Preparing WhatsApp message for {employee_name} to {phone_number}")
+        
+        if not phone_number:
+            logger.error(f"No phone number provided for employee {employee.employee_id}")
+            return False, "No phone number provided"
+        
+        # Format phone number (remove +91 if present, ensure it's just digits)
+        clean_phone = phone_number.replace('+', '').replace(' ', '').replace('-', '')
+        if clean_phone.startswith('91'):
+            clean_phone = clean_phone[2:]
+        
+        # Check WATI configuration
+        wati_config = getattr(settings, 'WATI_CONFIG', {})
+        if not wati_config.get('ENABLED', False):
+            logger.warning("WATI is not enabled in settings")
+            return False, "WhatsApp service is not enabled. Please configure WATI_CONFIG."
+        
+        wati_base_url = wati_config.get('BASE_URL')
+        wati_token = wati_config.get('WATI_TOKEN')
+        
+        if not wati_base_url or not wati_token:
+            logger.error("WATI configuration missing: BASE_URL or WATI_TOKEN")
+            return False, "WhatsApp service is not configured properly"
+        
+        # Build WATI API URL
+        api_url = f"{wati_base_url}/api/v1/sendTemplateMessage"
+        
+        # Template parameters
+        template_params = [
+            [employee_name],
+            [username],
+            [password],
+            [portal_url]
+        ]
+        
+        # Prepare payload
+        payload = {
+            "channel": "WhatsApp",
+            "phoneNumber": clean_phone,
+            "templateName": "employee_credentials",  # You need to create this template in WATI
+            "templateParams": template_params
+        }
+        
+        headers = {
+            "Authorization": wati_token,
+            "Content-Type": "application/json"
+        }
+        
+        logger.info(f"Sending WhatsApp message to {clean_phone} via WATI")
+        
+        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code == 200 or response.status_code == 201:
+            logger.info(f"WhatsApp message sent successfully to {clean_phone}")
+            return True, {"sent": True, "phone": clean_phone, "response": response.json()}
+        else:
+            logger.error(f"WhatsApp API error: {response.status_code} - {response.text}")
+            return False, f"WhatsApp API error: {response.status_code}"
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error sending WhatsApp message: {str(e)}")
+        return False, f"Failed to send WhatsApp message: {str(e)}"
+    except Exception as e:
+        logger.error(f"Unexpected error in WhatsApp service: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False, str(e)
