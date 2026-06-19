@@ -23,6 +23,26 @@ class ModSaleOrderSerializer(serializers.ModelSerializer):
 #     def get_status_name(self, obj):
 #         return obj.flow_status_id.flow_status_name if obj.flow_status_id else None
 
+# class UdfSaleOrderSerializer(serializers.ModelSerializer):
+#     status_name = serializers.SerializerMethodField()
+#     customer_name = serializers.SerializerMethodField()
+
+#     class Meta:
+#         model = SaleOrder
+#         fields = [
+#             'sale_order_id',
+#             'order_no',
+#             'flow_status_id',
+#             'status_name',
+#             'customer_name'
+#         ]
+
+#     def get_status_name(self, obj):
+#         return obj.flow_status_id.flow_status_name if obj.flow_status_id else None
+
+#     def get_customer_name(self, obj):
+#         return obj.customer_id.name if obj.customer_id else None
+
 class UdfSaleOrderSerializer(serializers.ModelSerializer):
     status_name = serializers.SerializerMethodField()
     customer_name = serializers.SerializerMethodField()
@@ -41,7 +61,19 @@ class UdfSaleOrderSerializer(serializers.ModelSerializer):
         return obj.flow_status_id.flow_status_name if obj.flow_status_id else None
 
     def get_customer_name(self, obj):
-        return obj.customer_id.name if obj.customer_id else None
+        try:
+            # Check if customer_id exists and then access it
+            if obj.customer_id:
+                return obj.customer_id.name
+            return None
+        except Customer.DoesNotExist:
+            # Log the issue and return None
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Customer not found for sale order {obj.sale_order_id}")
+            return None
+        except AttributeError:
+            return None
 
 class ModSaleReturnOrdersSerializer(serializers.ModelSerializer):
     class Meta:
