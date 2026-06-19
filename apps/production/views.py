@@ -327,29 +327,59 @@ class WorkOrderAPIView(APIView):
         page = int(request.query_params.get("page", 1))
         limit = int(request.query_params.get("limit", 10))
         return page, limit
-
+    
     def get_work_orders(self, request):
         """Fetches paginated Work Order records with applied filters."""
         logger.info("Retrieving all Work Orders")
 
         page, limit = self.get_pagination_params(request)
-        queryset = WorkOrder.objects.annotate(
-        pending_qty=F("quantity") - F("completed_qty"))  #  Add pending_qty dynamically
-        # total_count = queryset.count()  
         
-       # Apply filters
+        # Use select_related to prefetch related data
+        queryset = WorkOrder.objects.select_related(
+            'product_id', 
+            'size_id', 
+            'color_id', 
+            'status_id',
+            'sale_order_id'
+        ).annotate(
+            pending_qty=F("quantity") - F("completed_qty")
+        )
+        
+        # Apply filters
         filterset = WorkOrderFilter(request.GET, queryset=queryset)
         if filterset.is_valid():
             queryset = filterset.qs
 
-        total_count = WorkOrder.objects.count() #queryset.count()
-        # Apply pagination manually (if filter_response does not handle it)
+        total_count = WorkOrder.objects.count()
         start = (page - 1) * limit
         end = start + limit
         page_queryset = queryset[start:end]
         
-        serializer = WorkOrderSerializer(queryset, many=True)
+        serializer = WorkOrderSerializer(page_queryset, many=True)
         return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
+    # def get_work_orders(self, request):
+    #     """Fetches paginated Work Order records with applied filters."""
+    #     logger.info("Retrieving all Work Orders")
+
+    #     page, limit = self.get_pagination_params(request)
+    #     queryset = WorkOrder.objects.annotate(
+    #     pending_qty=F("quantity") - F("completed_qty"))  #  Add pending_qty dynamically
+    #     # total_count = queryset.count()  
+        
+    #    # Apply filters
+    #     filterset = WorkOrderFilter(request.GET, queryset=queryset)
+    #     if filterset.is_valid():
+    #         queryset = filterset.qs
+
+    #     total_count = WorkOrder.objects.count() #queryset.count()
+    #     # Apply pagination manually (if filter_response does not handle it)
+    #     start = (page - 1) * limit
+    #     end = start + limit
+    #     page_queryset = queryset[start:end]
+        
+    #     serializer = WorkOrderSerializer(queryset, many=True)
+    #     return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
     # def get_work_orders(self, request):
     #     logger.info(f'We are in the method')
     #     queryset = WorkOrder.objects.annotate(pending_qty=F("quantity") - F("completed_qty"))
