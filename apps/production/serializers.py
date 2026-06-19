@@ -1,5 +1,3 @@
-from asyncio.log import logger
-
 from rest_framework import serializers
 
 from apps.masters.serializers import ModOrderStatusesSerializer, ModProductionFloorSerializer, ModUnitOptionsSerializer
@@ -58,33 +56,10 @@ class ProductionStatusSerializer(serializers.ModelSerializer):
         model = ProductionStatus
         fields = '__all__'
 
-# class WorkOrderSerializer(serializers.ModelSerializer):
-#     product = ModproductsSerializer(source='product_id', read_only=True)
-#     size = ModSizeSerializer(source='size_id',read_only=True)
-#     color = ColorSerializer(source='color_id',read_only=True)    
-#     status = ModProductionStatusSerializer(source='status_id', read_only=True)
-#     sale_order = UdfSaleOrderSerializer(source='sale_order_id', read_only=True)
-#     pending_qty = serializers.SerializerMethodField()
-
-#     class Meta:
-#         model = WorkOrder
-#         fields = '__all__'
-    
-#     def get_pending_qty(self, obj):
-#         return obj.quantity - obj.completed_qty
-    
-#     def get_bom_data(pk, product_id):
-#         return {
-#             "work_order_id" : pk,
-#             "finished_product" : product_id.name,
-#             "bom": BOM.objects.filter(product_id=product_id.product_id).values(),
-#             "bom_components" : BillOfMaterials.objects.filter(reference_id=pk).values()
-#         }
-
 class WorkOrderSerializer(serializers.ModelSerializer):
-    product = serializers.SerializerMethodField()
-    size = serializers.SerializerMethodField()
-    color = serializers.SerializerMethodField()
+    product = ModproductsSerializer(source='product_id', read_only=True)
+    size = ModSizeSerializer(source='size_id',read_only=True)
+    color = ColorSerializer(source='color_id',read_only=True)    
     status = ModProductionStatusSerializer(source='status_id', read_only=True)
     sale_order = UdfSaleOrderSerializer(source='sale_order_id', read_only=True)
     pending_qty = serializers.SerializerMethodField()
@@ -96,46 +71,12 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     def get_pending_qty(self, obj):
         return obj.quantity - obj.completed_qty
     
-    def get_product(self, obj):
-        """Safely get product data"""
-        try:
-            if obj.product_id:
-                return ModproductsSerializer(obj.product_id).data
-            return None
-        except Products.DoesNotExist:
-            logger.warning(f"Product not found for work order {obj.work_order_id}")
-            return None
-        except AttributeError:
-            return None
-    
-    def get_size(self, obj):
-        """Safely get size data"""
-        try:
-            if obj.size_id:
-                return ModSizeSerializer(obj.size_id).data
-            return None
-        except Size.DoesNotExist:
-            return None
-        except AttributeError:
-            return None
-    
-    def get_color(self, obj):
-        """Safely get color data"""
-        try:
-            if obj.color_id:
-                return ColorSerializer(obj.color_id).data
-            return None
-        except Color.DoesNotExist:
-            return None
-        except AttributeError:
-            return None
-    
     def get_bom_data(pk, product_id):
         return {
-            "work_order_id": pk,
-            "finished_product": product_id.name if product_id else "Unknown",
-            "bom": BOM.objects.filter(product_id=product_id.product_id).values() if product_id else [],
-            "bom_components": BillOfMaterials.objects.filter(reference_id=pk).values()
+            "work_order_id" : pk,
+            "finished_product" : product_id.name,
+            "bom": BOM.objects.filter(product_id=product_id.product_id).values(),
+            "bom_components" : BillOfMaterials.objects.filter(reference_id=pk).values()
         }
 
 class StockJournalSerializer(serializers.ModelSerializer):
