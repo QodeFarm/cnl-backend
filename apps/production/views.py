@@ -355,7 +355,7 @@ class WorkOrderAPIView(APIView):
         end = start + limit
         page_queryset = queryset[start:end]
         
-        serializer = WorkOrderOptionsSerializer(page_queryset, many=True)
+        serializer = WorkOrderSerializer(page_queryset, many=True)
         return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
     # def get_work_orders(self, request):
