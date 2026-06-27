@@ -2236,6 +2236,7 @@ class EmployeePortalLoginView(APIView):
                 "https://prod.cnlerp.com",
                 "https://rudhra.cnlerp.com",
                 "https://vasusri.cnlerp.com",
+                "https://nthras.cnlerp.com",
                 "https://qa.cnlerp.com",
                 "https://apicore.cnlerp.com",
                 "https://dev.qodefarm.com",
