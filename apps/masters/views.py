@@ -1074,11 +1074,18 @@ class DocumentGeneratorView(APIView):
     from rest_framework.permissions import IsAuthenticated
     permission_classes = [IsAuthenticated]
 
-    def _load_print_config(self, document_type):
+    def _load_print_config(self, document_type, pk=None):
         """
         Load the default DocumentPrintTemplate for the first company and given
         document_type, and resolve it into a config dict ready for PDF builders.
         Falls back to system defaults if no template is configured.
+
+        Special case: a sale_invoice that was generated from timesheets
+        (ad-hoc billable hours) gets a clean SERVICES layout — product-only
+        columns (Boxes/Unit) hidden and service-appropriate terms — applied
+        on top of the resolved config. Normal product invoices are NOT
+        affected (the override only runs when the invoice has linked
+        timesheets), so existing invoice printing is unchanged.
         """
         try:
             company = Companies.objects.first()
@@ -1091,10 +1098,62 @@ class DocumentGeneratorView(APIView):
                     is_deleted=False,
                     is_active=True,
                 ).first()
-            return resolve_print_config(template_obj, document_type)
+            config = resolve_print_config(template_obj, document_type)
+
+            # Apply the services layout ONLY for timesheet-generated invoices.
+            if document_type == 'sale_invoice' and pk and self._is_timesheet_invoice(pk):
+                config = self._apply_services_invoice_layout(config)
+
+            return config
         except Exception as e:
             logger.error("Failed to load print config for '%s': %s", document_type, str(e))
             return get_default_template_config(document_type)
+
+    def _is_timesheet_invoice(self, pk):
+        """
+        True only when the sale invoice was generated from billable timesheets
+        (i.e. it has linked source_timesheets). Any failure is treated as a
+        normal product invoice so printing never breaks.
+        """
+        try:
+            from apps.sales.models import SaleInvoiceOrders
+            invoice = SaleInvoiceOrders.objects.filter(pk=pk).first()
+            return bool(invoice and invoice.source_timesheets.exists())
+        except Exception:
+            return False
+
+    def _apply_services_invoice_layout(self, config):
+        """
+        Return a COPY of the print config adjusted for a professional-services
+        invoice: hide product-only columns (Boxes, Unit) and use service terms.
+        Only 'required: False' columns are touched, so totals/qty/rate stay.
+        """
+        hide_keys = {'boxes', 'unit'}
+
+        new_column_config = []
+        for col in (config.get('column_config') or []):
+            col_copy = dict(col)
+            if col_copy.get('key') in hide_keys:
+                col_copy['visible'] = False
+            new_column_config.append(col_copy)
+
+        new_custom_text = dict(config.get('custom_text') or {})
+        new_custom_text['terms_conditions'] = (
+            "1. Payment due within 15 days of the invoice date.\n"
+            "2. Billed for professional services rendered as per the agreed scope.\n"
+            "3. Interest @ 24% p.a. on overdue amounts.\n"
+            "4. Subject to local jurisdiction."
+        )
+        new_custom_text['declaration'] = (
+            "We declare that this invoice reflects the actual charges for the "
+            "professional services rendered and that all particulars are true and correct."
+        )
+
+        return {
+            **config,
+            'column_config': new_column_config,
+            'custom_text':   new_custom_text,
+        }
 
     def post(self, request, **kwargs):
         """ Retrieves a sale order and its related data. """
@@ -1108,7 +1167,7 @@ class DocumentGeneratorView(APIView):
             doc_name, file_path, relative_file_path = path_generate(document_type)
 
             # ========== LOAD PRINT CONFIG ==========
-            print_config = self._load_print_config(document_type)
+            print_config = self._load_print_config(document_type, pk)
             print("print_config loaded for:", document_type)
             # ========== END PRINT CONFIG LOAD ==========
 
