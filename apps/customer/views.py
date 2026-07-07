@@ -2473,13 +2473,23 @@ from rest_framework.response import Response
 class CustomerOutstandingAPIView(APIView):
 
     def get(self, request, customer_id):
+        from decimal import Decimal
 
-        outstanding = PaymentTransactions.objects.filter(
-            customer=customer_id,
-            outstanding_amount__gt=0
+        # Outstanding must be read from each invoice's live pending_amount, NOT by
+        # summing PaymentTransactions.outstanding_amount. That column stores a
+        # per-payment running snapshot (total_amount - running_paid), so an invoice
+        # paid in several installments leaves stale non-zero snapshots on the older
+        # rows that are never zeroed — summing them double-counts (and never-paid
+        # invoices, which have no payment rows at all, would be missed entirely).
+        # pending_amount is maintained per invoice and is the single source of truth.
+        outstanding = SaleInvoiceOrders.objects.filter(
+            customer_id=customer_id,
+            is_deleted=False,
+        ).exclude(
+            order_status_id__status_name='Cancelled'
         ).aggregate(
-            total_outstanding=Sum('outstanding_amount')
-        )['total_outstanding'] or 0
+            total_outstanding=Sum(Coalesce('pending_amount', 'total_amount'))
+        )['total_outstanding'] or Decimal('0.00')
 
         return Response({
             "customer_id": customer_id,
