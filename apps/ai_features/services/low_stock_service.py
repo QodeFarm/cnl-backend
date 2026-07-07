@@ -7,10 +7,13 @@ def get_low_stock_products(limit=500):
     Returns products where current balance is below minimum_level.
     Only includes non-deleted products (active or no status set) that have a minimum_level set.
     """
+    # Reorder trigger = stock AT OR BELOW the minimum level (`<=`), the ERP
+    # standard — matches the Reorder Level report. `<` (strictly below) used to
+    # miss products sitting exactly at the minimum. (flow.md — one metric, one rule.)
     queryset = Products.objects.filter(
         is_deleted=False,
-        minimum_level__isnull=False,
-        balance__lt=F('minimum_level')
+        minimum_level__gt=0,
+        balance__lte=F('minimum_level')
     ).exclude(
         status='Inactive'
     ).annotate(

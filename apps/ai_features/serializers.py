@@ -124,8 +124,9 @@ class DeadStockSerializer(serializers.Serializer):
     product_type = serializers.SerializerMethodField()
     category = serializers.SerializerMethodField()
     balance = serializers.IntegerField()
-    purchase_rate = serializers.FloatField()
-    dead_stock_value = serializers.FloatField()
+    # null when the product has no purchase cost set — never faked to ₹0.
+    purchase_rate = serializers.FloatField(allow_null=True)
+    dead_stock_value = serializers.FloatField(allow_null=True)
     last_sold_date = serializers.DateField(allow_null=True)
     days_since_last_sale = serializers.IntegerField(allow_null=True)
 
@@ -441,12 +442,14 @@ class ProfitMarginSerializer(serializers.Serializer):
     product_code = serializers.SerializerMethodField()
     product_group = serializers.SerializerMethodField()
     revenue = serializers.FloatField()
-    cost = serializers.FloatField()
-    profit = serializers.FloatField()
-    margin_pct = serializers.FloatField()
+    # cost / profit / margin are null when the product has no known cost
+    # (cost_source == 'unknown', status == 'NO_COST') — never faked to 0/100%.
+    cost = serializers.FloatField(allow_null=True)
+    profit = serializers.FloatField(allow_null=True)
+    margin_pct = serializers.FloatField(allow_null=True)
     status = serializers.CharField()
     sold_qty = serializers.FloatField()
-    cost_per_unit = serializers.FloatField()
+    cost_per_unit = serializers.FloatField(allow_null=True)
     sell_per_unit = serializers.FloatField()
     cost_source = serializers.CharField()
 

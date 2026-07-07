@@ -18,12 +18,14 @@ def get_reorder_suggestions(limit=500):
     Find products below minimum_level that have purchase history,
     meaning they are purchased (not manufactured). Suggests best vendor + qty.
     """
+    # Reorder trigger = stock AT OR BELOW minimum (`<=`), the ERP standard —
+    # consistent with low_stock_service and the Reorder Level report (flow.md).
     low_stock_products = (
         Products.objects
         .filter(
             is_deleted=False,
-            balance__lt=F('minimum_level'),
-            minimum_level__isnull=False,
+            balance__lte=F('minimum_level'),
+            minimum_level__gt=0,
         )
         .select_related('unit_options_id')[:limit]
     )

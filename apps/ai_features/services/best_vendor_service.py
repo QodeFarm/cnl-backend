@@ -144,27 +144,32 @@ def get_best_vendors(from_date=None, to_date=None):
         else:
             price_score = 100 * (1 - (avg_rate - rate_range['min']) / (rate_range['max'] - rate_range['min']))
 
-        # Delivery score
+        # Delivery score — None when there is NO delivery data. Never fake a
+        # neutral 50: an unknown shown as a measured score misleads the buyer
+        # ("Delivery 50" looks mediocre when it really means no data). flow.md.
         delivery_info = vendor_delivery.get(vid, {'total': 0, 'on_time': 0})
         if delivery_info['total'] > 0:
-            delivery_score = 100 * (delivery_info['on_time'] / delivery_info['total'])
+            delivery_score = round(100 * (delivery_info['on_time'] / delivery_info['total']), 2)
         else:
-            delivery_score = 50.0  # No delivery data, neutral score
+            delivery_score = None
 
-        # Quality score
+        # Quality score — None when there is nothing purchased to judge against.
         total_purchased = float(row['total_qty'] or 0)
         returned = return_map.get((vid, pid), 0)
         if total_purchased > 0:
-            quality_score = max(0, 100 * (1 - returned / total_purchased))
+            quality_score = round(max(0, 100 * (1 - returned / total_purchased)), 2)
         else:
-            quality_score = 50.0
+            quality_score = None
 
-        final_score = round(
-            (price_score * WEIGHT_PRICE) +
-            (delivery_score * WEIGHT_DELIVERY) +
-            (quality_score * WEIGHT_QUALITY),
-            2
-        )
+        # Final score = weighted average of the KPIs we can actually measure,
+        # re-normalised over their weights. A missing KPI is excluded, not faked.
+        components = [(price_score, WEIGHT_PRICE)]
+        if delivery_score is not None:
+            components.append((delivery_score, WEIGHT_DELIVERY))
+        if quality_score is not None:
+            components.append((quality_score, WEIGHT_QUALITY))
+        weight_sum = sum(w for _, w in components)
+        final_score = round(sum(s * w for s, w in components) / weight_sum, 2) if weight_sum else None
 
         entry = {
             'vendor': vendor,
@@ -172,8 +177,8 @@ def get_best_vendors(from_date=None, to_date=None):
             'total_qty_purchased': float(row['total_qty'] or 0),
             'purchase_count': row['purchase_count'],
             'price_score': round(price_score, 2),
-            'delivery_score': round(delivery_score, 2),
-            'quality_score': round(quality_score, 2),
+            'delivery_score': delivery_score,
+            'quality_score': quality_score,
             'total_score': final_score,
             'return_qty': returned,
         }
