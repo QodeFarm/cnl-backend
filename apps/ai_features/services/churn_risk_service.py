@@ -88,11 +88,16 @@ def get_churn_risk(period_days=365, from_date=None, to_date=None):
         cid = row['customer_id']
         if cid in customer_rfm:
             existing = customer_rfm[cid]
+            # Orders only REFRESH recency. Never add order count/value to a
+            # customer who already has invoices — an order that became an invoice
+            # would be counted twice, inflating Frequency & Monetary (~2x) and
+            # corrupting the RFM segment. Monetary = realized invoice revenue,
+            # which also keeps it consistent with the Customer Sales Analysis
+            # report (see flow.md — one metric, one number).
             if row['last_order'] and (not existing['last_date'] or row['last_order'] > existing['last_date']):
                 existing['last_date'] = row['last_order']
-            existing['frequency'] += row['order_count']
-            existing['monetary'] += float(row['total_ordered'])
         else:
+            # Order-only customer (no invoice yet) — pipeline; count the order.
             customer_rfm[cid] = {
                 'last_date': row['last_order'],
                 'frequency': row['order_count'],

@@ -165,7 +165,11 @@ class DeadStockView(APIView):
             dead_stock = get_dead_stock(dead_days, from_date=from_date, to_date=to_date)
             serializer = DeadStockSerializer(dead_stock, many=True)
             data = serializer.data
-            total_dead_value = sum(d['dead_stock_value'] for d in data)
+            # dead_stock_value is null when the product has no purchase cost set
+            # (honest "cost not set" — never faked to 0). Sum only the known values,
+            # and report how many are unpriced so the total isn't read as complete.
+            priced = [d['dead_stock_value'] for d in data if d['dead_stock_value'] is not None]
+            total_dead_value = sum(priced)
             response = build_response(
                 len(data),
                 "Success",
@@ -175,6 +179,7 @@ class DeadStockView(APIView):
             response.data['summary'] = {
                 'total_dead_products': len(data),
                 'total_dead_stock_value': round(total_dead_value, 2),
+                'unpriced_products': len(data) - len(priced),
             }
             return response
         except Exception as e:
