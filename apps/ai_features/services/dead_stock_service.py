@@ -78,13 +78,20 @@ def get_dead_stock(dead_days=None, limit=500, from_date=None, to_date=None):
         if product.product_id in active_product_ids:
             continue
 
-        purchase_rate = product.purchase_rate or Decimal('0')
-        dead_value = float(product.balance * purchase_rate)
+        # Value the locked capital at REAL purchase cost. If cost is not set,
+        # the value is UNKNOWN — never show ₹0 (that fakes "no money locked").
+        # See CLAUDE.md §3 / flow.md — honest empty state, not a fabricated 0.
+        if product.purchase_rate and product.purchase_rate > 0:
+            purchase_rate = float(product.purchase_rate)
+            dead_value = float(product.balance * product.purchase_rate)
+        else:
+            purchase_rate = None
+            dead_value = None
 
         results.append({
             'product': product,
             'balance': product.balance,
-            'purchase_rate': float(purchase_rate),
+            'purchase_rate': purchase_rate,
             'dead_stock_value': dead_value,
             'last_sold_date': None,  # Will be enriched below
             'days_since_last_sale': None,
@@ -115,7 +122,8 @@ def get_dead_stock(dead_days=None, limit=500, from_date=None, to_date=None):
             if last_date:
                 r['days_since_last_sale'] = (today - last_date).days
 
-    # Sort by dead stock value descending (highest locked capital first)
-    results.sort(key=lambda x: -x['dead_stock_value'])
+    # Sort by dead stock value descending (highest locked capital first);
+    # items with unknown cost (None) sort last.
+    results.sort(key=lambda x: -(x['dead_stock_value'] or 0))
 
     return results

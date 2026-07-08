@@ -15,7 +15,6 @@ from apps.sales.models import (
     SaleInvoiceOrders, SaleReturnOrders, SaleCreditNotes,
 )
 from apps.purchase.models import PurchaseInvoiceOrders
-from apps.production.models import WorkOrder
 from apps.finance.models import ExpenseItem, ExpenseClaim
 from apps.hrms.models import EmployeeSalary
 
@@ -54,12 +53,18 @@ def get_money_bleeding_summary(period_days=365, from_date=None, to_date=None):
         dead_total = 0
         for d in dead:
             p = d['product']
-            cost = float(p.purchase_rate or p.sales_rate or 0)
-            value = float(p.balance) * cost
+            # Use the dead-stock service's honest value (real purchase cost, or
+            # None when cost is not set). Never fall back to sales_rate — that
+            # overstates locked capital. Unknown-cost items contribute 0 to the
+            # total (we only count what we can truthfully value). See flow.md.
+            value = d.get('dead_stock_value') or 0
+            cost = d.get('purchase_rate') or 0
             dead_total += value
+            detail = ('%d units x Rs.%.0f' % (int(p.balance), cost)) if cost \
+                else ('%d units (cost not set)' % int(p.balance))
             dead_items.append({
                 'name': p.name,
-                'detail': '%d units x Rs.%.0f' % (int(p.balance), cost),
+                'detail': detail,
                 'amount': round(value, 2),
             })
         dead_items.sort(key=lambda x: x['amount'], reverse=True)
@@ -216,45 +221,12 @@ def get_money_bleeding_summary(period_days=365, from_date=None, to_date=None):
     except Exception as e:
         logger.warning('Discounts calculation failed: %s', e)
 
-    # ============================================================
-    # 7. PRODUCTION WASTAGE (Production Module)
-    # ============================================================
-    try:
-        work_orders = WorkOrder.objects.filter(
-            completed_qty__gt=0,
-        ).select_related('product_id')
-
-        waste_total = 0
-        waste_count = 0
-        waste_items = []
-        for wo in work_orders:
-            product = wo.product_id
-            if not product:
-                continue
-            wasted_qty = int(wo.quantity) - int(wo.completed_qty)
-            if wasted_qty > 0:
-                cost = float(product.purchase_rate or product.sales_rate or 0)
-                value = wasted_qty * cost
-                waste_total += value
-                waste_count += 1
-                waste_items.append({
-                    'name': product.name,
-                    'detail': 'Ordered %d, Completed %d, Wasted %d' % (
-                        wo.quantity, wo.completed_qty, wasted_qty),
-                    'amount': round(value, 2),
-                })
-        waste_items.sort(key=lambda x: x['amount'], reverse=True)
-        categories.append({
-            'category': 'production_wastage',
-            'label': 'Production Wastage',
-            'module': 'Production',
-            'amount': round(waste_total, 2),
-            'item_count': waste_count,
-            'severity': _severity(waste_total, 25000),
-            'top_items': waste_items[:5],
-        })
-    except Exception as e:
-        logger.warning('Production wastage calculation failed: %s', e)
+    # ── PRODUCTION WASTAGE — intentionally NOT counted ──────────
+    # The ERP has no scrap/reject tracking. The old logic treated
+    # (ordered − completed) as "wasted", but that is WORK-IN-PROGRESS, not
+    # waste — it inflated the bleeding total with units still being made.
+    # Showing a fabricated wastage number breaks trust (CLAUDE.md §3 / flow.md).
+    # Re-add this category only when a real scrap/rejection quantity is tracked.
 
     # ============================================================
     # 8. PENDING EXPENSE CLAIMS (HRMS Module)

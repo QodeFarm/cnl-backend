@@ -8,7 +8,36 @@ from apps.products.models import Products
 from apps.sales.models import SaleInvoiceItems, SaleOrderItems
 
 
-def get_at_risk_stock_forecast(period_days=180, limit=500, from_date=None, to_date=None):
+def forecast_status(current_stock, avg_sales):
+    """SINGLE SOURCE OF TRUTH for stock-forecast status (CLAUDE.md §4B / flow.md).
+
+    Used by BOTH the Stock Forecast report and the at-risk insight so they never
+    disagree. `avg_sales` = average units sold per MONTH over the window.
+    Returns (status: 'RED'|'YELLOW'|'GREEN', days_remaining: int).
+      RED    = out of stock, or less than one month of cover
+      YELLOW = under two months of cover
+      GREEN  = healthy, or no demand to forecast against
+    """
+    cur = float(current_stock or 0)
+    avg = float(avg_sales or 0)
+    if avg <= 0:
+        status = 'GREEN'
+    elif cur <= 0 or (cur - avg) < 0:
+        status = 'RED'
+    elif cur < (avg * 2):
+        status = 'YELLOW'
+    else:
+        status = 'GREEN'
+    if avg <= 0:
+        days = 999
+    elif cur <= 0:
+        days = 0
+    else:
+        days = round(cur / (avg / 30))
+    return status, days
+
+
+def get_at_risk_stock_forecast(period_days=180, limit=None, from_date=None, to_date=None):
     """
     Computes stock forecast for ALL products, then returns only RED and YELLOW
     status products with a summary. This avoids pagination issues when the
@@ -47,7 +76,9 @@ def get_at_risk_stock_forecast(period_days=180, limit=500, from_date=None, to_da
             else:
                 sales_dict[pid] = Decimal(item['total_sales'])
 
-    # Query all non-deleted products with related data
+    # Query all non-deleted, active products. No row cap by default — the summary
+    # counts must cover EVERY product so the dashboard total matches the Stock
+    # Forecast report total (flow.md — same metric, same number).
     products = Products.objects.filter(
         is_deleted=False
     ).exclude(
@@ -57,40 +88,34 @@ def get_at_risk_stock_forecast(period_days=180, limit=500, from_date=None, to_da
         'category_id',
         'type_id',
         'unit_options_id'
-    ).order_by('-created_at')[:limit]
+    ).order_by('-created_at')
+    if limit:
+        products = products[:limit]
 
     at_risk = []
     summary = {'red': 0, 'yellow': 0, 'green': 0, 'total': 0}
 
     for product in products:
-        summary['total'] += 1
-        current_stock = float(product.balance) if product.balance else 0.0
         pid = str(product.product_id).replace('-', '')
         total_sales = float(sales_dict.get(pid, 0))
+        # A stock forecast only applies to products WITH demand — you can't "run
+        # out" of something nobody buys. No-demand items are covered by Low Stock
+        # / Dead Stock instead. This also prevents a 0-stock item from showing
+        # GREEN here while Low Stock calls it "Out of Stock" (flow.md consistency).
+        if total_sales <= 0:
+            continue
+
+        summary['total'] += 1
+        current_stock = float(product.balance) if product.balance else 0.0
         avg_sales = round(total_sales / months, 2)
         difference = round(current_stock - avg_sales, 2)
 
-        # Status logic — matches ProductStockForecastSerializer exactly
-        if avg_sales <= 0:
-            status = 'GREEN'
-        elif current_stock <= 0 or difference < 0:
-            status = 'RED'
-        elif current_stock < (avg_sales * 2):
-            status = 'YELLOW'
-        else:
-            status = 'GREEN'
+        # Shared status — identical formula to the Stock Forecast report.
+        status, days_remaining = forecast_status(current_stock, avg_sales)
 
         if status == 'GREEN':
             summary['green'] += 1
             continue
-
-        # Days remaining calculation
-        if avg_sales <= 0:
-            days_remaining = 999
-        elif current_stock <= 0:
-            days_remaining = 0
-        else:
-            days_remaining = round(current_stock / (avg_sales / 30))
 
         summary[status.lower()] += 1
         at_risk.append({
