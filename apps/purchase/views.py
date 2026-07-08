@@ -8,7 +8,7 @@ from apps.auditlogs.utils import log_user_action
 from apps.company.utils import get_finance_setting
 from apps.customfields.models import CustomFieldValue
 from apps.customfields.serializers import CustomFieldValueSerializer
-from apps.finance.models import JournalEntryLines
+from apps.finance.models import JournalEntryLines, JournalEntry
 from apps.finance.serializers import JournalEntryLinesSerializer
 from apps.finance.views import JournalEntryLinesAPIView
 from apps.purchase.filters import BillPaymentTransactionsReportFilter, PurchaseInvoiceOrdersFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter
@@ -1792,6 +1792,31 @@ class PurchaseInvoiceOrderViewSet(APIView):
                 description=description,
                 vendor_id=updated_invoice_obj.vendor_id,
                 balance=Decimal('0.00')
+            )
+
+        # ------------------------------ L E D G E R   D A T E   S Y N C ------------------------------ #
+        # Same fix as Sale Invoice: the journal block above only rewrites amounts/
+        # description, so editing the bill's invoice_date left the ledger entry on its
+        # original date. Move every line of this voucher (and any JournalEntry header
+        # they roll up to) to the current invoice date.
+        JournalEntryLines.objects.filter(
+            voucher_no=updated_invoice_obj.invoice_no,
+            is_deleted=False
+        ).update(entry_date=updated_invoice_obj.invoice_date)
+
+        header_ids = list(
+            JournalEntryLines.objects
+            .filter(
+                voucher_no=updated_invoice_obj.invoice_no,
+                is_deleted=False,
+                journal_entry_id__isnull=False
+            )
+            .values_list('journal_entry_id', flat=True)
+            .distinct()
+        )
+        if header_ids:
+            JournalEntry.objects.filter(pk__in=header_ids).update(
+                entry_date=updated_invoice_obj.invoice_date
             )
 
         self._recalculate_vendor_balances(updated_invoice_obj.vendor_id.vendor_id)

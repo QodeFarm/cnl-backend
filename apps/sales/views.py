@@ -17,7 +17,7 @@ from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
-from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts
+from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts, JournalEntry
 from apps.customer.models import CustomerBalance, LedgerAccounts
 from apps.company.utils import get_finance_setting
 from rest_framework.filters import OrderingFilter
@@ -4547,7 +4547,8 @@ class SaleInvoiceOrdersViewSet(APIView):
             voucher_no=invoice_obj.invoice_no,
             description=description,
             customer_id=invoice_obj.customer_id,
-            balance=new_balance
+            balance=new_balance,
+            entry_date=invoice_obj.invoice_date  # accounting date = invoice date, not row-creation time
         )
 
         # ---------------------- R E S P O N S E ----------------------------#
@@ -5114,6 +5115,37 @@ class SaleInvoiceOrdersViewSet(APIView):
             logger.info(
                 f"Journal entry created for Sale Invoice {updated_invoice.invoice_no}"
             )
+
+        # ------------------------------ L E D G E R   D A T E   S Y N C ------------------------------ #
+        # Keep the ledger in step with the (possibly edited) invoice date. The journal
+        # block above only rewrites amounts/description, so without this the entry_date
+        # stayed on the original date and the Account Ledger showed the sale on the wrong
+        # day. Move every line of this voucher (and any JournalEntry header they roll up
+        # to) to the current invoice date. Runs inside the method's @transaction.atomic,
+        # so the invoice and its ledger date can never disagree.
+        JournalEntryLines.objects.using(db_to_use).filter(
+            voucher_no=updated_invoice.invoice_no,
+            is_deleted=False
+        ).update(entry_date=updated_invoice.invoice_date)
+
+        header_ids = list(
+            JournalEntryLines.objects.using(db_to_use)
+            .filter(
+                voucher_no=updated_invoice.invoice_no,
+                is_deleted=False,
+                journal_entry_id__isnull=False
+            )
+            .values_list('journal_entry_id', flat=True)
+            .distinct()
+        )
+        if header_ids:
+            JournalEntry.objects.using(db_to_use).filter(
+                pk__in=header_ids
+            ).update(entry_date=updated_invoice.invoice_date)
+
+        logger.info(
+            f"Ledger date synced to {updated_invoice.invoice_date} for Sale Invoice {updated_invoice.invoice_no}"
+        )
 
         # ------------------------------ I N V E N T O R Y   A D J U S T M E N T ------------------------------ #
         sale_order_id = updated_invoice.sale_order_id
