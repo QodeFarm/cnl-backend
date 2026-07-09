@@ -192,6 +192,11 @@ class CompanySettings(models.Model):
         db_column='round_off_account_id'
     )
 
+    # Notifications: when ON, a WhatsApp is auto-sent to the customer when a Sale
+    # Order is created. Default OFF so no customer is messaged until an admin
+    # explicitly turns it on. (Add more notify_* toggles here as needed.)
+    notify_sale_order_whatsapp = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
