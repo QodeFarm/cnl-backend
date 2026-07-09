@@ -19,7 +19,7 @@ from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
 from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts, JournalEntry
 from apps.customer.models import CustomerBalance, LedgerAccounts
-from apps.company.utils import get_finance_setting
+from apps.company.utils import get_finance_setting, is_notification_enabled
 from rest_framework.filters import OrderingFilter
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -2342,8 +2342,12 @@ class SaleOrderViewSet(APIView):
         # Generate PDF for this specific order
         file_path, cdn_path = generate_sale_order_pdf(sale_order_id)
 
-        # Send WhatsApp with the generated PDF
-        whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id, cdn_path)
+        # Send WhatsApp with the generated PDF — ONLY when enabled in Company Settings.
+        # Defaults OFF: no customer is messaged until an admin turns the toggle on.
+        if is_notification_enabled('notify_sale_order_whatsapp'):
+            whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id, cdn_path)
+        else:
+            whatsapp_result = {"whatsapp_sent": False, "reason": "DISABLED_IN_COMPANY_SETTINGS"}
 
         custom_data = {
             "sale_order": new_sale_order_data,
