@@ -196,7 +196,12 @@ def list_all_objects(self, request, *args, **kwargs):
             return obj[s:e]
 
         # --- default queryset (already filtered & ordered) ---
-        base_qs = self.filter_queryset(self.get_queryset().order_by('-created_at'))
+        # Soft-deleted rows sink to the bottom when the model has an `is_deleted` field
+        # (deleted masters stay visible for restore, but appear LAST); otherwise newest-first.
+        # Guarded by field presence so models without is_deleted are unaffected (no FieldError).
+        _model = self.get_queryset().model
+        _order = ('is_deleted', '-created_at') if any(f.name == 'is_deleted' for f in _model._meta.fields) else ('-created_at',)
+        base_qs = self.filter_queryset(self.get_queryset().order_by(*_order))
 
         total_count = 0
         page_items = []
@@ -221,8 +226,8 @@ def list_all_objects(self, request, *args, **kwargs):
 
         # --- records_all=true: combine BOTH DBs (default first, then mstcnl) ---
         elif records_all:
-            default_qs = self.filter_queryset(self.get_queryset().using('default').order_by('-created_at'))
-            mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by('-created_at'))
+            default_qs = self.filter_queryset(self.get_queryset().using('default').order_by(*_order))
+            mstcnl_qs = self.filter_queryset(self.get_queryset().using('mstcnl').order_by(*_order))
 
             default_count = qs_count(default_qs)
             mstcnl_count = qs_count(mstcnl_qs)
@@ -1163,8 +1168,15 @@ def generic_data_creation(self, valid_data, serializer_class, update_fields=None
             for key, value in update_fields.items():
                 data[key] = value
 
+    # Stamp a 1-based line number for item tables that carry a line_number column so the
+    # exact on-screen row order survives save/reload. Ignored for models without the field.
+    _ln_model = getattr(getattr(serializer_class, 'Meta', None), 'model', None)
+    _stamp_line_number = bool(_ln_model) and any(f.name == 'line_number' for f in _ln_model._meta.fields)
+
     data_list = []
-    for data in valid_data:
+    for line_no, data in enumerate(valid_data, start=1):
+        if _stamp_line_number and not data.get('line_number'):
+            data['line_number'] = line_no
         serializer = serializer_class(data=data)
         serializer.is_valid(raise_exception=True)
 
@@ -1244,8 +1256,14 @@ def update_multi_instances(self, pk, valid_data, related_model_name, related_cla
         if isinstance(valid_data, dict):
             valid_data = [valid_data]
 
+    # Re-stamp line numbers from the current on-screen order so edits/reorders/deletes persist
+    # the row order (item tables only; ignored for models without a line_number column).
+    _stamp_line_number = any(f.name == 'line_number' for f in related_model_name._meta.fields)
+
     update_count = 0
-    for data in valid_data:
+    for line_no, data in enumerate(valid_data, start=1):
+        if _stamp_line_number:
+            data['line_number'] = line_no
         id = data.get(current_model_pk_field, None)  # get the primary key in updated data
         if id is not None:
             pks_in_update_data.append(id)
@@ -1470,6 +1488,9 @@ def get_related_data(model, serializer_class, filter_field, filter_value):
     """
     try:
         related_data = model.objects.filter(**{filter_field: filter_value})
+        # Line/item tables carry a line_number column: return them in the saved on-screen order.
+        if any(f.name == 'line_number' for f in model._meta.fields):
+            related_data = related_data.order_by('line_number', 'created_at')
         serializer = serializer_class(related_data, many=True)
         logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
         return serializer.data

@@ -402,6 +402,9 @@ class PurchaseOrderViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
             return serializer.data
@@ -880,6 +883,9 @@ class PurchaseInvoiceOrderViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
             return serializer.data
@@ -2082,6 +2088,9 @@ class PurchaseReturnOrderViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
             return serializer.data

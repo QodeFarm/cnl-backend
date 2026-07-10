@@ -1796,6 +1796,9 @@ class SaleOrderViewSet(APIView):
         """
         try:
             related_data = model.objects.using(using_db).filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug(f"Retrieved related data for model {model.__name__} with filter {filter_field}={filter_value} from {using_db}.")
             return serializer.data
@@ -3637,6 +3640,9 @@ class SaleInvoiceOrdersViewSet(APIView):
         """
         try:
             related_data = model.objects.using(using_db).filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
             return serializer.data
@@ -5610,6 +5616,9 @@ class SaleReturnOrdersViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -6132,6 +6141,9 @@ class QuickPackCreateViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -6423,6 +6435,9 @@ class SaleReceiptCreateViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -6982,6 +6997,9 @@ class SaleCreditNoteViewset(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -7285,6 +7303,9 @@ class SaleDebitNoteViewset(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -9550,6 +9571,9 @@ class DeliveryChallanViewSet(APIView):
     def get_related_data(self, model, serializer_class, filter_field, filter_value):
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             return serializer.data
         except Exception as e:
