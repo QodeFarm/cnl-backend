@@ -53,6 +53,8 @@ class BillOfMaterials(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = billofmaterials
         
@@ -332,6 +334,8 @@ class MaterialIssueItem(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = 'material_issue_items'
 
@@ -403,6 +407,8 @@ class MaterialReceivedItem(models.Model):
     gp_vdate = models.DateField(null=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    line_number = models.IntegerField(null=True, blank=True, default=None)
 
     class Meta:
         db_table = 'material_received_items'
