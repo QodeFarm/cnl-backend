@@ -1271,7 +1271,9 @@ class PaymentTransactions(OrderNumberMixin):
     payment_receipt_no = models.CharField(max_length=50, unique=True, default='')
     order_no_prefix = 'PTR'  # Payment Receipt prefix
     order_no_field = 'payment_receipt_no'  # Field to store the order number
-    payment_date = models.DateTimeField(auto_now_add=True)
+    # Editable business date (when the money was actually received). NOT auto_now_add:
+    # created_at below keeps the true "row created" audit timestamp.
+    payment_date = models.DateTimeField(null=True, blank=True)
     payment_method = models.CharField(max_length=100, null=True, blank=True)
     cheque_no = models.CharField(max_length=50, null=True, blank=True)
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=0.00, null=False)

@@ -7855,6 +7855,7 @@ class PaymentTransactionAPIView(APIView):
                         payment_transaction = PaymentTransactions.objects.create(
                             payment_receipt_no=original_payment_receipt_no,
                             payment_method=original_payment_method,
+                            payment_date=self._parse_payment_date(data.get('date')),
                             total_amount=total_amount,
                             outstanding_amount=new_outstanding,
                             adjusted_now=allocated_amount,
@@ -8031,6 +8032,7 @@ class PaymentTransactionAPIView(APIView):
                         payment_receipt_no=data.get('payment_receipt_no'),
                         payment_method=data.get('payment_method'),
                         cheque_no=data.get('cheque_no'),
+                        payment_date=self._parse_payment_date(data.get('date')),
                         total_amount=sale_invoice.total_amount,
                         amount=allocated_amount,
                         outstanding_amount=new_outstanding,
@@ -8821,8 +8823,34 @@ class PaymentTransactionAPIView(APIView):
 
     #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 
+    @staticmethod
+    def _parse_payment_date(raw):
+        """Parse the receipt date sent by the UI ('YYYY-MM-DD' or ISO). Falls back to now()."""
+        from django.utils.dateparse import parse_datetime, parse_date
+        from datetime import datetime as _dt
+        value = None
+        if raw:
+            value = parse_datetime(str(raw))
+            if not value:
+                d = parse_date(str(raw)[:10])
+                if d:
+                    value = _dt(d.year, d.month, d.day)
+        if not value:
+            value = timezone.now()
+        # Match the project's USE_TZ setting. This project runs USE_TZ=False (plain, naive
+        # datetimes); attaching a timezone here makes MySQL reject the value. Only convert
+        # to aware when timezones are actually enabled.
+        from django.conf import settings
+        if settings.USE_TZ:
+            if timezone.is_naive(value):
+                value = timezone.make_aware(value)
+        else:
+            if timezone.is_aware(value):
+                value = timezone.make_naive(value)
+        return value
+
     def put(self, request, transaction_id):
-        with transaction.atomic():                        
+        with transaction.atomic():
             try:
                 pending_status = OrderStatuses.objects.get(status_name="Pending")
                 completed_status = OrderStatuses.objects.get(status_name="Completed")
@@ -8881,10 +8909,24 @@ class PaymentTransactionAPIView(APIView):
                 new_outstanding = max_allowed - new_amount
                 payment_status = request.data.get('payment_status', "Partial")
             
-            # Step 5: Update transaction
+            # Step 5: Update transaction — save EVERY field the user can edit (date, method,
+            # cheque, cash/bank account, status, amount), not just the amount.
             payment_transactions.amount = new_amount
             payment_transactions.outstanding_amount = new_outstanding
+            payment_transactions.adjusted_now = new_amount  # keep "Adjust Now" in step with amount
             payment_transactions.payment_status = payment_status
+            payment_transactions.payment_date = self._parse_payment_date(request.data.get('date'))
+            if request.data.get('payment_method') is not None:
+                payment_transactions.payment_method = request.data.get('payment_method')
+            payment_transactions.cheque_no = request.data.get('cheque_no')
+            _acc_raw = request.data.get('ledger_account_id')
+            if _acc_raw:
+                _acc_id = _acc_raw.get('ledger_account_id') if isinstance(_acc_raw, dict) else _acc_raw
+                if _acc_id:
+                    try:
+                        payment_transactions.ledger_account_id = LedgerAccounts.objects.get(pk=str(_acc_id).replace('-', ''))
+                    except LedgerAccounts.DoesNotExist:
+                        pass
             payment_transactions.save()
 
             # Step 6: Update sale invoice amounts
@@ -8934,8 +8976,8 @@ class PaymentTransactionAPIView(APIView):
         """Helper method to recalculate outstanding amounts for all transactions"""
         transactions = PaymentTransactions.objects.filter(
             invoice_no=invoice.invoice_no
-        ).order_by('created_at')
-        
+        ).order_by('payment_date', 'created_at')
+
         running_paid = Decimal('0.00')
         for txn in transactions:
             running_paid += txn.amount
@@ -8958,6 +9000,9 @@ class PaymentTransactionAPIView(APIView):
             journal_line.ledger_account_id = ledger_instance
             journal_line.debit = Decimal('0.00')
             journal_line.credit = new_amount
+            # Keep the ledger entry's date in step with the receipt's (editable) date.
+            if payment_transaction.payment_date:
+                journal_line.entry_date = payment_transaction.payment_date.date()
             journal_line.description = (
                 f"Payment receipt {payment_transaction.payment_receipt_no} "
                 f"for Invoice {invoice.invoice_no}"
@@ -8966,6 +9011,7 @@ class PaymentTransactionAPIView(APIView):
                 'ledger_account_id',
                 'debit',
                 'credit',
+                'entry_date',
                 'description'
             ])
 
@@ -8988,6 +9034,7 @@ class PaymentTransactionAPIView(APIView):
                 ledger_account_id=ledger_instance,
                 debit=Decimal('0.00'),
                 credit=new_amount,
+                entry_date=payment_transaction.payment_date.date() if payment_transaction.payment_date else None,
                 voucher_no=payment_transaction.payment_receipt_no,
                 description=(
                     f"Payment receipt {payment_transaction.payment_receipt_no} "
@@ -9008,7 +9055,7 @@ class PaymentTransactionAPIView(APIView):
         entries = JournalEntryLines.objects.filter(
             customer_id=customer_id,
             is_deleted=False
-        ).order_by('created_at')
+        ).order_by('entry_date', 'created_at')
 
         running_balance = Decimal('0.00')
 
