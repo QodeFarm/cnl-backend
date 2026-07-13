@@ -61,6 +61,7 @@ urlpatterns = [
     path('api/v1/dashboard/', include('apps.dashboard.urls')),
     path('api/v1/audit/logs/', include('apps.auditlogs.urls')),
     path('api/v1/smart-insights/', include('apps.ai_features.urls')),
+    path('api/v1/reports/', include('apps.reports.urls')),
 
 
     path('', api_links, name='api_links'),

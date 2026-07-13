@@ -488,6 +488,9 @@ class SaleOrderItems(models.Model):
     remarks = models.CharField(max_length=1024, null=True, default=None)
     invoiced = models.CharField(max_length=3, default="NO")
     work_order_created  = models.CharField(max_length=3, default="NO")
+    # Preserves the exact row order the user created/edited (UUID PK + second-precision
+    # created_at cannot recover it). Stamped 1..N on save, ordered by on retrieve.
+    line_number = models.IntegerField(null=True, blank=True, default=None)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -706,6 +709,8 @@ class SaleInvoiceItems(models.Model): #required fields are updated
     def __str__(self):
         return f'{self.sale_invoice_item_id}'
     
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = saleinvoiceitemstable
 
@@ -833,6 +838,8 @@ class SaleReturnItems(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = salereturnitemstable
 
@@ -949,6 +956,8 @@ class QuickPackItems(models.Model):
     color_id = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, db_column='color_id')
     is_deleted = models.BooleanField(default=False)
      
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = quickpackitems
 
@@ -1071,6 +1080,8 @@ class SaleCreditNoteItems(models.Model):
         return f'{self.credit_note_item_id}'
     
     
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = salecreditnoteitems
         
@@ -1149,6 +1160,8 @@ class SaleDebitNoteItems(models.Model):
         return f'{self.debit_note_item_id}'
     
     
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = saledebitnoteitems
 
@@ -1244,6 +1257,8 @@ class DeliveryChallanItems(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = deliverychalllanitemstable
 
@@ -1256,7 +1271,9 @@ class PaymentTransactions(OrderNumberMixin):
     payment_receipt_no = models.CharField(max_length=50, unique=True, default='')
     order_no_prefix = 'PTR'  # Payment Receipt prefix
     order_no_field = 'payment_receipt_no'  # Field to store the order number
-    payment_date = models.DateTimeField(auto_now_add=True)
+    # Editable business date (when the money was actually received). NOT auto_now_add:
+    # created_at below keeps the true "row created" audit timestamp.
+    payment_date = models.DateTimeField(null=True, blank=True)
     payment_method = models.CharField(max_length=100, null=True, blank=True)
     cheque_no = models.CharField(max_length=50, null=True, blank=True)
     amount = models.DecimalField(max_digits=18, decimal_places=2, default=0.00, null=False)

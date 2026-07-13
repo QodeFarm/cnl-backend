@@ -17,9 +17,9 @@ from apps.finance.views import JournalEntryLinesAPIView
 from django.core.exceptions import  ObjectDoesNotExist
 from apps.customfields.models import CustomFieldValue
 from apps.customer.views import CustomerBalanceView
-from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts
+from apps.finance.models import JournalEntryLines, PaymentTransaction, ChartOfAccounts, JournalEntry
 from apps.customer.models import CustomerBalance, LedgerAccounts
-from apps.company.utils import get_finance_setting
+from apps.company.utils import get_finance_setting, is_notification_enabled
 from rest_framework.filters import OrderingFilter
 from django.shortcuts import get_object_or_404
 from rest_framework.response import Response
@@ -1796,6 +1796,9 @@ class SaleOrderViewSet(APIView):
         """
         try:
             related_data = model.objects.using(using_db).filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug(f"Retrieved related data for model {model.__name__} with filter {filter_field}={filter_value} from {using_db}.")
             return serializer.data
@@ -2361,8 +2364,12 @@ class SaleOrderViewSet(APIView):
         # Generate PDF for this specific order
         file_path, cdn_path = generate_sale_order_pdf(sale_order_id)
 
-        # Send WhatsApp with the generated PDF
-        whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id, cdn_path)
+        # Send WhatsApp with the generated PDF — ONLY when enabled in Company Settings.
+        # Defaults OFF: no customer is messaged until an admin turns the toggle on.
+        if is_notification_enabled('notify_sale_order_whatsapp'):
+            whatsapp_result = try_send_sale_order_whatsapp(request, sale_order_id, cdn_path)
+        else:
+            whatsapp_result = {"whatsapp_sent": False, "reason": "DISABLED_IN_COMPANY_SETTINGS"}
 
         custom_data = {
             "sale_order": new_sale_order_data,
@@ -3652,6 +3659,9 @@ class SaleInvoiceOrdersViewSet(APIView):
         """
         try:
             related_data = model.objects.using(using_db).filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.", model.__name__, filter_field, filter_value)
             return serializer.data
@@ -4585,7 +4595,8 @@ class SaleInvoiceOrdersViewSet(APIView):
             voucher_no=invoice_obj.invoice_no,
             description=description,
             customer_id=invoice_obj.customer_id,
-            balance=new_balance
+            balance=new_balance,
+            entry_date=invoice_obj.invoice_date  # accounting date = invoice date, not row-creation time
         )
 
         # ---------------------- R E S P O N S E ----------------------------#
@@ -5153,6 +5164,37 @@ class SaleInvoiceOrdersViewSet(APIView):
                 f"Journal entry created for Sale Invoice {updated_invoice.invoice_no}"
             )
 
+        # ------------------------------ L E D G E R   D A T E   S Y N C ------------------------------ #
+        # Keep the ledger in step with the (possibly edited) invoice date. The journal
+        # block above only rewrites amounts/description, so without this the entry_date
+        # stayed on the original date and the Account Ledger showed the sale on the wrong
+        # day. Move every line of this voucher (and any JournalEntry header they roll up
+        # to) to the current invoice date. Runs inside the method's @transaction.atomic,
+        # so the invoice and its ledger date can never disagree.
+        JournalEntryLines.objects.using(db_to_use).filter(
+            voucher_no=updated_invoice.invoice_no,
+            is_deleted=False
+        ).update(entry_date=updated_invoice.invoice_date)
+
+        header_ids = list(
+            JournalEntryLines.objects.using(db_to_use)
+            .filter(
+                voucher_no=updated_invoice.invoice_no,
+                is_deleted=False,
+                journal_entry_id__isnull=False
+            )
+            .values_list('journal_entry_id', flat=True)
+            .distinct()
+        )
+        if header_ids:
+            JournalEntry.objects.using(db_to_use).filter(
+                pk__in=header_ids
+            ).update(entry_date=updated_invoice.invoice_date)
+
+        logger.info(
+            f"Ledger date synced to {updated_invoice.invoice_date} for Sale Invoice {updated_invoice.invoice_no}"
+        )
+
         # ------------------------------ I N V E N T O R Y   A D J U S T M E N T ------------------------------ #
         sale_order_id = updated_invoice.sale_order_id
 
@@ -5612,6 +5654,9 @@ class SaleReturnOrdersViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -6153,6 +6198,9 @@ class QuickPackCreateViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -6444,6 +6492,9 @@ class SaleReceiptCreateViewSet(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -7003,6 +7054,9 @@ class SaleCreditNoteViewset(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -7306,6 +7360,9 @@ class SaleDebitNoteViewset(APIView):
         """
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             logger.debug("Retrieved related data for model %s with filter %s=%s.",
                          model.__name__, filter_field, filter_value)
@@ -7855,6 +7912,7 @@ class PaymentTransactionAPIView(APIView):
                         payment_transaction = PaymentTransactions.objects.create(
                             payment_receipt_no=original_payment_receipt_no,
                             payment_method=original_payment_method,
+                            payment_date=self._parse_payment_date(data.get('date')),
                             total_amount=total_amount,
                             outstanding_amount=new_outstanding,
                             adjusted_now=allocated_amount,
@@ -8031,6 +8089,7 @@ class PaymentTransactionAPIView(APIView):
                         payment_receipt_no=data.get('payment_receipt_no'),
                         payment_method=data.get('payment_method'),
                         cheque_no=data.get('cheque_no'),
+                        payment_date=self._parse_payment_date(data.get('date')),
                         total_amount=sale_invoice.total_amount,
                         amount=allocated_amount,
                         outstanding_amount=new_outstanding,
@@ -8821,8 +8880,34 @@ class PaymentTransactionAPIView(APIView):
 
     #         return filter_response(len(combined), "Payment Transactions", combined, page, limit, total_count, status.HTTP_200_OK)
 
+    @staticmethod
+    def _parse_payment_date(raw):
+        """Parse the receipt date sent by the UI ('YYYY-MM-DD' or ISO). Falls back to now()."""
+        from django.utils.dateparse import parse_datetime, parse_date
+        from datetime import datetime as _dt
+        value = None
+        if raw:
+            value = parse_datetime(str(raw))
+            if not value:
+                d = parse_date(str(raw)[:10])
+                if d:
+                    value = _dt(d.year, d.month, d.day)
+        if not value:
+            value = timezone.now()
+        # Match the project's USE_TZ setting. This project runs USE_TZ=False (plain, naive
+        # datetimes); attaching a timezone here makes MySQL reject the value. Only convert
+        # to aware when timezones are actually enabled.
+        from django.conf import settings
+        if settings.USE_TZ:
+            if timezone.is_naive(value):
+                value = timezone.make_aware(value)
+        else:
+            if timezone.is_aware(value):
+                value = timezone.make_naive(value)
+        return value
+
     def put(self, request, transaction_id):
-        with transaction.atomic():                        
+        with transaction.atomic():
             try:
                 pending_status = OrderStatuses.objects.get(status_name="Pending")
                 completed_status = OrderStatuses.objects.get(status_name="Completed")
@@ -8881,10 +8966,24 @@ class PaymentTransactionAPIView(APIView):
                 new_outstanding = max_allowed - new_amount
                 payment_status = request.data.get('payment_status', "Partial")
             
-            # Step 5: Update transaction
+            # Step 5: Update transaction — save EVERY field the user can edit (date, method,
+            # cheque, cash/bank account, status, amount), not just the amount.
             payment_transactions.amount = new_amount
             payment_transactions.outstanding_amount = new_outstanding
+            payment_transactions.adjusted_now = new_amount  # keep "Adjust Now" in step with amount
             payment_transactions.payment_status = payment_status
+            payment_transactions.payment_date = self._parse_payment_date(request.data.get('date'))
+            if request.data.get('payment_method') is not None:
+                payment_transactions.payment_method = request.data.get('payment_method')
+            payment_transactions.cheque_no = request.data.get('cheque_no')
+            _acc_raw = request.data.get('ledger_account_id')
+            if _acc_raw:
+                _acc_id = _acc_raw.get('ledger_account_id') if isinstance(_acc_raw, dict) else _acc_raw
+                if _acc_id:
+                    try:
+                        payment_transactions.ledger_account_id = LedgerAccounts.objects.get(pk=str(_acc_id).replace('-', ''))
+                    except LedgerAccounts.DoesNotExist:
+                        pass
             payment_transactions.save()
 
             # Step 6: Update sale invoice amounts
@@ -8934,8 +9033,8 @@ class PaymentTransactionAPIView(APIView):
         """Helper method to recalculate outstanding amounts for all transactions"""
         transactions = PaymentTransactions.objects.filter(
             invoice_no=invoice.invoice_no
-        ).order_by('created_at')
-        
+        ).order_by('payment_date', 'created_at')
+
         running_paid = Decimal('0.00')
         for txn in transactions:
             running_paid += txn.amount
@@ -8958,6 +9057,9 @@ class PaymentTransactionAPIView(APIView):
             journal_line.ledger_account_id = ledger_instance
             journal_line.debit = Decimal('0.00')
             journal_line.credit = new_amount
+            # Keep the ledger entry's date in step with the receipt's (editable) date.
+            if payment_transaction.payment_date:
+                journal_line.entry_date = payment_transaction.payment_date.date()
             journal_line.description = (
                 f"Payment receipt {payment_transaction.payment_receipt_no} "
                 f"for Invoice {invoice.invoice_no}"
@@ -8966,6 +9068,7 @@ class PaymentTransactionAPIView(APIView):
                 'ledger_account_id',
                 'debit',
                 'credit',
+                'entry_date',
                 'description'
             ])
 
@@ -8988,6 +9091,7 @@ class PaymentTransactionAPIView(APIView):
                 ledger_account_id=ledger_instance,
                 debit=Decimal('0.00'),
                 credit=new_amount,
+                entry_date=payment_transaction.payment_date.date() if payment_transaction.payment_date else None,
                 voucher_no=payment_transaction.payment_receipt_no,
                 description=(
                     f"Payment receipt {payment_transaction.payment_receipt_no} "
@@ -9008,7 +9112,7 @@ class PaymentTransactionAPIView(APIView):
         entries = JournalEntryLines.objects.filter(
             customer_id=customer_id,
             is_deleted=False
-        ).order_by('created_at')
+        ).order_by('entry_date', 'created_at')
 
         running_balance = Decimal('0.00')
 
@@ -9571,6 +9675,9 @@ class DeliveryChallanViewSet(APIView):
     def get_related_data(self, model, serializer_class, filter_field, filter_value):
         try:
             related_data = model.objects.filter(**{filter_field: filter_value})
+            # Item tables carry a line_number column: return them in the saved on-screen order.
+            if any(f.name == 'line_number' for f in model._meta.fields):
+                related_data = related_data.order_by('line_number', 'created_at')
             serializer = serializer_class(related_data, many=True)
             return serializer.data
         except Exception as e:

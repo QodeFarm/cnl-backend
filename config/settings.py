@@ -122,6 +122,7 @@ INSTALLED_APPS = [
     'apps.auditlogs',
     'apps.ai_features',
     'apps.documents',
+    'apps.reports',
 ]
 
 MIDDLEWARE = [

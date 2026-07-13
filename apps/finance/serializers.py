@@ -45,12 +45,18 @@ class JournalEntryLinesSerializer(serializers.ModelSerializer):
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    date = serializers.SerializerMethodField()
     # voucher_no = serializers.CharField(source='journal_entry_id.voucher_no', read_only=True)  # <-- FIXED LINE
     # voucher_no = serializers.CharField(read_only=True)
 
     class Meta:
         model = JournalEntryLines
         fields = '__all__'
+
+    def get_date(self, obj):
+        if obj.entry_date:
+            return obj.entry_date
+        return obj.created_at.date() if obj.created_at else None
         
 class GeneralAccountSerializer(serializers.ModelSerializer):
     class Meta:

@@ -129,6 +129,8 @@ class JournalEntryLines(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     journal_entry_id = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, null=True, related_name='entry_lines', db_column='journal_entry_id')
     
+    line_number = models.IntegerField(null=True, blank=True, default=None)
+
     class Meta:
         db_table = journalentrylines
 
@@ -534,6 +536,8 @@ class JournalVoucherLine(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    line_number = models.IntegerField(null=True, blank=True, default=None)
 
     class Meta:
         db_table = journalvoucherlines
