@@ -1870,8 +1870,10 @@ class ProductTemplateAPIView(APIView):
 class ProductExportAPIView(APIView):
     """
     API for exporting existing products to Excel (for re-import update).
-    GET /export-products/              → export all products
-    GET /export-products/?ids=a,b,c    → export specific products
+    GET /export-products/                       → export all products
+    GET /export-products/?ids=a,b,c             → export specific products
+    GET /export-products/?<list filters>        → export every product matching the
+                                                  current list filter (select-all export)
     """
     def get(self, request, *args, **kwargs):
         try:
@@ -1883,6 +1885,21 @@ class ProductExportAPIView(APIView):
                 queryset = queryset.filter(product_id__in=id_list)
                 if not queryset.exists():
                     return build_response(0, "No matching products found", [], status.HTTP_404_NOT_FOUND)
+            else:
+                # Select-all export: apply the same list FilterSet so the file matches
+                # exactly what the user filtered to (mirrors productsViewSet: drop paging
+                # keys, run the rest through ProductsFilter). No filters => all products.
+                filter_params = request.GET.copy()
+                for drop in ('ids', 'page', 'limit', 'summary', 'no_page', 'view'):
+                    filter_params.pop(drop, None)
+                if filter_params:
+                    filterset = ProductsFilter(filter_params, queryset=queryset)
+                    if filterset.is_valid():
+                        # distinct(): reverse-FK join filters can duplicate rows.
+                        queryset = filterset.qs.distinct()
+                    else:
+                        # Fail closed: never fall back to exporting the whole table on a bad filter.
+                        queryset = queryset.none()
 
             wb = ProductExcelImport.export_products(queryset)
             response = HttpResponse(
@@ -2169,6 +2186,8 @@ class ProductBulkUpdateView(BaseBulkUpdateView):
     PK_FIELD = "product_id"
     MODULE_NAME = "Products"
     MAX_SELECTION = 100
+    # Enables "select all matching" — reuses the same FilterSet as the list endpoint.
+    FILTERSET = ProductsFilter
 
     # Whitelist: field_name → FK Model (None = plain value field)
     ALLOWED_FIELDS = {
@@ -2179,6 +2198,7 @@ class ProductBulkUpdateView(BaseBulkUpdateView):
         'unit_options_id':        UnitOptions,
         'stock_unit_id':          ProductStockUnits,
         'gst_classification_id':  ProductGstClassifications,
+        'gst_id':                 GSTMaster,
         'sales_gl_id':            ProductSalesGl,
         'purchase_gl_id':         ProductPurchaseGl,
         'item_type_id':           ProductItemType,
@@ -2194,6 +2214,20 @@ class ProductBulkUpdateView(BaseBulkUpdateView):
         'minimum_level':          None,
         'maximum_level':          None,
     }
+
+    def transform_update_data(self, safe_data):
+        # Products.save() derives gst_input (integer %) from the chosen GST master,
+        # but queryset.update() bypasses save(). Keep gst_input in sync here so bulk
+        # edits behave like a single save. Only auto-fill when the caller didn't set
+        # gst_input explicitly.
+        gst_id = safe_data.get('gst_id')
+        if gst_id and 'gst_input' not in safe_data:
+            try:
+                gst = GSTMaster.objects.get(pk=gst_id)
+                safe_data['gst_input'] = int(gst.gst_percentage)
+            except (GSTMaster.DoesNotExist, ValueError, TypeError):
+                pass
+        return safe_data
 
 
 #updating the balance
