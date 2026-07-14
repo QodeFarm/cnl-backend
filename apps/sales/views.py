@@ -1985,6 +1985,25 @@ class SaleOrderViewSet(APIView):
             item for item in sale_order_items_data
             if item.get("product_id") and item.get("quantity")
         ]
+        
+        # ---------------- ROUND AMOUNTS TO 2 DECIMAL PLACES ---------------- #
+        # Ensure all monetary values have exactly 2 decimal places
+        for item in sale_order_items_data:
+            if item.get("amount") is not None:
+                item["amount"] = round(float(item["amount"]), 2)
+            if item.get("rate") is not None:
+                item["rate"] = round(float(item["rate"]), 2)
+            if item.get("discount") is not None:
+                item["discount"] = round(float(item["discount"]), 2)
+            if item.get("cgst") is not None:
+                item["cgst"] = round(float(item["cgst"]), 2)
+            if item.get("sgst") is not None:
+                item["sgst"] = round(float(item["sgst"]), 2)
+            if item.get("igst") is not None:
+                item["igst"] = round(float(item["igst"]), 2)
+            if item.get("tax") is not None:
+                item["tax"] = round(float(item["tax"]), 2)
+        #----------------------------------------------------------
         #----------------------------------------------------------
 
         sale_type_name = sale_order_data.get("sale_type", {}).get("name")
@@ -4283,6 +4302,25 @@ class SaleInvoiceOrdersViewSet(APIView):
             item for item in sale_invoice_items_data
             if item.get("product_id") and item.get("quantity")
         ]
+        
+        # ---------------- ROUND AMOUNTS TO 2 DECIMAL PLACES ---------------- #
+        # Ensure all monetary values have exactly 2 decimal places
+        for item in sale_invoice_items_data:
+            if item.get("amount") is not None:
+                item["amount"] = round(float(item["amount"]), 2)
+            if item.get("rate") is not None:
+                item["rate"] = round(float(item["rate"]), 2)
+            if item.get("discount") is not None:
+                item["discount"] = round(float(item["discount"]), 2)
+            if item.get("cgst") is not None:
+                item["cgst"] = round(float(item["cgst"]), 2)
+            if item.get("sgst") is not None:
+                item["sgst"] = round(float(item["sgst"]), 2)
+            if item.get("igst") is not None:
+                item["igst"] = round(float(item["igst"]), 2)
+            if item.get("tax") is not None:
+                item["tax"] = round(float(item["tax"]), 2)
+        #----------------------------------------------------------
         #----------------------------------------------------------
 
         # ---------------------- VALIDATION ----------------------------------#
@@ -5787,6 +5825,25 @@ class SaleReturnOrdersViewSet(APIView):
             item for item in sale_return_items_data
             if item.get("product_id") and item.get("quantity")
         ]
+        
+        # ---------------- ROUND AMOUNTS TO 2 DECIMAL PLACES ---------------- #
+        # Ensure all monetary values have exactly 2 decimal places
+        for item in sale_return_items_data:
+            if item.get("amount") is not None:
+                item["amount"] = round(float(item["amount"]), 2)
+            if item.get("rate") is not None:
+                item["rate"] = round(float(item["rate"]), 2)
+            if item.get("discount") is not None:
+                item["discount"] = round(float(item["discount"]), 2)
+            if item.get("cgst") is not None:
+                item["cgst"] = round(float(item["cgst"]), 2)
+            if item.get("sgst") is not None:
+                item["sgst"] = round(float(item["sgst"]), 2)
+            if item.get("igst") is not None:
+                item["igst"] = round(float(item["igst"]), 2)
+            if item.get("tax") is not None:
+                item["tax"] = round(float(item["tax"]), 2)
+        #----------------------------------------------------------
         #----------------------------------------------------------
 
         if sale_return_order_data:
