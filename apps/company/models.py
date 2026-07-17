@@ -191,6 +191,14 @@ class CompanySettings(models.Model):
         on_delete=models.SET_NULL, related_name='+',
         db_column='round_off_account_id'
     )
+    opening_balance_equity_account = models.ForeignKey(
+        'customer.LedgerAccounts', null=True, blank=True, default=None,
+        on_delete=models.SET_NULL, related_name='+',
+        db_column='opening_balance_equity_account_id'
+    )
+    # Financial-year / books start date. Opening balances default to (and are
+    # anchored to) this date, so every opening entry sorts first in the ledger.
+    books_beginning_date = models.DateField(null=True, blank=True, default=None)
 
     # Notifications: when ON, a WhatsApp is auto-sent to the customer when a Sale
     # Order is created. Default OFF so no customer is messaged until an admin
