@@ -2871,6 +2871,17 @@ class SaleInvoiceOrdersViewSet(APIView):
             if summary:
                 saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
 
+                # ✅ Apply filters/search FIRST (remove pagination params to avoid conflicts with filtering)
+                if request.query_params:
+                    filter_params = request.GET.copy()
+                    if 'page' in filter_params:
+                        del filter_params['page']
+                    if 'limit' in filter_params:
+                        del filter_params['limit']
+                    filterset = SaleInvoiceOrdersFilter(filter_params, queryset=saleinvoiceorder)
+                    if filterset.is_valid():
+                        saleinvoiceorder = filterset.qs
+
                 # ✅ Dynamically fetch the IDs
                 canceled_status_ids = list(OrderStatuses.objects.filter(
                     status_name__in=['Cancelled']
