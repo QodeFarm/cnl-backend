@@ -2,7 +2,9 @@ from rest_framework import serializers
 from .models import *
 from apps.hrms.serializers import ModEmployeesSerializer
 from apps.customer.serializers import ModCustomersSerializer, ModLedgerAccountsSerializers
-from apps.vendor.serializers import ModVendorSerializer    
+from apps.customer.models import Customer, LedgerAccounts
+from apps.vendor.serializers import ModVendorSerializer
+from apps.vendor.models import Vendor
 from django.db.models import Sum
 
 class ModBankAccountSerializer(serializers.ModelSerializer):
@@ -46,6 +48,7 @@ class JournalEntryLinesSerializer(serializers.ModelSerializer):
     customer = ModCustomersSerializer(source='customer_id', read_only=True)
     vendor = ModVendorSerializer(source='vendor_id', read_only=True)
     date = serializers.SerializerMethodField()
+    voucher_type = serializers.CharField(source='journal_entry_id.voucher_type', read_only=True)
     # voucher_no = serializers.CharField(source='journal_entry_id.voucher_no', read_only=True)  # <-- FIXED LINE
     # voucher_no = serializers.CharField(read_only=True)
 
@@ -58,6 +61,61 @@ class JournalEntryLinesSerializer(serializers.ModelSerializer):
             return obj.entry_date
         return obj.created_at.date() if obj.created_at else None
         
+class OpeningBalanceEntrySerializer(serializers.ModelSerializer):
+    ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
+    customer = ModCustomersSerializer(source='customer_id', read_only=True)
+    vendor = ModVendorSerializer(source='vendor_id', read_only=True)
+    account_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OpeningBalanceEntry
+        fields = '__all__'
+
+    def get_account_name(self, obj):
+        if obj.account_type == 'Customer' and obj.customer_id:
+            return obj.customer_id.name
+        if obj.account_type == 'Vendor' and obj.vendor_id:
+            return obj.vendor_id.name
+        if obj.account_type == 'Ledger' and obj.ledger_account_id:
+            return obj.ledger_account_id.name
+        return None
+
+
+class OpeningBalanceEntryWriteSerializer(serializers.Serializer):
+    """
+    Input validation for an Opening Balance posting (OpeningBalanceLedgerEntryView).
+    Not a ModelSerializer - the endpoint posts a JournalEntry as a side effect, so this
+    only validates the incoming request shape and enforces that account_type matches the
+    single account FK provided (a Customer entry must carry customer_id and nothing else).
+    """
+    account_type = serializers.ChoiceField(choices=OpeningBalanceEntry.ACCOUNT_TYPE_CHOICES)
+    customer_id = serializers.PrimaryKeyRelatedField(
+        queryset=Customer.objects.filter(is_deleted=False), required=False, allow_null=True
+    )
+    vendor_id = serializers.PrimaryKeyRelatedField(
+        queryset=Vendor.objects.filter(is_deleted=False), required=False, allow_null=True
+    )
+    ledger_account_id = serializers.PrimaryKeyRelatedField(
+        queryset=LedgerAccounts.objects.filter(is_deleted=False), required=False, allow_null=True
+    )
+    amount = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=0)
+    entry_type = serializers.ChoiceField(choices=OpeningBalanceEntry.ENTRY_TYPE_CHOICES)
+    opening_balance_date = serializers.DateField()
+
+    _FK_FOR_TYPE = {'Customer': 'customer_id', 'Vendor': 'vendor_id', 'Ledger': 'ledger_account_id'}
+
+    def validate(self, attrs):
+        account_type = attrs['account_type']
+        required_key = self._FK_FOR_TYPE[account_type]
+        if not attrs.get(required_key):
+            raise serializers.ValidationError({required_key: f"This field is required when account_type is {account_type}."})
+        # Null out the non-matching account FKs so each row stays unambiguous (exactly one
+        # account set), without failing if the frontend left a stale value from a type switch.
+        for key in self._FK_FOR_TYPE.values():
+            if key != required_key:
+                attrs[key] = None
+        return attrs
+
 class GeneralAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = LedgerAccounts

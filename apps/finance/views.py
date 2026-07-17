@@ -5,7 +5,7 @@ from django.forms import IntegerField
 from apps.auditlogs.utils import log_user_action
 from apps.customer.filters import LedgerAccountsFilters
 from apps.customer.models import CustomerAddresses
-from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter, JournalBookReportFilter
+from apps.finance.filters import AgingReportFilter, BalanceSheetReportFilter, BankAccountFilter, BankReconciliationReportFilter, BudgetFilter, CashFlowReportFilter, ChartOfAccountsFilter,  ExpenseClaimFilter, ExpenseItemFilter, FinancialReportFilter, GeneralLedgerReportFilter, JournalEntryFilter, JournalEntryLineFilter, JournalEntryReportFilter, OpeningBalanceEntryFilter, PaymentTransactionFilter, ProfitLossReportFilter, TaxConfigurationFilter, TrialBalanceReportFilter, JournalEntryLinesListFilter, JournalVoucherFilter, JournalVoucherLineFilter, JournalBookReportFilter
 from apps.sales.models import (
     SaleInvoiceItems, SaleInvoiceOrders, SaleOrder, SaleReturnOrders,
     SaleCreditNotes, SaleDebitNotes, DeliveryChallans, PaymentTransactions,
@@ -570,6 +570,59 @@ class JournalEntryLinesAPIView(APIView):
                         row['source_id'] = pk
                     break
 
+        # Opening Balance rows share the generic 'JE-' voucher_no prefix with every other
+        # JournalEntry-backed posting, so the prefix map above can't tell them apart - use
+        # voucher_type instead to route these to the Opening Balance screen, not Journal Entry.
+        ob_journal_entry_ids = [
+            row['journal_entry_id'] for row in data
+            if row.get('voucher_type') == 'OpeningBalance' and row.get('journal_entry_id')
+        ]
+        if ob_journal_entry_ids:
+            ob_lookup = {
+                str(je_id): str(entry_id) for je_id, entry_id in
+                OpeningBalanceEntry.objects.filter(journal_entry_id__in=ob_journal_entry_ids)
+                .values_list('journal_entry_id', 'opening_balance_entry_id')
+            }
+            for row in data:
+                if row.get('voucher_type') == 'OpeningBalance':
+                    pk = ob_lookup.get(str(row.get('journal_entry_id')))
+                    if pk:
+                        row['source_type'] = 'opening_balance'
+                        row['source_id'] = pk
+
+        # ---- Counter-account ("Particulars") for each row ----
+        # The account on the OTHER side of each entry, shown as a column so the user can see
+        # where money came from / went to (Tally's "Particulars", AlignBooks' "Ledger" column).
+        # Two row shapes exist in this data:
+        #   * Double-entry rows (opening balance): the real counter is the sibling line in the
+        #     same journal_entry - look it up by journal_entry_id.
+        #   * Single-sided rows (sale invoice, payment, credit note, etc.): the line itself
+        #     carries the counter GL account in ledger_account (Sales Account, Bank/Cash),
+        #     with the customer/vendor only tagged on - so the counter is its own ledger_account.
+        je_ids = [row['journal_entry_id'] for row in data if row.get('journal_entry_id')]
+        siblings_by_je = {}
+        if je_ids:
+            for s in (JournalEntryLines.objects
+                      .filter(journal_entry_id__in=je_ids, is_deleted=False)
+                      .values('journal_entry_id', 'journal_entry_line_id', 'ledger_account_id__name')):
+                siblings_by_je.setdefault(str(s['journal_entry_id']), []).append(
+                    (str(s['journal_entry_line_id']), s['ledger_account_id__name'])
+                )
+
+        for row in data:
+            je_id = str(row['journal_entry_id']) if row.get('journal_entry_id') else None
+            own_line_id = str(row.get('journal_entry_line_id'))
+            other = [name for (lid, name) in siblings_by_je.get(je_id, [])
+                     if lid != own_line_id and name] if je_id else []
+            if other:
+                counter = ', '.join(dict.fromkeys(other))  # dedupe, preserve order
+            elif account_type in ('customer', 'vendor'):
+                counter = (row.get('ledger_account') or {}).get('name')
+            else:  # general/bank/cash ledger - the other side is the tagged party
+                counter = ((row.get('customer') or {}).get('name')
+                           or (row.get('vendor') or {}).get('name'))
+            row['counter_account'] = counter or '-'
+
         # Resolve human-readable account name for the ledger header
         account_name = ''
         try:
@@ -1109,6 +1162,275 @@ class ExpenseItemView(APIView):
 
     
     	
+class OpeningBalanceEntryViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only listing for the Opening Balance screen's list. Posting/updating an entry
+    always goes through OpeningBalanceLedgerEntryView (which also posts the JournalEntry) -
+    this is deliberately ReadOnlyModelViewSet, not ModelViewSet, so create/update/destroy
+    can't be hit directly here and bypass that posting logic.
+    """
+    queryset = OpeningBalanceEntry.objects.filter(is_deleted=False).select_related(
+        'customer_id', 'vendor_id', 'ledger_account_id'
+    ).order_by('-created_at')
+    serializer_class = OpeningBalanceEntrySerializer
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = OpeningBalanceEntryFilter
+    ordering_fields = ['created_at', 'amount', 'opening_balance_date']
+
+    def list(self, request, *args, **kwargs):
+        return list_filtered_objects(self, request, OpeningBalanceEntry, *args, **kwargs)
+
+
+class OpeningBalanceLedgerEntryView(APIView):
+    """
+    Posts a Customer's, Vendor's, or Ledger Account's opening balance as a balanced
+    JournalEntry against CompanySettings.opening_balance_equity_account (see
+    apps/company/utils.get_finance_setting). Customer/Vendor are kept separate from
+    LedgerAccounts because many customers/vendors can share one control account
+    (e.g. Sundry Debtors/Sundry Creditors) - the opening balance belongs to the
+    customer/vendor, not the shared account.
+
+    POST   /opening_balance/        create or replace an account's opening balance
+    DELETE /opening_balance/<pk>/    cancel an entry and reverse its ledger impact
+    """
+
+    _FK_FOR_TYPE = {'Customer': 'customer_id', 'Vendor': 'vendor_id', 'Ledger': 'ledger_account_id'}
+
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    def delete(self, request, pk, *args, **kwargs):
+        return self.cancel(request, pk, *args, **kwargs)
+
+    # ---- helpers -------------------------------------------------------------
+
+    def _resolve_account(self, validated):
+        """
+        Returns (customer, vendor, ledger_account, reference, description) for the posting,
+        or raises ValueError(message) for a business-rule failure (e.g. a dangling ledger FK).
+        The posting always hits `ledger_account`; customer/vendor tag the line so the
+        Account Ledger screen (which filters by customer_id/vendor_id) shows it.
+        """
+        account_type = validated['account_type']
+        if account_type == 'Customer':
+            customer = validated['customer_id']
+            if not customer.ledger_account_id_id:
+                raise ValueError(f"{customer.name} has no linked ledger account - link one first")
+            try:
+                ledger_account = customer.ledger_account_id
+            except LedgerAccounts.DoesNotExist:
+                raise ValueError(f"{customer.name}'s linked ledger account no longer exists - please re-link one")
+            return customer, None, ledger_account, f"OPENING-CUSTOMER-{customer.pk}", f'Opening Balance - {customer.name}'
+
+        if account_type == 'Vendor':
+            vendor = validated['vendor_id']
+            if not vendor.ledger_account_id_id:
+                raise ValueError(f"{vendor.name} has no linked ledger account - link one first")
+            try:
+                ledger_account = vendor.ledger_account_id
+            except LedgerAccounts.DoesNotExist:
+                raise ValueError(f"{vendor.name}'s linked ledger account no longer exists - please re-link one")
+            return None, vendor, ledger_account, f"OPENING-VENDOR-{vendor.pk}", f'Opening Balance - {vendor.name}'
+
+        ledger_account = validated['ledger_account_id']
+        return None, None, ledger_account, f"OPENING-LEDGER-{ledger_account.pk}", f'Opening Balance - {ledger_account.name}'
+
+    def _recalc_running_balance(self, *account_ids):
+        """Rebuild JournalEntryLines.balance for each account, in ledger (entry_date) order."""
+        for account_id in account_ids:
+            if not account_id:
+                continue
+            lines = JournalEntryLines.objects.filter(
+                ledger_account_id=account_id, is_deleted=False
+            ).order_by('entry_date', 'created_at', 'journal_entry_line_id')
+            running_balance = Decimal('0.00')
+            for line in lines:
+                debit = Decimal(str(line.debit)) if line.debit else Decimal('0.00')
+                credit = Decimal(str(line.credit)) if line.credit else Decimal('0.00')
+                # Vendor (payable) balances are credit-positive; everything else debit-positive.
+                if line.vendor_id_id:
+                    running_balance = running_balance + credit - debit
+                else:
+                    running_balance = running_balance + debit - credit
+                if line.balance != running_balance:
+                    JournalEntryLines.objects.filter(
+                        journal_entry_line_id=line.journal_entry_line_id
+                    ).update(balance=running_balance)
+
+    # ---- create / replace ----------------------------------------------------
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        from apps.company.utils import get_finance_setting
+        from config.utils_methods import generate_order_number
+
+        set_db('default')
+
+        serializer = OpeningBalanceEntryWriteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return build_response(0, "ValidationError", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        validated = serializer.validated_data
+
+        account_type = validated['account_type']
+        amount = validated['amount']
+        entry_type = validated['entry_type']
+        opening_balance_date = validated['opening_balance_date']  # a real date object
+
+        try:
+            customer, vendor, ledger_account, reference, description = self._resolve_account(validated)
+        except ValueError as exc:
+            return build_response(0, str(exc), [], status.HTTP_400_BAD_REQUEST)
+
+        # Equity (contra) account must exist BEFORE any write - a plain return inside
+        # @transaction.atomic does NOT roll back, so validating here avoids orphan rows.
+        equity_account = get_finance_setting('opening_balance_equity_account', fallback_name='Opening Balance Equity')
+        if not equity_account:
+            return build_response(
+                0,
+                "Setup required: No 'Opening Balance Equity' ledger account configured. "
+                "Set it in Company Settings, or create a ledger account named 'Opening Balance Equity'.",
+                [], status.HTTP_400_BAD_REQUEST
+            )
+
+        # Lock this account's existing ACTIVE entry (if any) so two concurrent saves serialize
+        # instead of both inserting - complements the DB-level unique-active-entry index.
+        # A previously-cancelled entry is left as-is in history; this save replaces the
+        # active one or, if none, creates a fresh active row.
+        entry_lookup = {'account_type': account_type, self._FK_FOR_TYPE[account_type]:
+                        (customer or vendor or ledger_account), 'status': 'Active', 'is_deleted': False}
+        existing_entry = OpeningBalanceEntry.objects.select_for_update().filter(**entry_lookup).first()
+
+        # Non-blocking warning if this date lands after an existing transaction for the account
+        # (its own prior opening posting is excluded so a same-date re-save never warns).
+        line_filter = {'is_deleted': False}
+        if account_type == 'Customer':
+            line_filter['customer_id'] = customer
+        elif account_type == 'Vendor':
+            line_filter['vendor_id'] = vendor
+        else:
+            line_filter.update({'ledger_account_id': ledger_account, 'customer_id__isnull': True, 'vendor_id__isnull': True})
+        earliest_date = (
+            JournalEntryLines.objects.filter(**line_filter)
+            .exclude(journal_entry_id__reference=reference)
+            .order_by('entry_date').values_list('entry_date', flat=True).first()
+        )
+        warning = None
+        if earliest_date and opening_balance_date > earliest_date:
+            warning = (f"This date ({opening_balance_date}) is after an existing transaction dated "
+                       f"{earliest_date} - it may not appear first in the ledger. "
+                       "Check the date if that wasn't intended.")
+
+        # Replace any prior posting for this account (soft-delete old JournalEntry + lines).
+        old_journal = JournalEntry.objects.filter(reference=reference, is_deleted=False).first()
+        if old_journal:
+            JournalEntryLines.objects.filter(journal_entry_id=old_journal, is_deleted=False).update(is_deleted=True)
+            old_journal.is_deleted = True
+            old_journal.save(update_fields=['is_deleted'])
+
+        # Post the balanced pair (Dr/Cr the account, opposite side to equity) - direct
+        # create matches ExpenseItemView.create (the other explicit ledger-posting view).
+        # Give opening balances their own 'OB-' number series (e.g. OB-2607-00001) instead
+        # of the generic 'JE-' journal number, so they're recognizable in the ledger - the
+        # way Tally numbers each voucher type separately. Setting voucher_no explicitly makes
+        # JournalEntry.save() skip its own JE- generation.
+        ob_voucher_no = generate_order_number('OB', model_class=JournalEntry, field_name='voucher_no')
+        journal_entry = JournalEntry.objects.create(
+            entry_date=opening_balance_date, reference=reference, voucher_no=ob_voucher_no,
+            description='Opening Balance', voucher_type='OpeningBalance',
+        )
+        account_debit = amount if entry_type == 'Debit' else 0
+        account_credit = amount if entry_type == 'Credit' else 0
+        JournalEntryLines.objects.create(
+            journal_entry_id=journal_entry, ledger_account_id=ledger_account,
+            customer_id=customer, vendor_id=vendor,
+            debit=account_debit, credit=account_credit, description=description,
+            voucher_no=journal_entry.voucher_no, entry_date=opening_balance_date, balance=0,
+        )
+        JournalEntryLines.objects.create(
+            journal_entry_id=journal_entry, ledger_account_id=equity_account,
+            debit=account_credit, credit=account_debit, description=description,
+            voucher_no=journal_entry.voucher_no, entry_date=opening_balance_date, balance=0,
+        )
+        self._recalc_running_balance(ledger_account.pk, equity_account.pk)
+
+        # Upsert the source-document row (the Opening Balance list <- OpeningBalanceEntry).
+        entry = existing_entry or OpeningBalanceEntry(
+            account_type=account_type, customer_id=customer, vendor_id=vendor, ledger_account_id=ledger_account,
+        )
+        entry.amount = amount
+        entry.entry_type = entry_type
+        entry.opening_balance_date = opening_balance_date
+        entry.journal_entry_id = journal_entry
+        entry.status = 'Active'
+        entry.is_deleted = False
+        entry.save()
+
+        log_user_action('default', request.user, 'CREATE', 'Opening Balance', str(entry.pk),
+                        f"{description} ({entry_type} {amount}) by {request.user.username}")
+        logger.info(f'Opening balance posted for {account_type}: {entry_type} {amount}')
+
+        return build_response(1, "Opening balance saved successfully", {
+            'opening_balance_entry_id': str(entry.pk),
+            'account_type': account_type,
+            'amount': str(amount),
+            'entry_type': entry_type,
+            'opening_balance_date': str(opening_balance_date),
+            'warning': warning,
+        }, status.HTTP_201_CREATED)
+
+    # ---- cancel / reverse ----------------------------------------------------
+
+    @transaction.atomic
+    def cancel(self, request, pk, *args, **kwargs):
+        set_db('default')
+
+        try:
+            entry = OpeningBalanceEntry.objects.select_for_update().get(pk=pk, is_deleted=False)
+        except (OpeningBalanceEntry.DoesNotExist, ValueError, TypeError):
+            return build_response(0, "Opening balance entry does not exist", [], status.HTTP_404_NOT_FOUND)
+
+        if entry.status == 'Cancelled':
+            return build_response(0, "This opening balance is already cancelled", [], status.HTTP_400_BAD_REQUEST)
+
+        # Reverse the ledger impact: soft-delete the posted JournalEntry + its lines, then
+        # rebuild running balances on the accounts those lines touched. Collect raw account
+        # ids (not descriptors) so a dangling FK can't raise here.
+        affected_ids = set()
+        journal_entry = entry.journal_entry_id if entry.journal_entry_id_id else None
+        if journal_entry:
+            affected_ids = set(
+                JournalEntryLines.objects.filter(journal_entry_id=journal_entry, is_deleted=False)
+                .values_list('ledger_account_id', flat=True)
+            )
+            JournalEntryLines.objects.filter(journal_entry_id=journal_entry, is_deleted=False).update(is_deleted=True)
+            journal_entry.is_deleted = True
+            journal_entry.save(update_fields=['is_deleted'])
+
+        entry.status = 'Cancelled'
+        entry.save(update_fields=['status', 'updated_at'])
+
+        self._recalc_running_balance(*affected_ids)
+
+        log_user_action('default', request.user, 'CANCEL', 'Opening Balance', str(entry.pk),
+                        f"Opening Balance cancelled by {request.user.username}")
+        logger.info(f'Opening balance cancelled: {entry.pk}')
+
+        return build_response(1, "Opening balance cancelled successfully", [], status.HTTP_200_OK)
+
+
+class OpeningBalanceTotalsAPIView(APIView):
+    """Running Debit/Credit totals across active OpeningBalanceEntry rows, for the list screen."""
+
+    def get(self, request, *args, **kwargs):
+        entries = OpeningBalanceEntry.objects.filter(is_deleted=False, status='Active')
+        debit_total = entries.filter(entry_type='Debit').aggregate(total=Sum('amount'))['total'] or 0
+        credit_total = entries.filter(entry_type='Credit').aggregate(total=Sum('amount'))['total'] or 0
+
+        return build_response(1, "Opening balance totals", {
+            'debit': str(debit_total), 'credit': str(credit_total),
+        }, status.HTTP_200_OK)
+
+
 class GeneralAccountsListAPIView(APIView):
     def get(self, request):
         accounts = LedgerAccounts.objects.filter(type__in=['Bank', 'Cash', 'General'], is_deleted=False)

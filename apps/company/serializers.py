@@ -65,6 +65,7 @@ class CompanySettingsSerializer(serializers.ModelSerializer):
     bank_account_name          = serializers.CharField(source='bank_account.name',            read_only=True, default=None)
     discount_account_name      = serializers.CharField(source='discount_account.name',        read_only=True, default=None)
     round_off_account_name     = serializers.CharField(source='round_off_account.name',       read_only=True, default=None)
+    opening_balance_equity_account_name = serializers.CharField(source='opening_balance_equity_account.name', read_only=True, default=None)
 
     class Meta:
         model  = CompanySettings

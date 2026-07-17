@@ -196,12 +196,16 @@ def update_balance_after_return(sender, instance, created, **kwargs):
                 logger.warning("Sale return signal: Sales Ledger Account not configured. Journal entry skipped.")
                 return
 
-            # Step 3: Creating JournalEntryLines record
+            # Step 3: Creating JournalEntryLines record.
+            # A sale return means the customer owes LESS (they returned goods), so it must
+            # CREDIT the customer's account - exactly like a credit note above. It was posting
+            # debit=total, which wrongly INCREASED the receivable. bal_amt is already computed
+            # as (existing - total), so credit is the side that matches it.
             JournalEntryLines.objects.create(
                 ledger_account_id=sale_account,
-                debit=instance.total_amount,
+                debit=0.00,
                 voucher_no = (instance.return_no),
-                credit=0.00,
+                credit=instance.total_amount,
                 description= f"Return gives to {instance.customer_id.name} ({instance.return_reason})",
                 customer_id=instance.customer_id,
                 balance=bal_amt

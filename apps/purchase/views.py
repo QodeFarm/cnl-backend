@@ -977,15 +977,20 @@ class PurchaseInvoiceOrderViewSet(APIView):
             latest_balance = existing_balance - Decimal(instance.total_amount)
 
             try:
+                # Cancelling a purchase invoice REVERSES the purchase, so we owe the vendor
+                # LESS - it must reduce payable, which for a vendor is a CREDIT (a purchase
+                # invoice is a debit; its cancellation is the opposite side, exactly like the
+                # sale-invoice cancellation credits the customer). Was debit, which wrongly
+                # increased the payable when cancelling.
                 JournalEntryLines.objects.create(
                     description=f"Cancellation of purchase invoice {invoice_no}",
-                    debit=instance.total_amount,
-                    credit=0,
+                    debit=0,
+                    credit=instance.total_amount,
                     voucher_no=invoice_no,
                     vendor_id=supplier_id,
                     balance=latest_balance
                 )
-                logger.info(f"Created offsetting debit entry of {instance.total_amount} for cancelled purchase invoice {invoice_no}")
+                logger.info(f"Created offsetting credit entry of {instance.total_amount} for cancelled purchase invoice {invoice_no}")
             except Exception as e:
                 logger.error(f"Error creating offsetting debit entry: {str(e)}")
 

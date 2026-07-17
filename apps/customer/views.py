@@ -1134,6 +1134,7 @@ class CustomerBulkUpdateView(BaseBulkUpdateView):
 
     # Whitelist: field_name → FK Model (None = plain value field)
     ALLOWED_FIELDS = {
+        'ledger_account_id':    LedgerAccounts,
         'customer_category_id': CustomerCategories,
         'territory_id':         Territory,
         'firm_status_id':       FirmStatuses,

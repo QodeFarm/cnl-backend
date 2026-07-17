@@ -17,6 +17,7 @@ router.register(r'expense_claims', ExpenseClaimViewSet)
 # router.register(r'expense_items', ExpenseItemViewSet)
 router.register(r'financial_reports', FinancialReportViewSet)
 router.register(r'journal_voucher_lines', JournalVoucherLineViewSet)  # For individual line operations
+router.register(r'opening_balance_entries', OpeningBalanceEntryViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -38,6 +39,10 @@ urlpatterns = [
     # path('expense_items/', ExpenseItemAPIView.as_view(), name='expenseitem-detail-update-delete'),
     # path('expense_items/<str:pk>/', ExpenseItemAPIView.as_view(), name='expenseitem-detail-update-delete'),
     path('general_accounts/', GeneralAccountsListAPIView.as_view()),
+
+    path('opening_balance/', OpeningBalanceLedgerEntryView.as_view(), name='opening_balance-create'),
+    path('opening_balance/<str:pk>/', OpeningBalanceLedgerEntryView.as_view(), name='opening_balance-cancel'),
+    path('opening_balance_totals/', OpeningBalanceTotalsAPIView.as_view(), name='opening_balance-totals'),
     
     # ======================================
     # JOURNAL VOUCHER URLS
