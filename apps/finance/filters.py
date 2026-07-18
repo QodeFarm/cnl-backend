@@ -1,6 +1,6 @@
 from django_filters import rest_framework as filters
 from apps.customer.models import CustomerAddresses
-from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, JournalVoucher, JournalVoucherLine, PaymentTransaction, TaxConfiguration
+from apps.finance.models import BankAccount, Budget, ChartOfAccounts, ExpenseClaim, ExpenseItem, FinancialReport, JournalEntry, JournalEntryLines, JournalVoucher, JournalVoucherLine, OpeningBalanceEntry, PaymentTransaction, TaxConfiguration
 from apps.vendor.models import VendorAddress
 from config.utils_methods import filter_uuid
 from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
@@ -8,6 +8,34 @@ import logging
 from django.db.models import Q
 logger = logging.getLogger(__name__)
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
+
+
+class OpeningBalanceEntryFilter(filters.FilterSet):
+    account_type = filters.ChoiceFilter(choices=OpeningBalanceEntry.ACCOUNT_TYPE_CHOICES)
+    entry_type = filters.ChoiceFilter(choices=OpeningBalanceEntry.ENTRY_TYPE_CHOICES)
+    customer_id = filters.CharFilter(lookup_expr='exact')
+    vendor_id = filters.CharFilter(lookup_expr='exact')
+    ledger_account_id = filters.CharFilter(lookup_expr='exact')
+    s = filters.CharFilter(method='filter_by_search', label="Search")
+    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    page = filters.NumberFilter(method='filter_by_page', label="Page")
+    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+
+    def filter_by_search(self, queryset, name, value):
+        return filter_by_search(queryset, self, value)
+
+    def filter_by_sort(self, queryset, name, value):
+        return filter_by_sort(self, queryset, value)
+
+    def filter_by_page(self, queryset, name, value):
+        return filter_by_page(self, queryset, value)
+
+    def filter_by_limit(self, queryset, name, value):
+        return filter_by_limit(self, queryset, value)
+
+    class Meta:
+        model = OpeningBalanceEntry
+        fields = ['account_type', 'entry_type', 'customer_id', 'vendor_id', 'ledger_account_id']
 
 
 class BankAccountFilter(filters.FilterSet):

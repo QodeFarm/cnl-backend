@@ -867,9 +867,21 @@ class BaseBulkUpdateView(APIView):
     MODULE_NAME = "Record"
     PK_FIELD = "id"
     MAX_SELECTION = 100
+    # Optional FilterSet. Set this in a subclass to enable "select all matching":
+    # the client sends select_all=true + the same filter query string used by the
+    # list endpoint, and every matching row is updated (no MAX_SELECTION cap, no
+    # explicit id list). Left as None => select-all is simply unsupported for that
+    # module and the existing ids-based flow is completely unchanged.
+    FILTERSET = None
 
     @transaction.atomic
     def patch(self, request, *args, **kwargs):
+        # Two mutually-exclusive modes:
+        #   • select_all=true  -> update every row matching the current filter
+        #   • otherwise        -> update the explicit ids list (original behaviour)
+        if request.data.get('select_all'):
+            return self._patch_select_all(request)
+
         ids = request.data.get('ids', [])
         update_data = request.data.get('update_data', {})
 
@@ -891,6 +903,9 @@ class BaseBulkUpdateView(APIView):
         if fk_error:
             return fk_error
 
+        # --- Derive any dependent fields (e.g. gst_input from gst_id). No-op by default. ---
+        safe_data = self.transform_update_data(safe_data)
+
         # --- Verify all records exist ---
         qs_filter = {f"{self.PK_FIELD}__in": unique_ids}
         if hasattr(self.MODEL, 'is_deleted'):
@@ -910,6 +925,111 @@ class BaseBulkUpdateView(APIView):
             f"{updated_count} {self.MODULE_NAME} updated successfully",
             {"updated_count": updated_count, "fields_changed": list(safe_data.keys())},
             status.HTTP_200_OK
+        )
+
+    def _patch_select_all(self, request):
+        """Update every record matching the current list filter (select-all mode)."""
+        update_data = request.data.get('update_data', {})
+        if not self.FILTERSET:
+            return build_response(0, "Select-all is not supported for this record type", [], status.HTTP_400_BAD_REQUEST)
+        if not update_data:
+            return build_response(0, "No fields to update", [], status.HTTP_400_BAD_REQUEST)
+
+        # --- Filter to only whitelisted fields ---
+        safe_data = {k: v for k, v in update_data.items() if k in self.ALLOWED_FIELDS}
+        if not safe_data:
+            return build_response(0, "No valid fields provided for update", [], status.HTTP_400_BAD_REQUEST)
+
+        # --- Validate FK references ---
+        fk_error = self._validate_foreign_keys(safe_data)
+        if fk_error:
+            return fk_error
+
+        # --- Derive any dependent fields (e.g. gst_input from gst_id). No-op by default. ---
+        safe_data = self.transform_update_data(safe_data)
+
+        # --- Rebuild the exact same queryset the list endpoint produced, minus paging.
+        # Uses the module's own FilterSet + the client's filter query string, so the
+        # rows updated are guaranteed identical to what the user is looking at. ---
+        matched = self._select_all_queryset(request)
+
+        # Materialise the matching PKs into a Python list FIRST, then UPDATE by literal
+        # ids. Two reasons:
+        #   • MySQL forbids "UPDATE products ... WHERE pk IN (SELECT ... FROM products)"
+        #     (error 1093 — can't read the target table in the same statement's subquery).
+        #   • Some list filters JOIN reverse FKs (e.g. warehouse) and can return duplicate
+        #     rows; distinct PKs collapse that so each product is updated once.
+        # Batched so a very large selection never builds one oversized statement.
+        # .order_by() clears any sort the FilterSet applied — ordering is irrelevant for
+        # an id fetch, and "SELECT DISTINCT pk ... ORDER BY <other col>" is rejected by
+        # MySQL under ONLY_FULL_GROUP_BY (error 3065).
+        pk_list = list(matched.order_by().values_list(self.PK_FIELD, flat=True).distinct())
+        updated_count = 0
+        BATCH_SIZE = 2000
+        for start in range(0, len(pk_list), BATCH_SIZE):
+            chunk = pk_list[start:start + BATCH_SIZE]
+            updated_count += self.MODEL.objects.filter(
+                **{f"{self.PK_FIELD}__in": chunk}
+            ).update(**safe_data)
+        self._log_select_all(request, safe_data, updated_count)
+
+        return build_response(
+            updated_count,
+            f"{updated_count} {self.MODULE_NAME} updated successfully",
+            {"updated_count": updated_count, "fields_changed": list(safe_data.keys())},
+            status.HTTP_200_OK
+        )
+
+    def _select_all_queryset(self, request):
+        """Reconstruct the filtered queryset from the client's filter query string.
+
+        Mirrors the list endpoint's pattern (see productsViewSet): strip paging keys,
+        run the remaining params through the module's FilterSet. is_deleted rows are
+        excluded so a bulk edit never touches soft-deleted records.
+        """
+        from django.http import QueryDict
+
+        filter_query = request.data.get('filter_query', '') or ''
+        if filter_query.startswith('?'):
+            filter_query = filter_query[1:]
+
+        filter_params = QueryDict(filter_query, mutable=True)
+        for drop in ('page', 'limit', 'summary', 'no_page', 'view'):
+            filter_params.pop(drop, None)
+
+        base_qs = self.MODEL.objects.all()
+        if hasattr(self.MODEL, 'is_deleted'):
+            base_qs = base_qs.filter(is_deleted=False)
+
+        filterset = self.FILTERSET(filter_params, queryset=base_qs)
+        if hasattr(filterset, 'is_valid') and not filterset.is_valid():
+            # Bad filter => fail safe on the whole set rather than update everything.
+            return self.MODEL.objects.none()
+        return filterset.qs
+
+    def transform_update_data(self, safe_data):
+        """Hook: derive dependent fields before the bulk update.
+
+        Default is a no-op. Subclasses override to keep denormalised columns in sync
+        (queryset.update() bypasses Model.save(), so any save()-time derivation must be
+        replicated here). Applies to BOTH the ids flow and the select-all flow.
+        """
+        return safe_data
+
+    def _log_select_all(self, request, safe_data, count):
+        """Single summary audit row for a select-all bulk update (no per-id explosion)."""
+        from apps.auditlogs.models import AuditLog
+        from config.utils_db_router import set_db
+
+        changed_fields = ', '.join(safe_data.keys())
+        description = f"Bulk updated [{changed_fields}] on {count} records (select-all) by {request.user.username}"
+        db = set_db('default')
+        AuditLog.objects.using(db).create(
+            user_id=request.user,
+            action_type="BULK_UPDATE",
+            module_name=self.MODULE_NAME,
+            record_id="ALL_MATCHING",
+            description=description,
         )
 
     # --- Private helpers (keeps patch() clean) ---

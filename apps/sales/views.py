@@ -2887,6 +2887,17 @@ class SaleInvoiceOrdersViewSet(APIView):
             if summary:
                 saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
 
+                # ✅ Apply filters/search FIRST (remove pagination params to avoid conflicts with filtering)
+                if request.query_params:
+                    filter_params = request.GET.copy()
+                    if 'page' in filter_params:
+                        del filter_params['page']
+                    if 'limit' in filter_params:
+                        del filter_params['limit']
+                    filterset = SaleInvoiceOrdersFilter(filter_params, queryset=saleinvoiceorder)
+                    if filterset.is_valid():
+                        saleinvoiceorder = filterset.qs
+
                 # ✅ Dynamically fetch the IDs
                 canceled_status_ids = list(OrderStatuses.objects.filter(
                     status_name__in=['Cancelled']
@@ -5748,12 +5759,16 @@ class SaleReturnOrdersViewSet(APIView):
                         .first()
                     ) or Decimal('0.00')
 
-                    latest_balance = existing_balance - Decimal(instance.total_amount)
+                    # Cancelling a sale return REVERSES it: the customer owes MORE again, so
+                    # this must DEBIT the customer (increase receivable) - the opposite of the
+                    # return itself (which credits). Was credit/(existing - total), which only
+                    # matched the old, wrong debit-side return posting.
+                    latest_balance = existing_balance + Decimal(instance.total_amount)
 
                     JournalEntryLines.objects.create(
                         description=f"Cancellation of sale return {invoice_no}",
-                        credit=instance.total_amount,
-                        debit=0,
+                        credit=0,
+                        debit=instance.total_amount,
                         voucher_no=invoice_no,
                         customer_id=customer_id,
                         balance=latest_balance

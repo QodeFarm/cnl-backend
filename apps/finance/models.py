@@ -2,7 +2,7 @@ from django.db import models
 import uuid
 from apps.hrms.models import Employees
 from config.utils_methods import OrderNumberMixin, generate_order_number
-from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal, expenseitems, journalvouchers, journalvoucherlines, journalvoucherattachments
+from config.utils_variables import bankaccounts, chartofaccounts, journalentries, journalentrylines, paymenttransaction, taxconfigurations, budgets, expenseclaims, financialreports, journaldetail, journal, expenseitems, journalvouchers, journalvoucherlines, journalvoucherattachments, openingbalanceentries
 from apps.customer.models import Customer, LedgerAccounts
 from apps.vendor.models import Vendor
 
@@ -69,6 +69,7 @@ class JournalEntry(OrderNumberMixin):
     ('PaymentVoucher', 'PaymentVoucher'),
     ('AdvancePaymentVendorVoucher', 'AdvancePaymentVendorVoucher'),
     ('PaymentRefundVoucher', 'PaymentRefundVoucher'),
+    ('OpeningBalance', 'OpeningBalance'),
         ]
     voucher_type = models.CharField(max_length=30, choices=VOUCHER_TYPE_CHOICES, default='CommonVoucher')
     cash_bank_posting = models.CharField(max_length=10, choices=[('Single', 'Single'), ('LineWise', 'LineWise')], default='Single')
@@ -136,6 +137,49 @@ class JournalEntryLines(models.Model):
 
     def __str__(self):
         return f"Line {self.journal_entry_line_id} for Entry {self.description}"
+
+
+class OpeningBalanceEntry(models.Model):
+    """
+    One row per opening-balance entry made through the Opening Balance screen - this is
+    the list that screen displays (like SaleInvoiceOrders backs the Sales Invoice list),
+    separate from the opening_balance snapshot fields on Customer/Vendor/LedgerAccounts
+    (those just hold "the current opening balance" for quick lookup elsewhere).
+    Posting the actual JournalEntry/JournalEntryLines happens in
+    OpeningBalanceLedgerEntryView; journal_entry_id here just tracks which one, for re-save.
+    """
+    ACCOUNT_TYPE_CHOICES = [
+        ('Customer', 'Customer'),
+        ('Vendor', 'Vendor'),
+        ('Ledger', 'Ledger'),
+    ]
+    ENTRY_TYPE_CHOICES = [
+        ('Debit', 'Debit'),
+        ('Credit', 'Credit'),
+    ]
+    STATUS_CHOICES = [
+        ('Active', 'Active'),
+        ('Cancelled', 'Cancelled'),
+    ]
+    opening_balance_entry_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    account_type = models.CharField(max_length=10, choices=ACCOUNT_TYPE_CHOICES)
+    customer_id = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, db_column='customer_id')
+    vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, db_column='vendor_id')
+    ledger_account_id = models.ForeignKey(LedgerAccounts, on_delete=models.PROTECT, null=True, db_column='ledger_account_id')
+    amount = models.DecimalField(max_digits=18, decimal_places=2)
+    entry_type = models.CharField(max_length=10, choices=ENTRY_TYPE_CHOICES)
+    opening_balance_date = models.DateField()
+    journal_entry_id = models.ForeignKey(JournalEntry, on_delete=models.SET_NULL, null=True, db_column='journal_entry_id')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Active')
+    is_deleted = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = openingbalanceentries
+
+    def __str__(self):
+        return f"{self.account_type} opening balance {self.amount} {self.entry_type}"
 
 
 class PaymentTransaction(models.Model): # Enhance Later

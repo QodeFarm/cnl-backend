@@ -1129,9 +1129,12 @@ class CustomerBulkUpdateView(BaseBulkUpdateView):
     PK_FIELD = "customer_id"
     MODULE_NAME = "Customers"
     MAX_SELECTION = 100
+    # Enables "select all matching" — reuses the same FilterSet as the list endpoint.
+    FILTERSET = CustomerFilters
 
     # Whitelist: field_name → FK Model (None = plain value field)
     ALLOWED_FIELDS = {
+        'ledger_account_id':    LedgerAccounts,
         'customer_category_id': CustomerCategories,
         'territory_id':         Territory,
         'firm_status_id':       FirmStatuses,
@@ -2220,8 +2223,10 @@ class CustomerTemplateAPIView(APIView):
 class CustomerExportAPIView(APIView):
     """
     API for exporting existing customers to Excel (for re-import update).
-    GET /export-customers/              → export all customers
-    GET /export-customers/?ids=a,b,c    → export specific customers
+    GET /export-customers/                  → export all customers
+    GET /export-customers/?ids=a,b,c        → export specific customers
+    GET /export-customers/?<list filters>   → export every customer matching the
+                                              current list filter (select-all export)
     """
     def get(self, request, *args, **kwargs):
         try:
@@ -2233,6 +2238,20 @@ class CustomerExportAPIView(APIView):
                 queryset = queryset.filter(customer_id__in=id_list)
                 if not queryset.exists():
                     return build_response(0, "No matching customers found", [], status.HTTP_404_NOT_FOUND)
+            else:
+                # Select-all export: apply the same list FilterSet so the file matches
+                # exactly what the user filtered to (drop paging keys, run the rest).
+                filter_params = request.GET.copy()
+                for drop in ('ids', 'page', 'limit', 'summary', 'no_page', 'view'):
+                    filter_params.pop(drop, None)
+                if filter_params:
+                    filterset = CustomerFilters(filter_params, queryset=queryset)
+                    if filterset.is_valid():
+                        # distinct(): reverse-FK join filters (address email/phone/city) can duplicate rows.
+                        queryset = filterset.qs.distinct()
+                    else:
+                        # Fail closed: never fall back to exporting the whole table on a bad filter.
+                        queryset = queryset.none()
 
             wb = CustomerExcelImport.export_customers(queryset)
             response = HttpResponse(

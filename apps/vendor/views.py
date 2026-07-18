@@ -1880,8 +1880,10 @@ class VendorTemplateAPIView(APIView):
 class VendorExportAPIView(APIView):
     """
     API for exporting existing vendors to Excel (for re-import update).
-    GET /export-vendors/              -> export all vendors
-    GET /export-vendors/?ids=a,b,c    -> export specific vendors
+    GET /export-vendors/                  -> export all vendors
+    GET /export-vendors/?ids=a,b,c        -> export specific vendors
+    GET /export-vendors/?<list filters>   -> export every vendor matching the
+                                            current list filter (select-all export)
     """
     def get(self, request, *args, **kwargs):
         try:
@@ -1893,6 +1895,20 @@ class VendorExportAPIView(APIView):
                 queryset = queryset.filter(vendor_id__in=id_list)
                 if not queryset.exists():
                     return build_response(0, "No matching vendors found", [], status.HTTP_404_NOT_FOUND)
+            else:
+                # Select-all export: apply the same list FilterSet so the file matches
+                # exactly what the user filtered to (drop paging keys, run the rest).
+                filter_params = request.GET.copy()
+                for drop in ('ids', 'page', 'limit', 'summary', 'no_page', 'view'):
+                    filter_params.pop(drop, None)
+                if filter_params:
+                    filterset = VendorFilter(filter_params, queryset=queryset)
+                    if filterset.is_valid():
+                        # distinct(): reverse-FK join filters (address email/phone/city) can duplicate rows.
+                        queryset = filterset.qs.distinct()
+                    else:
+                        # Fail closed: never fall back to exporting the whole table on a bad filter.
+                        queryset = queryset.none()
 
             wb = VendorExcelImport.export_vendors(queryset)
             response = HttpResponse(
@@ -2160,6 +2176,8 @@ class VendorBulkUpdateView(BaseBulkUpdateView):
     PK_FIELD = "vendor_id"
     MODULE_NAME = "Vendors"
     MAX_SELECTION = 100
+    # Enables "select all matching" — reuses the same FilterSet as the list endpoint.
+    FILTERSET = VendorFilter
 
     # Whitelist: field_name → FK Model (None = plain value field)
     ALLOWED_FIELDS = {
