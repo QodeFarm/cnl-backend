@@ -120,7 +120,7 @@ class JournalEntryLines(models.Model):
     voucher_no = models.CharField(max_length=20)
     debit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
     credit = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)
-    description = models.CharField(max_length=1024, default=None, null=True)
+    description = models.TextField(default=None, null=True)
     customer_id  = models.ForeignKey(Customer, on_delete=models.PROTECT, null=True, db_column='customer_id')
     vendor_id = models.ForeignKey(Vendor, on_delete=models.PROTECT, null=True, db_column='vendor_id')
     balance = models.DecimalField(max_digits=15, decimal_places=2, default=0.00)

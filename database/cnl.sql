@@ -2355,8 +2355,8 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
     voucher_no VARCHAR(20) NOT NULL
     debit DECIMAL(15, 2) DEFAULT 0.00,
     credit DECIMAL(15, 2) DEFAULT 0.00,
-    description VARCHAR(1024),
-    balance DECIMAL(15, 2) DEFAULT 0.00,  -- balance amt  
+    description TEXT,
+    balance DECIMAL(15, 2) DEFAULT 0.00,  -- balance amt
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
    -- journal_entry_id CHAR(36),     Needed in future
