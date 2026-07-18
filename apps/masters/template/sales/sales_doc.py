@@ -107,22 +107,42 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
         
             # Access dictionary keys correctly
             shipping_address = customer_data_for_cust_data.get("shipping_address")
+            print("shipping_address : ", shipping_address)
             billing_address = customer_data_for_cust_data.get("billing_address")
-            
+            print("billing_address : ", billing_address)
+
             discountAmt = customer_data_for_cust_data.get("dis_amt")
             discountAmt = float(discountAmt) if discountAmt is not None else 0.0  # Convert to float
             
+            # # Fetch shipment record
+            # shipment_record = related_model.objects.filter(
+            #     **{related_filter_field: pk}
+            # ).first()
+
+            # shipping_charges = 0.0
+
+            # if shipment_record:
+            #     shipping_charges = float(getattr(shipment_record, 'shipping_charges', 0) or 0)
+
+            # shipping_charges = round(shipping_charges, 2)
             # Fetch shipment record
             shipment_record = related_model.objects.filter(
                 **{related_filter_field: pk}
             ).first()
 
             shipping_charges = 0.0
+            shipping_gst = 0.0
+            shipping_gst_amount = 0.0
 
             if shipment_record:
                 shipping_charges = float(getattr(shipment_record, 'shipping_charges', 0) or 0)
+                shipping_gst = float(getattr(shipment_record, 'shipping_gst', 0) or 0)
+                
+                # Calculate GST on shipping charges
+                shipping_gst_amount = (shipping_charges * shipping_gst) / 100 if shipping_gst > 0 else 0.0
 
             shipping_charges = round(shipping_charges, 2)
+            shipping_gst_amount = round(shipping_gst_amount, 2)
             
             if billing_address and 'Andhra Pradesh' in billing_address:
                 print("Intra-state transaction (CGST + SGST)")
@@ -130,6 +150,7 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
 
             # Retrieve related data
             items_data = get_related_data(item_model, items_serializer, item_model_pk, pk)
+            print("items_data : ", items_data)
             related_data = get_related_data(related_model, related_serializer, related_filter_field, pk)
             print("related_data : ", related_data)
             related_data = related_data[0] if len(related_data) > 0 else {}
@@ -190,34 +211,136 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
 
             total_amt = total_qty = cgst = sgst = igst = total_cgst = total_sgst= total_igst = cessAmt = total_disc_amt = round_0ff = party_old_balance = net_value = 0.0
             # Assuming cgst and sgst are not being mixed
+            # for item in items_data:
+            #     total_amt += float(item['amount']) if item['amount'] is not None else 0
+            #     total_qty += float(item['quantity']) if item['quantity'] is not None else 0
+            #     cgst = float(item['cgst']) if item['cgst'] is not None else 0
+            #     sgst = float(item['sgst']) if item['sgst'] is not None else 0
+            #     igst = float(item['igst']) if item['igst'] is not None else 0
+
+            #     # Handle intra-state or inter-state
+            #     if billing_address and 'Andhra Pradesh' in billing_address:
+            #         print("-"*20)
+            #         print("we are in the method ...")
+            #         total_cgst += cgst  # Intra-state, split equally between CGST & SGST
+            #         print("total_cgst : ", total_cgst)
+            #         total_sgst += sgst
+            #         print("total_sgst : ", total_sgst)
+            #     else:
+            #         total_igst += igst  # Inter-state, tax goes to IGST
+            #         print("total_igst : ", total_igst)
+            #         print("-"*20)
+
+            #     # total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
+            #     total_disc_amt += (
+            #         num_val(item.get('quantity')) *
+            #         num_val(item.get('rate')) *
+            #         num_val(item.get('discount'))
+            #     ) / 100
+            
+            # for item in items_data:
+            #     total_amt += float(item['amount']) if item['amount'] is not None else 0
+            #     print("We are at testing")
+            #     print("rate : ", item['rate'])
+            #     print("total_amt : ", total_amt)
+            #     total_qty += float(item['quantity']) if item['quantity'] is not None else 0
+            #     print("total_qty : ", total_qty)
+            #     # Get the tax rate from the product or item
+            #     tax_rate = float(item.get('tax', 0)) if item.get('tax') is not None else 0
+            #     amount = float(item['amount']) if item['amount'] is not None else 0
+                
+            #     # Calculate GST correctly
+            #     if tax_rate > 0:
+            #         total_gst = (float(total_qty) * item['rate']) * tax_rate / 100
+            #         cgst = total_gst / 2
+            #         sgst = total_gst / 2
+            #         igst = 0.0
+            #     else:
+            #         # Use existing values if tax_rate is 0
+            #         cgst = float(item.get('cgst', 0)) if item.get('cgst') is not None else 0
+            #         sgst = float(item.get('sgst', 0)) if item.get('sgst') is not None else 0
+            #         igst = float(item.get('igst', 0)) if item.get('igst') is not None else 0
+
+            #     # Determine if intra-state or inter-state
+            #     if billing_state and billing_state != 'N/A' and company_address and billing_state == company_address:
+            #         print("We are in testing of billing addresses")
+            #         total_cgst += cgst
+            #         total_sgst += sgst
+            #     else:
+            #         print("We are in testing of billing addresses else part")
+            #         if igst > 0:
+            #             total_igst += igst
+            #         elif cgst > 0 or sgst > 0:
+            #             total_cgst += cgst
+            #             total_sgst += sgst
+
+            #     total_disc_amt += (
+            #         num_val(item.get('quantity')) *
+            #         num_val(item.get('rate')) *
+            #         num_val(item.get('discount'))
+            #     ) / 100
+            
             for item in items_data:
-                total_amt += float(item['amount']) if item['amount'] is not None else 0
-                total_qty += float(item['quantity']) if item['quantity'] is not None else 0
-                cgst = float(item['cgst']) if item['cgst'] is not None else 0
-                sgst = float(item['sgst']) if item['sgst'] is not None else 0
-                igst = float(item['igst']) if item['igst'] is not None else 0
-
-                # Handle intra-state or inter-state
-                if billing_address and 'Andhra Pradesh' in billing_address:
-                    print("-"*20)
-                    print("we are in the method ...")
-                    total_cgst += cgst  # Intra-state, split equally between CGST & SGST
-                    print("total_cgst : ", total_cgst)
-                    total_sgst += sgst
-                    print("total_sgst : ", total_sgst)
+                # Get quantity and rate
+                quantity = float(item.get('quantity', 0)) if item.get('quantity') is not None else 0
+                rate = float(item.get('rate', 0)) if item.get('rate') is not None else 0
+                discount = float(item.get('discount', 0)) if item.get('discount') is not None else 0
+                
+                # Calculate taxable value (this is the base amount before GST)
+                taxable_value = quantity * rate
+                
+                # Calculate discount amount
+                discount_amount = (taxable_value * discount) / 100
+                
+                # Calculate amount after discount (this is the taxable value for GST)
+                amount_after_discount = taxable_value - discount_amount
+                
+                # Get the total amount (may include GST if Inclusive tax type)
+                amount = float(item.get('amount', 0)) if item.get('amount') is not None else 0
+                
+                print(f"quantity: {quantity}, rate: {rate}, taxable_value: {taxable_value}")
+                print(f"discount: {discount}%, discount_amount: {discount_amount}")
+                print(f"amount_after_discount: {amount_after_discount}")
+                
+                total_amt += amount
+                total_qty += quantity
+                
+                # Get the tax rate from the item
+                tax_rate = float(item.get('tax', 0)) if item.get('tax') is not None else 0
+                
+                # Calculate GST on the amount after discount
+                if tax_rate > 0 and amount_after_discount > 0:
+                    total_gst = (amount_after_discount * tax_rate) / 100
+                    cgst = total_gst / 2
+                    sgst = total_gst / 2
+                    igst = 0.0
+                    print(f"tax_rate: {tax_rate}%, total_gst: {total_gst}, cgst: {cgst}, sgst: {sgst}")
                 else:
-                    total_igst += igst  # Inter-state, tax goes to IGST
-                    print("total_igst : ", total_igst)
-                    print("-"*20)
+                    # Use existing values if tax_rate is 0 or taxable_value is 0
+                    cgst = float(item.get('cgst', 0)) if item.get('cgst') is not None else 0
+                    sgst = float(item.get('sgst', 0)) if item.get('sgst') is not None else 0
+                    igst = float(item.get('igst', 0)) if item.get('igst') is not None else 0
 
-                # total_disc_amt += float(item['quantity']) * float(item['rate']) * float(item['discount']) / 100
-                total_disc_amt += (
-                    num_val(item.get('quantity')) *
-                    num_val(item.get('rate')) *
-                    num_val(item.get('discount'))
-                ) / 100
+                # Determine if intra-state or inter-state
+                if billing_state and billing_state != 'N/A' and company_address and billing_state == company_address:
+                    print("Intra-state transaction (CGST + SGST)")
+                    total_cgst += cgst
+                    total_sgst += sgst
+                else:
+                    print("Inter-state or unknown, using fallback logic")
+                    if igst > 0:
+                        total_igst += igst
+                    elif cgst > 0 or sgst > 0:
+                        total_cgst += cgst
+                        total_sgst += sgst
 
+                # Accumulate total discount amount
+                total_disc_amt += discount_amount
 
+            print(f"Final totals - total_cgst: {total_cgst}, total_sgst: {total_sgst}, total_igst: {total_igst}")
+            print(f"total_disc_amt: {total_disc_amt}")
+
+            # print(f"Final totals - total_cgst: {total_cgst}, total_sgst: {total_sgst}, total_igst: {total_igst}")
 
             
             # product_data = extract_product_data(items_data)
@@ -232,15 +355,23 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
             
             final_total = round(itemstotal - total_disc_amt, 2)
             
-            final_amount = round(itemstotal + total_cgst + total_sgst + total_igst + cessAmt, 2)
+            # final_amount = round(itemstotal + total_cgst + total_sgst + total_igst + cessAmt, 2)
             
-            # raw = party_old_balance + final_total - finalDiscount
-            # net_value = round(raw, 2)
+            # # raw = party_old_balance + final_total - finalDiscount
+            # # net_value = round(raw, 2)
             
+            
+            # net_value = round(party_old_balance + final_amount - finalDiscount + shipping_charges)
+            
+            # round_0ff = round(net_value - (party_old_balance + final_amount - finalDiscount + shipping_charges), 2)  # e.g., "+0.00", "-0.01"
+            
+            # Update final calculations to include shipping GST
+            final_amount = round(itemstotal + total_cgst + total_sgst + total_igst + cessAmt + shipping_gst_amount, 2)
             
             net_value = round(party_old_balance + final_amount - finalDiscount + shipping_charges)
             
-            round_0ff = round(net_value - (party_old_balance + final_amount - finalDiscount + shipping_charges), 2)  # e.g., "+0.00", "-0.01"
+            round_0ff = round(net_value - (party_old_balance + final_amount - finalDiscount + shipping_charges), 2)
+            
             bill_amount_in_words = convert_amount_to_words(net_value)
             
             # ===== Combine Date + Time for Invoice =====
@@ -312,13 +443,16 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                 'total_igst' : round(total_igst, 2),
                 
                 'finalDiscount' : finalDiscount,
-                'shipping_charges' : shipping_charges,
+                # 'shipping_charges' : shipping_charges,
+                'shipping_charges': shipping_charges,
+                'shipping_gst': shipping_gst,
+                'shipping_gst_amount': shipping_gst_amount,
                 # 'total_txbl_amt' : total_txbl_amt,
                 'total_disc_amt' : total_disc_amt,
                 'cess_amount' : cessAmt,
                 'round_0ff' : round_0ff,
                 'party_old_balance' :  party_old_balance,
-                'net_value' : net_value,
+                'net_value' : round(net_value, 2),
                 'remarks': customer_data_for_cust_data.get("remarks", ""),
                 'return_reason': customer_data_for_cust_data.get("return_reason", "")
 
@@ -331,7 +465,7 @@ def sale_order_sales_invoice_doc(
     customer_name, billing_address, phone, city,
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
-    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, shipping_charges, round_0ff, cess_amount,
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, shipping_charges, shipping_gst_amount, round_0ff, cess_amount,
     party_old_balance, net_lbl, net_value, tax_type, remarks, print_config=None
 ):
     copies = _num_copies(print_config)
@@ -347,7 +481,7 @@ def sale_order_sales_invoice_doc(
             show_gst=(tax_type != 'Inclusive'), print_config=cfg
         ))
         elements.append(product_total_details_inwords(
-            bill_amount_in_words, itemstotal, finalDiscount, shipping_charges,
+            bill_amount_in_words, itemstotal, finalDiscount, shipping_charges, shipping_gst_amount, 
             total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
             party_old_balance, net_lbl, net_value, tax_type=tax_type, print_config=cfg
         ))
@@ -361,7 +495,7 @@ def sales_invoice_doc(
     customer_name, city, country, phone, dest, shipping_address, billing_address,
     product_data,
     total_qty, final_total, total_amt, total_cgst, total_sgst, total_igst,
-    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, shipping_charges, cess_amount, round_0ff,
+    bill_amount_in_words, itemstotal, total_disc_amt, finalDiscount, shipping_charges, shipping_gst_amount, cess_amount, round_0ff,
     party_old_balance, net_lbl, net_value, tax_type, remarks, print_config=None
 ):
     copies = _num_copies(print_config)
@@ -380,7 +514,7 @@ def sales_invoice_doc(
             show_gst=(tax_type != 'Inclusive'), print_config=cfg
         ))
         elements.append(product_total_details_inwords(
-            bill_amount_in_words, itemstotal, finalDiscount, shipping_charges,
+            bill_amount_in_words, itemstotal, finalDiscount, shipping_charges, shipping_gst_amount, 
             total_cgst, total_sgst, total_igst, cess_amount, round_0ff,
             party_old_balance, net_lbl, net_value, tax_type=tax_type, print_config=cfg
         ))
@@ -395,7 +529,7 @@ def sale_return_doc(
     cust_bill_dtl, number_lbl, return_no, date_lbl, date_value,
     customer_name, billing_address, phone, city,
     product_data,
-    total_qty, total_amt, cess_amount, total_cgst, total_sgst, total_igst, itemstotal, finalDiscount,
+    total_qty, total_amt, cess_amount, total_cgst, total_sgst, total_igst, itemstotal, finalDiscount, shipping_charges, shipping_gst_amount,  # ADD THESE PARAMETERS
     bill_amount_in_words, round_0ff,
     party_old_balance, net_lbl, net_value, tax_type, return_reason, print_config=None
 ):
@@ -417,6 +551,8 @@ def sale_return_doc(
             total_qty=format_numeric(total_qty),
             sub_total=format_numeric(itemstotal),
             discount_amt=format_numeric(finalDiscount),
+            shipping_charges=format_numeric(shipping_charges),  # ADD THIS
+            shipping_gst=format_numeric(shipping_gst_amount),   # ADD THIS
             cess_amount=format_numeric(cess_amount),
             total_cgst=format_numeric(total_cgst),
             total_sgst=format_numeric(total_sgst),
@@ -751,7 +887,7 @@ def generate_sale_order_pdf(sale_order_id):
         pdf_data['total_qty'], pdf_data['final_total'], pdf_data['total_amt'], 
         pdf_data['total_cgst'], pdf_data['total_sgst'], pdf_data['total_igst'],
         pdf_data['bill_amount_in_words'], pdf_data['itemstotal'], pdf_data['total_disc_amt'], 
-        pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data['round_0ff'], pdf_data['cess_amount'],
+        pdf_data['finalDiscount'], pdf_data['shipping_charges'], pdf_data.get('shipping_gst_amount', 0.0), pdf_data['round_0ff'], pdf_data['cess_amount'],
         pdf_data['party_old_balance'], pdf_data['net_lbl'], pdf_data['net_value'], 
         pdf_data['tax_type'], pdf_data['remarks'],
         print_config=print_config

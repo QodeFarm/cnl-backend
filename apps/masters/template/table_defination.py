@@ -544,8 +544,180 @@ def product_total_details_purchase(ttl_Qty, final_Amount, total_disc, ttl_Amount
 
 
 
+# def product_total_details_inwords(
+#     Bill_Amount_In_Words, SubTotal, Discount_Amt, shipping_charges,
+#     total_cgst, total_sgst, total_igst, cess_amount,
+#     round_off, Party_Old_Balance, net_lbl, net_value,
+#     tax_type='Exclusive', print_config=None
+# ):
+#     styles = getSampleStyleSheet()
+#     fs = _get_font_size(print_config)
+#     normal_style  = ParagraphStyle('inwords_normal', parent=styles['Normal'], fontSize=fs)
+#     bold_style    = ParagraphStyle('inwords_bold', parent=normal_style, fontName='Helvetica-Bold', fontSize=fs)
+#     header_color  = get_header_color(print_config) if print_config else colors.skyblue
+
+#     sec = (print_config or {}).get('section_config', {}) if print_config else {}
+#     show_amount_in_words = sec.get('show_amount_in_words', True)
+#     show_subtotal        = sec.get('show_subtotal', True)
+#     show_discount        = sec.get('show_discount', True)
+#     show_shipping        = sec.get('show_shipping_charges', True)
+#     show_tax             = sec.get('show_tax_breakdown', True)
+#     show_cess            = sec.get('show_cess', True)
+#     show_round_off       = sec.get('show_round_off', True)
+#     show_party_balance   = sec.get('show_party_balance', True)
+
+#     def _fmt(val):
+#         """Format a numeric value: 2 decimal places, handle negative-zero, add commas."""
+#         try:
+#             f = round(float(val), 2)
+#             if f == 0.0:
+#                 return '0.00'
+#             # Comma formatting with 2 decimals (Indian/International style)
+#             return '{:,.2f}'.format(f)
+#         except (ValueError, TypeError):
+#             return str(val)
+
+#     def _is_zero(val):
+#         if val is None:
+#             return True
+#         s = str(val).strip()
+#         if s in ('', 'None', 'N/A', 'null', '-'):
+#             return True
+#         try:
+#             return round(float(s), 2) == 0.0
+#         except (ValueError, TypeError):
+#             return False
+
+#     def _signed(val):
+#         """Show negative values with − prefix, positive as-is."""
+#         try:
+#             f = round(float(val), 2)
+#             if f == 0.0:
+#                 return '0.00'
+#             if f < 0:
+#                 return '-{:,.2f}'.format(abs(f))
+#             return '{:,.2f}'.format(f)
+#         except (ValueError, TypeError):
+#             return str(val)
+
+#     # ── Bill Amount In Words ─────────────────────────────────────
+#     bill_amount_paragraph = Paragraph(
+#         f"<b>Bill Amount In Words:</b><br/>{Bill_Amount_In_Words}" if show_amount_in_words else '',
+#         normal_style
+#     )
+
+#     # ── Financials rows ──────────────────────────────────────────
+#     # Each row: (label, value_str, is_net_total)
+#     rows = []
+
+#     if show_subtotal:
+#         rows.append(('Sub Total', _fmt(SubTotal), False))
+
+#     if show_discount and not _is_zero(Discount_Amt):
+#         disc_val = round(float(Discount_Amt), 2)
+#         disc_display = '-{:,.2f}'.format(abs(disc_val))
+#         rows.append(('Total Discount', disc_display, False))
+
+#     if show_shipping and not _is_zero(shipping_charges):
+#         rows.append(('Shipping Charges', _fmt(shipping_charges), False))
+
+#     if show_tax and tax_type != 'Inclusive':
+#         if not _is_zero(total_igst):
+#             rows.append(('IGST', _fmt(total_igst), False))
+#         else:
+#             if not _is_zero(total_cgst):
+#                 rows.append(('CGST', _fmt(total_cgst), False))
+#             if not _is_zero(total_sgst):
+#                 rows.append(('SGST', _fmt(total_sgst), False))
+
+#     if show_cess and not _is_zero(cess_amount):
+#         rows.append(('Cess Amt', _fmt(cess_amount), False))
+
+#     if show_round_off and not _is_zero(round_off):
+#         rows.append(('Round Off', _signed(round_off), False))
+
+#     if show_party_balance and not _is_zero(Party_Old_Balance):
+#         rows.append(('Party Old Balance', _fmt(Party_Old_Balance), False))
+
+#     # Net Total always shown
+#     rows.append((net_lbl or 'Net Total', _fmt(net_value), True))
+
+#     # ── Build table rows ────────────────────────────────────────
+#     s            = get_width_scale(print_config) if print_config else 1.0
+#     TOTAL_USABLE = 10.0 * inch * s
+#     # Scale minimum width with font size: "232,391.10" at 12pt needs ~1.2", at 10pt ~1.0"
+#     font_scale   = fs / 10.0
+#     LABEL_W      = max(1.5 * inch * font_scale, 2.2 * inch * s)
+#     VALUE_W      = max(1.0 * inch * font_scale, 1.1 * inch * s)
+#     LEFT_W       = TOTAL_USABLE - LABEL_W - VALUE_W
+
+#     financials_data = []
+#     net_row_index = None
+#     for i, (lbl, val, is_net) in enumerate(rows):
+#         if is_net:
+#             net_row_index = i
+#             financials_data.append([
+#                 Paragraph(f"<b>{lbl}:</b>", bold_style),
+#                 Paragraph(f"<b>{val}</b>", bold_style),
+#             ])
+#         else:
+#             financials_data.append([
+#                 Paragraph(f"{lbl}:", normal_style),
+#                 Paragraph(val, normal_style),
+#             ])
+
+#     if not financials_data:
+#         financials_data.append([Paragraph('', normal_style), Paragraph('', normal_style)])
+
+#     fin_style_cmds = [
+#         ('ALIGN',         (0, 0),  (-1, -1), 'LEFT'),
+#         ('ALIGN',         (1, 0),  (1, -1),  'RIGHT'),
+#         ('FONTNAME',      (0, 0),  (-1, -1), 'Helvetica'),
+#         ('FONTSIZE',      (0, 0),  (-1, -1), fs),
+#         ('TOPPADDING',    (0, 0),  (-1, -1), 4),
+#         ('BOTTOMPADDING', (0, 0),  (-1, -1), 4),
+#         ('LEFTPADDING',   (0, 0),  (-1, -1), 6),
+#         ('RIGHTPADDING',  (0, 0),  (-1, -1), 6),
+#         # Thin separator line between rows
+#         ('LINEBELOW',     (0, 0),  (-1, -2), 0.3, colors.HexColor('#CCCCCC')),
+#     ]
+
+#     # Highlight Net Total row
+#     if net_row_index is not None:
+#         fin_style_cmds += [
+#             ('BACKGROUND',    (0, net_row_index), (-1, net_row_index), header_color),
+#             ('FONTNAME',      (0, net_row_index), (-1, net_row_index), 'Helvetica-Bold'),
+#             ('FONTSIZE',      (0, net_row_index), (-1, net_row_index), fs + 1),
+#             ('LINEABOVE',     (0, net_row_index), (-1, net_row_index), 1, colors.black),
+#         ]
+
+#     financials_table = Table(financials_data, colWidths=[LABEL_W, VALUE_W])
+#     financials_table.setStyle(TableStyle(fin_style_cmds))
+
+#     # ── Outer wrapper table ──────────────────────────────────────
+#     table = Table(
+#         [[bill_amount_paragraph, financials_table]],
+#         colWidths=[LEFT_W, (LABEL_W + VALUE_W)]
+#     )
+#     table.setStyle(TableStyle([
+#         ('BOX',      (0, 0), (-1, -1), 1, colors.black),
+#         ('LINEBEFORE',(1, 0), (1, 0),  1, colors.black),
+#         ('VALIGN',   (0, 0), (-1, -1), 'TOP'),
+#         ('LEFTPADDING',  (0, 0), (0, 0), 8),
+#         ('RIGHTPADDING', (0, 0), (0, 0), 8),
+#         ('TOPPADDING',   (0, 0), (0, 0), 8),
+#         ('BOTTOMPADDING',(0, 0), (0, 0), 8),
+#         ('LEFTPADDING',  (1, 0), (1, 0), 0),
+#         ('RIGHTPADDING', (1, 0), (1, 0), 0),
+#         ('TOPPADDING',   (1, 0), (1, 0), 0),
+#         ('BOTTOMPADDING',(1, 0), (1, 0), 0),
+#     ]))
+
+#     return table
+
 def product_total_details_inwords(
     Bill_Amount_In_Words, SubTotal, Discount_Amt, shipping_charges,
+    shipping_gst_amount,  # NEW PARAMETER - GST on shipping
     total_cgst, total_sgst, total_igst, cess_amount,
     round_off, Party_Old_Balance, net_lbl, net_value,
     tax_type='Exclusive', print_config=None
@@ -561,6 +733,7 @@ def product_total_details_inwords(
     show_subtotal        = sec.get('show_subtotal', True)
     show_discount        = sec.get('show_discount', True)
     show_shipping        = sec.get('show_shipping_charges', True)
+    show_shipping_gst    = sec.get('show_shipping_gst', True)  # NEW CONFIG
     show_tax             = sec.get('show_tax_breakdown', True)
     show_cess            = sec.get('show_cess', True)
     show_round_off       = sec.get('show_round_off', True)
@@ -618,9 +791,15 @@ def product_total_details_inwords(
         disc_display = '-{:,.2f}'.format(abs(disc_val))
         rows.append(('Total Discount', disc_display, False))
 
+    # ── Shipping Charges with GST ──────────────────────────────
     if show_shipping and not _is_zero(shipping_charges):
         rows.append(('Shipping Charges', _fmt(shipping_charges), False))
+        
+        # Show shipping GST if applicable and not zero
+        if show_shipping_gst and not _is_zero(shipping_gst_amount):
+            rows.append(('Shipping GST', _fmt(shipping_gst_amount), False))
 
+    # ── Product Tax Breakdown ──────────────────────────────────
     if show_tax and tax_type != 'Inclusive':
         if not _is_zero(total_igst):
             rows.append(('IGST', _fmt(total_igst), False))
@@ -714,7 +893,6 @@ def product_total_details_inwords(
     ]))
 
     return table
-
 
 
 # def declaration():
@@ -1459,8 +1637,108 @@ def return_customer_details_with_reason(cust_name, billing_address, phone, city,
 
 
 
-def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
-                          total_cgst, total_sgst, total_igst, round_0ff, bill_total,
+# def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
+#                           total_cgst, total_sgst, total_igst, round_0ff, bill_total,
+#                           amount_in_words, show_gst=False, print_config=None):
+#     styles = getSampleStyleSheet()
+#     fs = _effective_table_font_size(print_config)
+#     normal_style = ParagraphStyle('ret_tbl_normal', parent=styles['Normal'], fontSize=fs)
+#     header_color = get_header_color(print_config) if print_config else colors.HexColor('#f0f0f0')
+#     s = get_width_scale(print_config) if print_config else 1.0
+
+#     col_widths = [4.5*inch*s, 1.5*inch*s, 1.5*inch*s, 1.5*inch*s, 1.0*inch*s]
+
+#     table_data = [[
+#         Paragraph("<b>Description</b>", normal_style),
+#         Paragraph("<b>Qty</b>", normal_style),
+#         Paragraph("<b>MRP</b>", normal_style),
+#         Paragraph("<b>Amount</b>", normal_style),
+#         Paragraph("<b>Discount</b>", normal_style)
+#     ]]
+
+#     for item in data:
+#         table_data.append([
+#             Paragraph(str(item[1]), normal_style),   # Description — wraps
+#             format_numeric(item[3]),                 # Qty — plain string
+#             format_numeric(item[5]),                 # MRP — plain string
+#             format_numeric(item[6]),                 # Amount — plain string
+#             format_numeric(item[8]),                 # Discount — plain string
+#         ])
+
+#     # Fill with empty rows if less than 4 items (for layout consistency)
+#     while len(table_data) < 5:
+#         table_data.append(["", "", "", "", ""])
+
+#     def _fmtv(val):
+#         try:
+#             f = round(float(val), 2)
+#             return '0.00' if f == 0.0 else '{:,.2f}'.format(f)
+#         except (ValueError, TypeError):
+#             return str(val)
+
+#     def _is_zero_v(val):
+#         try:
+#             return round(float(val), 2) == 0.0
+#         except (ValueError, TypeError):
+#             return False
+
+#     # Add financial rows
+#     fin_rows = [["Total Quantity", "", "", "", _fmtv(total_qty)]]
+#     fin_rows.append(["Sub Total", "", "", "", _fmtv(sub_total)])
+#     if not _is_zero_v(discount_amt):
+#         disc_val = round(float(discount_amt), 2)
+#         fin_rows.append(["Total Discount", "", "", "", '-{:,.2f}'.format(abs(disc_val))])
+#     if not _is_zero_v(cess_amount):
+#         fin_rows.append(["Cess Amt", "", "", "", _fmtv(cess_amount)])
+#     table_data.extend(fin_rows)
+
+#     # GST handling based on tax type
+#     if show_gst:
+#         if float(total_igst) > 0:
+#             table_data.append(["IGST", "", "", "", format_numeric(total_igst)])
+#         else:
+#             if float(total_cgst) > 0:
+#                 table_data.append(["CGST", "", "", "", format_numeric(total_cgst)])
+#             if float(total_sgst) > 0:
+#                 table_data.append(["SGST", "", "", "", format_numeric(total_sgst)])
+
+#     # Round Off (hide if zero), Bill Total, Amount in Words
+#     if not _is_zero_v(round_0ff):
+#         r0ff = round(float(round_0ff), 2)
+#         r0ff_str = ('+' if r0ff > 0 else '') + '{:,.2f}'.format(r0ff)
+#         table_data.append(["Round Off", "", "", "", r0ff_str])
+#     table_data.extend([
+#         ["Bill Total", "", "", "", _fmtv(bill_total)],
+#         [Paragraph(f"<b>Amount in Words:</b> {amount_in_words}", normal_style), "", "", "", ""]
+#     ])
+
+#     # Create table
+#     table = Table(table_data, colWidths=col_widths)
+
+#     table.setStyle(TableStyle([
+#         ('BOX', (0, 0), (-1, -1), 1, colors.black),
+#         ('BACKGROUND', (0, 0), (-1, 0), header_color),
+#         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+#         ('FONTSIZE', (0, 0), (-1, -1), fs),
+#         ('LINEABOVE', (0, 0), (-1, 0), 1, colors.black),
+#         ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+#         ('LINEABOVE', (0, len(data)+1), (-1, len(data)+1), 1, colors.black),
+#         ('LINEABOVE', (0, -3), (-1, -3), 1, colors.black),
+#         ('LINEABOVE', (0, -2), (-1, -2), 0.5, colors.grey),
+#         ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+#         ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+#         ('SPAN', (0, -1), (-1, -1)),
+#         ('FONTNAME', (0, -2), (-1, -2), 'Helvetica-Bold'),
+#         ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+#         ('TOPPADDING', (0, 0), (-1, -1), 6),
+#         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+#         ('LEFTPADDING', (0, 0), (-1, -1), 5),
+#         ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+#     ]))
+#     return table
+
+def return_complete_table(data, total_qty, sub_total, discount_amt, shipping_charges, shipping_gst,  # ADD shipping params
+                          cess_amount, total_cgst, total_sgst, total_igst, round_0ff, bill_total,
                           amount_in_words, show_gst=False, print_config=None):
     styles = getSampleStyleSheet()
     fs = _effective_table_font_size(print_config)
@@ -1507,11 +1785,22 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, cess_amount,
     # Add financial rows
     fin_rows = [["Total Quantity", "", "", "", _fmtv(total_qty)]]
     fin_rows.append(["Sub Total", "", "", "", _fmtv(sub_total)])
+    
     if not _is_zero_v(discount_amt):
         disc_val = round(float(discount_amt), 2)
         fin_rows.append(["Total Discount", "", "", "", '-{:,.2f}'.format(abs(disc_val))])
+    
+    # ADD SHIPPING CHARGES (if applicable)
+    if not _is_zero_v(shipping_charges):
+        fin_rows.append(["Shipping Charges", "", "", "", _fmtv(shipping_charges)])
+    
+    # ADD SHIPPING GST (if applicable)
+    if not _is_zero_v(shipping_gst):
+        fin_rows.append(["Shipping GST", "", "", "", _fmtv(shipping_gst)])
+    
     if not _is_zero_v(cess_amount):
         fin_rows.append(["Cess Amt", "", "", "", _fmtv(cess_amount)])
+    
     table_data.extend(fin_rows)
 
     # GST handling based on tax type
