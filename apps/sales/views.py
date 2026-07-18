@@ -2003,6 +2003,22 @@ class SaleOrderViewSet(APIView):
                 item["igst"] = round(float(item["igst"]), 2)
             if item.get("tax") is not None:
                 item["tax"] = round(float(item["tax"]), 2)
+                
+        # Round monetary fields in sale_order_data
+        # if sale_order_data:
+        #     monetary_fields = [
+        #         "item_value", "discount", "dis_amt", "taxable", 
+        #         "tax_amount", "cess_amount", "round_off", "doc_amount", 
+        #         "total_amount", "advance_amount"
+        #     ]
+        #     for field in monetary_fields:
+        #         if sale_order_data.get(field) is not None:
+        #             try:
+        #                 sale_order_data[field] = round(float(sale_order_data[field]), 2)
+        #             except (ValueError, TypeError):
+        #                 # Keep original value if conversion fails
+        #                 pass
+        #----------------------------------------------------------
         #----------------------------------------------------------
         #----------------------------------------------------------
 

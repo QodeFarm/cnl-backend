@@ -2433,21 +2433,61 @@ def extract_product_data(data, tax_type=None):
     for index, item in enumerate(data, start=1):
         product = item['product']
         unit_options = item.get('unit_options') or {}       
-        product_name = product['name']
-        total_boxes = item['total_boxes'] if item['total_boxes'] is not None else '-'
-        quantity = float(item['quantity'])
+        product_name = product.get('print_name') or product.get('name', '')
+        total_boxes = item.get('total_boxes', '-') if item.get('total_boxes') is not None else '-'
+        quantity = float(item.get('quantity', 0)) if item.get('quantity') is not None else 0
         unit_name = unit_options.get('unit_name', '')
-        rate = float(item['rate'])
-        amount = float(quantity * rate)
-        discount_percent = item['discount'] if item['discount'] is not None else 0
-        # discount = quantity * rate * float(discount_percent) / 100 
-        discount = quantity * rate * (float(discount_percent) if discount_percent is not None else 0) / 100     
-        total_amount = float(item['amount'])
-
-        cgst = float(item['cgst'])
-        sgst = float(item['sgst'])
-        igst = float(item['igst'])
-        gst_tax = 0.0 if tax_type == 'Inclusive' else float(cgst + sgst + igst)
+        rate = float(item.get('rate', 0)) if item.get('rate') is not None else 0
+        
+        # Calculate taxable value
+        taxable_value = quantity * rate
+        
+        # Calculate discount
+        discount_percent = float(item.get('discount', 0)) if item.get('discount') is not None else 0
+        discount_amount = (taxable_value * discount_percent) / 100
+        
+        # Amount after discount (this is the taxable amount for GST)
+        amount_after_discount = taxable_value - discount_amount
+        
+        # Get tax rate from item
+        tax_rate = float(item.get('tax', 0)) if item.get('tax') is not None else 0
+        
+        # Calculate GST on amount after discount
+        if tax_type == 'Inclusive':
+            # For Inclusive tax, amount already includes GST
+            # Calculate GST from the total amount
+            if tax_rate > 0:
+                gst_amount = (amount_after_discount * tax_rate) / (100 + tax_rate)
+                gst_tax = gst_amount
+                total_amount = amount_after_discount  # Already includes GST
+            else:
+                gst_tax = 0.0
+                total_amount = amount_after_discount
+        else:
+            # For Exclusive tax, calculate GST on amount after discount
+            if tax_rate > 0:
+                gst_amount = (amount_after_discount * tax_rate) / 100
+                gst_tax = gst_amount
+                total_amount = amount_after_discount + gst_amount
+            else:
+                gst_tax = 0.0
+                total_amount = amount_after_discount
+        
+        # Use CGST/SGST/IGST from item if available, otherwise split the GST
+        cgst = float(item.get('cgst', 0)) if item.get('cgst') is not None else 0
+        sgst = float(item.get('sgst', 0)) if item.get('sgst') is not None else 0
+        igst = float(item.get('igst', 0)) if item.get('igst') is not None else 0
+        
+        # If CGST/SGST are 0 but we have GST amount, split it
+        if cgst == 0 and sgst == 0 and igst == 0 and gst_tax > 0:
+            cgst = gst_tax / 2
+            sgst = gst_tax / 2
+        
+        # Calculate GST total for display
+        if tax_type == 'Inclusive':
+            display_gst = 0.0  # Don't show GST separately for Inclusive
+        else:
+            display_gst = gst_tax
 
         product_data.append([
             index,
@@ -2456,14 +2496,52 @@ def extract_product_data(data, tax_type=None):
             round(quantity, 2),
             unit_name,
             round(rate, 2),
-            round(amount, 2),
+            round(amount_after_discount, 2),  # Amount after discount
             discount_percent,
-            round(discount, 2),
-            round(gst_tax, 2),
-            round(total_amount, 2),
+            round(discount_amount, 2),  # Discount amount
+            round(display_gst, 2),  # GST amount
+            round(total_amount, 2),  # Final total with GST
         ])
 
     return product_data
+
+# def extract_product_data(data, tax_type=None):
+#     product_data = []
+    
+#     for index, item in enumerate(data, start=1):
+#         product = item['product']
+#         unit_options = item.get('unit_options') or {}       
+#         product_name = product['name']
+#         total_boxes = item['total_boxes'] if item['total_boxes'] is not None else '-'
+#         quantity = float(item['quantity'])
+#         unit_name = unit_options.get('unit_name', '')
+#         rate = float(item['rate'])
+#         amount = float(quantity * rate)
+#         discount_percent = item['discount'] if item['discount'] is not None else 0
+#         # discount = quantity * rate * float(discount_percent) / 100 
+#         discount = quantity * rate * (float(discount_percent) if discount_percent is not None else 0) / 100     
+#         total_amount = float(item['amount'])
+
+#         cgst = float(item['cgst'])
+#         sgst = float(item['sgst'])
+#         igst = float(item['igst'])
+#         gst_tax = 0.0 if tax_type == 'Inclusive' else float(cgst + sgst + igst)
+
+#         product_data.append([
+#             index,
+#             product_name,
+#             total_boxes,
+#             round(quantity, 2),
+#             unit_name,
+#             round(rate, 2),
+#             round(amount, 2),
+#             discount_percent,
+#             round(discount, 2),
+#             round(gst_tax, 2),
+#             round(total_amount, 2),
+#         ])
+
+#     return product_data
 
 
 # def extract_product_data(data):
