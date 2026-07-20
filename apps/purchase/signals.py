@@ -50,7 +50,8 @@ def update_pending_amount_after_invoice_creation(sender, instance, created, **kw
             credit=0.00,
             description=f"Goods purchased from {instance.vendor_id.name}",
             vendor_id=instance.vendor_id,
-            balance=new_balance
+            balance=new_balance,
+            entry_date=instance.invoice_date  # accounting date; ledger orders/dates by entry_date, not created_at
         )
 
         logger.info(f"Pending amount initialized for purchase invoice {instance.invoice_no} = {instance.total_amount}")
