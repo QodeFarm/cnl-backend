@@ -6124,6 +6124,39 @@ class SaleReturnOrdersViewSet(APIView):
         if custom_field_values_data:
             custom_field_values_data = update_multi_instances(self, pk, custom_field_values_data, CustomFieldValue, CustomFieldValueSerializer, {}, main_model_related_field='custom_id', current_model_pk_field='custom_field_value_id')
 
+        # ------------------------------ L E D G E R   R E - S Y N C ------------------------------ #
+        # A sale return posts to the Account Ledger via the post_save(created) signal, which never
+        # fires on edit. Without this, editing a return's date/amount/reason left the ledger line
+        # stale. Re-sync this return's line so the edit reflects. The ledger orders + dates by
+        # entry_date and recomputes the running balance from debit/credit on read, so entry_date +
+        # credit + description are what must move. Runs inside this method's @transaction.atomic, so
+        # the return and its ledger line can never disagree. (Credit-note-type returns post no
+        # return_no line here - handled via SaleCreditNotes - so .first() is None and we skip.)
+        updated_return = SaleReturnOrders.objects.get(pk=pk)
+        journal_line = JournalEntryLines.objects.filter(
+            voucher_no=updated_return.return_no,
+            customer_id=updated_return.customer_id,
+            is_deleted=False
+        ).first()
+        if journal_line:
+            other_totals = (
+                JournalEntryLines.objects
+                .filter(customer_id=updated_return.customer_id, is_deleted=False)
+                .exclude(voucher_no=updated_return.return_no)
+                .aggregate(total_debit=Sum('debit'), total_credit=Sum('credit'))
+            )
+            other_debit = other_totals.get('total_debit') or Decimal('0.00')
+            other_credit = other_totals.get('total_credit') or Decimal('0.00')
+            new_balance = other_debit - other_credit - Decimal(updated_return.total_amount or 0)
+
+            journal_line.debit = Decimal('0.00')
+            journal_line.credit = updated_return.total_amount or Decimal('0.00')
+            journal_line.description = f"Return gives to {updated_return.customer_id.name} ({updated_return.return_reason})"
+            journal_line.balance = new_balance
+            journal_line.entry_date = updated_return.return_date
+            journal_line.save(update_fields=['debit', 'credit', 'description', 'balance', 'entry_date', 'updated_at'])
+            logger.info(f"Ledger re-synced for Sale Return {updated_return.return_no} (date={updated_return.return_date})")
+
         custom_data = {
             "sale_return_order": return_order_data,
             "sale_return_items": items_data if items_data else [],
@@ -7285,6 +7318,36 @@ class SaleCreditNoteViewset(APIView):
         update_fields = {'credit_note_id': pk}
         # items_data = update_multi_instances(self, pk, sale_credit_items_data, SaleCreditNoteItems, SaleCreditNoteItemsSerializers,
         #                                     update_fields, main_model_related_field='credit_note_id', current_model_pk_field='credit_note_item_id')
+
+        # ------------------------------ L E D G E R   R E - S Y N C ------------------------------ #
+        # A credit note posts to the Account Ledger via the post_save(created) signal, which never
+        # fires on edit. Without this, editing the amount/reason left the ledger line stale. Re-sync
+        # this credit note's line so the edit reflects (same pattern + rationale as the Sale Return
+        # update). Runs inside this method's @transaction.atomic.
+        updated_cn = SaleCreditNotes.objects.get(pk=pk)
+        journal_line = JournalEntryLines.objects.filter(
+            voucher_no=updated_cn.credit_note_number,
+            customer_id=updated_cn.customer_id,
+            is_deleted=False
+        ).first()
+        if journal_line:
+            other_totals = (
+                JournalEntryLines.objects
+                .filter(customer_id=updated_cn.customer_id, is_deleted=False)
+                .exclude(voucher_no=updated_cn.credit_note_number)
+                .aggregate(total_debit=Sum('debit'), total_credit=Sum('credit'))
+            )
+            other_debit = other_totals.get('total_debit') or Decimal('0.00')
+            other_credit = other_totals.get('total_credit') or Decimal('0.00')
+            new_balance = other_debit - other_credit - Decimal(updated_cn.total_amount or 0)
+
+            journal_line.debit = Decimal('0.00')
+            journal_line.credit = updated_cn.total_amount or Decimal('0.00')
+            journal_line.description = f"Credit note gives to {updated_cn.customer_id.name} ( {updated_cn.reason} )"
+            journal_line.balance = new_balance
+            journal_line.entry_date = updated_cn.credit_date
+            journal_line.save(update_fields=['debit', 'credit', 'description', 'balance', 'entry_date', 'updated_at'])
+            logger.info(f"Ledger re-synced for Credit Note {updated_cn.credit_note_number}")
 
         custom_data = {
             "sale_credit_note": salecreditnote_data[0] if salecreditnote_data else {},

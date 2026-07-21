@@ -171,7 +171,8 @@ def update_balance_after_credit(sender, instance, created, **kwargs):
             credit=instance.total_amount,
             description=f"Credit note gives to {instance.customer_id.name} ( {instance.reason} )",
             customer_id=instance.customer_id,
-            balance=bal_amt
+            balance=bal_amt,
+            entry_date=instance.credit_date  # accounting date; ledger orders/dates by entry_date, not created_at
         )
         
         
@@ -208,5 +209,6 @@ def update_balance_after_return(sender, instance, created, **kwargs):
                 credit=instance.total_amount,
                 description= f"Return gives to {instance.customer_id.name} ({instance.return_reason})",
                 customer_id=instance.customer_id,
-                balance=bal_amt
+                balance=bal_amt,
+                entry_date=instance.return_date  # accounting date = return date; ledger orders/dates by entry_date, not created_at
             )
