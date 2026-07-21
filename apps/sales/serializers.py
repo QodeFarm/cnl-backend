@@ -489,8 +489,8 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
     total_amount = serializers.DecimalField(source='sale_invoice.total_amount', max_digits=18, decimal_places=2)
     taxable = serializers.DecimalField(source='sale_invoice.taxable', max_digits=18, decimal_places=2)
     tax_amount = serializers.DecimalField(source='sale_invoice.tax_amount', max_digits=18, decimal_places=2)
-    # customer_name = serializers.CharField(source='customer.name', read_only=True)
-    customer_name = serializers.CharField(source='sale_invoice.customer_id.name', read_only=True)
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    # customer_name = serializers.CharField(source='sale_invoice.customer_id.name', read_only=True)
     
     ledger_account = ModLedgerAccountsSerializers(source='ledger_account_id', read_only=True)
 

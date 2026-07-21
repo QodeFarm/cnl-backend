@@ -8120,10 +8120,78 @@ class PaymentTransactionAPIView(APIView):
         except (ValueError, TypeError):
             return build_response(1, "Invalid amount provided.", None, status.HTTP_406_NOT_ACCEPTABLE)
 
-        invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"]).order_by('invoice_date')
-        if not invoices.exists():
-            return build_response(0, "No pending invoices found for this customer.", None, status.HTTP_400_BAD_REQUEST)
+        # invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"]).order_by('invoice_date')
+        # if not invoices.exists():
+        #     return build_response(0, "No pending invoices found for this customer.", None, status.HTTP_400_BAD_REQUEST)
         
+        invoices = SaleInvoiceOrders.objects.filter(customer_id=customer_id).exclude(order_status_id__status_name__in=["Completed", "Cancelled"]).order_by('invoice_date')
+
+        # print("🔍 Pending invoices for customer:", customer_id)
+        print("🔍 Pending invoices for customer:", customer_id, "Count:", invoices.count())
+        print("📄 Invoice List:", [inv.invoice_no for inv in invoices])
+        # ✅ NEW: Handle case when no pending invoices exist
+        if not invoices.exists():
+            # Create payment transaction without linking to invoice
+            customer_instance = Customer.objects.get(pk=customer_id)
+            ledger_account_instance = LedgerAccounts.objects.get(pk=account_id)
+            
+            # Create payment transaction with NULL sale_invoice
+            payment_transaction = PaymentTransactions.objects.create(
+                payment_receipt_no=data.get('payment_receipt_no'),
+                payment_method=data.get('payment_method'),
+                cheque_no=data.get('cheque_no'),
+                payment_date=self._parse_payment_date(data.get('date')),
+                total_amount=input_amount,
+                amount=input_amount,
+                outstanding_amount=input_amount,
+                adjusted_now=input_amount,  # ✅ Added this - it's required in your model
+                payment_status="PENDING",  # ✅ Changed to uppercase to match choices
+                customer=customer_instance,  # ✅ This is correct - ForeignKey expects instance
+                # customer_name = customer_instance.name,  # ✅ Added customer_name for journal entry description
+                sale_invoice=None,  # ✅ Field name is 'sale_invoice', not 'sale_invoice_id'
+                invoice_no=f"ADV-{data.get('payment_receipt_no', '')}",
+                ledger_account_id=ledger_account_instance  # ✅ This is correct
+            )
+            
+            # ✅ Create journal entry for advance payment
+            # The function will generate: "Advance payment received from {customer_name} - Receipt #{voucher_no}"
+            journal_entry_line_response = create_journal_entry_line(
+                customer_id=customer_id,
+                ledger_account_id=account_id,
+                amount=input_amount,
+                description=None,  # Let function generate advance payment description
+                balance_amount=input_amount,  # Full amount as balance
+                voucher_no=data.get('payment_receipt_no'),
+                # invoice_no=None,  # No invoice for advance payment
+                payment_method=data.get('payment_method'),
+                customer_name=customer_instance.name
+            )
+            
+            # ✅ Update customer balance
+            customer_balance_response = CustomerBalanceView.post(
+                self, request, customer_id, input_amount
+            )
+            
+            # Return success response
+            response_data = {
+                "payment_transactions": [
+                    {
+                        "Transaction ID": str(payment_transaction.transaction_id),
+                        "payment Receipt No": payment_transaction.payment_receipt_no,
+                        "Amount": str(payment_transaction.amount),
+                        "Outstanding Amount": str(payment_transaction.outstanding_amount),
+                        "Type": "Advance Payment",
+                        "customer_id": str(customer_id),
+                        "account_id": str(account_id),
+                        "journal_entry_line": journal_entry_line_response.get("message"),
+                        "customer_balance": customer_balance_response.data.get("message")
+                    }
+                ],
+                "remaining_payment": str(Decimal('0.00'))
+            }
+            
+            return build_response(1, "Advance payment processed successfully", response_data, status.HTTP_201_CREATED)
+
         remaining_amount = input_amount
         payment_transactions_created = []
 
