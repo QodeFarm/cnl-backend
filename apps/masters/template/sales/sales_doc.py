@@ -321,18 +321,24 @@ def sale_order_sales_invoice_data(pk, document_type, format_value=None):
                     sgst = float(item.get('sgst', 0)) if item.get('sgst') is not None else 0
                     igst = float(item.get('igst', 0)) if item.get('igst') is not None else 0
 
-                # Determine if intra-state or inter-state
-                if billing_state and billing_state != 'N/A' and company_address and billing_state == company_address:
-                    print("Intra-state transaction (CGST + SGST)")
+                # ===== CORRECTED GST DETERMINATION LOGIC =====
+                # Intra-state ONLY if billing_state is Andhra Pradesh or empty
+                if billing_state is None or billing_state == 'N/A' or billing_state == 'Andhra Pradesh':
+                    # Intra-state transaction → CGST + SGST
+                    print(f"Intra-state: billing_state={billing_state} → CGST+SGST")
                     total_cgst += cgst
                     total_sgst += sgst
                 else:
-                    print("Inter-state or unknown, using fallback logic")
+                    # Inter-state transaction → IGST
+                    print(f"Inter-state: billing_state={billing_state} → IGST")
+                    # If we have CGST/SGST values, combine them into IGST
                     if igst > 0:
                         total_igst += igst
                     elif cgst > 0 or sgst > 0:
-                        total_cgst += cgst
-                        total_sgst += sgst
+                        total_igst += (cgst + sgst)  # Convert CGST+SGST to IGST
+                    else:
+                        # Fallback - use the total GST amount as IGST
+                        total_igst += (cgst + sgst)
 
                 # Accumulate total discount amount
                 total_disc_amt += discount_amount
