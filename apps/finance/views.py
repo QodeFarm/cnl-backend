@@ -163,6 +163,25 @@ class JournalEntryLinesViewSet(viewsets.ModelViewSet):
         
 #         return build_response(1, "Data Loaded In Journal Entry Lines.", [], status.HTTP_201_CREATED)
     
+def order_account_ledger(queryset):
+    """Canonical Account Ledger ordering - the SINGLE source of truth for how ledger
+    rows are presented. Every ledger/report path must order through this so the order
+    can never drift between paths again. Rules, in priority:
+      1. Accounting date ascending (entry_date; created_at only as a fallback for legacy
+         rows that predate entry_date).
+      2. Opening Balance pinned to the TOP of its date. It is the account's starting
+         position (brought-forward balance), not a transaction, so it must never sink
+         below a same-date payment/invoice just because it was keyed in later.
+      3. created_at as a final, deterministic tiebreaker (never rely on raw insertion
+         order alone for same-date, same-type rows).
+    """
+    return queryset.order_by(
+        Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
+        Case(When(voucher_no__startswith='OB-', then=Value(0)), default=Value(1)),
+        F('created_at'),
+    )
+
+
 class JournalEntryLinesAPIView(APIView):
 
     def post(self, customer_id, ledger_account_id, amount, description, invoice_no):
@@ -305,33 +324,24 @@ class JournalEntryLinesAPIView(APIView):
         # ---------------------------
         if is_uuid and Customer.objects.filter(pk=input_id).exists():
             account_type = 'customer'
-            queryset = JournalEntryLines.objects.filter(
+            queryset = order_account_ledger(JournalEntryLines.objects.filter(
                 customer_id=input_id,
                 is_deleted=False
-            ).order_by(
-                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
-                F('created_at')
-            )  # entry_date for JV date order; created_at as tiebreaker
+            ))
 
         elif is_uuid and Vendor.objects.filter(pk=input_id).exists():
             account_type = 'vendor'
-            queryset = JournalEntryLines.objects.filter(
+            queryset = order_account_ledger(JournalEntryLines.objects.filter(
                 vendor_id=input_id,
                 is_deleted=False
-            ).order_by(
-                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
-                F('created_at')
-            )  # entry_date for JV date order; created_at as tiebreaker
+            ))
 
         elif is_uuid and LedgerAccounts.objects.filter(pk=input_id).exists():
             account_type = 'ledger'
-            queryset = JournalEntryLines.objects.filter(
+            queryset = order_account_ledger(JournalEntryLines.objects.filter(
                 ledger_account_id=input_id,
                 is_deleted=False
-            ).order_by(
-                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
-                F('created_at')
-            )  # entry_date for JV date order; created_at as tiebreaker
+            ))
 
         else:
             # ---------------------------
@@ -349,27 +359,21 @@ class JournalEntryLinesAPIView(APIView):
 
             if input_id == 'customer_id':
                 account_type = 'customer'
-                queryset = JournalEntryLines.objects.filter(
+                queryset = order_account_ledger(JournalEntryLines.objects.filter(
                     customer_id__in=CustomerAddresses.objects.filter(
                         city_id=city_id
                     ).values_list('customer_id', flat=True),
                     is_deleted=False
-                ).order_by(
-                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
-                F('created_at')
-            )  # entry_date for JV date order; created_at as tiebreaker
+                ))
 
             elif input_id == 'vendor_id':
                 account_type = 'vendor'
-                queryset = JournalEntryLines.objects.filter(
+                queryset = order_account_ledger(JournalEntryLines.objects.filter(
                     vendor_id__in=VendorAddress.objects.filter(
                         city_id=city_id
                     ).values_list('vendor_id', flat=True),
                     is_deleted=False
-                ).order_by(
-                Coalesce(F('entry_date'), Cast(F('created_at'), output_field=DateField())),
-                F('created_at')
-            )  # entry_date for JV date order; created_at as tiebreaker
+                ))
 
             else:
                 return build_response(
