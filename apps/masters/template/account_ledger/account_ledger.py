@@ -131,7 +131,7 @@ def ledger_document_data(request, pk, document_type):
         ledger_qs = ledger_qs.filter(**{pk: filter_value})
         
     # ---------------------------
-    # ✅ CITY-BASED FILTER (FIX)
+    # CITY-BASED FILTER
     # ---------------------------
     city_id = request.GET.get('city')
 
@@ -142,28 +142,33 @@ def ledger_document_data(request, pk, document_type):
                     city_id=city_id
                 ).values_list('customer_id', flat=True)
             )
-
         elif pk == 'vendor_id':
             ledger_qs = ledger_qs.filter(
                 vendor_id__in=VendorAddress.objects.filter(
                     city_id=city_id
                 ).values_list('vendor_id', flat=True)
-        )
-
+            )
 
     # ---------------------------
-    # Date filters
+    # Date filters - Use entry_date
     # ---------------------------
     from_date = request.GET.get('created_at_after')
     to_date = request.GET.get('created_at_before')
 
     if from_date:
-        ledger_qs = ledger_qs.filter(created_at__date__gte=from_date)
-
+        ledger_qs = ledger_qs.filter(entry_date__gte=from_date)
     if to_date:
-        ledger_qs = ledger_qs.filter(created_at__date__lte=to_date)
+        ledger_qs = ledger_qs.filter(entry_date__lte=to_date)
 
-    ledger_qs = ledger_qs.order_by('created_at')
+    # ---------------------------
+    # 🔥 SORTING LOGIC
+    # ---------------------------
+    sort_order = request.GET.get('sort', 'asc')  # Default: ascending
+    
+    if sort_order == 'desc':
+        ledger_qs = ledger_qs.order_by('-entry_date', '-created_at')  # Secondary sort by created_at
+    else:
+        ledger_qs = ledger_qs.order_by('entry_date', 'created_at')    # Secondary sort by created_at
 
     # ---------------------------
     # Ledger calculations
@@ -180,7 +185,7 @@ def ledger_document_data(request, pk, document_type):
         running_balance += (debit - credit)
 
         ledger_rows.append({
-            'date': row.created_at.strftime('%d/%m/%Y'),
+            'date': row.entry_date.strftime('%d/%m/%Y') if row.entry_date else row.created_at.strftime('%d/%m/%Y'),
             'voucher_no': row.voucher_no,
             'description': row.description,
             'debit': debit,
