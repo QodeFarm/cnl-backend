@@ -2606,11 +2606,16 @@ class SaleOrderViewSet(APIView):
                 new_flow_status = FlowStatus.objects.get(pk=flow_status_id)
 
                 # ── Flow-status transition validation ──────────────────────
-                # Allow these statuses to be set directly (from confirmReceipt / order acknowledgement)
-                ALLOWED_DIRECT_STATUSES = {'Completed', 'Partially Delivered', 'Dispatch', 'Delivery In Progress', 'Ready for Invoice'}
+                # Allow these statuses to be set directly (from confirmReceipt / order acknowledgement).
+                # Compared case-insensitively: the real DB value is 'Delivery In progress' (lowercase p,
+                # see filters.py) but this set previously listed 'Delivery In Progress' (capital P), so a
+                # full-invoice advance to Delivery In progress was NOT recognised as a direct status and
+                # fell into the strict +1-stage check below - which rejects the (deliberately skipped)
+                # transition, leaving the order stuck and hiding the Order Acknowledgement button.
+                ALLOWED_DIRECT_STATUSES = {'completed', 'partially delivered', 'dispatch', 'delivery in progress', 'ready for invoice'}
                 new_status_name = new_flow_status.flow_status_name
 
-                if new_status_name not in ALLOWED_DIRECT_STATUSES:
+                if (new_status_name or '').strip().lower() not in ALLOWED_DIRECT_STATUSES:
                     current_stage = WorkflowStage.objects.filter(
                         flow_status_id=sale_order.flow_status_id
                     ).first()
