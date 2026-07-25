@@ -1269,6 +1269,8 @@ class DocumentGeneratorView(APIView):
                                    pdf_data['comp_name'],
                                    pdf_data['shipping_company_name'], pdf_data['shipping_tracking_no'], pdf_data['vehicle_vessel'], pdf_data['no_of_packets'], pdf_data['shipping_date'], pdf_data['shipping_charges'], pdf_data['weight'],
                                    pdf_data['comp_address'], pdf_data['comp_phone'], pdf_data['comp_email'],
+                                   round_off=pdf_data.get('round_off'),           # Pass round-off
+                                   rounded_total=pdf_data.get('rounded_total'),   # Pass rounded total
                                    print_config=print_config
                                 )
 
