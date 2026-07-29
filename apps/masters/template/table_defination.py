@@ -1037,7 +1037,38 @@ def vendor_details(customer_name, v_billing_address, v_shipping_address_lbl, v_s
     ]))
     return table
 
-def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt, print_config=None):
+# def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt, print_config=None):
+#     s = get_width_scale(print_config)
+#     fs = _get_font_size(print_config)
+#     normal_style = ParagraphStyle('nt_normal', parent=getSampleStyleSheet()['Normal'], fontSize=fs)
+
+#     def _f(v):
+#         try:
+#             return '{:,.2f}'.format(round(float(v), 2))
+#         except (ValueError, TypeError):
+#             return str(v)
+
+#     narration_paragraph = Paragraph(f"<b>Narration:</b> Being Goods Purchase From {comp_name} {sdate}", normal_style)
+#     total_paragraph = Paragraph(
+#         f"<b>Sub Total:</b> {_f(total_sub_amt)}<br/>"
+#         f"<b>Bill Total:</b> {_f(total_bill_amt)}",
+#         normal_style
+#     )
+
+#     table = Table([[narration_paragraph, total_paragraph]], colWidths=[5*inch*s, 5*inch*s])
+#     table.setStyle(TableStyle([
+#         ('BACKGROUND', (0, 0), (-1, -1), colors.white),
+#         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+#         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+#         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+#         ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
+#         ('FONTSIZE', (0, 0), (-1, -1), fs),
+#         ('GRID', (0, 0), (-1, -1), 1, colors.black),
+#         ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+#     ]))
+#     return table
+
+def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt, print_config=None, round_off=None, rounded_total=None):
     s = get_width_scale(print_config)
     fs = _get_font_size(print_config)
     normal_style = ParagraphStyle('nt_normal', parent=getSampleStyleSheet()['Normal'], fontSize=fs)
@@ -1048,12 +1079,37 @@ def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt, print_c
         except (ValueError, TypeError):
             return str(v)
 
+    # Calculate round-off if not provided
+    if round_off is None or rounded_total is None:
+        total_bill = float(total_bill_amt) if total_bill_amt else 0
+        rounded_total = round(total_bill)  # Round to nearest rupee
+        round_off = rounded_total - total_bill
+    
+    # Format round-off for display
+    if abs(round_off) > 0.001:  # If there's a round-off
+        if round_off > 0:
+            round_off_display = f"+{round_off:.2f}"
+            round_off_text = f"(Rounded up by {round_off:.2f})"
+        else:
+            round_off_display = f"{round_off:.2f}"  # Already shows negative sign
+            round_off_text = f"(Rounded down by {abs(round_off):.2f})"
+        
+        # Show all details including round-off
+        total_paragraph = Paragraph(
+            f"<b>Sub Total:</b> {_f(total_sub_amt)}<br/>"
+            f"<b>Round Off:</b> {round_off_display}<br/>"
+            f"<b>Bill Total:</b> {_f(rounded_total)}<br/>",
+            normal_style
+        )
+    else:
+        # No round-off needed, show as usual
+        total_paragraph = Paragraph(
+            f"<b>Sub Total:</b> {_f(total_sub_amt)}<br/>"
+            f"<b>Bill Total:</b> {_f(total_bill_amt)}",
+            normal_style
+        )
+
     narration_paragraph = Paragraph(f"<b>Narration:</b> Being Goods Purchase From {comp_name} {sdate}", normal_style)
-    total_paragraph = Paragraph(
-        f"<b>Sub Total:</b> {_f(total_sub_amt)}<br/>"
-        f"<b>Bill Total:</b> {_f(total_bill_amt)}",
-        normal_style
-    )
 
     table = Table([[narration_paragraph, total_paragraph]], colWidths=[5*inch*s, 5*inch*s])
     table.setStyle(TableStyle([
