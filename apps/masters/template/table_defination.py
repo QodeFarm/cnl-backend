@@ -9,6 +9,7 @@ from apps.masters.template.print_config_defaults import (
     SALES_PURCHASE_COLUMN_DEFINITIONS, COLOR_THEMES, PAPER_SIZES,
     get_header_color, get_width_scale, FONT_SIZE_MAP, PAPER_WIDTH_SCALE,
 )
+from config.utils_methods import format_inr
 
 
 # ─────────────────────────────────────────────
@@ -284,7 +285,7 @@ def customer_details(cust_name, billing_address, phone, city, print_config=None)
 
 def format_numeric(cell):
     try:
-        return "{:,.2f}".format(float(cell))
+        return format_inr(float(cell))
     except (ValueError, TypeError):
         return str(cell)
 
@@ -446,7 +447,7 @@ def _fmt_total(val):
     if val is None or str(val).strip() in ('', '-'):
         return ''
     try:
-        return '{:,.2f}'.format(round(float(val), 2))
+        return format_inr(round(float(val), 2))
     except (ValueError, TypeError):
         return str(val)
 
@@ -745,8 +746,8 @@ def product_total_details_inwords(
             f = round(float(val), 2)
             if f == 0.0:
                 return '0.00'
-            # Comma formatting with 2 decimals (Indian/International style)
-            return '{:,.2f}'.format(f)
+            # Indian-grouped comma formatting with 2 decimals
+            return format_inr(f)
         except (ValueError, TypeError):
             return str(val)
 
@@ -767,9 +768,7 @@ def product_total_details_inwords(
             f = round(float(val), 2)
             if f == 0.0:
                 return '0.00'
-            if f < 0:
-                return '-{:,.2f}'.format(abs(f))
-            return '{:,.2f}'.format(f)
+            return format_inr(f)
         except (ValueError, TypeError):
             return str(val)
 
@@ -788,7 +787,7 @@ def product_total_details_inwords(
 
     if show_discount and not _is_zero(Discount_Amt):
         disc_val = round(float(Discount_Amt), 2)
-        disc_display = '-{:,.2f}'.format(abs(disc_val))
+        disc_display = '-' + format_inr(disc_val)
         rows.append(('Total Discount', disc_display, False))
 
     # ── Shipping Charges with GST ──────────────────────────────
@@ -1045,7 +1044,7 @@ def narration_and_total(comp_name, sdate, total_sub_amt, total_bill_amt, print_c
 
     def _f(v):
         try:
-            return '{:,.2f}'.format(round(float(v), 2))
+            return format_inr(round(float(v), 2))
         except (ValueError, TypeError):
             return str(v)
 
@@ -1772,7 +1771,7 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, shipping_cha
     def _fmtv(val):
         try:
             f = round(float(val), 2)
-            return '0.00' if f == 0.0 else '{:,.2f}'.format(f)
+            return '0.00' if f == 0.0 else format_inr(f)
         except (ValueError, TypeError):
             return str(val)
 
@@ -1788,7 +1787,7 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, shipping_cha
     
     if not _is_zero_v(discount_amt):
         disc_val = round(float(discount_amt), 2)
-        fin_rows.append(["Total Discount", "", "", "", '-{:,.2f}'.format(abs(disc_val))])
+        fin_rows.append(["Total Discount", "", "", "", '-' + format_inr(disc_val)])
     
     # ADD SHIPPING CHARGES (if applicable)
     if not _is_zero_v(shipping_charges):
@@ -1816,7 +1815,7 @@ def return_complete_table(data, total_qty, sub_total, discount_amt, shipping_cha
     # Round Off (hide if zero), Bill Total, Amount in Words
     if not _is_zero_v(round_0ff):
         r0ff = round(float(round_0ff), 2)
-        r0ff_str = ('+' if r0ff > 0 else '') + '{:,.2f}'.format(r0ff)
+        r0ff_str = ('+' if r0ff > 0 else '') + format_inr(r0ff)
         table_data.append(["Round Off", "", "", "", r0ff_str])
     table_data.extend([
         ["Bill Total", "", "", "", _fmtv(bill_total)],
@@ -2073,9 +2072,9 @@ def payment_amount_section(amount, amount_in_words, outstanding, total):
     
     # Amount breakdown table
     amounts_data = [
-        [Paragraph("<b>Amount Paid:</b>", bold_style), Paragraph(f"<b>{amount:,.2f}</b>", bold_style)],
-        [Paragraph("<b>Outstanding:</b>", normal_style), Paragraph(f"{outstanding:,.2f}", normal_style)],
-        [Paragraph("<b>Original Total:</b>", normal_style), Paragraph(f"{total:,.2f}", normal_style)],
+        [Paragraph("<b>Amount Paid:</b>", bold_style), Paragraph(f"<b>{format_inr(amount)}</b>", bold_style)],
+        [Paragraph("<b>Outstanding:</b>", normal_style), Paragraph(f"{format_inr(outstanding)}", normal_style)],
+        [Paragraph("<b>Original Total:</b>", normal_style), Paragraph(f"{format_inr(total)}", normal_style)],
     ]
     
     amounts_table = Table(amounts_data, colWidths=[3*inch, 2*inch])
@@ -2132,9 +2131,9 @@ def payment_receipt_amount_section(data):
     
     # Amount breakdown table
     amounts_data = [
-        [Paragraph("<b>Amount Paid:</b>", bold_style), f"{data['amount']:,.2f}"],
-        [Paragraph("Outstanding:", normal_style), f"{data['outstanding']:,.2f}"],
-        [Paragraph("Original Total:", normal_style), f"{data['total']:,.2f}"],
+        [Paragraph("<b>Amount Paid:</b>", bold_style), f"{format_inr(data['amount'])}"],
+        [Paragraph("Outstanding:", normal_style), f"{format_inr(data['outstanding'])}"],
+        [Paragraph("Original Total:", normal_style), f"{format_inr(data['total'])}"],
     ]
     
     amounts_table = Table(amounts_data, colWidths=[2.0*inch, 1.5*inch])
@@ -2400,7 +2399,7 @@ def payment_amount_summary(outstanding, amount_in_words, print_config=None):
 
     # Format outstanding as proper currency (not raw float)
     try:
-        outstanding_fmt = '{:,.2f}'.format(round(float(outstanding), 2))
+        outstanding_fmt = format_inr(round(float(outstanding), 2))
     except (ValueError, TypeError):
         outstanding_fmt = str(outstanding)
 
@@ -2461,9 +2460,9 @@ def ledger_details_table(ledger_data, print_config=None):
             Paragraph(row.get('voucher_no', ''), normal),
             Paragraph(row.get('description', ''), normal),
             # Numeric cells as plain strings — no mid-number wrap
-            f"{(row.get('debit') or 0):,.2f}",
-            f"{(row.get('credit') or 0):,.2f}",
-            f"{(row.get('balance') or 0):,.2f}",
+            format_inr(row.get('debit') or 0),
+            format_inr(row.get('credit') or 0),
+            format_inr(row.get('balance') or 0),
         ])
 
     table = Table(table_data, colWidths=col_widths)
@@ -2494,9 +2493,9 @@ def ledger_amount_summary(total_debit, total_credit, closing_balance, balance_in
     normal_style = ParagraphStyle('ledger_sum_normal', parent=styles['Normal'], fontSize=fs)
     s = get_width_scale(print_config) if print_config else 1.0
 
-    debit_para   = Paragraph(f"<b>Total Debit:</b> {total_debit:,.2f}", normal_style)
-    credit_para  = Paragraph(f"<b>Total Credit:</b> {total_credit:,.2f}", normal_style)
-    balance_para = Paragraph(f"<b>Closing Balance:</b> {closing_balance:,.2f}", normal_style)
+    debit_para   = Paragraph(f"<b>Total Debit:</b> {format_inr(total_debit)}", normal_style)
+    credit_para  = Paragraph(f"<b>Total Credit:</b> {format_inr(total_credit)}", normal_style)
+    balance_para = Paragraph(f"<b>Closing Balance:</b> {format_inr(closing_balance)}", normal_style)
     words_para   = Paragraph(f"<b>Balance in Words:</b> {balance_in_words}", normal_style)
 
     summary_table = Table(
