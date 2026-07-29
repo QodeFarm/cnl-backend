@@ -2561,6 +2561,34 @@ class JournalVoucherView(APIView):
         except JournalVoucher.DoesNotExist:
             return None
 
+    # def get(self, request, *args, **kwargs):
+    #     """
+    #     GET Handler:
+    #     - With pk: Returns single voucher with lines and attachments
+    #     - Without pk: Returns paginated list of vouchers
+    #     """
+    #     pk = kwargs.get('pk')
+    #     if pk:
+    #         result = validate_input_pk(self, pk)
+    #         if result:
+    #             return result
+    #         return self.retrieve(request, pk)
+        
+    #     # List all vouchers with pagination
+    #     page = int(request.query_params.get("page", 1))
+    #     limit = int(request.query_params.get("limit", 10))
+
+    #     queryset = JournalVoucher.objects.filter(is_deleted=False).order_by('-created_at')
+        
+    #     # Apply filters
+    #     if request.query_params:
+    #         filterset = JournalVoucherFilter(request.GET, queryset=queryset)
+    #         if filterset.is_valid():
+    #             queryset = filterset.qs
+        
+    #     serializer = JournalVoucherSerializer(queryset, many=True)
+    #     return filter_response(queryset.count(), "Success", serializer.data, page, limit, queryset.count(), status.HTTP_200_OK)
+    
     def get(self, request, *args, **kwargs):
         """
         GET Handler:
@@ -2586,8 +2614,16 @@ class JournalVoucherView(APIView):
             if filterset.is_valid():
                 queryset = filterset.qs
         
-        serializer = JournalVoucherSerializer(queryset, many=True)
-        return filter_response(queryset.count(), "Success", serializer.data, page, limit, queryset.count(), status.HTTP_200_OK)
+        # Get total count BEFORE pagination
+        total_count = queryset.count()
+        
+        # Apply pagination
+        start = (page - 1) * limit
+        end = start + limit
+        paginated_queryset = queryset[start:end]
+        
+        serializer = JournalVoucherSerializer(paginated_queryset, many=True)
+        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
 
     def retrieve(self, request, pk):
         """
