@@ -2488,6 +2488,42 @@ def build_whatsapp_click_url(phone, message):
 
 
 
+def format_inr(value, symbol=False):
+    """Format a number with Indian digit grouping + 2 decimals: 4842000 -> '48,42,000.00'.
+
+    Display/PDF only — JSON/CSV/Excel keep raw numbers. Non-numeric input is returned
+    stringified (matches the old '{:,.2f}' fallback); None/empty/'-' -> ''.
+    Pass symbol=True for a leading rupee sign.
+    """
+    if value is None or str(value).strip() in ('', '-'):
+        return ''
+    try:
+        num = round(float(value), 2)
+    except (ValueError, TypeError):
+        return str(value)
+    sign = '-' if num < 0 else ''
+    num = abs(num)
+    whole = int(num)
+    frac = int(round((num - whole) * 100))
+    if frac == 100:            # rounding carry, e.g. 999.999 -> 1000.00
+        whole += 1
+        frac = 0
+    s = str(whole)
+    if len(s) > 3:
+        last3, rest = s[-3:], s[:-3]
+        parts = []
+        while len(rest) > 2:   # everything left of the last 3 digits groups in pairs
+            parts.insert(0, rest[-2:])
+            rest = rest[:-2]
+        if rest:
+            parts.insert(0, rest)
+        grouped = ','.join(parts) + ',' + last3
+    else:
+        grouped = s
+    out = f"{sign}{grouped}.{frac:02d}"
+    return ('₹' + out) if symbol else out
+
+
 def convert_amount_to_words(amount):
     '''
 This Code convert amount into world.

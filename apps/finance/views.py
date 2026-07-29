@@ -641,6 +641,26 @@ class JournalEntryLinesAPIView(APIView):
             pass
 
         # ---------------------------
+        # VENDOR VIEW = ACCOUNTS-PAYABLE PERSPECTIVE
+        # ---------------------------
+        # A purchase line is STORED with debit=amount because the SAME journal row also feeds the
+        # Purchase (expense) account, where a purchase is correctly a DEBIT - and it must stay a
+        # debit in the Trial Balance / Balance Sheet / P&L. So we must NOT change the stored posting
+        # (flipping it would make purchases look like income and corrupt those reports).
+        # But in the VENDOR sub-ledger (payable) the same amount must READ as a CREDIT (you owe
+        # more), and a payment as a DEBIT. Every vendor row follows the same stored convention
+        # (debit-stored = payable increase), so we present the payable view by swapping only the
+        # DISPLAYED debit/credit columns for vendor accounts. Presentation-only: stored data, the
+        # running balance (computed above from raw values), and every account-type report are
+        # untouched and stay correct.
+        display_total_debit = total_debit_sum
+        display_total_credit = total_credit_sum
+        if account_type == 'vendor':
+            for row in data:
+                row['debit'], row['credit'] = row['credit'], row['debit']
+            display_total_debit, display_total_credit = total_credit_sum, total_debit_sum
+
+        # ---------------------------
         # STEP 11: RESPONSE
         # ---------------------------
         return Response({
@@ -652,8 +672,8 @@ class JournalEntryLinesAPIView(APIView):
             'totalCount': total_count,
             'opening_balance': str(opening_balance),
             'closing_balance': str(closing_balance),
-            'total_debit':     str(total_debit_sum),
-            'total_credit':    str(total_credit_sum),
+            'total_debit':     str(display_total_debit),
+            'total_credit':    str(display_total_credit),
             'final_balance':   str(final_balance),
             'account_name':    account_name,
             'account_type':    account_type or '',

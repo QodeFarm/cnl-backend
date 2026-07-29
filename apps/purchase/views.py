@@ -3631,12 +3631,31 @@ class BillPaymentTransactionAPIView(APIView):
                 new_outstanding = Decimal("0.00")
 
             # === Step 6: Update payment transaction ===
+            # Save EVERY field the user can edit (date, cash/bank account, cheque, method, status,
+            # amount) - not just the amount. Mirrors the Payment Receipt update. payment_date is
+            # auto_now_add, but that only fires on CREATE, so an explicit assignment on UPDATE persists.
+            from django.utils.dateparse import parse_date as _parse_date
+            _raw_date = request.data.get('date')
+            new_entry_date = _parse_date(str(_raw_date)[:10]) if _raw_date else None
+
             bill_payment.amount = new_amount
             bill_payment.adjusted_now = adjusted_now
             bill_payment.outstanding_amount = new_outstanding
             bill_payment.payment_status = payment_status
             bill_payment.payment_method = payment_method
             bill_payment.payment_receipt_no = payment_receipt_no
+            if new_entry_date:
+                bill_payment.payment_date = new_entry_date
+            if request.data.get('cheque_no') is not None:
+                bill_payment.cheque_no = request.data.get('cheque_no')
+            _acc_raw = request.data.get('ledger_account_id')
+            if _acc_raw:
+                _acc_id = _acc_raw.get('ledger_account_id') if isinstance(_acc_raw, dict) else _acc_raw
+                if _acc_id:
+                    try:
+                        bill_payment.ledger_account_id = LedgerAccounts.objects.get(pk=str(_acc_id).replace('-', ''))
+                    except LedgerAccounts.DoesNotExist:
+                        pass
             bill_payment.save()
 
             # === Step 7: Update invoice totals ===
@@ -3669,11 +3688,14 @@ class BillPaymentTransactionAPIView(APIView):
                     f"Bill payment receipt {payment_receipt_no} "
                     f"for Invoice {invoice.invoice_no}"
                 )
+                if new_entry_date:
+                    journal_line.entry_date = new_entry_date  # ledger date = the edited payment date
                 journal_line.save(update_fields=[
                     "ledger_account_id",
                     "debit",
                     "credit",
-                    "description"
+                    "description",
+                    "entry_date",
                 ])
             else:
                 latest_balance = (
@@ -3700,6 +3722,7 @@ class BillPaymentTransactionAPIView(APIView):
                     ),
                     vendor_id=vendor_instance,
                     balance=new_balance,
+                    entry_date=new_entry_date,
                 )
 
             self._recalculate_vendor_balances(vendor_instance.vendor_id)

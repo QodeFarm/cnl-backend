@@ -1841,6 +1841,16 @@ class SaleOrderViewSet(APIView):
                 record_id = instance.pk
                 # Delete related child data first
                 SaleOrderItems.objects.using(db_to_use).filter(sale_order_id=pk).delete()
+                # Return the reserved stock BEFORE dropping the block records. This order was
+                # never invoiced (guarded above), so its blocked quantity was never actually
+                # sold - deleting the blocks without adding the quantity back to product.balance
+                # leaks that stock out of inventory permanently. Over many deletes product.balance
+                # drifts below real stock, so genuinely in-stock products get flagged for
+                # production and the order wrongly shows 'Partially Delivered'.
+                for blocked in BlockedInventory.objects.using(db_to_use).filter(sale_order_id=pk):
+                    Products.objects.using(db_to_use).filter(
+                        product_id=blocked.product_id_id
+                    ).update(balance=F('balance') + blocked.blocked_qty)
                 BlockedInventory.objects.using(db_to_use).filter(sale_order_id=pk).delete()
                 WorkOrder.objects.using(db_to_use).filter(sale_order_id=pk).delete()
                 
@@ -7816,7 +7826,7 @@ class MoveToNextStageGenericView(APIView):
             #print(f"Model {module_name} not found.")
             return None
         
-def create_journal_entry_line(customer_id, ledger_account_id, amount, description, balance_amount, voucher_no, invoice_no=None, payment_method=None, customer_name=None):
+def create_journal_entry_line(customer_id, ledger_account_id, amount, description, balance_amount, voucher_no, invoice_no=None, payment_method=None, customer_name=None, entry_date=None):
     """
     Create a journal entry line with standardized ERP description
     """
@@ -7844,14 +7854,26 @@ def create_journal_entry_line(customer_id, ledger_account_id, amount, descriptio
     print(f"💰 Creating Journal Entry - Amount: {amount}, Balance: {balance_amount}, Voucher: {voucher_no}")
     print(f"📝 Description: {description}")
     print(f"📄 Invoice No: {invoice_no}")
-    
+
+    # _parse_payment_date returns a datetime, but JournalEntryLines.entry_date is a DateField and
+    # the DRF serializer REJECTS a datetime ("Expected a date but got a datetime"), which made
+    # is_valid() fail and silently dropped the whole ledger row (payment vanished from the ledger).
+    # Normalize to a plain date so the serializer accepts it. date/None pass through unchanged.
+    from datetime import datetime as _datetime
+    if isinstance(entry_date, _datetime):
+        entry_date = entry_date.date()
+
     entry_data = {
         "customer_id": customer_id,
         "ledger_account_id": ledger_account_id,
         "credit": amount,
         "description": description,
         "balance": balance_amount,
-        "voucher_no": voucher_no
+        "voucher_no": voucher_no,
+        # Accounting date = the payment date the user chose. Without this, entry_date is NULL
+        # and the ledger falls back to created_at (today), so a back-dated / future-dated
+        # receipt wrongly showed today's date and vanished when filtered by its real date.
+        "entry_date": entry_date,
     }
     
     serializer = JournalEntryLinesSerializer(data=entry_data)
@@ -8607,7 +8629,8 @@ class PaymentTransactionAPIView(APIView):
                             original_payment_receipt_no,
                             invoice_no=invoice.invoice_no,
                             payment_method=original_payment_method,
-                            customer_name=customer_instance.name
+                            customer_name=customer_instance.name,
+                            entry_date=self._parse_payment_date(data.get('date'))
                         )
                         
                         # ✅ UPDATED: Handle overpayment as credit balance instead of remaining payment
@@ -8749,7 +8772,8 @@ class PaymentTransactionAPIView(APIView):
                 voucher_no=data.get('payment_receipt_no'),
                 # invoice_no=None,  # No invoice for advance payment
                 payment_method=data.get('payment_method'),
-                customer_name=customer_instance.name
+                customer_name=customer_instance.name,
+                entry_date=self._parse_payment_date(data.get('date'))
             )
             
             # ✅ Update customer balance
@@ -8928,7 +8952,8 @@ class PaymentTransactionAPIView(APIView):
                     input_amount,
                     description,  # ✅ Now using properly formatted description
                     total_pending,
-                    data.get('payment_receipt_no')
+                    data.get('payment_receipt_no'),
+                    entry_date=self._parse_payment_date(data.get('date'))
                 )
 
                 customer_balance_response = CustomerBalanceView.post(

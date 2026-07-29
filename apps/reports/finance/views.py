@@ -12,6 +12,7 @@ Field reality (verified against models + cnlprod_2 data):
 """
 
 from decimal import Decimal
+from config.utils_methods import format_inr
 
 from django.db.models import Count, Sum, Value, DecimalField, Q
 from django.db.models.functions import Coalesce
@@ -616,7 +617,7 @@ class JournalBookView(_FinanceCustomView):
         for ln in vlines:
             ledger = ln.ledger_account_id.name if ln.ledger_account_id else ""
             party = cls._line_party(ln)
-            famt = f"₹{(ln.amount or Decimal('0.00')):,.2f}"
+            famt = format_inr(ln.amount or Decimal('0.00'), symbol=True)
             if party:
                 parts.append(f"{ledger} [ {party}]## {ln.entry_type} {famt}")
             elif ledger:
