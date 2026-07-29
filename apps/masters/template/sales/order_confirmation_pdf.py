@@ -23,6 +23,7 @@ from reportlab.platypus import (
     Paragraph, Spacer, HRFlowable
 )
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from config.utils_methods import format_inr
 
 
 # ─────────────────────────────────────────
@@ -189,8 +190,8 @@ def generate_order_confirmation_pdf(sale_order_id, format_value='CNL_Standard_Ex
             Paragraph(str(idx), s_td_center),
             Paragraph(product_name, s_normal),
             Paragraph(str(int(qty)), s_td_center),
-            Paragraph(f"₹{rate:,.2f}", s_td_right),
-            Paragraph(f"₹{amount:,.2f}", s_td_right),
+            Paragraph(format_inr(rate, symbol=True), s_td_right),
+            Paragraph(format_inr(amount, symbol=True), s_td_right),
         ])
 
     product_table = Table(product_rows, colWidths=col_widths, repeatRows=1)
@@ -215,7 +216,7 @@ def generate_order_confirmation_pdf(sale_order_id, format_value='CNL_Standard_Ex
     # ── GRAND TOTAL ───────────────────────────────────────────────────────────
     total_data = [[
         Paragraph("Grand Total", s_total_lbl),
-        Paragraph(f"₹{total_amount:,.2f}", s_total_val),
+        Paragraph(format_inr(total_amount, symbol=True), s_total_val),
     ]]
     total_table = Table(total_data, colWidths=[PAGE_W * 0.75, PAGE_W * 0.25])
     total_table.setStyle(TableStyle([
