@@ -5601,7 +5601,16 @@ def replicate_invoice_to_mstcnl(sale_invoice_id):
         logger.error(f"Error replicating invoice to mstcnl: {str(e)}")
 
 
+# class SaleReturnOrdersViewSet(APIView):
+#     def get_object(self, pk):
+#         try:
+#             return SaleReturnOrders.objects.get(pk=pk)
+#         except SaleReturnOrders.DoesNotExist:
+#             logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
+#             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
 class SaleReturnOrdersViewSet(APIView):
+    
     def get_object(self, pk):
         try:
             return SaleReturnOrders.objects.get(pk=pk)
@@ -5611,40 +5620,98 @@ class SaleReturnOrdersViewSet(APIView):
 
     def get(self, request, *args, **kwargs):
         if "pk" in kwargs:
-            result =  validate_input_pk(self,kwargs['pk'])
+            result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
+            # ✅ Check for summary parameter (like in Sale Invoice)
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving sale return orders summary")
                 salereturnorders = SaleReturnOrders.objects.all().order_by('is_deleted', '-created_at')
+                
+                # ✅ Apply filters FIRST (remove pagination params to avoid conflicts)
+                if request.query_params:
+                    filter_params = request.GET.copy()
+                    if 'page' in filter_params:
+                        del filter_params['page']
+                    if 'limit' in filter_params:
+                        del filter_params['limit']
+                    filterset = SaleReturnOrdersFilter(filter_params, queryset=salereturnorders)
+                    if filterset.is_valid():
+                        salereturnorders = filterset.qs
+                
                 data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
-             
+                
+                total_count = len(data)
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
+                
+                # Manual pagination on summary data
+                start_index = (page - 1) * limit
+                end_index = start_index + limit
+                paginated_data = data[start_index:end_index]
+                
+                return filter_response(
+                    total_count,
+                    "Success",
+                    paginated_data,
+                    page,
+                    limit,
+                    total_count,
+                    status.HTTP_200_OK
+                )
+            
             logger.info("Retrieving all sale return order")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            page = int(request.query_params.get('page', 1))
             limit = int(request.query_params.get('limit', 10)) 
             
+            # Start with base queryset
             queryset = SaleReturnOrders.objects.all().order_by('is_deleted', '-created_at')
 
-            # Apply filters manually
+            # ✅ Apply filters (like in Sale Invoice)
             if request.query_params:
-                filterset = SaleReturnOrdersFilter(request.GET, queryset=queryset)
+                # ✅ Create filter_params WITHOUT pagination parameters
+                filter_params = request.GET.copy()
+                if 'page' in filter_params:
+                    del filter_params['page']
+                if 'limit' in filter_params:
+                    del filter_params['limit']
+                if 'sort[0]' in filter_params:
+                    del filter_params['sort[0]']
+                if 'sort' in filter_params:
+                    del filter_params['sort']
+                if '0' in filter_params:
+                    del filter_params['0']
+                
+                filterset = SaleReturnOrdersFilter(filter_params, queryset=queryset)
                 if filterset.is_valid():
-                    queryset = filterset.qs 
+                    queryset = filterset.qs
 
-            total_count = SaleReturnOrders.objects.count()
+            # ✅ Get total count from FILTERED queryset (BEFORE pagination)
+            total_count = queryset.count()
+            logger.info(f"Total count after filtering: {total_count}")
+            
+            # ✅ Apply pagination manually (like in Sale Invoice)
+            paginated_results = queryset[(page - 1) * limit: page * limit]
 
-            serializer = SaleReturnOrdersOptionsSerializer(queryset, many=True)
+            serializer = SaleReturnOrdersOptionsSerializer(paginated_results, many=True)
             logger.info("sale return order data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            
+            return filter_response(
+                total_count,  # ✅ Total filtered records
+                "Success",
+                serializer.data,
+                page,
+                limit,
+                total_count,
+                status.HTTP_200_OK
+            )
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a sale return order and its related data (items, attachments, and shipments).

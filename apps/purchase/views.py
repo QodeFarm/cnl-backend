@@ -202,6 +202,7 @@ class PurchaseOrderViewSet(APIView):
     #     total_count = model_class.objects.count()  # Total count calculation
     #     return queryset, total_count
     
+    
     def get_purchase_orders(self, request):
         """Fetches filtered purchase orders."""
         logger.info("Retrieving all purchase orders")
@@ -209,15 +210,40 @@ class PurchaseOrderViewSet(APIView):
         
         queryset = PurchaseOrders.objects.all().order_by('is_deleted', '-created_at')
 
-        # Apply filters
+        # ✅ Apply filters (remove pagination params to avoid conflicts)
         if request.query_params:
-            filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+            filter_params = request.GET.copy()
+            if 'page' in filter_params:
+                del filter_params['page']
+            if 'limit' in filter_params:
+                del filter_params['limit']
+            if 'sort[0]' in filter_params:
+                del filter_params['sort[0]']
+            if 'sort' in filter_params:
+                del filter_params['sort']
+            if '0' in filter_params:
+                del filter_params['0']
+            
+            filterset = PurchaseOrdersFilter(filter_params, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
                 
-        total_count = PurchaseOrders.objects.count()
-        serializer = PurchaseOrdersSerializer(queryset, many=True)
-        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+        # ✅ Get total count from FILTERED queryset
+        total_count = queryset.count()
+        
+        # ✅ Apply pagination manually
+        paginated_results = queryset[(page - 1) * limit: page * limit]
+        
+        serializer = PurchaseOrdersSerializer(paginated_results, many=True)
+        return filter_response(
+            total_count,  # ✅ Total filtered records
+            "Success", 
+            serializer.data, 
+            page, 
+            limit, 
+            total_count,  # ✅ Total filtered records
+            status.HTTP_200_OK
+        )
 
     def get_summary_data(self, request):
         """Fetches purchase order summary data."""
@@ -226,15 +252,40 @@ class PurchaseOrderViewSet(APIView):
         page, limit = self.get_pagination_params(request)
         queryset = PurchaseOrders.objects.all().order_by('is_deleted', '-created_at')
 
-        # Apply filters
+        # ✅ Apply filters (remove pagination params to avoid conflicts)
         if request.query_params:
-            filterset = PurchaseOrdersFilter(request.GET, queryset=queryset)
+            filter_params = request.GET.copy()
+            if 'page' in filter_params:
+                del filter_params['page']
+            if 'limit' in filter_params:
+                del filter_params['limit']
+            if 'sort[0]' in filter_params:
+                del filter_params['sort[0]']
+            if 'sort' in filter_params:
+                del filter_params['sort']
+            if '0' in filter_params:
+                del filter_params['0']
+            
+            filterset = PurchaseOrdersFilter(filter_params, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
                 
-        total_count = PurchaseOrders.objects.count()
-        serializer = PurchaseOrdersOptionsSerializer(queryset, many=True)
-        return filter_response(total_count, "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+        # ✅ Get total count from FILTERED queryset
+        total_count = queryset.count()
+        
+        # ✅ Apply pagination manually
+        paginated_results = queryset[(page - 1) * limit: page * limit]
+        
+        serializer = PurchaseOrdersOptionsSerializer(paginated_results, many=True)
+        return filter_response(
+            total_count,  # ✅ Total filtered records
+            "Success", 
+            serializer.data, 
+            page, 
+            limit, 
+            total_count,  # ✅ Total filtered records
+            status.HTTP_200_OK
+        )
     
     def get_purchases_by_vendor_report(self, request):
         """Fetches total purchases aggregated by vendor."""
@@ -802,40 +853,104 @@ class PurchaseInvoiceOrderViewSet(APIView):
       
     def get(self, request, *args, **kwargs):
         if 'pk' in kwargs:
-           result =  validate_input_pk(self,kwargs['pk'])
-           return result if result else self.retrieve(self, request, *args, **kwargs)
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
+            # ✅ Fix: Remove the "&" from summary check
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Purchase Invoice orders summary")
                 purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
+                
+                # ✅ Apply filters for summary (remove pagination params)
+                if request.query_params:
+                    filter_params = request.GET.copy()
+                    if 'page' in filter_params:
+                        del filter_params['page']
+                    if 'limit' in filter_params:
+                        del filter_params['limit']
+                    if 'sort[0]' in filter_params:
+                        del filter_params['sort[0]']
+                    if 'sort' in filter_params:
+                        del filter_params['sort']
+                    if '0' in filter_params:
+                        del filter_params['0']
+                    
+                    filterset = PurchaseInvoiceOrdersFilter(filter_params, queryset=purchaseinvoiceorders)
+                    if filterset.is_valid():
+                        purchaseinvoiceorders = filterset.qs
+                
                 data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+                
+                # ✅ Manual pagination for summary data
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
+                total_count = len(data)
+                
+                start_index = (page - 1) * limit
+                end_index = start_index + limit
+                paginated_data = data[start_index:end_index]
+                
+                return filter_response(
+                    total_count,
+                    "Success",
+                    paginated_data,
+                    page,
+                    limit,
+                    total_count,
+                    status.HTTP_200_OK
+                )
             
-            instance = PurchaseInvoiceOrders.objects.all()
+            logger.info("Retrieving all purchase invoice orders")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            page = int(request.query_params.get('page', 1))
             limit = int(request.query_params.get('limit', 10)) 
-            total_count = PurchaseInvoiceOrders.objects.count()
+            
+            # Start with base queryset
+            queryset = PurchaseInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
 
-            # Apply filters manually
+            # ✅ Apply filters (remove pagination params to avoid conflicts)
             if request.query_params:
-                queryset = PurchaseInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
-                filterset = PurchaseInvoiceOrdersFilter(request.GET, queryset=queryset)
+                filter_params = request.GET.copy()
+                if 'page' in filter_params:
+                    del filter_params['page']
+                if 'limit' in filter_params:
+                    del filter_params['limit']
+                if 'sort[0]' in filter_params:
+                    del filter_params['sort[0]']
+                if 'sort' in filter_params:
+                    del filter_params['sort']
+                if '0' in filter_params:
+                    del filter_params['0']
+                
+                filterset = PurchaseInvoiceOrdersFilter(filter_params, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-                    serializer = PurchaseInvoiceOrdersOptionsSerializer(queryset, many=True)
-                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
-        except PurchaseInvoiceOrders.DoesNotExist:
-            logger.error("Purchase invoice order does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        else:
-            serializer = PurchaseInvoiceOrdersSerializer(instance, many=True)
+            # ✅ Get total count from FILTERED queryset (BEFORE pagination)
+            total_count = queryset.count()
+            
+            # ✅ Apply pagination manually
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            paginated_queryset = queryset[start_index:end_index]
+
+            serializer = PurchaseInvoiceOrdersOptionsSerializer(paginated_queryset, many=True)
             logger.info("Purchase invoice order data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)      
-     
+            
+            return filter_response(
+                total_count,  # ✅ Total filtered records
+                "Success",
+                serializer.data,
+                page,
+                limit,
+                total_count,  # ✅ Total filtered records
+                status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a Purchase Invoice Orders and its related data (Invoiceitems, attachments, and shipments).
@@ -2012,39 +2127,104 @@ class PurchaseReturnOrderViewSet(APIView):
       
     def get(self, request, *args, **kwargs):
         if 'pk' in kwargs:
-           result =  validate_input_pk(self,kwargs['pk'])
-           return result if result else self.retrieve(self, request, *args, **kwargs)
+            result = validate_input_pk(self, kwargs['pk'])
+            return result if result else self.retrieve(self, request, *args, **kwargs)
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true"+ "&"
+            # ✅ Fix: Remove the "&" from summary check
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Purchase return orders summary")
                 purchasereturnorders = PurchaseReturnOrders.objects.all().order_by('is_deleted', '-created_at')
+                
+                # ✅ Apply filters for summary (remove pagination params)
+                if request.query_params:
+                    filter_params = request.GET.copy()
+                    if 'page' in filter_params:
+                        del filter_params['page']
+                    if 'limit' in filter_params:
+                        del filter_params['limit']
+                    if 'sort[0]' in filter_params:
+                        del filter_params['sort[0]']
+                    if 'sort' in filter_params:
+                        del filter_params['sort']
+                    if '0' in filter_params:
+                        del filter_params['0']
+                    
+                    filterset = PurchaseReturnOrdersFilter(filter_params, queryset=purchasereturnorders)
+                    if filterset.is_valid():
+                        purchasereturnorders = filterset.qs
+                
                 data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(purchasereturnorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
+                
+                # ✅ Manual pagination for summary data
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
+                total_count = len(data)
+                
+                start_index = (page - 1) * limit
+                end_index = start_index + limit
+                paginated_data = data[start_index:end_index]
+                
+                return filter_response(
+                    total_count,
+                    "Success",
+                    paginated_data,
+                    page,
+                    limit,
+                    total_count,
+                    status.HTTP_200_OK
+                )
             
-            instance = PurchaseReturnOrders.objects.all()
-            
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            logger.info("Retrieving all purchase return orders")
+
+            page = int(request.query_params.get('page', 1))
             limit = int(request.query_params.get('limit', 10)) 
-            total_count = PurchaseReturnOrders.objects.count()            
             
-            # Apply filters manually
+            # Start with base queryset
+            queryset = PurchaseReturnOrders.objects.all().order_by('is_deleted', '-created_at')
+
+            # ✅ Apply filters (remove pagination params to avoid conflicts)
             if request.query_params:
-                queryset = PurchaseReturnOrders.objects.all().order_by('is_deleted', '-created_at')
-                filterset = PurchaseReturnOrdersFilter(request.GET, queryset=queryset)
+                filter_params = request.GET.copy()
+                if 'page' in filter_params:
+                    del filter_params['page']
+                if 'limit' in filter_params:
+                    del filter_params['limit']
+                if 'sort[0]' in filter_params:
+                    del filter_params['sort[0]']
+                if 'sort' in filter_params:
+                    del filter_params['sort']
+                if '0' in filter_params:
+                    del filter_params['0']
+                
+                filterset = PurchaseReturnOrdersFilter(filter_params, queryset=queryset)
                 if filterset.is_valid():
                     queryset = filterset.qs
-                    serializer = PurchaseReturnOrdersOptionsSerializer(queryset, many=True)
-                    # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-                    return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
 
-        except PurchaseReturnOrders.DoesNotExist:
-            logger.error("Purchase return order does not exist.")
-            return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
-        else:
-            serializer = PurchaseReturnOrdersSerializer(instance, many=True)
+            # ✅ Get total count from FILTERED queryset (BEFORE pagination)
+            total_count = queryset.count()
+            
+            # ✅ Apply pagination manually
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            paginated_queryset = queryset[start_index:end_index]
+
+            serializer = PurchaseReturnOrdersOptionsSerializer(paginated_queryset, many=True)
             logger.info("Purchase return order data retrieved successfully.")
-            return build_response(instance.count(), "Success", serializer.data, status.HTTP_200_OK)  
+            
+            return filter_response(
+                total_count,  # ✅ Total filtered records
+                "Success",
+                serializer.data,
+                page,
+                limit,
+                total_count,  # ✅ Total filtered records
+                status.HTTP_200_OK
+            )
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred: {str(e)}")
+            return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def retrieve(self, request, *args, **kwargs):
         """
