@@ -173,16 +173,40 @@ from itertools import chain
 
 from django.utils.functional import cached_property
 
+# A page is what one screen shows. Nothing the client sends may make the server do
+# unbounded work — `?limit=1000000` was previously honoured verbatim.
+MAX_PAGE_LIMIT = 200
+DEFAULT_PAGE_LIMIT = 10
+
+
+def get_pagination_params(request, default_limit=DEFAULT_PAGE_LIMIT, max_limit=MAX_PAGE_LIMIT):
+    """
+    Page and limit from the query string, clamped. Every list endpoint reads its paging
+    through here so the ceiling cannot be forgotten at a new call site.
+    Returns (page, limit, start, end).
+    """
+    try:
+        page = int(request.query_params.get('page', 1) or 1)
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        limit = int(request.query_params.get('limit', default_limit) or default_limit)
+    except (TypeError, ValueError):
+        limit = default_limit
+
+    page = max(1, page)
+    limit = max(1, min(limit, max_limit))
+    start = (page - 1) * limit
+    return page, limit, start, start + limit
+
+
 def list_all_objects(self, request, *args, **kwargs):
     try:
         # --- read params ---
         filters = request.query_params.dict()
         sale_order_id = filters.get('sale_order_id')
         records_all = request.query_params.get("records_all", "false").lower() == "true"
-        page = int(request.query_params.get('page', 1) or 1)
-        limit = int(request.query_params.get('limit', 10) or 10)
-        start = (page - 1) * limit
-        end = start + limit
+        page, limit, start, end = get_pagination_params(request)
 
         # --- helpers ---
         def qs_count(obj):
