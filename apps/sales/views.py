@@ -35,7 +35,7 @@ from django.utils import timezone
 from django.db import transaction
 from rest_framework import status
 from django.http import Http404
-from datetime import timedelta
+from datetime import datetime, timedelta
 from django.apps import apps
 from itertools import chain
 from decimal import Decimal
@@ -5625,7 +5625,16 @@ def replicate_invoice_to_mstcnl(sale_invoice_id):
         logger.error(f"Error replicating invoice to mstcnl: {str(e)}")
 
 
+# class SaleReturnOrdersViewSet(APIView):
+#     def get_object(self, pk):
+#         try:
+#             return SaleReturnOrders.objects.get(pk=pk)
+#         except SaleReturnOrders.DoesNotExist:
+#             logger.warning(f"SaleReturnOrders with ID {pk} does not exist.")
+#             return build_response(0, "Record does not exist", [], status.HTTP_404_NOT_FOUND)
+
 class SaleReturnOrdersViewSet(APIView):
+    
     def get_object(self, pk):
         try:
             return SaleReturnOrders.objects.get(pk=pk)
@@ -5635,40 +5644,98 @@ class SaleReturnOrdersViewSet(APIView):
 
     def get(self, request, *args, **kwargs):
         if "pk" in kwargs:
-            result =  validate_input_pk(self,kwargs['pk'])
+            result = validate_input_pk(self, kwargs['pk'])
             return result if result else self.retrieve(self, request, *args, **kwargs) 
         try:
-            summary = request.query_params.get("summary", "false").lower() == "true" + "&"
+            # ✅ Check for summary parameter (like in Sale Invoice)
+            summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving sale return orders summary")
                 salereturnorders = SaleReturnOrders.objects.all().order_by('is_deleted', '-created_at')
+                
+                # ✅ Apply filters FIRST (remove pagination params to avoid conflicts)
+                if request.query_params:
+                    filter_params = request.GET.copy()
+                    if 'page' in filter_params:
+                        del filter_params['page']
+                    if 'limit' in filter_params:
+                        del filter_params['limit']
+                    filterset = SaleReturnOrdersFilter(filter_params, queryset=salereturnorders)
+                    if filterset.is_valid():
+                        salereturnorders = filterset.qs
+                
                 data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
-                return build_response(len(data), "Success", data, status.HTTP_200_OK)
-             
+                
+                total_count = len(data)
+                page = int(request.query_params.get('page', 1))
+                limit = int(request.query_params.get('limit', 10))
+                
+                # Manual pagination on summary data
+                start_index = (page - 1) * limit
+                end_index = start_index + limit
+                paginated_data = data[start_index:end_index]
+                
+                return filter_response(
+                    total_count,
+                    "Success",
+                    paginated_data,
+                    page,
+                    limit,
+                    total_count,
+                    status.HTTP_200_OK
+                )
+            
             logger.info("Retrieving all sale return order")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
+            page = int(request.query_params.get('page', 1))
             limit = int(request.query_params.get('limit', 10)) 
             
+            # Start with base queryset
             queryset = SaleReturnOrders.objects.all().order_by('is_deleted', '-created_at')
 
-            # Apply filters manually
+            # ✅ Apply filters (like in Sale Invoice)
             if request.query_params:
-                filterset = SaleReturnOrdersFilter(request.GET, queryset=queryset)
+                # ✅ Create filter_params WITHOUT pagination parameters
+                filter_params = request.GET.copy()
+                if 'page' in filter_params:
+                    del filter_params['page']
+                if 'limit' in filter_params:
+                    del filter_params['limit']
+                if 'sort[0]' in filter_params:
+                    del filter_params['sort[0]']
+                if 'sort' in filter_params:
+                    del filter_params['sort']
+                if '0' in filter_params:
+                    del filter_params['0']
+                
+                filterset = SaleReturnOrdersFilter(filter_params, queryset=queryset)
                 if filterset.is_valid():
-                    queryset = filterset.qs 
+                    queryset = filterset.qs
 
-            total_count = SaleReturnOrders.objects.count()
+            # ✅ Get total count from FILTERED queryset (BEFORE pagination)
+            total_count = queryset.count()
+            logger.info(f"Total count after filtering: {total_count}")
+            
+            # ✅ Apply pagination manually (like in Sale Invoice)
+            paginated_results = queryset[(page - 1) * limit: page * limit]
 
-            serializer = SaleReturnOrdersOptionsSerializer(queryset, many=True)
+            serializer = SaleReturnOrdersOptionsSerializer(paginated_results, many=True)
             logger.info("sale return order data retrieved successfully.")
-            # return build_response(queryset.count(), "Success", serializer.data, status.HTTP_200_OK)
-            return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
+            
+            return filter_response(
+                total_count,  # ✅ Total filtered records
+                "Success",
+                serializer.data,
+                page,
+                limit,
+                total_count,
+                status.HTTP_200_OK
+            )
 
         except Exception as e:
             logger.error(f"An unexpected error occurred: {str(e)}")
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+    
     def retrieve(self, request, *args, **kwargs):
         """
         Retrieves a sale return order and its related data (items, attachments, and shipments).
@@ -10992,7 +11059,7 @@ class PaymentTransactionAPIView(APIView):
             
             # Revert invoices for old allocations
             for old_txn in old_allocations:
-                if old_txn.sale_invoice:
+                if old_txn.sale_invoice and old_txn.sale_invoice_id:
                     old_inv = old_txn.sale_invoice
                     # Recalculate paid amount WITHOUT this transaction
                     remaining_paid = PaymentTransactions.objects.filter(
@@ -11024,7 +11091,6 @@ class PaymentTransactionAPIView(APIView):
             invoice_pending_dict = {}
             
             for inv in all_pending_invoices:
-                # ✅ KEY FIX: EXCLUDE current transaction
                 paid_amount = PaymentTransactions.objects.filter(
                     invoice_no=inv.invoice_no
                 ).exclude(transaction_id=transaction_id).aggregate(
@@ -11051,13 +11117,11 @@ class PaymentTransactionAPIView(APIView):
             overpayment_amount = Decimal('0.00')
             allocated_to_this_invoice = Decimal('0.00')
             new_outstanding = Decimal('0.00')
-            payment_status = "PENDING"  # Default status
+            payment_status = "PENDING"
             
-            # Check if this transaction is linked to a specific invoice
-            current_invoice = payment_transactions.sale_invoice
+            current_invoice = payment_transactions.sale_invoice if payment_transactions.sale_invoice_id else None
             
             if current_invoice:
-                # Get current invoice pending amount (EXCLUDING current transaction)
                 current_paid = PaymentTransactions.objects.filter(
                     invoice_no=current_invoice.invoice_no
                 ).exclude(transaction_id=transaction_id).aggregate(
@@ -11072,26 +11136,25 @@ class PaymentTransactionAPIView(APIView):
                 print(f"   Pending: ₹{current_pending}")
                 
                 if current_pending <= 0:
-                    # Invoice already fully paid, treat as overpayment
                     print(f"⚠️ Current invoice already fully paid!")
                     remaining_amount = new_amount
                     allocated_to_this_invoice = Decimal('0.00')
                     new_outstanding = Decimal('0.00')
                     payment_status = "PENDING"
                 elif new_amount >= current_pending:
-                    # Can pay current invoice fully
                     allocated_to_this_invoice = current_pending
                     new_outstanding = Decimal('0.00')
                     remaining_amount = new_amount - current_pending
-                    payment_status = "COMPLETED"  # ✅ Valid status
+                    payment_status = "COMPLETED"
                     print(f"✅ Current invoice {current_invoice.invoice_no} fully paid")
                 else:
-                    # Partial payment on current invoice
                     allocated_to_this_invoice = new_amount
                     new_outstanding = current_pending - new_amount
                     remaining_amount = Decimal('0.00')
-                    payment_status = "PENDING"  # ✅ Still pending since not fully paid
+                    payment_status = "PENDING"
                     print(f"⚠️ Partial payment on current invoice: ₹{new_amount}")
+            else:
+                print(f"ℹ️ No current invoice linked to this payment transaction")
             
             # ============================================
             # STEP 7: If remaining amount exists, pay other pending invoices
@@ -11099,16 +11162,17 @@ class PaymentTransactionAPIView(APIView):
             if remaining_amount > 0:
                 print(f"💰 Remaining after current invoice: ₹{remaining_amount}")
                 
-                # Get other pending invoices (excluding current)
-                other_invoices = all_pending_invoices.exclude(
-                    sale_invoice_id=current_invoice.sale_invoice_id if current_invoice else None
-                )
+                if current_invoice:
+                    other_invoices = all_pending_invoices.exclude(
+                        sale_invoice_id=current_invoice.sale_invoice_id
+                    )
+                else:
+                    other_invoices = all_pending_invoices
                 
                 for inv in other_invoices:
                     if remaining_amount <= 0:
                         break
                     
-                    # Calculate pending for this invoice (EXCLUDING current transaction)
                     inv_paid = PaymentTransactions.objects.filter(
                         invoice_no=inv.invoice_no
                     ).exclude(transaction_id=transaction_id).aggregate(
@@ -11121,26 +11185,21 @@ class PaymentTransactionAPIView(APIView):
                         continue
                     
                     amount_to_allocate = min(remaining_amount, inv_pending)
-                    
-                    # ✅ Determine valid payment status (only PENDING or COMPLETED)
                     allocation_status = "COMPLETED" if (inv_pending - amount_to_allocate) == 0 else "PENDING"
                     
-                    # Check if transaction already exists for this invoice
                     existing_txn = PaymentTransactions.objects.filter(
                         payment_receipt_no=payment_transactions.payment_receipt_no,
                         invoice_no=inv.invoice_no
                     ).exclude(transaction_id=transaction_id).first()
                     
                     if existing_txn:
-                        # Update existing transaction
                         existing_txn.amount = amount_to_allocate
                         existing_txn.outstanding_amount = inv_pending - amount_to_allocate
                         existing_txn.adjusted_now = amount_to_allocate
-                        existing_txn.payment_status = allocation_status  # ✅ Valid status
+                        existing_txn.payment_status = allocation_status
                         existing_txn.save()
                         print(f"✅ Updated payment for {inv.invoice_no}: ₹{amount_to_allocate}")
                     else:
-                        # Create new transaction for this invoice
                         PaymentTransactions.objects.create(
                             payment_receipt_no=payment_transactions.payment_receipt_no,
                             payment_method=payment_transactions.payment_method,
@@ -11149,7 +11208,7 @@ class PaymentTransactionAPIView(APIView):
                             amount=amount_to_allocate,
                             outstanding_amount=inv_pending - amount_to_allocate,
                             adjusted_now=amount_to_allocate,
-                            payment_status=allocation_status,  # ✅ Valid status
+                            payment_status=allocation_status,
                             customer=customer_instance,
                             sale_invoice=inv,
                             invoice_no=inv.invoice_no,
@@ -11157,7 +11216,6 @@ class PaymentTransactionAPIView(APIView):
                         )
                         print(f"✅ Created payment for {inv.invoice_no}: ₹{amount_to_allocate}")
                     
-                    # Update invoice
                     inv.update_paid_amount_balance_amount_after_payment_transactions(
                         payment_amount=amount_to_allocate,
                         outstanding_amount=inv_pending - amount_to_allocate
@@ -11174,13 +11232,13 @@ class PaymentTransactionAPIView(APIView):
                     remaining_amount -= amount_to_allocate
                 
                 # ============================================
-                # STEP 8: Handle overpayment
+                # STEP 8: Handle overpayment - ONLY update CustomerBalance
                 # ============================================
                 if remaining_amount > 0:
                     overpayment_amount = remaining_amount
                     print(f"💰 Overpayment after all invoices: ₹{overpayment_amount}")
                     
-                    # Update CustomerBalance (not create new)
+                    # ✅ ONLY update CustomerBalance
                     customer_credit, created = CustomerBalance.objects.get_or_create(
                         customer_id=customer_instance,
                         defaults={'balance_amount': Decimal('0.00')}
@@ -11189,78 +11247,33 @@ class PaymentTransactionAPIView(APIView):
                     customer_credit.save()
                     print(f"💰 Customer credit balance: ₹{customer_credit.balance_amount}")
                     
-                    # Update or create credit journal entry
-                    credit_journal = JournalEntryLines.objects.filter(
-                        voucher_no=payment_transactions.payment_receipt_no,
-                        customer_id=customer_instance,
-                        description__icontains="Overpayment credit",
-                        is_deleted=False
-                    ).first()
+                    # ✅ REMOVED: No separate journal entry creation here!
+                    # The _update_journal_entry_lines will handle everything
                     
-                    if credit_journal:
-                        # Update existing
-                        credit_journal.credit = overpayment_amount
-                        credit_journal.balance = overpayment_amount
-                        credit_journal.ledger_account_id = payment_transactions.ledger_account_id
-                        if payment_transactions.payment_date:
-                            credit_journal.entry_date = payment_transactions.payment_date.date()
-                        credit_journal.description = f"Overpayment credit from {customer_instance.name} - Receipt #{payment_transactions.payment_receipt_no}"
-                        credit_journal.save(update_fields=['credit', 'balance', 'ledger_account_id', 'entry_date', 'description'])
-                        print(f"✅ Updated credit journal entry: ₹{overpayment_amount}")
-                    else:
-                        # Create new
-                        credit_description = f"Overpayment credit from {customer_instance.name} - Receipt #{payment_transactions.payment_receipt_no}"
-                        create_journal_entry_line(
-                            customer_instance.customer_id,
-                            payment_transactions.ledger_account_id.ledger_account_id,
-                            overpayment_amount,
-                            credit_description,
-                            overpayment_amount,
-                            payment_transactions.payment_receipt_no,
-                            payment_method=payment_transactions.payment_method,
-                            customer_name=customer_instance.name
-                        )
-                        print(f"✅ Created new credit journal entry: ₹{overpayment_amount}")
-            else:
-                # ============================================
-                # STEP 9: No overpayment, remove any existing credit
-                # ============================================
-                customer_credit, created = CustomerBalance.objects.get_or_create(
-                    customer_id=customer_instance,
-                    defaults={'balance_amount': Decimal('0.00')}
-                )
-                customer_credit.balance_amount = Decimal('0.00')
-                customer_credit.save()
-                print(f"🗑️ Reset customer credit balance to ₹0.00")
-                
-                # Remove credit journal if exists
-                credit_journal = JournalEntryLines.objects.filter(
-                    voucher_no=payment_transactions.payment_receipt_no,
-                    customer_id=customer_instance,
-                    description__icontains="Overpayment credit",
-                    is_deleted=False
-                ).first()
-                
-                if credit_journal:
-                    credit_journal.credit = Decimal('0.00')
-                    credit_journal.balance = Decimal('0.00')
-                    credit_journal.save(update_fields=['credit', 'balance'])
-                    print(f"🗑️ Removed credit journal entry")
+                else:
+                    # ============================================
+                    # STEP 9: No overpayment, reset customer balance
+                    # ============================================
+                    customer_credit, created = CustomerBalance.objects.get_or_create(
+                        customer_id=customer_instance,
+                        defaults={'balance_amount': Decimal('0.00')}
+                    )
+                    customer_credit.balance_amount = Decimal('0.00')
+                    customer_credit.save()
+                    print(f"🗑️ Reset customer credit balance to ₹0.00")
             
             # ============================================
             # STEP 10: Update the main transaction
             # ============================================
-            # ✅ Ensure payment_status is one of the valid choices
-            # Valid values: 'PENDING', 'COMPLETED', 'FAILED'
             if payment_status not in ['PENDING', 'COMPLETED', 'FAILED']:
-                payment_status = 'PENDING'  # Default to PENDING if invalid
+                payment_status = 'PENDING'
             
             payment_transactions.amount = new_amount
             payment_transactions.outstanding_amount = new_outstanding
             payment_transactions.adjusted_now = allocated_to_this_invoice
-            payment_transactions.payment_status = payment_status  # ✅ Now always valid
+            payment_transactions.payment_status = payment_status
             
-            # Parse payment date using existing method
+            # Parse payment date
             payment_transactions.payment_date = self._parse_payment_date(request.data.get('date'))
             
             # Update payment method if provided
@@ -11289,7 +11302,6 @@ class PaymentTransactionAPIView(APIView):
             # STEP 11: Update current invoice if it exists
             # ============================================
             if current_invoice:
-                # Recalculate current invoice amounts (EXCLUDING current transaction)
                 total_paid_for_current = PaymentTransactions.objects.filter(
                     invoice_no=current_invoice.invoice_no
                 ).exclude(transaction_id=transaction_id).aggregate(
@@ -11302,11 +11314,10 @@ class PaymentTransactionAPIView(APIView):
                 current_invoice.save()
                 print(f"📄 Updated invoice {current_invoice.invoice_no}: paid={total_paid_for_current}, pending={current_invoice.pending_amount}")
                 
-                # Recalculate outstanding amounts
                 self._recalculate_outstanding_amounts(current_invoice)
             
             # ============================================
-            # STEP 12: Update journal entry for main payment
+            # STEP 12: Update journal entry for main payment (SINGLE ENTRY)
             # ============================================
             journal_message = self._update_journal_entry_lines(
                 payment_transactions,
@@ -11373,7 +11384,6 @@ class PaymentTransactionAPIView(APIView):
         running_paid = Decimal('0.00')
         for txn in transactions:
             running_paid += txn.amount
-            # Don't allow negative outstanding amounts
             outstanding = invoice.total_amount - running_paid
             txn.outstanding_amount = max(outstanding, Decimal('0.00'))
             txn.save()
@@ -11381,56 +11391,73 @@ class PaymentTransactionAPIView(APIView):
         print(f"📊 Recalculated outstanding amounts for {invoice.invoice_no}: Total paid = {running_paid}")
 
     def _update_journal_entry_lines(self, payment_transaction, old_amount, new_amount, invoice):
-        """Update existing journal entry line based on voucher_no == payment_receipt_no"""
+        """Update existing journal entry line - ONLY ONE ENTRY PER VOUCHER"""
         
         customer_instance = payment_transaction.customer
         ledger_instance = payment_transaction.ledger_account_id
         
-        # Get ALL journal entries for this voucher
-        journal_lines = JournalEntryLines.objects.filter(
+        # ✅ Find the SINGLE journal entry for this voucher
+        journal_line = JournalEntryLines.objects.filter(
             voucher_no=payment_transaction.payment_receipt_no,
             customer_id=customer_instance,
             is_deleted=False
-        ).order_by('created_at')
+        ).first()  # ✅ Only ONE entry per voucher
         
-        # Separate regular payment entries from overpayment credit entries
-        payment_lines = journal_lines.filter(
-            description__icontains="Payment receipt"
-        )
+        print(f"🔍 Looking for journal entry for {payment_transaction.payment_receipt_no}")
+        if journal_line:
+            print(f"✅ Found existing entry: ID={journal_line.journal_entry_line_id}, Credit={journal_line.credit}")
+        else:
+            print(f"❌ No existing entry found")
         
-        credit_lines = journal_lines.filter(
-            description__icontains="Overpayment credit"
-        )
-        
-        # If amount is zero or negative, remove entries
+        # If amount is zero or negative, remove the entry
         if new_amount <= 0:
-            payment_lines.delete()
-            credit_lines.delete()
-            print(f"🗑️ Removed journal entries for zero amount")
-            return "Journal entries removed (amount is zero)"
+            if journal_line:
+                journal_line.is_deleted = True
+                journal_line.save()
+                print(f"🗑️ Marked journal entry as deleted for zero amount")
+            self._recalculate_customer_balances(customer_instance.customer_id)
+            return "Journal entry removed (amount is zero)"
         
-        # Update the regular payment journal entry
-        if payment_lines.exists():
-            journal_line = payment_lines.first()
+        # ✅ Get overpayment amount from CustomerBalance
+        customer_balance = CustomerBalance.objects.filter(customer_id=customer_instance).first()
+        overpayment_amount = customer_balance.balance_amount if customer_balance else Decimal('0.00')
+        
+        # ✅ UPDATE existing entry (if found)
+        if journal_line:
+            print(f"📝 UPDATING existing journal entry: {journal_line.journal_entry_line_id}")
+            print(f"   Old credit: {journal_line.credit}")
+            print(f"   New credit: {new_amount}")
+            
+            # Update the entry
             journal_line.ledger_account_id = ledger_instance
             journal_line.debit = Decimal('0.00')
-            journal_line.credit = new_amount
+            journal_line.credit = new_amount  # ✅ Only the payment amount
+            
+            # Update date if changed
             if payment_transaction.payment_date:
                 journal_line.entry_date = payment_transaction.payment_date.date()
-            journal_line.description = (
-                f"Payment receipt {payment_transaction.payment_receipt_no} "
-                f"for Invoice {invoice.invoice_no if invoice else 'Multiple Invoices'}"
-            )
+                print(f"   Date: {journal_line.entry_date}")
+            
+            # ✅ Create combined description with overpayment info
+            description_parts = [
+                f"Payment receipt {payment_transaction.payment_receipt_no}"
+            ]
+            if invoice:
+                description_parts.append(f"for Invoice {invoice.invoice_no}")
+            if overpayment_amount > 0:
+                description_parts.append(f"(Overpayment: ₹{overpayment_amount} credited)")
+            
+            journal_line.description = " - ".join(description_parts)
+            
             journal_line.save(update_fields=[
-                'ledger_account_id',
-                'debit',
-                'credit',
-                'entry_date',
-                'description'
+                'ledger_account_id', 'debit', 'credit', 'entry_date', 'description'
             ])
-            print(f"✅ Updated payment journal entry: {old_amount} → {new_amount}")
+            print(f"✅ Journal entry UPDATED: ₹{journal_line.credit}")
+            
         else:
-            # Create new payment journal entry if doesn't exist
+            # ✅ Create NEW entry (only if it doesn't exist)
+            print(f"📝 Creating NEW journal entry for {payment_transaction.payment_receipt_no}")
+            
             latest_balance = (
                 JournalEntryLines.objects
                 .filter(customer_id=customer_instance, is_deleted=False)
@@ -11439,35 +11466,35 @@ class PaymentTransactionAPIView(APIView):
                 .first()
             ) or Decimal('0.00')
             
-            new_balance = Decimal(latest_balance) - Decimal(new_amount)
+            new_balance = latest_balance - new_amount
+            entry_date = payment_transaction.payment_date.date() if payment_transaction.payment_date else datetime.now().date()
             
-            JournalEntryLines.objects.create(
+            description_parts = [
+                f"Payment receipt {payment_transaction.payment_receipt_no}"
+            ]
+            if invoice:
+                description_parts.append(f"for Invoice {invoice.invoice_no}")
+            if overpayment_amount > 0:
+                description_parts.append(f"(Overpayment: ₹{overpayment_amount} credited)")
+            
+            journal_line = JournalEntryLines.objects.create(
                 ledger_account_id=ledger_instance,
                 debit=Decimal('0.00'),
                 credit=new_amount,
-                entry_date=payment_transaction.payment_date.date() if payment_transaction.payment_date else None,
+                entry_date=entry_date,
                 voucher_no=payment_transaction.payment_receipt_no,
-                description=f"Payment receipt {payment_transaction.payment_receipt_no} for Invoice {invoice.invoice_no if invoice else 'Multiple Invoices'}",
+                description=" - ".join(description_parts),
                 customer_id=customer_instance,
                 balance=new_balance,
                 journal_entry_id=None
             )
-            print(f"✅ Created new payment journal entry for {payment_transaction.payment_receipt_no}")
+            print(f"✅ Journal entry CREATED: {journal_line.journal_entry_line_id}")
         
-        # Update overpayment credit entries if they exist
-        if credit_lines.exists():
-            for credit_line in credit_lines:
-                # Update the credit amount if needed
-                if credit_line.credit != new_amount:
-                    credit_line.credit = new_amount
-                    credit_line.save(update_fields=['credit'])
-                    print(f"✅ Updated credit journal entry: {credit_line.journal_entry_line_id}")
-        
-        # Recalculate customer balances
+        # ✅ Recalculate customer balances
         self._recalculate_customer_balances(customer_instance.customer_id)
         
-        return f"Journal entry updated: {old_amount} → {new_amount}"
-        
+        return f"Journal entry {'updated' if journal_line else 'created'}: ₹{new_amount}"
+
     def _recalculate_customer_balances(self, customer_id):
         """Recalculate customer ledger balances after journal update"""
         
@@ -11482,15 +11509,23 @@ class PaymentTransactionAPIView(APIView):
             debit = entry.debit or Decimal('0.00')
             credit = entry.credit or Decimal('0.00')
             
-            # Customer ledger:
-            # Debit increases receivable
-            # Credit decreases receivable
-            running_balance = running_balance + Decimal(debit) - Decimal(credit)
+            running_balance = running_balance + debit - credit
             
-            entry.balance = running_balance
-            entry.save(update_fields=['balance'])
+            if entry.balance != running_balance:
+                entry.balance = running_balance
+                entry.save(update_fields=['balance'])
+                print(f"  Updated balance for {entry.voucher_no}: {running_balance}")
         
-        print(f"🔄 Recalculated customer {customer_id} balances: {entries.count()} entries")
+        print(f"🔄 Recalculated customer {customer_id} balances: {entries.count()} entries, final balance: {running_balance}")
+        
+        # Update CustomerBalance table
+        customer_balance, created = CustomerBalance.objects.get_or_create(
+            customer_id=customer_id,
+            defaults={'balance_amount': Decimal('0.00')}
+        )
+        customer_balance.balance_amount = running_balance
+        customer_balance.save()
+        print(f"💰 Customer balance updated: ₹{running_balance}")
 
     def _recalculate_subsequent_balances(self, customer_id, from_datetime):
         """Recalculate all balances after a given datetime to ensure consistency"""
@@ -11499,7 +11534,6 @@ class PaymentTransactionAPIView(APIView):
             created_at__gte=from_datetime
         ).order_by('created_at')
         
-        # Get the balance just before this entry
         previous_balance = (JournalEntryLines.objects.filter(
             customer_id=customer_id,
             created_at__lt=from_datetime
@@ -11514,173 +11548,8 @@ class PaymentTransactionAPIView(APIView):
             entry.balance = running_balance
             entry.save()
             print(f"  Entry {entry.voucher_no}: {old_balance} → {running_balance}")
-
-    # def _parse_payment_date(self, date_value):
-    #     """Helper method to parse payment date from various formats"""
-    #     if not date_value:
-    #         return None
-        
-    #     try:
-    #         from datetime import datetime
-    #         if isinstance(date_value, str):
-    #             # Try common formats
-    #             for fmt in ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']:
-    #                 try:
-    #                     return datetime.strptime(date_value, fmt)
-    #                 except ValueError:
-    #                     continue
-    #             # If all fail, try with dateutil parser
-    #             from dateutil import parser
-    #             return parser.parse(date_value)
-    #         elif isinstance(date_value, (datetime, date)):
-    #             return date_value
-    #     except Exception as e:
-    #         print(f"⚠️ Date parsing error: {e}")
-    #         return None
-
-    # def _recalculate_outstanding_amounts(self, invoice):
-    #     """Helper method to recalculate outstanding amounts for all transactions"""
-    #     transactions = PaymentTransactions.objects.filter(
-    #         invoice_no=invoice.invoice_no
-    #     ).order_by('payment_date', 'created_at')
-
-    #     running_paid = Decimal('0.00')
-    #     for txn in transactions:
-    #         running_paid += txn.amount
-    #         txn.outstanding_amount = invoice.total_amount - running_paid
-    #         txn.save()
-
-    # def _update_journal_entry_lines(self, payment_transaction, old_amount, new_amount, invoice):
-    #     """Update existing journal entry line based on voucher_no == payment_receipt_no"""
-
-    #     customer_instance = payment_transaction.customer
-    #     ledger_instance = payment_transaction.ledger_account_id
-
-    #     journal_line = JournalEntryLines.objects.filter(
-    #         voucher_no=payment_transaction.payment_receipt_no,
-    #         customer_id=customer_instance,
-    #         is_deleted=False
-    #     ).first()
-
-    #     if journal_line:
-    #         journal_line.ledger_account_id = ledger_instance
-    #         journal_line.debit = Decimal('0.00')
-    #         journal_line.credit = new_amount
-    #         # Keep the ledger entry's date in step with the receipt's (editable) date.
-    #         if payment_transaction.payment_date:
-    #             journal_line.entry_date = payment_transaction.payment_date.date()
-    #         journal_line.description = (
-    #             f"Payment receipt {payment_transaction.payment_receipt_no} "
-    #             f"for Invoice {invoice.invoice_no}"
-    #         )
-    #         journal_line.save(update_fields=[
-    #             'ledger_account_id',
-    #             'debit',
-    #             'credit',
-    #             'entry_date',
-    #             'description'
-    #         ])
-
-    #         self._recalculate_customer_balances(customer_instance.customer_id)
-
-    #         return f"Journal entry updated: {old_amount} → {new_amount}"
-
-    #     else:
-    #         latest_balance = (
-    #             JournalEntryLines.objects
-    #             .filter(customer_id=customer_instance, is_deleted=False)
-    #             .order_by('-created_at')
-    #             .values_list('balance', flat=True)
-    #             .first()
-    #         ) or Decimal('0.00')
-
-    #         new_balance = Decimal(latest_balance) - Decimal(new_amount)
-
-    #         JournalEntryLines.objects.create(
-    #             ledger_account_id=ledger_instance,
-    #             debit=Decimal('0.00'),
-    #             credit=new_amount,
-    #             entry_date=payment_transaction.payment_date.date() if payment_transaction.payment_date else None,
-    #             voucher_no=payment_transaction.payment_receipt_no,
-    #             description=(
-    #                 f"Payment receipt {payment_transaction.payment_receipt_no} "
-    #                 f"for Invoice {invoice.invoice_no}"
-    #             ),
-    #             customer_id=customer_instance,
-    #             balance=new_balance,
-    #             journal_entry_id=None
-    #         )
-
-    #         self._recalculate_customer_balances(customer_instance.customer_id)
-
-    #         return "Journal entry created"
-        
-    # def _recalculate_customer_balances(self, customer_id):
-    #     """Recalculate customer ledger balances after journal update"""
-
-    #     entries = JournalEntryLines.objects.filter(
-    #         customer_id=customer_id,
-    #         is_deleted=False
-    #     ).order_by('entry_date', 'created_at')
-
-    #     running_balance = Decimal('0.00')
-
-    #     for entry in entries:
-    #         debit = entry.debit or Decimal('0.00')
-    #         credit = entry.credit or Decimal('0.00')
-
-    #         # Customer ledger:
-    #         # Debit increases receivable
-    #         # Credit decreases receivable
-    #         running_balance = running_balance + Decimal(debit) - Decimal(credit)
-
-    #         entry.balance = running_balance
-    #         entry.save(update_fields=['balance'])
-
-    # def _recalculate_subsequent_balances(self, customer_id, from_datetime):
-    #     """Recalculate all balances after a given datetime to ensure consistency"""
-    #     entries = JournalEntryLines.objects.filter(
-    #         customer_id=customer_id,
-    #         created_at__gte=from_datetime
-    #     ).order_by('created_at')
-        
-    #     # Get the balance just before this entry
-    #     previous_balance = (JournalEntryLines.objects.filter(
-    #         customer_id=customer_id,
-    #         created_at__lt=from_datetime
-    #     ).order_by('-created_at').values_list('balance', flat=True).first()) or Decimal('0.00')
-        
-    #     print(f"🔄 Recalculating {entries.count()} entries from {from_datetime}")
-    #     running_balance = previous_balance
-        
-    #     for entry in entries:
-    #         # For customer ledger:
-    #         # - Debit increases amount customer owes
-    #         # - Credit decreases amount customer owes
-    #         old_balance = entry.balance
-    #         running_balance = running_balance + (entry.debit or 0) - (entry.credit or 0)
-    #         entry.balance = running_balance
-    #         entry.save()
-    #         print(f"  Entry {entry.voucher_no}: {old_balance} → {running_balance}")
-# class FetchSalesInvoicesForPaymentReceiptTable(APIView):
-#     '''This API is used to fetch all information related to sales invoices for 
-#         the Payment Receipt. It's related to the Payment Transaction table only.'''
-#     def get(self, request, customer_id):
-#         sale_invoice = SaleInvoiceOrders.objects.filter(customer_id=customer_id)
-        
-#         if not sale_invoice.exists():
-#             return build_response(0, "No sale invoice found for this customer", None, status.HTTP_400_BAD_REQUEST) 
-
-#         try:
-#             serializer = SaleInvoiceOrdersSerializer(sale_invoice, many=True)
-#             sorted_data = sorted(
-#                 serializer.data,
-#                 key=lambda x: x['created_at']
-#             )
-#             return build_response(len(serializer.data), "Sale Invoices", sorted_data, status.HTTP_200_OK)
-#         except Exception as e:
-#             return build_response(0, "An error occurred", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            
+            
 class FetchSalesInvoicesForPaymentReceiptTable(APIView):
     '''This API is used to fetch all information related to sales invoices for 
         the Payment Receipt. It's related to the Payment Transaction table only.
