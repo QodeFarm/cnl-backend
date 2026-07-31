@@ -47,13 +47,16 @@ COLOR_THEMES = {
 # Format: [Idx, Product, Boxes, Qty, Unit Name, Rate, Amount, Disc(%), Disc(Rs), GST(Rs), Total Amount]
 
 SALES_PURCHASE_COLUMN_DEFINITIONS = [
-    # base_width = proportional width in inches on a 10" usable page (Custom_11x16)
-    # Product name gets the most space; numeric/short cols get less
+    # base_width = *preferred* width in inches on a 10" usable page (Custom_11x16). It is a
+    # starting ratio, not a guarantee: columns are re-measured against the real values at
+    # print time so nothing is ever drawn outside its column.
+    # wrappable = rendered as a Paragraph, so it word-wraps and may be squeezed to give
+    # room to a column that cannot wrap. Never set this on a column holding a number.
     {'key': 'serial_no',        'label': 'S.No',         'data_index': 0,  'required': True,  'default': True,  'base_width': 0.40},
-    {'key': 'product_name',     'label': 'Product',      'data_index': 1,  'required': True,  'default': True,  'base_width': 2.80},
+    {'key': 'product_name',     'label': 'Product',      'data_index': 1,  'required': True,  'default': True,  'base_width': 2.80, 'wrappable': True},
     {'key': 'boxes',            'label': 'Boxes',        'data_index': 2,  'required': False, 'default': True,  'base_width': 0.50},
     {'key': 'quantity',         'label': 'Qty',          'data_index': 3,  'required': True,  'default': True,  'base_width': 0.55},
-    {'key': 'unit',             'label': 'Unit',         'data_index': 4,  'required': False, 'default': True,  'base_width': 0.60},
+    {'key': 'unit',             'label': 'Unit',         'data_index': 4,  'required': False, 'default': True,  'base_width': 0.60, 'wrappable': True},
     {'key': 'rate',             'label': 'Rate',         'data_index': 5,  'required': True,  'default': True,  'base_width': 0.80},
     {'key': 'amount',           'label': 'Amount',       'data_index': 6,  'required': False, 'default': True,  'base_width': 0.85},
     {'key': 'discount_percent', 'label': 'Disc (%)',     'data_index': 7,  'required': False, 'default': True,  'base_width': 0.65},

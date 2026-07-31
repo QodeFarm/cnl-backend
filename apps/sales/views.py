@@ -5,7 +5,7 @@ from apps.finance.serializers import JournalEntryLinesSerializer
 from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_data, sale_order_sales_invoice_doc
 from apps.masters.template.table_defination import doc_heading
 from apps.production.models import WorkOrder
-from config.utils_methods import build_whatsapp_click_url, check_credit_limit, path_generate, resolve_phone_from_document, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import build_whatsapp_click_url, check_credit_limit, get_pagination_params, path_generate, resolve_phone_from_document, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from apps.finance.models import JournalEntryLines, PaymentTransaction
@@ -58,8 +58,13 @@ logger = logging.getLogger(__name__)
 
 
 class SaleOrderView(viewsets.ModelViewSet):
+    # Every FK the list/detail serializers dereference must be joined here, or DRF issues
+    # one query per row per relation. Nesting counts: ModCustomersSerializer reaches
+    # customer_category, so the join has to follow customer_id one level deeper.
     queryset = SaleOrder.objects.select_related(
-        'customer_id', 'order_status_id', 'flow_status_id', 'sale_type_id', 'gst_type_id'
+        'customer_id', 'customer_id__customer_category_id',
+        'order_status_id', 'flow_status_id', 'sale_type_id', 'gst_type_id',
+        'customer_address_id', 'payment_term_id', 'ledger_account_id', 'sale_return_id',
     ).prefetch_related(
         'saleorderitems_set__product_id',
         'saleinvoiceorders_set',
@@ -980,54 +985,42 @@ class SaleOrderViewSet(APIView):
 
 
     def get_pagination_params(self, request):
-        """Extracts pagination parameters from the request."""
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        """Extracts pagination parameters from the request (clamped — see utils_methods)."""
+        page, limit, _start, _end = get_pagination_params(request)
         return page, limit
-    
+
     def get_sale_orders(self, request):
         """Applies filters, pagination, and retrieves sale orders."""
         logger.info("Retrieving all sale orders")
 
-        page, limit = self.get_pagination_params(request)
-        
-        queryset = SaleOrder.objects.all().order_by('is_deleted', '-created_at')
+        page, limit, start, end = get_pagination_params(request)
 
-        # ✅ Apply filters (remove pagination params to avoid conflicts)
-        if request.query_params:
-            filter_params = request.GET.copy()
-            if 'page' in filter_params:
-                del filter_params['page']
-            if 'limit' in filter_params:
-                del filter_params['limit']
-            if 'sort[0]' in filter_params:
-                del filter_params['sort[0]']
-            if 'sort' in filter_params:
-                del filter_params['sort']
-            if '0' in filter_params:
-                del filter_params['0']
-            
-            filterset = SaleOrderFilter(filter_params, queryset=queryset)
-            if filterset.is_valid():
-                queryset = filterset.qs
+        # Read through the viewset queryset so the list inherits its select_related /
+        # prefetch_related — the list serializer dereferences those relations per row.
+        queryset = SaleOrderView.queryset.all()
 
-        # ✅ Get total count from FILTERED queryset
-        total_count = queryset.count()
-        
-        # ✅ Apply pagination manually
-        paginated_results = queryset[(page - 1) * limit: page * limit]
-        
-        serializer = SaleOrderSerializer(paginated_results, many=True)
-        return filter_response(
-            total_count,  # ✅ Total filtered records
-            "Success",
-            serializer.data,
-            page,
-            limit,
-            total_count,  # ✅ Total filtered records
-            status.HTTP_200_OK
-        )
-        
+        # SaleOrderFilter IS the paginator: filter_by_page / filter_by_limit sort, search
+        # and slice, and record the pre-slice total. Feed it clamped values and let it do
+        # the work — slicing again here would paginate an already-paginated queryset.
+        # `limit` must always be present or filter_by_limit never runs and the whole table
+        # is returned, which is what made this endpoint serialize everything.
+        params = request.GET.copy()
+        params['page']  = str(page)
+        params['limit'] = str(limit)
+
+        filterset = SaleOrderFilter(params, queryset=queryset)
+        if filterset.is_valid():
+            page_items = filterset.qs
+            total_count = getattr(filterset, 'total_count', None)
+            if total_count is None:
+                total_count = queryset.count()
+        else:
+            page_items = queryset[start:end]
+            total_count = queryset.count()
+
+        serializer = SaleOrderOptionsSerializer(page_items, many=True)
+        return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
+
     # def get_summary_data(self, request):
     #     """Fetches sale order summary data from both databases."""
     #     logger.info("Retrieving Sale order summary")
@@ -1199,9 +1192,8 @@ class SaleOrderViewSet(APIView):
         """Fetches sale order summary data from both databases."""
         logger.info("Retrieving Sale order summary")
         
-        # Get pagination parameters with defaults
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        # Get pagination parameters with defaults (clamped — see utils_methods)
+        page, limit, start, end = get_pagination_params(request)
         records_all = request.query_params.get("records_all", "false").lower() == "true"
         records_mstcnl = request.query_params.get("records_mstcnl", "false").lower() == "true"
 
@@ -1242,25 +1234,29 @@ class SaleOrderViewSet(APIView):
             filterset_devcnl = SaleOrderFilter(filter_params, queryset=base_queryset_devcnl)
             saleorders_devcnl = filterset_devcnl.qs if filterset_devcnl.is_valid() else base_queryset_devcnl
 
-            # Get all records (no pagination)
-            all_mstcnl_records = saleorders_mstcnl
-            all_devcnl_records = saleorders_devcnl
+            # Paginate across both databases — mstcnl first, then default — taking only the
+            # rows this page shows. This branch previously serialized BOTH tables in full on
+            # every request; the table on screen is paginated either way, so the extra rows
+            # were built, shipped and then never rendered.
+            mstcnl_count = saleorders_mstcnl.count()
+            devcnl_count = saleorders_devcnl.count()
+            total_count  = mstcnl_count + devcnl_count
 
-            # Serialize the results
-            serializer_mstcnl = MstcnlSaleOrderSerializer(all_mstcnl_records, many=True)
-            serializer_devcnl = SaleOrderSerializer(all_devcnl_records, many=True)
+            final_results = []
+            if start < mstcnl_count:
+                page_mstcnl = saleorders_mstcnl[start:min(end, mstcnl_count)]
+                final_results += MstcnlSaleOrderSerializer(page_mstcnl, many=True).data
+            if end > mstcnl_count:
+                d_start = max(0, start - mstcnl_count)
+                d_end   = end - mstcnl_count
+                if d_start < devcnl_count:
+                    page_devcnl = saleorders_devcnl[d_start:d_end]
+                    final_results += SaleOrderOptionsSerializer(page_devcnl, many=True).data
 
-            # Combine results
-            final_results = serializer_mstcnl.data + serializer_devcnl.data
-            total_count = len(final_results)
-
-            # Return ALL records without pagination metadata
-            return Response({
-                "count": total_count,
-                "message": "Success",
-                "data": final_results,
-                "totalCount": total_count
-            }, status=status.HTTP_200_OK)
+            return filter_response(
+                len(final_results), "Success", final_results,
+                page, limit, total_count, status.HTTP_200_OK
+            )
         
         elif records_mstcnl:        
             logger.info("Fetching sale orders only from mstcnl database")
@@ -1294,9 +1290,11 @@ class SaleOrderViewSet(APIView):
             
         else:
             logger.info("Fetching sale order summary only from default database")
-            
-            # Start with all records
-            queryset = SaleOrder.objects.all().order_by('is_deleted', '-created_at')
+
+            # Start with all records — via the viewset queryset, so the joins and prefetches
+            # the list serializer needs are already in place. A bare .all() here meant
+            # SaleOrderOptionsSerializer fell back to per-row lookups for products/invoices.
+            queryset = SaleOrderView.queryset.all()
 
             # Apply filters from request FIRST (before any slicing)
             if request.query_params:
