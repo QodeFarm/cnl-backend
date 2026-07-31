@@ -3,6 +3,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate, Spacer, Image
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from apps.company.models import Companies
 from apps.masters.template.print_config_defaults import (
@@ -86,17 +87,170 @@ def _effective_table_font_size(print_config):
     return fs
 
 
-def _compute_col_widths(visible_cols, total_width):
-    """
-    Compute per-column widths scaled to fill total_width proportionally,
-    using each column's base_width as the ratio.
-    """
+# Columns rendered as Paragraph: they word-wrap, so they may be squeezed to make room
+# for columns that cannot. Everything else is drawn as a plain string, and ReportLab
+# neither wraps nor clips those — an oversized value paints straight over the ruling.
+WRAPPABLE_KEYS = {'product_name', 'unit'}
+
+# Floor for a wrappable column, in inches on a 10" page. Below this a product name
+# wraps to one word per line and the row becomes unreadable.
+MIN_WRAPPABLE_WIDTH = 0.90 * inch
+
+# Smallest the table font may be auto-shrunk to before we stop trying. Below ~6pt the
+# document is not readable anyway, and no supported paper/column combination gets here.
+MIN_TABLE_FONT_SIZE = 6
+
+# Cache key for the widths resolved by product_details, read back by the totals rows.
+_COL_WIDTHS_CACHE_KEY = '_resolved_col_widths'
+
+
+def _proportional_col_widths(visible_cols, total_width):
+    """Per-column widths filling total_width in proportion to each column's base_width."""
     base_widths = [col.get('base_width', 0.8) for col in visible_cols]
     total_base = sum(base_widths)
     if total_base == 0:
         equal = total_width / len(visible_cols)
         return [equal] * len(visible_cols)
     return [(bw / total_base) * total_width for bw in base_widths]
+
+
+def _natural_width(col, rows, col_index, fs, cell_pad):
+    """
+    Width the column needs to draw its widest value in full: the header (bold) and every
+    cell (regular) measured in the real font, plus padding and a hairline gutter so the
+    glyphs never touch the ruling.
+    """
+    widest = stringWidth(str(col.get('label') or ''), 'Helvetica-Bold', fs)
+    for row in rows:
+        if col_index < len(row):
+            widest = max(widest, stringWidth(str(row[col_index] or ''), 'Helvetica', fs))
+    return widest + (2 * cell_pad) + 2
+
+
+def _is_wrappable(col):
+    """
+    True when the column is rendered as a Paragraph and can therefore be squeezed.
+    Columns declare this themselves; WRAPPABLE_KEYS covers definitions written before
+    the flag existed, so a config missing it still behaves.
+    """
+    return col.get('wrappable', col.get('key') in WRAPPABLE_KEYS)
+
+
+def _fit_at_font_size(cols, total_width, rows, fs, cell_pad):
+    """
+    Column widths at this exact font size, or None when the rigid columns plus the
+    wrappable floors simply cannot fit total_width — the caller then tries a size down.
+    """
+    preferred = _proportional_col_widths(cols, total_width)
+    widths    = list(preferred)
+    flexible  = []
+
+    for i, col in enumerate(cols):
+        if _is_wrappable(col):
+            flexible.append(i)
+        else:
+            widths[i] = max(widths[i], _natural_width(col, rows, i, fs, cell_pad))
+
+    surplus = total_width - sum(widths)
+    if surplus >= 0:
+        # Spread the slack so the table still reaches the margin: to the wrappable
+        # columns if there are any, otherwise across every column.
+        targets = flexible or list(range(len(cols)))
+        share = surplus / len(targets)
+        for i in targets:
+            widths[i] += share
+        return widths
+
+    # A wrappable column never floors above its own preferred width — on narrow paper
+    # a fixed floor would be wider than the column was ever meant to be.
+    floors = {i: min(MIN_WRAPPABLE_WIDTH, preferred[i]) for i in flexible}
+    if sum(widths[i] - floors[i] for i in flexible) < -surplus:
+        return None
+
+    need = -surplus
+    for i in sorted(flexible, key=lambda i: widths[i], reverse=True):
+        if need <= 0:
+            break
+        give = min(need, widths[i] - floors[i])
+        widths[i] -= give
+        need -= give
+    return widths
+
+
+def _compute_table_layout(cols, total_width, rows=None, fs=10, cell_pad=5):
+    """
+    Returns (widths, font_size) for a table that fits total_width with no value drawn
+    outside its column.
+
+    base_width is the *preference*; the measured content is the *constraint*. Columns
+    that cannot wrap (numbers, dates, S.No) are grown to fit their widest value and the
+    extra is reclaimed from the wrappable text columns, which absorb it by wrapping.
+    If even that is not enough the font steps down until it fits — the same shrink-to-fit
+    every print engine falls back to, because a clipped digit is a wrong number.
+
+    With rows=None this degrades to the plain proportional split, so a caller with no
+    data still gets the same column order and a sane layout.
+    """
+    if not rows:
+        return _proportional_col_widths(cols, total_width), fs
+
+    size = fs
+    while size >= MIN_TABLE_FONT_SIZE:
+        widths = _fit_at_font_size(cols, total_width, rows, size, cell_pad)
+        if widths is not None:
+            return widths, size
+        size -= 1
+
+    # Nothing fits even at the minimum readable size — far more columns than paper.
+    # Proportional split at the floor size: the layout stays inside the page and the
+    # wrapping columns still wrap. _resolve_product_columns drops columns on small
+    # paper specifically so this stays unreachable in practice.
+    return _proportional_col_widths(cols, total_width), MIN_TABLE_FONT_SIZE
+
+
+def _cache_table_layout(print_config, widths, fs):
+    """Publish the resolved grid so later bands of the same document can align to it."""
+    if print_config is not None:
+        print_config[_COL_WIDTHS_CACHE_KEY] = {'widths': widths, 'fs': fs}
+
+
+def _cached_table_layout(print_config, cols, total_width, fs):
+    """
+    The grid product_details resolved for this render, so every band of the document
+    shares one set of column widths and one font size. product_details always runs
+    first; the fallback covers callers rendering without a print_config.
+    """
+    cached = (print_config or {}).get(_COL_WIDTHS_CACHE_KEY) or {}
+    widths = cached.get('widths')
+    if widths and len(widths) == len(cols):
+        return widths, cached.get('fs', fs)
+    return _proportional_col_widths(cols, total_width), fs
+
+
+def _totals_probe_row(visible_cols, rows):
+    """
+    A synthetic row holding each numeric column's sum, formatted the way the totals row
+    formats it. The totals row is built by a different function that never sees the item
+    data, so its values are measured here — a column total is always at least as wide as
+    the total that function will print.
+    """
+    probe = []
+    for i, col in enumerate(visible_cols):
+        if _is_wrappable(col):
+            probe.append('')
+            continue
+        total = 0.0
+        found = False
+        for row in rows:
+            if i >= len(row):
+                continue
+            try:
+                total += float(str(row[i]).replace(',', ''))
+                found = True
+            except (ValueError, TypeError):
+                continue
+        probe.append(_fmt_total(total) if found else '')
+    return probe
 
 
 def doc_heading(file_path, doc_header, sub_header, print_config=None):
@@ -361,8 +515,6 @@ def format_numeric(cell):
 
 def product_details(data, show_gst=True, print_config=None):
     styles = getSampleStyleSheet()
-    fs = _effective_table_font_size(print_config)
-    style_normal = ParagraphStyle('prod_normal', parent=styles['Normal'], fontSize=fs)
     header_color = get_header_color(print_config) if print_config else colors.skyblue
     width_scale  = get_width_scale(print_config)  if print_config else 1.0
 
@@ -373,14 +525,17 @@ def product_details(data, show_gst=True, print_config=None):
     col_config   = (print_config or {}).get('column_config') if print_config else None
     visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
 
-    headers    = [col['label'] for col in visible_cols]
-    col_widths = _compute_col_widths(visible_cols, TOTAL_WIDTH)
+    headers = [col['label'] for col in visible_cols]
+    # Reduce cell padding on narrow paper sizes to reclaim column width
+    cell_pad = max(3, int(5 * width_scale))
 
     # Keys that should be right-aligned (numeric) and formatted
     NUMERIC_KEYS = {'quantity', 'rate', 'amount', 'discount_percent', 'discount_amount', 'gst_amount', 'total_amount', 'boxes'}
 
-    table_data = [headers]
-
+    # Text first, layout second, cells last: the columns are sized against the strings that
+    # will actually be drawn — including the totals row product_total_details* renders
+    # underneath — and only then is the font known and the Paragraph cells built.
+    item_rows = []
     for item in data:
         if not isinstance(item, (list, tuple)):
             continue
@@ -389,18 +544,27 @@ def product_details(data, show_gst=True, print_config=None):
             idx = col.get('data_index', 0)
             raw = item[idx] if idx < len(item) else ''
             if col['key'] in NUMERIC_KEYS:
-                # Plain string — ReportLab won't break mid-number (no space to break on)
-                cell = format_numeric(raw)
-            elif col['key'] == 'product_name':
-                # Only product_name needs Paragraph for proper word-wrap
-                cell = Paragraph(str(raw or ''), style_normal)
-            elif col['key'] == 'unit':
-                # Wrap unit name so multi-word names (e.g. "Stock Unit") word-wrap in narrow columns
-                cell = Paragraph(str(raw or ''), style_normal) if raw not in (None, '', '-') else ''
+                row.append(format_numeric(raw))
             else:
-                cell = str(raw) if raw not in (None, '', '-') else ''
-            row.append(cell)
-        table_data.append(row)
+                row.append(str(raw) if raw not in (None, '', '-') else '')
+        item_rows.append(row)
+
+    measure_rows = item_rows + [_totals_probe_row(visible_cols, item_rows)]
+    col_widths, fs = _compute_table_layout(
+        visible_cols, TOTAL_WIDTH, rows=measure_rows,
+        fs=_effective_table_font_size(print_config), cell_pad=cell_pad,
+    )
+    _cache_table_layout(print_config, col_widths, fs)
+
+    style_normal = ParagraphStyle('prod_normal', parent=styles['Normal'], fontSize=fs)
+    table_data = [headers]
+    for row in item_rows:
+        # Wrappable columns become Paragraphs so they word-wrap; everything else stays a
+        # plain string, which ReportLab never breaks mid-number.
+        table_data.append([
+            (Paragraph(value, style_normal) if value else '') if _is_wrappable(col) else value
+            for col, value in zip(visible_cols, row)
+        ])
 
     num_columns = len(visible_cols)
     # A5 gets fewer padding rows — small page has limited height to spare
@@ -411,8 +575,6 @@ def product_details(data, show_gst=True, print_config=None):
     table = Table(table_data, colWidths=col_widths)
 
     NUMERIC_KEYS = {'quantity', 'rate', 'amount', 'discount_percent', 'discount_amount', 'gst_amount', 'total_amount'}
-    # Reduce cell padding on narrow paper sizes to reclaim column width
-    cell_pad = max(3, int(5 * width_scale))
     row_pad  = max(4, int(8 * width_scale))
     style_cmds = [
         ('BACKGROUND', (0, 0), (-1, 0), header_color),
@@ -463,7 +625,10 @@ def product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc, show_gs
 
     col_config   = (print_config or {}).get('column_config') if print_config else None
     visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
-    col_widths   = _compute_col_widths(visible_cols, TOTAL_WIDTH)
+    # Reuse the grid product_details measured for this same document, so the totals row
+    # lines up with the item table above it — including any font auto-shrink it applied.
+    # Falls back to ratios if it ran without a config.
+    col_widths, fs = _cached_table_layout(print_config, visible_cols, TOTAL_WIDTH, fs)
 
     # Map column key → value to display in totals row (formatted)
     value_map = {
@@ -509,7 +674,10 @@ def product_total_details_purchase(ttl_Qty, final_Amount, total_disc, ttl_Amount
 
     col_config   = (print_config or {}).get('column_config') if print_config else None
     visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
-    col_widths   = _compute_col_widths(visible_cols, TOTAL_WIDTH)
+    # Reuse the grid product_details measured for this same document, so the totals row
+    # lines up with the item table above it — including any font auto-shrink it applied.
+    # Falls back to ratios if it ran without a config.
+    col_widths, fs = _cached_table_layout(print_config, visible_cols, TOTAL_WIDTH, fs)
 
     value_map = {
         'serial_no':        '',
@@ -1397,7 +1565,10 @@ def invoice_product_total_details(ttl_Qty, final_Amount, ttl_Amount, total_disc,
 
     col_config   = (print_config or {}).get('column_config') if print_config else None
     visible_cols = _resolve_product_columns(col_config, show_gst, print_config=print_config)
-    col_widths   = _compute_col_widths(visible_cols, TOTAL_WIDTH)
+    # Reuse the grid product_details measured for this same document, so the totals row
+    # lines up with the item table above it — including any font auto-shrink it applied.
+    # Falls back to ratios if it ran without a config.
+    col_widths, fs = _cached_table_layout(print_config, visible_cols, TOTAL_WIDTH, fs)
 
     value_map = {
         'serial_no':        '',
@@ -2346,8 +2517,7 @@ def payment_customer_details(cust_name, billing_address, phone, email, print_con
 
 def payment_details_table(payment_data, print_config=None):
     styles = getSampleStyleSheet()
-    fs = _get_font_size(print_config)
-    style_normal = ParagraphStyle('pay_normal', parent=styles['Normal'], fontSize=fs)
+    fs = _get_font_size(print_config)   # may be reduced below if the amounts need the room
     header_color = get_header_color(print_config) if print_config else colors.skyblue
     s = get_width_scale(print_config) if print_config else 1.0
 
@@ -2375,9 +2545,6 @@ def payment_details_table(payment_data, print_config=None):
 
     num_cols   = len(visible_keys)
     total_w    = 10.0 * inch * s
-    col_widths = [total_w / num_cols] * num_cols
-
-    table_data = [[Paragraph(f"<b>{col_labels[k]}</b>", style_normal) for k in visible_keys]]
 
     def _fmt_date(v):
         """Convert ISO datetime to DD/MM/YYYY or DD/MM/YYYY HH:MM:SS.
@@ -2398,7 +2565,7 @@ def payment_details_table(payment_data, print_config=None):
             pass
         return s
 
-    def _cell(payment, key):
+    def _value(payment, key):
         mapping = {
             'invoice_no':     payment.get('invoice_no', ''),
             'invoice_date':   _fmt_date(payment.get('invoice_date', '')),
@@ -2407,14 +2574,26 @@ def payment_details_table(payment_data, print_config=None):
             'amount_paid':    format_numeric(payment.get('amount', 0)),
             'total_amount':   format_numeric(payment.get('total', 0)),
         }
-        val = str(mapping.get(key, ''))
-        # Numeric cells as plain strings (no mid-number wrap)
-        if key in NUMERIC_KEYS:
-            return val
-        return Paragraph(val, style_normal)
+        return str(mapping.get(key, ''))
 
-    for payment in payment_data:
-        table_data.append([_cell(payment, k) for k in visible_keys])
+    value_rows = [[_value(payment, k) for k in visible_keys] for payment in payment_data]
+
+    # Amount columns are drawn as plain strings, so they are measured against the real
+    # values and the text columns give up the room. Equal-splitting the page was what let
+    # a large amount paint over the ruling.
+    cols = [
+        {'key': k, 'label': col_labels[k], 'base_width': 1.0, 'wrappable': k not in NUMERIC_KEYS}
+        for k in visible_keys
+    ]
+    col_widths, fs = _compute_table_layout(cols, total_w, rows=value_rows, fs=fs, cell_pad=6)
+    style_normal = ParagraphStyle('pay_normal', parent=styles['Normal'], fontSize=fs)
+
+    table_data = [[Paragraph(f"<b>{col_labels[k]}</b>", style_normal) for k in visible_keys]]
+    for values in value_rows:
+        table_data.append([
+            Paragraph(value, style_normal) if _is_wrappable(col) else value
+            for col, value in zip(cols, values)
+        ])
 
     while len(table_data) < 7:
         table_data.append([' '] * num_cols)
@@ -2491,34 +2670,43 @@ from reportlab.lib.units import inch
 
 def ledger_details_table(ledger_data, print_config=None):
     styles = getSampleStyleSheet()
-    fs = _get_font_size(print_config)
-    normal = ParagraphStyle('ledger_normal', parent=styles['Normal'], fontSize=fs)
-    bold   = ParagraphStyle('ledger_bold',   parent=styles['Normal'], fontSize=fs, fontName='Helvetica-Bold')
+    fs = _get_font_size(print_config)   # may be reduced below if the balances need the room
     header_color = get_header_color(print_config) if print_config else colors.HexColor('#f0f0f0')
     s = get_width_scale(print_config) if print_config else 1.0
 
-    # Column widths scale with paper size
-    # voucher_no needs 1.7" to fit "SO-INV-XXXX-XXXXX" without wrapping
-    col_widths = [1.2*inch*s, 1.7*inch*s, 3.0*inch*s, 1.2*inch*s, 1.2*inch*s, 1.7*inch*s]
+    # base_width is the preference; Debit/Credit/Balance are re-measured against the real
+    # values below, because a running balance grows without bound and these are drawn as
+    # plain strings, which ReportLab would happily paint straight over the ruling.
+    cols = [
+        {'key': 'date',        'label': 'Date',        'base_width': 1.2, 'wrappable': True},
+        {'key': 'voucher_no',  'label': 'Voucher No',  'base_width': 1.7, 'wrappable': True},
+        {'key': 'description', 'label': 'Description', 'base_width': 3.0, 'wrappable': True},
+        {'key': 'debit',       'label': 'Debit',       'base_width': 1.2},
+        {'key': 'credit',      'label': 'Credit',      'base_width': 1.2},
+        {'key': 'balance',     'label': 'Balance',     'base_width': 1.7},
+    ]
 
-    table_data = [[
-        Paragraph("<b>Date</b>", bold),
-        Paragraph("<b>Voucher No</b>", bold),
-        Paragraph("<b>Description</b>", bold),
-        Paragraph("<b>Debit</b>", bold),
-        Paragraph("<b>Credit</b>", bold),
-        Paragraph("<b>Balance</b>", bold),
-    ]]
-
-    for row in ledger_data:
-        table_data.append([
-            Paragraph(row.get('date', ''), normal),
-            Paragraph(row.get('voucher_no', ''), normal),
-            Paragraph(row.get('description', ''), normal),
-            # Numeric cells as plain strings — no mid-number wrap
+    value_rows = [
+        [
+            str(row.get('date') or ''),
+            str(row.get('voucher_no') or ''),
+            str(row.get('description') or ''),
             format_inr(row.get('debit') or 0),
             format_inr(row.get('credit') or 0),
             format_inr(row.get('balance') or 0),
+        ]
+        for row in ledger_data
+    ]
+
+    col_widths, fs = _compute_table_layout(cols, 10.0 * inch * s, rows=value_rows, fs=fs, cell_pad=6)
+    normal = ParagraphStyle('ledger_normal', parent=styles['Normal'], fontSize=fs)
+    bold   = ParagraphStyle('ledger_bold',   parent=styles['Normal'], fontSize=fs, fontName='Helvetica-Bold')
+
+    table_data = [[Paragraph(f"<b>{col['label']}</b>", bold) for col in cols]]
+    for values in value_rows:
+        table_data.append([
+            Paragraph(value, normal) if _is_wrappable(col) else value
+            for col, value in zip(cols, values)
         ])
 
     table = Table(table_data, colWidths=col_widths)
