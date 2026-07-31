@@ -993,15 +993,41 @@ class SaleOrderViewSet(APIView):
         
         queryset = SaleOrder.objects.all().order_by('is_deleted', '-created_at')
 
+        # ✅ Apply filters (remove pagination params to avoid conflicts)
         if request.query_params:
-            filterset = SaleOrderFilter(request.GET, queryset=queryset)
+            filter_params = request.GET.copy()
+            if 'page' in filter_params:
+                del filter_params['page']
+            if 'limit' in filter_params:
+                del filter_params['limit']
+            if 'sort[0]' in filter_params:
+                del filter_params['sort[0]']
+            if 'sort' in filter_params:
+                del filter_params['sort']
+            if '0' in filter_params:
+                del filter_params['0']
+            
+            filterset = SaleOrderFilter(filter_params, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
 
-        total_count = SaleOrder.objects.count()
-        serializer = SaleOrderSerializer(queryset, many=True)
-        return filter_response(queryset.count(),"Success",serializer.data,page,limit,total_count,status.HTTP_200_OK)
-
+        # ✅ Get total count from FILTERED queryset
+        total_count = queryset.count()
+        
+        # ✅ Apply pagination manually
+        paginated_results = queryset[(page - 1) * limit: page * limit]
+        
+        serializer = SaleOrderSerializer(paginated_results, many=True)
+        return filter_response(
+            total_count,  # ✅ Total filtered records
+            "Success",
+            serializer.data,
+            page,
+            limit,
+            total_count,  # ✅ Total filtered records
+            status.HTTP_200_OK
+        )
+        
     # def get_summary_data(self, request):
     #     """Fetches sale order summary data from both databases."""
     #     logger.info("Retrieving Sale order summary")
