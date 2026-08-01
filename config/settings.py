@@ -250,7 +250,7 @@ TIME_ZONE = 'Asia/Kolkata' #UTC
 
 USE_I18N = True
 
-USE_TZ = True #True
+USE_TZ = False #True
 
 
 #write this before migrate
