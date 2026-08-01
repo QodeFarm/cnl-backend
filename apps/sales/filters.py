@@ -49,6 +49,9 @@ class SaleOrderFilter(filters.FilterSet):
     # New filter to fetch all child sale orders based on parent order_no
     parent_order_no = filters.CharFilter(method='filter_child_orders')
     work_order_created = filters.CharFilter(method='filter_by_work_order_created')
+    # ✅ Use order_date instead of created_at
+    order_date_after = filters.DateFilter(field_name='order_date', lookup_expr='gte')
+    order_date_before = filters.DateFilter(field_name='order_date', lookup_expr='lte')
     
     
     def filter_by_work_order_created(self, queryset, name, value):
@@ -104,7 +107,7 @@ class SaleOrderFilter(filters.FilterSet):
     class Meta:
         model = SaleOrder 
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['order_no','order_date','sale_estimate','flow_status_name','customer_id','customer','sale_type_id','sale_type','order_status_id', 'status_name','created_at','advance_amount','tax','amount','period_name','work_order_created','s','sort','page','limit']
+        fields = ['order_no','order_date','sale_estimate','flow_status_name','customer_id','customer','sale_type_id','sale_type','order_status_id', 'status_name','created_at','advance_amount','tax','amount','period_name','work_order_created', 'order_date_after', 'order_date_before', 's','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
     customer_id = filters.CharFilter(method=filter_uuid)
