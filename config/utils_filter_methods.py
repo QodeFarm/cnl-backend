@@ -20,69 +20,165 @@ PERIOD_NAME_CHOICES = [
     ('last_year', 'LastYear'),
 ]
 
-def filter_by_period_name(self, queryset, name, value):
-        today = timezone.now().date()
-        start_date = None
-        end_date = today
+# def filter_by_period_name(self, queryset, name, value):
+#         today = timezone.now().date()
+#         start_date = None
+#         end_date = today
 
-        # Check if custom from_date and to_date are provided in the URL
-        from_date = self.data.get('created_at_after')
-        to_date = self.data.get('created_at_before')
+#         # Check if custom from_date and to_date are provided in the URL
+#         from_date = self.data.get('created_at_after')
+#         to_date = self.data.get('created_at_before')
 
-        if from_date and to_date:
-            try:
-                start_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
-                end_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
-            except ValueError:
-                # Handle invalid date format
-                print(f"Invalid date format: from_date={from_date}, to_date={to_date}")
-                return queryset.none()
-        else:
-            # Determine the date range based on the period_name selected
-            if value == 'today':
-                start_date = end_date
-            elif value == 'yesterday':
-                start_date = end_date - datetime.timedelta(days=1)
-                end_date = start_date
-            elif value == 'last_week':
-                start_date = today - datetime.timedelta(days=today.weekday() + 7)
-                end_date = start_date + datetime.timedelta(days=6)
-            elif value == 'current_month':
-                start_date = today.replace(day=1)
-            elif value == 'last_month':
-                first_day_of_current_month = today.replace(day=1)
-                last_day_of_last_month = first_day_of_current_month - datetime.timedelta(days=1)
-                start_date = last_day_of_last_month.replace(day=1)
-                end_date = last_day_of_last_month
-            elif value == 'last_six_months':
-                start_date = today - datetime.timedelta(days=180)
-                # six_months_ago = today - relativedelta(months=6)
-                # start_date = six_months_ago.replace(day=1)
-                # end_date = today
-            elif value == 'current_quarter':
-                quarter = (today.month - 1) // 3 + 1
-                start_date = today.replace(month=(quarter - 1) * 3 + 1, day=1)
-            elif value == 'year_to_date':
-                # start_date = today.replace(month=1, day=1)
-                start_date = today.replace(month=4, day=1)
-            elif value == 'last_year':
-                # start_date = today.replace(month=1, day=1) - datetime.timedelta(days=365)
-                # end_date = today.replace(month=12, day=31)
-                start_date = today.replace(month=4, day=1) - datetime.timedelta(days=365)
-                end_date = today.replace(month=3, day=31)
+#         if from_date and to_date:
+#             try:
+#                 start_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
+#                 end_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
+#             except ValueError:
+#                 # Handle invalid date format
+#                 print(f"Invalid date format: from_date={from_date}, to_date={to_date}")
+#                 return queryset.none()
+#         else:
+#             # Determine the date range based on the period_name selected
+#             if value == 'today':
+#                 start_date = end_date
+#             elif value == 'yesterday':
+#                 start_date = end_date - datetime.timedelta(days=1)
+#                 end_date = start_date
+#             elif value == 'last_week':
+#                 start_date = today - datetime.timedelta(days=today.weekday() + 7)
+#                 end_date = start_date + datetime.timedelta(days=6)
+#             elif value == 'current_month':
+#                 start_date = today.replace(day=1)
+#             elif value == 'last_month':
+#                 first_day_of_current_month = today.replace(day=1)
+#                 last_day_of_last_month = first_day_of_current_month - datetime.timedelta(days=1)
+#                 start_date = last_day_of_last_month.replace(day=1)
+#                 end_date = last_day_of_last_month
+#             elif value == 'last_six_months':
+#                 start_date = today - datetime.timedelta(days=180)
+#                 # six_months_ago = today - relativedelta(months=6)
+#                 # start_date = six_months_ago.replace(day=1)
+#                 # end_date = today
+#             elif value == 'current_quarter':
+#                 quarter = (today.month - 1) // 3 + 1
+#                 start_date = today.replace(month=(quarter - 1) * 3 + 1, day=1)
+#             elif value == 'year_to_date':
+#                 # start_date = today.replace(month=1, day=1)
+#                 start_date = today.replace(month=4, day=1)
+#             elif value == 'last_year':
+#                 # start_date = today.replace(month=1, day=1) - datetime.timedelta(days=365)
+#                 # end_date = today.replace(month=12, day=31)
+#                 start_date = today.replace(month=4, day=1) - datetime.timedelta(days=365)
+#                 end_date = today.replace(month=3, day=31)
 
   
-        # Convert start_date and end_date to datetime objects with min and max times
-        if start_date:
-            start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
-        if end_date:
-            end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
+#         # Convert start_date and end_date to datetime objects with min and max times
+#         if start_date:
+#             start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
+#         if end_date:
+#             end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
 
-        # Apply filters
-        if start_datetime and end_datetime:
-            queryset = queryset.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
+#         # Apply filters
+#         if start_datetime and end_datetime:
+#             queryset = queryset.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
 
-        return queryset
+#         return queryset
+
+from django.utils import timezone
+import datetime
+
+def filter_by_period_name(self, queryset, name, value):
+    today = timezone.now().date()
+    start_date = None
+    end_date = None
+
+    # Check if custom from_date and to_date are provided in the URL
+    from_date = self.data.get('created_at_after')
+    to_date = self.data.get('created_at_before')
+
+    if from_date and to_date:
+        try:
+            start_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
+            end_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
+        except ValueError:
+            # Handle invalid date format
+            print(f"Invalid date format: from_date={from_date}, to_date={to_date}")
+            return queryset.none()
+    elif from_date:
+        try:
+            start_date = datetime.datetime.strptime(from_date, '%Y-%m-%d').date()
+            end_date = start_date
+        except ValueError:
+            print(f"Invalid date format: from_date={from_date}")
+            return queryset.none()
+    elif to_date:
+        try:
+            end_date = datetime.datetime.strptime(to_date, '%Y-%m-%d').date()
+            start_date = end_date
+        except ValueError:
+            print(f"Invalid date format: to_date={to_date}")
+            return queryset.none()
+    else:
+        # Determine the date range based on the period_name selected
+        if value == 'today':
+            start_date = today
+            end_date = today
+        elif value == 'yesterday':
+            start_date = today - datetime.timedelta(days=1)
+            end_date = start_date
+        elif value == 'last_week':
+            start_date = today - datetime.timedelta(days=today.weekday() + 7)
+            end_date = start_date + datetime.timedelta(days=6)
+        elif value == 'current_month':
+            start_date = today.replace(day=1)
+            end_date = today
+        elif value == 'last_month':
+            first_day_of_current_month = today.replace(day=1)
+            last_day_of_last_month = first_day_of_current_month - datetime.timedelta(days=1)
+            start_date = last_day_of_last_month.replace(day=1)
+            end_date = last_day_of_last_month
+        elif value == 'last_six_months':
+            start_date = today - datetime.timedelta(days=180)
+            end_date = today
+        elif value == 'current_quarter':
+            quarter = (today.month - 1) // 3 + 1
+            start_date = today.replace(month=(quarter - 1) * 3 + 1, day=1)
+            end_date = today
+        elif value == 'year_to_date':
+            start_date = today.replace(month=4, day=1)
+            end_date = today
+        elif value == 'last_year':
+            start_date = today.replace(month=4, day=1) - datetime.timedelta(days=365)
+            end_date = today.replace(month=3, day=31)
+        else:
+            # No valid period selected, return queryset as is
+            return queryset
+
+    # Convert dates to timezone-aware datetime objects and apply filters
+    if start_date and end_date:
+        # Create datetime objects with min and max times
+        start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
+        end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
+        
+        # Make them timezone-aware using Django's timezone
+        start_datetime = timezone.make_aware(start_datetime)
+        end_datetime = timezone.make_aware(end_datetime)
+        
+        # Apply filter using aware datetimes (Django handles the conversion to UTC)
+        queryset = queryset.filter(
+            created_at__gte=start_datetime,
+            created_at__lte=end_datetime
+        )
+    elif start_date:
+        start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
+        start_datetime = timezone.make_aware(start_datetime)
+        queryset = queryset.filter(created_at__gte=start_datetime)
+    elif end_date:
+        end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
+        end_datetime = timezone.make_aware(end_datetime)
+        queryset = queryset.filter(created_at__lte=end_datetime)
+
+    return queryset
 
 #=====================filter for page-limit-sort-search=======================================
 def apply_sorting(self, queryset):
