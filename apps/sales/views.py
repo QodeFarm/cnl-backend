@@ -5,8 +5,8 @@ from apps.finance.serializers import JournalEntryLinesSerializer
 from apps.masters.template.sales.sales_doc import sale_order_sales_invoice_data, sale_order_sales_invoice_doc
 from apps.masters.template.table_defination import doc_heading
 from apps.production.models import WorkOrder
-from config.utils_methods import build_whatsapp_click_url, check_credit_limit, get_pagination_params, path_generate, resolve_phone_from_document, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
-from config.utils_filter_methods import filter_response, list_filtered_objects
+from config.utils_methods import build_whatsapp_click_url, check_credit_limit, get_pagination_params, optimize_list_queryset, path_generate, resolve_phone_from_document, update_multi_instances, update_product_stock, validate_input_pk, delete_multi_instance, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_filter_methods import build_default_ordering, filter_response, list_filtered_objects
 from apps.inventory.models import BlockedInventory, InventoryBlockConfig
 from apps.finance.models import JournalEntryLines, PaymentTransaction
 from apps.customfields.serializers import CustomFieldValueSerializer
@@ -1325,8 +1325,7 @@ class SaleOrderViewSet(APIView):
             total_count = queryset.count()
             
             # Get pagination parameters
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             # Apply pagination LAST (after all filtering)
             paginated_results = queryset[(page - 1) * limit: page * limit]
@@ -2924,7 +2923,15 @@ class SaleInvoiceOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"
 
             if summary:
-                saleinvoiceorder = SaleInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
+                # Same shared optimizer the 80 list_all_objects endpoints get for free —
+                # this screen has its own list code, so it has to ask for it by name.
+                # This path strips page/limit before the FilterSet, so the shared sorting
+                # never runs here — order explicitly by the invoice date, same rule.
+                saleinvoiceorder = optimize_list_queryset(
+                    SaleInvoiceOrders.objects.order_by(
+                        *build_default_ordering(SaleInvoiceOrders, 'invoice_date')),
+                    SaleInvoiceOrderOptionsSerializer,
+                )
 
                 # ✅ Apply filters/search FIRST (remove pagination params to avoid conflicts with filtering)
                 if request.query_params:
@@ -2956,16 +2963,14 @@ class SaleInvoiceOrdersViewSet(APIView):
 
                 saleinvoiceorder = saleinvoiceorder.exclude(exclude_q) 
 
-                data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(saleinvoiceorder)
-
-                total_count = len(data)  # total after summary processing
-                page = int(request.query_params.get('page', 1))
-                limit = int(request.query_params.get('limit', 10))
-
-                # manual pagination on summary data
-                start_index = (page - 1) * limit
-                end_index = start_index + limit
-                paginated_data = data[start_index:end_index]
+                # Count and slice in the database, THEN serialize. This used to serialize
+                # every invoice in the tenant and slice the resulting Python list, so a
+                # 10-row page cost exactly as much as a 100-row page.
+                page, limit, start_index, end_index = get_pagination_params(request)
+                total_count = saleinvoiceorder.count()  # total after summary processing
+                paginated_data = SaleInvoiceOrderOptionsSerializer.get_sale_invoice_order_summary(
+                    saleinvoiceorder[start_index:end_index]
+                )
 
                 return filter_response(
                     total_count,
@@ -3135,8 +3140,7 @@ class SaleInvoiceOrdersViewSet(APIView):
                 else:
                     saleorders_mstcnl = base_queryset_mstcnl
 
-                page = int(request.query_params.get('page', 1))
-                limit = int(request.query_params.get('limit', 10))
+                page, limit, _pg_start, _pg_end = get_pagination_params(request)
                 total_count = saleorders_mstcnl.count()  # ✅ Correct: filtered count
                 start_index = (page - 1) * limit
                 end_index = start_index + limit
@@ -3181,8 +3185,7 @@ class SaleInvoiceOrdersViewSet(APIView):
                     if filterset.is_valid():
                         queryset = filterset.qs 
 
-                page = int(request.query_params.get('page', 1))
-                limit = int(request.query_params.get('limit', 10))
+                page, limit, _pg_start, _pg_end = get_pagination_params(request)
                 total_count = queryset.count()  # ✅ Correct: filtered count
                 paginated_results = queryset[(page - 1) * limit: page * limit]
 
@@ -3219,8 +3222,7 @@ class SaleInvoiceOrdersViewSet(APIView):
             logger.info("Retrieving Sale Register data")
             
             # Get pagination parameters
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             register_type = request.query_params.get('register_type', 'general')
             
             # Get cancelled status IDs
@@ -5651,7 +5653,10 @@ class SaleReturnOrdersViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving sale return orders summary")
-                salereturnorders = SaleReturnOrders.objects.all().order_by('is_deleted', '-created_at')
+                # This path strips page/limit before the FilterSet, so the shared
+                # sorting never runs here — order explicitly by the document date.
+                salereturnorders = SaleReturnOrders.objects.order_by(
+                    *build_default_ordering(SaleReturnOrders, 'return_date'))
                 
                 # ✅ Apply filters FIRST (remove pagination params to avoid conflicts)
                 if request.query_params:
@@ -5664,16 +5669,13 @@ class SaleReturnOrdersViewSet(APIView):
                     if filterset.is_valid():
                         salereturnorders = filterset.qs
                 
-                data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(salereturnorders)
-                
-                total_count = len(data)
-                page = int(request.query_params.get('page', 1))
-                limit = int(request.query_params.get('limit', 10))
-                
-                # Manual pagination on summary data
-                start_index = (page - 1) * limit
-                end_index = start_index + limit
-                paginated_data = data[start_index:end_index]
+                # Count and slice in the database, THEN serialize. Serializing first and
+                # slicing the resulting list made a 10-row page cost the whole table.
+                page, limit, start_index, end_index = get_pagination_params(request)
+                total_count = salereturnorders.count()
+                paginated_data = SaleReturnOrdersOptionsSerializer.get_sale_return_orders_summary(
+                    optimize_list_queryset(salereturnorders, SaleReturnOrdersOptionsSerializer)[start_index:end_index]
+                )
                 
                 return filter_response(
                     total_count,
@@ -5687,8 +5689,7 @@ class SaleReturnOrdersViewSet(APIView):
             
             logger.info("Retrieving all sale return order")
 
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             
             # Start with base queryset
             queryset = SaleReturnOrders.objects.all().order_by('is_deleted', '-created_at')
@@ -6303,8 +6304,7 @@ class QuickPackCreateViewSet(APIView):
         try:
             logger.info("Retrieving all QuickPacks")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10))   
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             # queryset = QuickPacks.objects.all().order_by('is_deleted', '-created_at')	
             queryset = QuickPacks.objects.filter(is_deleted=False).order_by('-created_at')
@@ -6604,8 +6604,7 @@ class SaleReceiptCreateViewSet(APIView):
         try:
             logger.info("Retrieving all sale_receipt")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             queryset = SaleReceipt.objects.all().order_by('is_deleted', '-created_at')	
 
@@ -6831,8 +6830,7 @@ class WorkflowCreateViewSet(APIView):
         try:
             logger.info("Retrieving all workflows")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             queryset = Workflow.objects.all().order_by('is_deleted', '-created_at')
 
@@ -7166,8 +7164,7 @@ class SaleCreditNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             #print("try block is triggering")
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             
             queryset = SaleCreditNotes.objects.all().order_by('is_deleted', '-created_at')	
             # Apply filters manually
@@ -7501,8 +7498,7 @@ class SaleDebitNoteViewset(APIView):
         try:
             logger.info("Retrieving all salecreditnote")
             #print("try block is triggering")
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             
             queryset = SaleDebitNotes.objects.all().order_by('is_deleted', '-created_at')	
             # Apply filters manually
@@ -9602,8 +9598,7 @@ class PaymentTransactionAPIView(APIView):
     def get(self, request, customer_id=None, transaction_id=None):
         records_all = request.query_params.get('records_all', 'false').lower() == 'true'
 
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
         # ✅ CASE 1: FETCH SINGLE RECORD
         if transaction_id:
@@ -11997,8 +11992,7 @@ class DeliveryChallanViewSet(APIView):
             return result if result else self.retrieve(request, *args, **kwargs)
         try:
             logger.info("Retrieving all DeliveryChallans")
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             queryset = DeliveryChallans.objects.all().order_by('is_deleted', '-created_at')
             if request.query_params:

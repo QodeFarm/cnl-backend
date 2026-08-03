@@ -501,8 +501,7 @@ class ProductViewSet(APIView):
             no_page = request.query_params.get('no_page', 'false').lower() == 'true'
             view_type = request.query_params.get('view', '')
 
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             # 1️. Base queryset
             queryset = Products.objects.all().order_by('is_deleted', '-created_at')

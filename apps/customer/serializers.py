@@ -251,9 +251,30 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
         model = Customer
         fields = ['customer_id', 'name', 'code', 'phone', 'email', 'city', 'gst', 'ledger_account', 'created_at', 'customer_addresses', 'credit_limit', 'max_credit_days','pin_code', 'customer_category', 'is_deleted', 'customer_common_for_sales_purchase']
 
+    def _addresses(self, obj):
+        """
+        This customer's addresses, from the prefetch cache when the queryset provided one.
+        Without it every address read is its own query, and five fields below want them.
+        """
+        cache = getattr(obj, '_prefetched_objects_cache', None) or {}
+        for key in ('customeraddresses_set', 'customer_addresses'):
+            if key in cache:
+                return list(cache[key])
+        return list(
+            CustomerAddresses.objects.using(obj._state.db)
+            .filter(customer_id=obj.customer_id)
+            .select_related('city_id', 'state_id', 'country_id')
+        )
+
     def get_customer_details(self, obj):
-        addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
-        
+        # email / phone / city / customer_addresses are four separate fields all built from
+        # this one walk, so without memoizing it ran four times per row.
+        cached = getattr(obj, '_customer_details_cache', None)
+        if cached is not None:
+            return cached
+
+        addresses = self._addresses(obj)
+
         email = None
         phone = None
         city = None
@@ -305,7 +326,12 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
         # if shipping_address:
         #     customer_addresses["shipping_address"] = f"{shipping_address.address}, {shipping_address.city_id.city_name}, {shipping_address.state_id.state_name}, {shipping_address.country_id.country_name}, {shipping_address.pin_code}, Phone: {shipping_address.phone},email: {shipping_address.email}"
         
-        return email, phone, city, customer_addresses
+        details = (email, phone, city, customer_addresses)
+        try:
+            obj._customer_details_cache = details
+        except AttributeError:
+            pass
+        return details
 
     def get_email(self, obj):
         return self.get_customer_details(obj)[0]
@@ -323,9 +349,11 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
         return self.get_customer_details(obj)[3]
     
     def get_pin_code(self, obj):
-        addresses = CustomerAddresses.objects.filter(customer_id=obj.customer_id)
+        # Reuses the same address list the other fields walk — this used to issue two more
+        # queries per row on top of theirs.
+        addresses = self._addresses(obj)
         # Try to get pin code from shipping address first
-        shipping_address = addresses.filter(address_type='Shipping').first()
+        shipping_address = next((a for a in addresses if a.address_type == 'Shipping'), None)
         if shipping_address and shipping_address.pin_code:
             return shipping_address.pin_code
             
@@ -349,7 +377,12 @@ class CustomerOptionSerializer(serializers.ModelSerializer):
     def get_ledger_account(self, obj):
         if obj.ledger_account_id_id:  # Check the raw foreign key ID, not just the relation
             try:
-                ledger_account = LedgerAccounts.objects.get(ledger_account_id=obj.ledger_account_id_id)
+                # Go through the relation so select_related serves it. The explicit .get()
+                # this replaced was one query per row and could not be joined away. The
+                # raw-id check above still guards the dangling-FK case.
+                ledger_account = obj.ledger_account_id
+                if ledger_account is None:
+                    return None
                 return ModLedgerAccountsSerializers(ledger_account).data
             except LedgerAccounts.DoesNotExist:
                 return None  # Avoid raising an error

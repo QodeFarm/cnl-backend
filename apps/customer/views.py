@@ -25,7 +25,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.serializers import ValidationError
 from django.core.exceptions import  ObjectDoesNotExist
-from django.db.models import Sum, F, DecimalField, ExpressionWrapper,When,Value,Case,FloatField,Max
+from django.db.models import Sum, F, DecimalField, ExpressionWrapper,When,Value,Case,FloatField,Max,Prefetch
 from django.db.models.functions import Coalesce
 from .models import Customer
 from openpyxl import Workbook
@@ -77,7 +77,18 @@ class LedgerAccountsViews(viewsets.ModelViewSet):
         return soft_delete(instance)
 
 class CustomerViews(viewsets.ModelViewSet):
-    queryset = Customer.objects.all().order_by('is_deleted', '-created_at')	
+    # The list serializer reads the category, the ledger account and every address (with
+    # its city/state/country). Prefetched here it is a fixed handful of queries; left to
+    # the serializer it was several per row. Reverse relations like the addresses cannot
+    # be derived from the serializer, so they are declared explicitly.
+    queryset = Customer.objects.select_related(
+        'customer_category_id', 'ledger_account_id',
+    ).prefetch_related(
+        Prefetch(
+            'customeraddresses_set',
+            queryset=CustomerAddresses.objects.select_related('city_id', 'state_id', 'country_id'),
+        ),
+    ).order_by('is_deleted', '-created_at')
     serializer_class = CustomerSerializer
     filter_backends = [DjangoFilterBackend,OrderingFilter]
     filterset_class = CustomerFilters
@@ -87,14 +98,42 @@ class CustomerViews(viewsets.ModelViewSet):
         # ?minimal=true — lightweight dropdown list (customer_id + name only, for select fields)
         minimal = request.query_params.get('minimal', 'false').lower() == 'true'
         if minimal:
-            queryset = Customer.objects.filter(is_deleted=False).order_by('name')
+            # Deliberately unpaginated — the select fields load this once and search it in
+            # the browser, so trimming rows would hide customers from the picker. .only()
+            # keeps every row but reads just the two columns actually serialized.
+            queryset = (Customer.objects.filter(is_deleted=False)
+                        .only('customer_id', 'name').order_by('name'))
             serializer = CustomerDropdownSerializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         summary = request.query_params.get('summary', 'false').lower() == 'true'
         if summary:
-            customers = self.filter_queryset(self.get_queryset())
+            # This screen has its own list code, so it cannot inherit the paging in
+            # list_all_objects — it has to ask for it. CustomerFilters is the paginator
+            # (filter_by_page / filter_by_limit) but only slices when `limit` is present;
+            # without it every customer in the tenant was serialized on every request.
+            page, limit, start, end = get_pagination_params(request)
+            params = request.GET.copy()
+            params['page'] = str(page)
+            params['limit'] = str(limit)
+
+            base = optimize_list_queryset(self.get_queryset(), CustomerOptionSerializer)
+            filterset = CustomerFilters(params, queryset=base)
+            if filterset.is_valid():
+                customers = filterset.qs
+                total_count = getattr(filterset, 'total_count', None)
+            else:
+                customers = base[start:end]
+                total_count = None
+            if total_count is None:
+                total_count = base.count()
+
             data = CustomerOptionSerializer.get_customer_summary(customers)
+            # ta-table reads totalCount first, falling back to count — without it the pager
+            # would treat the page size as the whole table and show a single page.
+            data['totalCount'] = total_count
+            data['page'] = page
+            data['limit'] = limit
             Result = Response(data, status=status.HTTP_200_OK)
         else:
             Result = list_all_objects(self, request, *args, **kwargs)
@@ -185,9 +224,8 @@ class CustomerCreateViews(APIView):
             return build_response(0, "An error occurred", [], status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def get_pagination_params(self, request):
-        """Extracts pagination parameters from the request."""
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        """Extracts pagination parameters from the request (clamped — see utils_methods)."""
+        page, limit, _start, _end = get_pagination_params(request)
         return page, limit
     
     def get_customers(self, request):
@@ -197,15 +235,20 @@ class CustomerCreateViews(APIView):
         page, limit = self.get_pagination_params(request)
         # using_db = self.resolve_db_from_request(request)
 
-        queryset = Customer.objects.all().order_by('is_deleted', '-created_at')
+        # Join what CustomerSerializer reads — it nests nine relations, each one a query
+        # per row otherwise.
+        queryset = optimize_list_queryset(
+            Customer.objects.order_by('is_deleted', '-created_at'), CustomerSerializer,
+        )
 
         if request.query_params:
             filterset = CustomerFilters(request.GET, queryset=queryset)
             if filterset.is_valid():
                 queryset = filterset.qs
-                
-        # ✅ Enforce ordering again after filters
-        queryset = queryset.order_by('is_deleted', '-created_at')
+
+        # The ordering above already applies. Re-ordering here raised "Cannot reorder a
+        # query once a slice has been taken" whenever the filterset had paginated, i.e.
+        # on any request carrying ?limit — this endpoint returned 500 for those.
 
         total_count = Customer.objects.count()
         serializer = CustomerSerializer(queryset, many=True)
@@ -220,12 +263,33 @@ class CustomerCreateViews(APIView):
         page, limit = self.get_pagination_params(request)
         # using_db = self.resolve_db_from_request(request)
 
-        queryset = Customer.objects.all().order_by('-created_at')
+        # This is the endpoint the customer LIST screen calls (customers/customers/).
+        # Join what CustomerOptionSerializer reads — the category, the ledger account and
+        # every address with its city/state/country — or each row costs several queries.
+        # ledger_account is a SerializerMethodField, so optimize_list_queryset cannot see
+        # it — declared explicitly here. Both FKs are nullable, so these are LEFT JOINs and
+        # cannot drop a row whose target is missing.
+        queryset = optimize_list_queryset(
+            Customer.objects.select_related(
+                'ledger_account_id', 'customer_category_id',
+            ).prefetch_related(
+                Prefetch(
+                    'customeraddresses_set',
+                    queryset=CustomerAddresses.objects.select_related('city_id', 'state_id', 'country_id'),
+                ),
+            ).order_by('-created_at'),
+            CustomerOptionSerializer,
+        )
 
-        if request.query_params:
-            filterset = CustomerFilters(request.GET, queryset=queryset.order_by('-created_at'))
-            if filterset.is_valid():
-                queryset = filterset.qs
+        # CustomerFilters is the paginator (filter_by_page / filter_by_limit) but it only
+        # slices when `limit` is present. Pass the clamped values explicitly so a request
+        # without them cannot fall through and serialize every customer in the tenant.
+        params = request.GET.copy()
+        params['page'] = str(page)
+        params['limit'] = str(limit)
+        filterset = CustomerFilters(params, queryset=queryset)
+        if filterset.is_valid():
+            queryset = filterset.qs
 
         total_count = Customer.objects.count()
         serializer = CustomerOptionSerializer(queryset, many=True)

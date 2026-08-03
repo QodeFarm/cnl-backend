@@ -8,7 +8,7 @@ from apps.leads.filters import InteractionTypesFilter, LeadStatusesFilter, Leads
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
 from .serializers import *
-from config.utils_methods import build_response, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data
+from config.utils_methods import get_pagination_params, build_response, generic_data_creation, get_object_or_none, list_all_objects, create_instance, update_instance, soft_delete, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data
 from rest_framework.views import APIView
 from datetime import datetime
 from django_filters.rest_framework import DjangoFilterBackend 
@@ -128,8 +128,7 @@ class LeadsViewSet(APIView):
             logger.info("Retrieving all lead")
             queryset = Leads.objects.all().order_by('-created_at')	
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             total_count = Leads.objects.count()
                         
             # Apply filters manually

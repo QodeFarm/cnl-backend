@@ -2,11 +2,20 @@ from django_filters import rest_framework as filters
 from apps.hrms.models import Departments, Designations, EmployeeSalaryComponents, Employees, EmployeeSalary, EmployeeLeaves, JobCodes, JobTypes, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, LeaveTypes, SalaryComponents, Shifts, Swipes, Timesheets, TimesheetEntries, TimesheetApprovals
 from config.utils_methods import filter_uuid
 from django_filters import DateFromToRangeFilter
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
 
 class EmployeesFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — "who joined in July" is what people ask of an employee list.
+    document_date_field = 'hire_date'
+
+    # Report screens send from_date/to_date instead of hire_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='hire_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='hire_date', lookup_expr='lte')
+
     employee_id = filters.CharFilter(method=filter_uuid)
     first_name = filters.CharFilter(lookup_expr='icontains')
     last_name = filters.CharFilter(lookup_expr='icontains')
@@ -14,7 +23,9 @@ class EmployeesFilter(filters.FilterSet):
     email = filters.CharFilter(lookup_expr='exact')
     phone = filters.CharFilter(lookup_expr='exact')
     address = filters.CharFilter(lookup_expr='icontains')
-    hire_date = filters.DateFilter()
+    # Range (hire_date_after / hire_date_before); exact form kept for old callers.
+    hire_date = DocumentDateFromToRangeFilter()
+    hire_date_exact = filters.DateFilter(field_name='hire_date')
     job_type_id = filters.CharFilter(field_name='job_type_id__job_type_name', lookup_expr='icontains')
     designation_id = filters.CharFilter(field_name='designation_id__designation_name', lookup_expr='icontains')
     job_code_id = filters.CharFilter(field_name='job_code_id__job_code', lookup_expr='icontains')
@@ -50,9 +61,20 @@ class EmployeesFilter(filters.FilterSet):
 
 
 class EmployeeSalaryFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a payroll row belongs to the period it pays for.
+    document_date_field = 'salary_start_date'
+
+    # Report screens send from_date/to_date instead of salary_start_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='salary_start_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='salary_start_date', lookup_expr='lte')
+
     salary_amount = filters.RangeFilter()
     salary_currency = filters.CharFilter(lookup_expr='icontains') 
-    salary_start_date = filters.DateFilter()
+    # Range (salary_start_date_after / salary_start_date_before); exact form kept for old callers.
+    salary_start_date = DocumentDateFromToRangeFilter()
+    salary_start_date_exact = filters.DateFilter(field_name='salary_start_date')
     salary_end_date = filters.DateFilter() 
     # employee_id = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
     employee_name = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains', label='Employee Name')
@@ -85,7 +107,18 @@ class EmployeeSalaryFilter(filters.FilterSet):
         fields =['salary_amount','salary_currency','salary_start_date','salary_end_date','employee_name', 'employee_id','created_at','period_name','s','sort','page','limit']
 
 class EmployeeLeavesFilter(filters.FilterSet):
-    start_date = filters.DateFilter()
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a leave belongs to the dates it covers, not when it was keyed in.
+    document_date_field = 'start_date'
+
+    # Report screens send from_date/to_date instead of start_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='start_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='start_date', lookup_expr='lte')
+
+    # Range (start_date_after / start_date_before); exact form kept for old callers.
+    start_date = DocumentDateFromToRangeFilter()
+    start_date_exact = filters.DateFilter(field_name='start_date')
     end_date = filters.DateFilter() 
     comments = filters.CharFilter(lookup_expr='icontains') 
     employee = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
@@ -192,9 +225,21 @@ class EmployeeLeaveBalanceFilter(filters.FilterSet):
         fields =['employee_id','employee','leave_type_id','leave_type','leave_balance','leave_bal','year','created_at','period_name','s','sort','page','limit']
 
 class EmployeeAttendanceFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'attendance_date'
+
+    # Report screens send from_date/to_date instead of attendance_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='attendance_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='attendance_date', lookup_expr='lte')
+
     employee = filters.CharFilter(field_name='employee_id__full_name', lookup_expr='icontains')
     employee_id = filters.CharFilter(method=filter_uuid)
-    attendance_date = filters.DateFilter()
+    # Range (attendance_date_after / attendance_date_before) so the date filter and Quick Period work;
+    # exact form kept for old callers. Handles DateField and DateTimeField alike.
+    attendance_date = DocumentDateFromToRangeFilter()
+    attendance_date_exact = filters.DateFilter(field_name='attendance_date')
     absent = filters.BooleanFilter()
     leave_duration = filters.ChoiceFilter(field_name='leave_duration',choices=[('First Half', 'First Half'),('Full Day', 'Full Day'),('Second Half', 'Second Half')])
     created_at = DateFromToRangeFilter()
@@ -460,6 +505,15 @@ class LeaveTypesFilter(filters.FilterSet):
 # ===================== timesheets ====================================
 
 class TimesheetsFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a timesheet belongs to the week it covers.
+    document_date_field = 'start_date'
+
+    # Report screens send from_date/to_date instead of start_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='start_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='start_date', lookup_expr='lte')
+
     """
     Filter set for the Timesheets model.
 
@@ -492,7 +546,9 @@ class TimesheetsFilter(filters.FilterSet):
     )
     is_billable = filters.BooleanFilter()
     invoiced = filters.CharFilter(lookup_expr='exact')
-    start_date = filters.DateFilter()
+    # Range (start_date_after / start_date_before); exact form kept for old callers.
+    start_date = DocumentDateFromToRangeFilter()
+    start_date_exact = filters.DateFilter(field_name='start_date')
     end_date = filters.DateFilter()
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(
@@ -543,12 +599,24 @@ class TimesheetEntriesFilter(filters.FilterSet):
       - created_at    : date-range filter
       - period_name / s / sort / page / limit : standard helpers
     """
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'work_date'
+
+    # Report screens send from_date/to_date instead of work_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='work_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='work_date', lookup_expr='lte')
+
     timesheet_id = filters.CharFilter(method=filter_uuid)
     employee = filters.CharFilter(
         field_name='timesheet_id__employee_id__full_name',
         lookup_expr='icontains',
     )
-    work_date = filters.DateFilter()
+    # Range (work_date_after / work_date_before) so the date filter and Quick Period work;
+    # exact form kept for old callers. Handles DateField and DateTimeField alike.
+    work_date = DocumentDateFromToRangeFilter()
+    work_date_exact = filters.DateFilter(field_name='work_date')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(
         choices=PERIOD_NAME_CHOICES,

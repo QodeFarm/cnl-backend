@@ -3,7 +3,7 @@ from apps.auditlogs.utils import log_user_action
 from apps.customfields.filters import CustomFieldFilter, CustomFieldOptionsFilters, CustomFieldValuesFilters
 from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
-from config.utils_methods import create_instance, list_all_objects, list_all_objects_1, update_instance, soft_delete
+from config.utils_methods import get_pagination_params, create_instance, list_all_objects, list_all_objects_1, update_instance, soft_delete
 from .models import CustomField, CustomFieldOption, CustomFieldValue
 from .serializers import  CustomFieldSerializer, CustomFieldOptionSerializer, CustomFieldValueSerializer
 from rest_framework.views import APIView
@@ -89,8 +89,7 @@ class CustomFieldCreateViewSet(APIView):
         try:
             logger.info("Retrieving all custom fields")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             queryset = CustomField.objects.all()
 

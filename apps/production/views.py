@@ -21,7 +21,7 @@ from .models import *
 from apps.products.models import Products, ProductVariation
 from apps.products.serializers import ProductVariationSerializer, productsSerializer
 from .serializers import *
-from config.utils_methods import normalize_value, build_response, delete_multi_instance, soft_delete, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
+from config.utils_methods import get_pagination_params, normalize_value, build_response, delete_multi_instance, soft_delete, generic_data_creation, get_related_data, list_all_objects, create_instance, product_stock_verification, update_instance, update_multi_instances, update_product_stock, validate_input_pk, validate_multiple_data, validate_order_type, validate_payload_data, validate_put_method_data
 from django.db.models.functions import Coalesce,NullIf,Cast,ExtractSecond
 from django.db.models import Avg
 from rest_framework.views import APIView
@@ -324,8 +324,7 @@ class WorkOrderAPIView(APIView):
 
     def get_pagination_params(self, request):
         """Extracts pagination parameters from the request."""
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         return page, limit
 
     def get_work_orders(self, request):
@@ -1050,8 +1049,7 @@ class BOMView(APIView):
 
     def get_pagination_params(self, request):
         """Extracts pagination parameters from the request."""
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         return page, limit
 
     def get_raw_material_consumption_report(self, request):
@@ -1329,8 +1327,7 @@ class MaterialIssueView(APIView):
                 return result
             return self.retrieve(request, pk)
         
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
         queryset = MaterialIssue.objects.filter(is_deleted=False).order_by('-created_at')
         # Apply filters using RawMaterialConsumptionReportFilter
@@ -1603,8 +1600,7 @@ class MaterialReceivedView(APIView):
                 return result
             return self.retrieve(request, pk)
         
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
         queryset = MaterialReceived.objects.filter(is_deleted=False).order_by('-created_at')
          # Apply filters using RawMaterialConsumptionReportFilter
@@ -1859,8 +1855,7 @@ class StockSummaryAPIView(APIView):
     """
     
     def get_pagination_params(self, request):
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         return page, limit
     
     def get(self, request, *args, **kwargs):

@@ -22,7 +22,7 @@ from django.db import transaction
 from rest_framework import viewsets, status
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
-from config.utils_methods import build_response, generic_data_creation, list_all_objects, soft_delete, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
+from config.utils_methods import get_pagination_params, build_response, generic_data_creation, list_all_objects, soft_delete, create_instance, update_instance, update_multi_instances, validate_input_pk, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend 
 from rest_framework.filters import OrderingFilter
@@ -902,8 +902,7 @@ class ExpenseItemView(APIView):
             logger.info("Retrieving all ExpenseItem")
             queryset = ExpenseItem.objects.all().order_by('-created_at')
 
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             total_count = ExpenseItem.objects.count()
 
             # Apply filters manually
@@ -1483,16 +1482,14 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
     
     def get_pagination_params(self, request):
         """Extracts pagination parameters from the request."""
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         return page, limit
 
     
     @action(detail=False, methods=['get'])
     def cash_book(self, request):
         """Generates the Cash Book Report."""
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         
         cash_accounts = LedgerAccounts.objects.filter(type='Cash', is_deleted=False)
         # Show newest first for better UX
@@ -1514,8 +1511,7 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def bank_book(self, request):
         """Generates the Bank Book Report."""
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         
         bank_accounts = LedgerAccounts.objects.filter(type='Bank', is_deleted=False)
         # Show newest first for better UX
@@ -1540,8 +1536,7 @@ class FinancialReportViewSet(viewsets.ModelViewSet):
         logger.info("Generating General Ledger Report")
         from decimal import Decimal
         
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         
         # Base queryset with ordering applied first
         queryset = JournalEntryLines.objects.select_related('ledger_account_id', 'journal_entry_id') \
@@ -1941,8 +1936,7 @@ class JournalEntryView(APIView):
             logger.info("Retrieving all JournalEntry")
             queryset = JournalEntry.objects.all().order_by('-created_at')
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             total_count = JournalEntry.objects.count()
 
             # Apply filters manually
@@ -2639,8 +2633,7 @@ class JournalVoucherView(APIView):
             return self.retrieve(request, pk)
         
         # List all vouchers with pagination
-        page = int(request.query_params.get("page", 1))
-        limit = int(request.query_params.get("limit", 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
         # Start with base queryset
         queryset = JournalVoucher.objects.filter(is_deleted=False).order_by('-created_at')
@@ -3239,10 +3232,10 @@ class JournalBookReportView(APIView):
         GET Handler - Returns Journal Book Report with all vouchers and lines.
         """
         try:
-            # Get pagination parameters
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 100))
-            
+            # Get pagination parameters — this report has always defaulted to 100 rows a
+            # page, not the usual 10, so keep that default while still capping the maximum.
+            page, limit, _pg_start, _pg_end = get_pagination_params(request, default_limit=100)
+
             # Get date range parameters
             from_date = request.query_params.get('voucher_date_after', None)
             to_date = request.query_params.get('voucher_date_before', None)
