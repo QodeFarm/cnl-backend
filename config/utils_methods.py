@@ -200,6 +200,95 @@ def get_pagination_params(request, default_limit=DEFAULT_PAGE_LIMIT, max_limit=M
     return page, limit, start, start + limit
 
 
+def _forward_fk_paths(serializer_class, model, depth=2, prefix='', prefetch_only=None):
+    """
+    The forward FK paths a serializer will dereference, derived from its declared nested
+    serializers, split into ones safe to JOIN and ones that must be prefetched instead.
+
+    Returns the select_related paths; `prefetch_only` (a list you pass in) is filled with
+    the NOT NULL relations, which must never be joined — see the note below. Method fields,
+    reverse relations and anything that does not resolve are skipped.
+    """
+    from rest_framework.serializers import BaseSerializer
+
+    if prefetch_only is None:
+        prefetch_only = []
+    paths = []
+    declared = getattr(serializer_class, '_declared_fields', {}) or {}
+    for name, field in declared.items():
+        if not isinstance(field, BaseSerializer) or getattr(field, 'many', False):
+            continue
+        source = getattr(field, 'source', None) or name
+        if '.' in source:
+            continue
+        try:
+            meta_field = model._meta.get_field(source)
+        except Exception:
+            continue
+        if not (meta_field.is_relation and (meta_field.many_to_one or meta_field.one_to_one)):
+            continue
+
+        path = f'{prefix}{source}'
+        # Django picks INNER JOIN for select_related on a NOT NULL FK. This database
+        # contains rows whose FK points at a missing record, and an INNER JOIN deletes
+        # those rows from the list entirely — a budget row vanished exactly this way.
+        # Nullable FKs get a LEFT JOIN and are safe; everything else is prefetched instead
+        # (a separate IN query, still one per relation rather than one per row).
+        if getattr(meta_field, 'null', False):
+            paths.append(path)
+            if depth > 1 and meta_field.related_model is not None:
+                paths.extend(_forward_fk_paths(
+                    type(field), meta_field.related_model, depth - 1,
+                    prefix=f'{path}__', prefetch_only=prefetch_only,
+                ))
+        else:
+            prefetch_only.append(path)
+            # Keep walking: a nested serializer one level down (customer -> category) is
+            # still a query per row otherwise. prefetch_related accepts the full path, and
+            # each one costs a single extra query rather than one per row.
+            if depth > 1 and meta_field.related_model is not None:
+                deeper = []
+                nested = _forward_fk_paths(
+                    type(field), meta_field.related_model, depth - 1,
+                    prefix=f'{path}__', prefetch_only=deeper,
+                )
+                # Anything hanging off a prefetched parent must be prefetched too — joining
+                # it would drag the unsafe parent join back in.
+                prefetch_only.extend(deeper + nested)
+    return paths
+
+
+def optimize_list_queryset(queryset, serializer_class):
+    """
+    Join in whatever the serializer is going to read anyway.
+
+    N+1 is DRF's default failure mode: a nested serializer with no select_related costs one
+    query per row per relation, so a 50-row page can run hundreds of queries. Applied here
+    rather than per view so every list endpoint inherits it and new ones cannot forget.
+
+    Purely a query-shape change — never alters the data returned. Any path that does not
+    resolve is dropped, and the original queryset is returned unchanged on any failure.
+    """
+    if queryset is None or serializer_class is None:
+        return queryset
+    try:
+        model = queryset.model
+        prefetch_only = []
+        existing = set(getattr(queryset.query, 'select_related', None) or [])
+        join_paths = [
+            p for p in _forward_fk_paths(serializer_class, model, prefetch_only=prefetch_only)
+            if p not in existing
+        ]
+        if join_paths:
+            queryset = queryset.select_related(*join_paths)
+        if prefetch_only:
+            queryset = queryset.prefetch_related(*prefetch_only)
+        return queryset
+    except Exception as e:
+        logger.debug(f"optimize_list_queryset skipped: {e}")
+        return queryset
+
+
 def list_all_objects(self, request, *args, **kwargs):
     try:
         # --- read params ---
@@ -224,8 +313,20 @@ def list_all_objects(self, request, *args, **kwargs):
         # (deleted masters stay visible for restore, but appear LAST); otherwise newest-first.
         # Guarded by field presence so models without is_deleted are unaffected (no FieldError).
         _model = self.get_queryset().model
-        _order = ('is_deleted', '-created_at') if any(f.name == 'is_deleted' for f in _model._meta.fields) else ('-created_at',)
-        base_qs = self.filter_queryset(self.get_queryset().order_by(*_order))
+        # Newest DOCUMENT first (the date on the document, matching the column on screen
+        # and the date filter), soft-deleted rows last, then deterministic tiebreakers so
+        # paging cannot repeat or skip rows that share a date.
+        from config.utils_filter_methods import build_default_ordering, get_document_date_field
+        _filterset_class = getattr(self, 'filterset_class', None)
+        _order = build_default_ordering(
+            _model, get_document_date_field(_filterset_class) if _filterset_class else 'created_at'
+        )
+        # Join the relations the serializer will read before filtering — every list that
+        # routes through this helper gets N+1 protection without opting in.
+        _serializer_class = self.get_serializer_class() if hasattr(self, 'get_serializer_class') else None
+        base_qs = self.filter_queryset(
+            optimize_list_queryset(self.get_queryset(), _serializer_class).order_by(*_order)
+        )
 
         total_count = 0
         page_items = []

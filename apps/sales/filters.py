@@ -3,7 +3,7 @@ from django_filters import rest_framework as filters
 from .models import DeliveryChallans, MstcnlSaleInvoiceOrder, PaymentTransactions, QuickPacks, SaleCreditNotes, SaleDebitNotes, SaleOrder, SaleInvoiceOrders, SaleOrderItems, SaleReceipt, SaleReturnOrders, Workflow
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter ,DateFromToRangeFilter
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 from django.db.models import Q, Sum, F, Count, Max, OuterRef, Subquery, DecimalField, IntegerField
 from django.db.models.functions import Coalesce
@@ -19,12 +19,24 @@ class CharInFilter(BaseInFilter, CharFilter):
 
 logger = logging.getLogger(__name__)
 class SaleOrderFilter(filters.FilterSet):
+    # Date filters and quick periods run on the ORDER date, not the row's insert time.
+    # An order entered today but dated the 1st belongs to the 1st — filtering by
+    # created_at made a backdated order appear under the day it was typed.
+    document_date_field = 'order_date'
+
+    # Report screens send from_date/to_date instead of order_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='order_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='order_date', lookup_expr='lte')
+
     order_no = filters.CharFilter(lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
-    # order_date = filters.DateFromToRangeFilter()
     sale_estimate = filters.RangeFilter(field_name='sale_estimate')
-    order_date = filters.DateFilter()
+    # Range (order_date_after / order_date_before); the old exact-match form is kept
+    # available as order_date_exact so any existing caller keeps working.
+    order_date = filters.DateFromToRangeFilter()
+    order_date_exact = filters.DateFilter(field_name='order_date')
     sale_estimate = filters.RangeFilter(field_name='sale_estimate') 
     sale_type_id = filters.CharFilter(method=filter_uuid)
     sale_type = filters.CharFilter(field_name='sale_type_id__name', lookup_expr='icontains')
@@ -104,13 +116,24 @@ class SaleOrderFilter(filters.FilterSet):
     class Meta:
         model = SaleOrder 
         #do not change "order_no",it should remain as the 0th index. When using ?summary=true&page=1&limit=10, it will retrieve the results in descending order.
-        fields = ['order_no','order_date','sale_estimate','flow_status_name','customer_id','customer','sale_type_id','sale_type','order_status_id', 'status_name','created_at','advance_amount','tax','amount','period_name','work_order_created','s','sort','page','limit']
+        fields = ['order_no','order_date','order_date_exact','sale_estimate','flow_status_name','customer_id','customer','sale_type_id','sale_type','order_status_id', 'status_name','created_at','advance_amount','tax','amount','period_name','work_order_created','s','sort','page','limit']
 
 class SaleInvoiceOrdersFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'invoice_date'
+
+    # Report screens send from_date/to_date instead of invoice_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='invoice_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='invoice_date', lookup_expr='lte')
+
     customer_id = filters.CharFilter(method=filter_uuid)
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
     sale_order_id = filters.CharFilter(method=filter_uuid)
-    invoice_date = filters.DateFilter()
+    # Range (invoice_date_after / invoice_date_before); exact form kept for old callers.
+    invoice_date = filters.DateFromToRangeFilter()
+    invoice_date_exact = filters.DateFilter(field_name='invoice_date')
     total_amount = filters.RangeFilter()
     tax_amount = filters.RangeFilter()
     invoice_no = filters.CharFilter(lookup_expr='icontains')
@@ -168,13 +191,20 @@ REGISTER_TYPE_CHOICES = [
 ]
 
 class SaleRegisterFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
     """
     Professional Sale Register Filter for ERP-style date range and voucher type filtering.
     """
+    document_date_field = 'invoice_date'
+
     # Date range filters
     from_date = filters.DateFilter(field_name='invoice_date', lookup_expr='gte')
     to_date = filters.DateFilter(field_name='invoice_date', lookup_expr='lte')
-    invoice_date = filters.DateFilter()
+    # Range (invoice_date_after / invoice_date_before) so the table's date filter and
+    # Quick Period work here too; exact form kept for old callers.
+    invoice_date = filters.DateFromToRangeFilter()
+    invoice_date_exact = filters.DateFilter(field_name='invoice_date')
     invoice_date_range = filters.DateFromToRangeFilter(field_name='invoice_date')
     
     # Voucher type filter (bill_type: CASH, CREDIT, OTHERS)
@@ -231,9 +261,20 @@ class SaleRegisterFilter(filters.FilterSet):
         ]
 
 class SaleReturnOrdersFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'return_date'
+
+    # Report screens send from_date/to_date instead of return_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='return_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='return_date', lookup_expr='lte')
+
     customer_id = filters.CharFilter(method=filter_uuid)
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
-    return_date = filters.DateFilter()
+    # Range (return_date_after / return_date_before); exact form kept for old callers.
+    return_date = filters.DateFromToRangeFilter()
+    return_date_exact = filters.DateFilter(field_name='return_date')
     due_date= filters.DateFilter()
     return_no = filters.CharFilter(lookup_expr='icontains')
     tax = filters.ChoiceFilter(choices=SaleReturnOrders.TAX_CHOICES)
@@ -621,6 +662,15 @@ class SalesOrderReportFilter(django_filters.FilterSet):
 
 
 class SalesInvoiceReportFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'invoice_date'
+
+    # Report screens send from_date/to_date instead of invoice_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='invoice_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='invoice_date', lookup_expr='lte')
+
     invoice_no = filters.CharFilter(field_name="invoice_no", lookup_expr="icontains")
     customer = filters.CharFilter(field_name="customer_id__name", lookup_expr="icontains")
     invoice_date = filters.DateFromToRangeFilter(field_name="invoice_date")
@@ -674,6 +724,13 @@ class SalesInvoiceReportFilter(filters.FilterSet):
   
 
 class SalesTaxByProductReportFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    # NOT wired to a document date on purpose. The existing `invoice_date` filter below
+    # points at 'sale_invoice_id__invoice_date', but this FilterSet's model is
+    # SaleOrderItems, which has no sale_invoice_id relation — that path is broken (and was
+    # before this change). Declaring it here would spread the breakage into the period
+    # filter too, so this report stays on created_at until the relation is fixed.
     product = filters.CharFilter(field_name='product', lookup_expr='icontains')
     gst_type = filters.CharFilter(field_name='gst_type', lookup_expr='icontains')
     total_sales = filters.RangeFilter()
@@ -742,6 +799,15 @@ class PaymentTransactionsReportFilter(filters.FilterSet):
     """
     Filter for Sales Payment Receipts Report showing all payment transactions
     """
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'payment_date'
+
+    # Report screens send from_date/to_date instead of payment_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='payment_date', lookup_expr='lte')
+
     # Customer filters
     customer = filters.CharFilter(field_name='customer__name', lookup_expr='icontains')
     customer_id = filters.UUIDFilter(field_name='customer__customer_id')
@@ -755,7 +821,11 @@ class PaymentTransactionsReportFilter(filters.FilterSet):
     invoice_no = filters.CharFilter(field_name='sale_invoice__invoice_no', lookup_expr='icontains')
     
     # Date filters
-    payment_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    # payment_date stores a time, so the range must run to the END of the closing day or
+    # afternoon payments drop out of their own date — see DocumentDateFromToRangeFilter.
+    # The original "from this date onward" form is kept as payment_date_from.
+    payment_date = DocumentDateFromToRangeFilter(field_name='payment_date')
+    payment_date_from = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
       # Payment details filters
     payment_method = filters.CharFilter(lookup_expr='icontains')
     payment_status = filters.ChoiceFilter(
@@ -865,6 +935,15 @@ class MstcnlSaleInvoiceFilter(django_filters.FilterSet):
 
 
 class DeliveryChallanFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'challan_date'
+
+    # Report screens send from_date/to_date instead of challan_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='challan_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='challan_date', lookup_expr='lte')
+
     challan_no = filters.CharFilter(lookup_expr='icontains')
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='icontains')
     customer_id = filters.CharFilter(method=filter_uuid)

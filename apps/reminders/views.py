@@ -13,7 +13,7 @@ from rest_framework.filters import OrderingFilter
 from .models import NotificationFrequencies, NotificationMethods, ReminderTypes, Reminders, ReminderRecipients, ReminderSettings, ReminderLogs
 from .serializers import NotificationFrequenciesSerializer, NotificationMethodsSerializer, ReminderTypesSerializer, RemindersSerializer, ReminderRecipientsSerializer, ReminderSettingsSerializer, ReminderLogsSerializer
 from .filters import NotificationFrequenciesFilter, NotificationMethodsFilter, ReminderTypesFilter, RemindersFilter, ReminderRecipientsFilter, ReminderSettingsFilter, ReminderLogsFilter
-from config.utils_methods import generic_data_creation, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_input_pk, update_multi_instances, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
+from config.utils_methods import get_pagination_params, generic_data_creation, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_input_pk, update_multi_instances, validate_multiple_data, validate_payload_data , get_related_data, validate_put_method_data
 
 # Set up basic configuration for logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -176,8 +176,7 @@ class ReminderView(APIView):
             logger.info("Retrieving all lead")
             queryset = Reminders.objects.all().order_by('-created_at')
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             total_count = Reminders.objects.count()
                         
             # Apply filters manually

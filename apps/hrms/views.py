@@ -7,7 +7,7 @@ from django.http import  Http404
 from django.shortcuts import get_object_or_404
 from .models import JobTypes, Designations, JobCodes, Departments, Shifts, Employees, EmployeeSalary, SalaryComponents, EmployeeSalaryComponents, LeaveTypes, EmployeeLeaves, LeaveApprovals, EmployeeLeaveBalance, EmployeeAttendance, Swipes, Biometric, TimesheetApprovals, TimesheetEntries, Timesheets
 from .serializers import EmployeePortalLoginSerializer, JobTypesSerializer, DesignationsSerializer, JobCodesSerializer, DepartmentsSerializer, ShiftsSerializer, EmployeesSerializer, EmployeeSalarySerializer, SalaryComponentsSerializer, EmployeeSalaryComponentsSerializer, LeavesTypesSerializer, EmployeeLeavesSerializer, LeaveApprovalsSerializer, EmployeeLeaveBalanceSerializer, EmployeeAttendanceSerializer, SwipesSerializer, BiometricSerializer, TimesheetApprovalsSerializer, TimesheetEntriesSerializer, TimesheetsSerializer
-from config.utils_methods import build_response, generic_data_creation, get_object_or_none, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, soft_delete, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
+from config.utils_methods import get_pagination_params, build_response, generic_data_creation, get_object_or_none, get_related_data, list_all_objects, create_instance, update_instance, update_multi_instances, soft_delete, validate_input_pk, validate_multiple_data, validate_payload_data, validate_put_method_data
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import OrderingFilter
@@ -463,8 +463,7 @@ class EmployeeLeavesView(APIView):
         try:
             logger.info("Retrieving all EmployeeLeaves")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             queryset = EmployeeLeaves.objects.all().order_by('-created_at')
 
@@ -750,8 +749,7 @@ class EmployeeView(APIView):
         try:
             logger.info("Retrieving all Employees")
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             queryset = Employees.objects.all().order_by('-created_at')	
 
@@ -1280,8 +1278,7 @@ class TimesheetsView(APIView):
         try:
             logger.info("Retrieving all Timesheets")
 
-            page  = int(request.query_params.get('page',  1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             queryset = Timesheets.objects.all().order_by('-created_at')
 
@@ -1984,8 +1981,7 @@ class BillableTimesheetsView(APIView):
         try:
             logger.info("Retrieving billable (invoice-eligible) timesheets")
 
-            page  = int(request.query_params.get('page',  1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             # Base eligibility: billable + approved + not yet invoiced + active.
             # 'approvals' is the related_name on TimesheetApprovals.timesheet_id.

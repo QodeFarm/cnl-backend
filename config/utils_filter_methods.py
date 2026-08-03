@@ -1,5 +1,7 @@
 import json
 import logging
+import django_filters
+from django.db import models
 from django.db.models import Q
 from django.forms import ValidationError
 from rest_framework.response import Response
@@ -20,14 +22,120 @@ PERIOD_NAME_CHOICES = [
     ('last_year', 'LastYear'),
 ]
 
+DEFAULT_DOCUMENT_DATE_FIELD = 'created_at'
+
+
+class DocumentDateFromToRangeFilter(django_filters.DateFromToRangeFilter):
+    """
+    A from/to date range that is correct on BOTH DateField and DateTimeField columns.
+
+    Django's DateFromToRangeFilter compares the upper bound as given, so on a DateTimeField
+    `?payment_date_before=2026-07-31` becomes `<= 2026-07-31 00:00:00` and silently drops
+    every payment recorded later that day — the record disappears from its own date. Here
+    the upper bound is widened to the end of the day when the column stores a time.
+    Use this instead of DateFromToRangeFilter for any document date.
+    """
+
+    def filter(self, qs, value):
+        if value is not None and value.stop is not None and qs is not None:
+            try:
+                model_field = qs.model._meta.get_field(self.field_name.split('__')[0])
+                is_datetime = isinstance(model_field, models.DateTimeField)
+            except Exception:
+                is_datetime = False
+            if is_datetime and not isinstance(value.stop, datetime.datetime):
+                value = slice(
+                    value.start,
+                    datetime.datetime.combine(value.stop, datetime.time.max),
+                )
+        return super().filter(qs, value)
+
+
+def get_document_date_field(filter_set):
+    """
+    The column a list filters its dates on.
+
+    A document carries two dates: the one the user chose (order_date, invoice_date) and
+    the timestamp the row happened to be saved (created_at). Filters, reports and periods
+    must use the FORMER — an order entered today but dated the 1st belongs to the 1st.
+    A FilterSet opts in by declaring `document_date_field`; anything that does not is
+    left on created_at, so existing screens keep their current behaviour.
+    """
+    return getattr(filter_set, 'document_date_field', DEFAULT_DOCUMENT_DATE_FIELD)
+
+
+def _has_field(model, path):
+    """True when the (possibly related) field path resolves on this model."""
+    try:
+        parts = path.split('__')
+        current = model
+        for part in parts:
+            field = current._meta.get_field(part)
+            current = field.related_model or current
+        return True
+    except Exception:
+        return False
+
+
+def build_default_ordering(model, date_field):
+    """
+    The order a list is shown in when the user has not clicked a column.
+
+    Newest DOCUMENT first — the date on the document, matching the column on screen and
+    the date filter — then deterministic tiebreakers. The tiebreakers are not cosmetic:
+    many documents share a date, and with a non-deterministic order MySQL can return the
+    same row on two pages while another row never appears at all.
+    """
+    order = []
+    if any(f.name == 'is_deleted' for f in model._meta.fields):
+        order.append('is_deleted')                      # deleted rows sink to the bottom
+    if date_field and _has_field(model, date_field):
+        order.append(f'-{date_field}')
+    if date_field != 'created_at' and any(f.name == 'created_at' for f in model._meta.fields):
+        order.append('-created_at')                     # same date -> most recently entered
+    order.append(f'-{model._meta.pk.name}')             # absolute tiebreaker, stable paging
+    return order
+
+
+def apply_default_ordering(filter_set, queryset):
+    """Order a queryset by its document date. Falls back to the queryset's own order."""
+    try:
+        return queryset.order_by(*build_default_ordering(
+            queryset.model, get_document_date_field(filter_set)))
+    except Exception as e:
+        logger.debug(f"default ordering skipped: {e}")
+        return queryset
+
+
+def _date_bounds_for(queryset, date_field, start_date, end_date):
+    """
+    Bounds matching the column's type. A DateField compares against plain dates; a
+    DateTimeField needs the whole day (00:00:00 → 23:59:59.999999), or documents saved
+    later in the day fall outside their own date.
+    """
+    try:
+        model_field = queryset.model._meta.get_field(date_field)
+        is_datetime = isinstance(model_field, models.DateTimeField)
+    except Exception:
+        is_datetime = True
+
+    if not is_datetime:
+        return start_date, end_date
+    return (datetime.datetime.combine(start_date, datetime.time.min),
+            datetime.datetime.combine(end_date, datetime.time.max))
+
+
 def filter_by_period_name(self, queryset, name, value):
         today = timezone.now().date()
         start_date = None
         end_date = today
 
-        # Check if custom from_date and to_date are provided in the URL
-        from_date = self.data.get('created_at_after')
-        to_date = self.data.get('created_at_before')
+        # Check if custom from_date and to_date are provided in the URL. Read the screen's
+        # own document-date params first, falling back to created_at_* for the screens
+        # (and older callers) that still send those.
+        date_field = get_document_date_field(self)
+        from_date = self.data.get(f'{date_field}_after') or self.data.get('created_at_after')
+        to_date = self.data.get(f'{date_field}_before') or self.data.get('created_at_before')
 
         if from_date and to_date:
             try:
@@ -72,15 +180,14 @@ def filter_by_period_name(self, queryset, name, value):
                 end_date = today.replace(month=3, day=31)
 
   
-        # Convert start_date and end_date to datetime objects with min and max times
-        if start_date:
-            start_datetime = datetime.datetime.combine(start_date, datetime.time.min)
-        if end_date:
-            end_datetime = datetime.datetime.combine(end_date, datetime.time.max)
-
-        # Apply filters
-        if start_datetime and end_datetime:
-            queryset = queryset.filter(created_at__gte=start_datetime, created_at__lte=end_datetime)
+        # Bound the range to the column's own type, then filter on the document date this
+        # screen declared rather than a hardcoded created_at.
+        if start_date and end_date:
+            start_bound, end_bound = _date_bounds_for(queryset, date_field, start_date, end_date)
+            queryset = queryset.filter(**{
+                f'{date_field}__gte': start_bound,
+                f'{date_field}__lte': end_bound,
+            })
 
         return queryset
 
@@ -127,15 +234,11 @@ def apply_sorting(self, queryset):
             raise
 
     else:
-        default_field = list(self.filters.keys())[0]
-        field_name = f'-{self.filters[default_field].field_name}'
-        logger.debug(f"Sorting by default field: {field_name}")
-        
-        # Check if 'is_deleted' exists in the model before ordering
-        if hasattr(queryset.model, 'is_deleted'):
-            return queryset.order_by('is_deleted', field_name)
-        else:
-            return queryset.order_by(field_name)
+        # No column chosen by the user: order by the DOCUMENT's own date, newest first.
+        # This used to sort by whichever filter happened to be declared first (usually the
+        # document number), so a backdated document jumped to the top of the list because
+        # it had the newest number — contradicting the date column beside it.
+        return apply_default_ordering(self, queryset)
 
     logger.debug(f"Sorting by field: {field_name}")
     
@@ -188,6 +291,19 @@ def apply_sorting(self, queryset):
 
 def filter_by_pagination(queryset, page, limit):
     logger.debug(f"Pagination - page: {page}, limit: {limit}")
+
+    # Every FilterSet exposing page/limit reaches pagination through here, so this is the
+    # one place the ceiling has to hold. `limit` arrives straight from the query string:
+    # without a clamp, ?limit=1000000 slices a million rows and then serializes them.
+    from config.utils_methods import MAX_PAGE_LIMIT
+    try:
+        page = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        limit = max(1, min(int(limit or 1), MAX_PAGE_LIMIT))
+    except (TypeError, ValueError):
+        limit = MAX_PAGE_LIMIT
 
     start = (page - 1) * limit
     end = start + limit
@@ -428,8 +544,12 @@ def list_filtered_objects(viewset, request, model_name, *args, **kwargs):
     Handles filtered listing of objects with pagination for ModelViewSet.
     """
     # ✅ force ordering by is_deleted first, then created_at desc
+    # Join whatever the serializer will read, exactly as list_all_objects does — this is
+    # the other shared list path, and without it these screens pay a query per row.
+    from config.utils_methods import optimize_list_queryset
+    _serializer_class = viewset.get_serializer_class() if hasattr(viewset, 'get_serializer_class') else None
     queryset = viewset.filter_queryset(
-        viewset.get_queryset()
+        optimize_list_queryset(viewset.get_queryset(), _serializer_class)
     )
 
     # Pagination handling

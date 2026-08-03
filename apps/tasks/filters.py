@@ -2,18 +2,29 @@ from django_filters import rest_framework as filters
 from apps.tasks.models import Tasks
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
 
 class TasksFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a task list is read by when work is due.
+    document_date_field = 'due_date'
+
+    # Report screens send from_date/to_date instead of due_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='due_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='due_date', lookup_expr='lte')
+
     user_id = filters.CharFilter(field_name='user_id__first_name', lookup_expr='icontains')
     group_id = filters.CharFilter(field_name='group_id__group_name', lookup_expr='icontains')
     priority_id = filters.CharFilter(field_name='priority_id__priority_name', lookup_expr='icontains')
     status_id = filters.CharFilter(field_name='status_id__status_name', lookup_expr='icontains')
     description = filters.CharFilter(field_name='description', lookup_expr='icontains')
     title = filters.CharFilter(lookup_expr='icontains')
-    due_date = filters.DateFilter()
+    # Range (due_date_after / due_date_before); exact form kept for old callers.
+    due_date = DocumentDateFromToRangeFilter()
+    due_date_exact = filters.DateFilter(field_name='due_date')
     created_at = DateFromToRangeFilter()
     period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
     s = filters.CharFilter(method='filter_by_search', label="Search")

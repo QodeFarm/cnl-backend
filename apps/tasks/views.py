@@ -10,7 +10,7 @@ from apps.customfields.serializers import CustomFieldValueSerializer
 from apps.tasks.filters import TasksFilter
 from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response
-from config.utils_methods import list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances, validate_put_method_data
+from config.utils_methods import get_pagination_params, list_all_objects, create_instance, update_instance, soft_delete, build_response, validate_input_pk, validate_payload_data, get_object_or_none, validate_multiple_data, generic_data_creation, update_multi_instances, validate_put_method_data
 from apps.tasks.serializers import TasksSerializer,TaskCommentsSerializer,TaskAttachmentsSerializer,TaskHistorySerializer
 from apps.tasks.models import Tasks,TaskComments,TaskAttachments,TaskHistory
 import logging
@@ -106,8 +106,7 @@ class TaskView(APIView):
             instance = Tasks.objects.all().order_by('is_deleted', '-created_at')	
 
 
-            page = int(request.query_params.get('page', 1))  # Default to page 1 if not provided
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             total_count = Tasks.objects.count()
 
             # Apply filters manually
