@@ -163,10 +163,16 @@ def filter_by_period_name(self, queryset, name, value):
                 start_date = last_day_of_last_month.replace(day=1)
                 end_date = last_day_of_last_month
             elif value == 'last_six_months':
-                start_date = today - datetime.timedelta(days=180)
-                # six_months_ago = today - relativedelta(months=6)
-                # start_date = six_months_ago.replace(day=1)
-                # end_date = today
+                # Start of the month six months back — the same range the date picker
+                # fills in on list screens. Using today-180d gave a different answer on
+                # report screens, so "Last 6 Months" meant two things depending where you
+                # asked. Plain month arithmetic, no extra dependency.
+                month = today.month - 6
+                year = today.year
+                if month <= 0:
+                    month += 12
+                    year -= 1
+                start_date = today.replace(year=year, month=month, day=1)
             elif value == 'current_quarter':
                 quarter = (today.month - 1) // 3 + 1
                 start_date = today.replace(month=(quarter - 1) * 3 + 1, day=1)
