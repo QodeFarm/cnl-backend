@@ -999,28 +999,40 @@ class SaleOrderViewSet(APIView):
         # prefetch_related — the list serializer dereferences those relations per row.
         queryset = SaleOrderView.queryset.all()
 
-        # SaleOrderFilter IS the paginator: filter_by_page / filter_by_limit sort, search
-        # and slice, and record the pre-slice total. Feed it clamped values and let it do
-        # the work — slicing again here would paginate an already-paginated queryset.
-        # `limit` must always be present or filter_by_limit never runs and the whole table
-        # is returned, which is what made this endpoint serialize everything.
+        # Create a COPY of the request params for filtering
         params = request.GET.copy()
-        params['page']  = str(page)
-        params['limit'] = str(limit)
-
+        
+        # Remove pagination params before applying filters to avoid slicing issues
+        # The pagination should be applied AFTER all filters are applied
+        if 'page' in params:
+            params.pop('page')
+        if 'limit' in params:
+            params.pop('limit')
+        if 'sort' in params:
+            params.pop('sort')
+        
+        # IMPORTANT: Apply filters FIRST, before pagination
         filterset = SaleOrderFilter(params, queryset=queryset)
+        
         if filterset.is_valid():
-            page_items = filterset.qs
+            # Get the filtered queryset - this is the FULL filtered result set
+            filtered_queryset = filterset.qs
             total_count = getattr(filterset, 'total_count', None)
             if total_count is None:
-                total_count = queryset.count()
+                total_count = filtered_queryset.count()
         else:
-            page_items = queryset[start:end]
+            filtered_queryset = queryset
             total_count = queryset.count()
-
+        
+        # NOW apply pagination (slicing) on the filtered queryset
+        # Use the original page and limit parameters for pagination
+        start = (page - 1) * limit
+        end = start + limit
+        page_items = filtered_queryset[start:end]
+        
         serializer = SaleOrderOptionsSerializer(page_items, many=True)
         return filter_response(len(serializer.data), "Success", serializer.data, page, limit, total_count, status.HTTP_200_OK)
-
+    
     # def get_summary_data(self, request):
     #     """Fetches sale order summary data from both databases."""
     #     logger.info("Retrieving Sale order summary")

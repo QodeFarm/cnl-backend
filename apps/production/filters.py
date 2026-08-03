@@ -49,27 +49,27 @@ class WorkOrderFilter(filters.FilterSet):
     end_date = filters.DateFromToRangeFilter()
     created_at = filters.DateFromToRangeFilter()
 
-    period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
+    # period_name = filters.ChoiceFilter(choices=PERIOD_NAME_CHOICES, method='filter_by_period_name')
 
-    s = filters.CharFilter(method='filter_by_search', label="Search")
-    sort = filters.CharFilter(method='filter_by_sort', label="Sort")
-    page = filters.NumberFilter(method='filter_by_page', label="Page")
-    limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
+    # s = filters.CharFilter(method='filter_by_search', label="Search")
+    # sort = filters.CharFilter(method='filter_by_sort', label="Sort")
+    # page = filters.NumberFilter(method='filter_by_page', label="Page")
+    # limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
 
-    def filter_by_period_name(self, queryset, name, value):
-        return filter_by_period_name(self, queryset, self.data, value)
+    # def filter_by_period_name(self, queryset, name, value):
+    #     return filter_by_period_name(self, queryset, self.data, value)
 
-    def filter_by_search(self, queryset, name, value):
-        return filter_by_search(queryset, self, value)
+    # def filter_by_search(self, queryset, name, value):
+    #     return filter_by_search(queryset, self, value)
 
-    def filter_by_sort(self, queryset, name, value):
-        return filter_by_sort(self, queryset, value)
+    # def filter_by_sort(self, queryset, name, value):
+    #     return filter_by_sort(self, queryset, value)
 
-    def filter_by_page(self, queryset, name, value):
-        return filter_by_page(self, queryset, value)
+    # def filter_by_page(self, queryset, name, value):
+    #     return filter_by_page(self, queryset, value)
 
-    def filter_by_limit(self, queryset, name, value):
-        return filter_by_limit(self, queryset, value)
+    # def filter_by_limit(self, queryset, name, value):
+    #     return filter_by_limit(self, queryset, value)
 
     class Meta:
         model = WorkOrder
@@ -87,11 +87,11 @@ class WorkOrderFilter(filters.FilterSet):
             'start_date',
             'end_date',
             'created_at',
-            'period_name',
-            's',
-            'sort',
-            'page',
-            'limit'
+            # 'period_name',
+            # 's',
+            # 'sort',
+            # 'page',
+            # 'limit'
         ]
 
     # def filter_by_period_name(self, queryset, name, value):
