@@ -10,6 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
 from django.http import Http404, HttpResponse
 from django.db import transaction
+from django.conf import settings
 from apps.auditlogs.utils import log_user_action
 from apps.masters.filters import ItemMasterFilter
 from apps.masters.models import City, Country, State, ItemMaster
@@ -501,8 +502,7 @@ class ProductViewSet(APIView):
             no_page = request.query_params.get('no_page', 'false').lower() == 'true'
             view_type = request.query_params.get('view', '')
 
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10))
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
             # 1️. Base queryset
             queryset = Products.objects.all().order_by('is_deleted', '-created_at')
@@ -841,11 +841,38 @@ class ProductViewSet(APIView):
             return build_response(0, f"Error updating product: {str(e)}", [], status.HTTP_400_BAD_REQUEST)
 
 
+def build_picture_link_cell(picture, base_url=''):
+    """
+    Excel cell value linking to a product's first uploaded image, or '' if it has none.
+
+    Products.picture is a JSONField holding the upload endpoint's payload:
+    [{'attachment_name': .., 'attachment_path': '<filename>', ..}]. Only the bare
+    filename is stored, never a URL, so the servable address is rebuilt from base_url.
+
+    Emits a HYPERLINK() formula rather than an openpyxl cell hyperlink: a real
+    hyperlink writes a relationship record per cell and Excel caps those at ~65k per
+    sheet, which a full product export can exceed. The formula has no such limit.
+
+    Returns '' on missing or malformed data — one bad row must never fail the export.
+    """
+    if not isinstance(picture, list) or not picture:
+        return ''
+    first = picture[0]
+    if not isinstance(first, dict):
+        return ''
+    path = str(first.get('attachment_path') or '').strip()
+    if not path:
+        return ''
+    # Double any quote so a filename containing one cannot terminate the formula string.
+    url = f"{base_url}{path}".replace('"', '""')
+    return f'=HYPERLINK("{url}","View Image")'
+
+
 class ProductExcelImport(BaseExcelImportExport):
     """
     Product Excel import/export functionality
-    
-    This class handles importing product data from Excel files and 
+
+    This class handles importing product data from Excel files and
     exporting product templates to Excel.
     """
     MODEL_CLASS = Products
@@ -929,7 +956,14 @@ class ProductExcelImport(BaseExcelImportExport):
         "size_category", "size_name", "color_name", "sku", "variation_price", "variation_quantity"
     ]
      # Additional fields for warehouse locations
-    WAREHOUSE_HEADERS = ["warehouse_name", "location_name", "location_quantity"]        
+    WAREHOUSE_HEADERS = ["warehouse_name", "location_name", "location_quantity"]
+
+    # Written by export_products only, and deliberately NOT in FIELD_MAP: the export
+    # file doubles as the update-import template, and create_record/update_record only
+    # read columns present in FIELD_MAP. Keeping it out is what stops a re-import from
+    # writing a URL string into the picture JSON field. The name ends in _HEADERS so the
+    # importer's column validator whitelists it the same way it does the two above.
+    EXPORT_ONLY_HEADERS = ["picture_url"]
 
     @classmethod
     def create_record(cls, row_data, field_map=None, boolean_fields=None, get_or_create_funcs=None):
@@ -1771,16 +1805,19 @@ class ProductExcelImport(BaseExcelImportExport):
     # EXPORT EXISTING PRODUCTS TO EXCEL
     # ============================================================
     @classmethod
-    def export_products(cls, queryset=None):
+    def export_products(cls, queryset=None, request=None):
         """
         Export existing products to Excel (with product_id for re-import update).
         Returns an openpyxl Workbook.
+
+        request is used only to resolve the image URL host; without it the picture
+        column falls back to a MEDIA_URL-relative path.
         """
         wb = cls.generate_template()
         ws = wb.active
 
         field_keys = list(cls.FIELD_MAP.keys())
-        all_headers = ['product_id'] + field_keys
+        all_headers = ['product_id'] + field_keys + cls.EXPORT_ONLY_HEADERS
 
         # Clear sheet and rewrite headers
         ws.delete_rows(1, ws.max_row)
@@ -1829,7 +1866,13 @@ class ProductExcelImport(BaseExcelImportExport):
             'gst_classification_id', 'sales_gl_id', 'purchase_gl_id'
         )
 
-        for product in queryset:
+        # Resolved once, not per row: build_absolute_uri() re-parses the request host on
+        # every call and this loop runs once per product.
+        media_base = request.build_absolute_uri(settings.MEDIA_URL) if request else settings.MEDIA_URL
+
+        # iterator(): the workbook already holds every row in memory, so there is no
+        # reason for the queryset to cache every model instance alongside it.
+        for product in queryset.iterator(chunk_size=2000):
             row = [str(product.product_id)]
 
             for excel_col, mapping in cls.FIELD_MAP.items():
@@ -1852,6 +1895,8 @@ class ProductExcelImport(BaseExcelImportExport):
                     if isinstance(val, bool):
                         val = 'Yes' if val else 'No'
                     row.append(val if val is not None else '')
+
+            row.append(build_picture_link_cell(product.picture, media_base))
 
             ws.append(row)
 
@@ -1901,7 +1946,7 @@ class ProductExportAPIView(APIView):
                         # Fail closed: never fall back to exporting the whole table on a bad filter.
                         queryset = queryset.none()
 
-            wb = ProductExcelImport.export_products(queryset)
+            wb = ProductExcelImport.export_products(queryset, request=request)
             response = HttpResponse(
                 content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             )

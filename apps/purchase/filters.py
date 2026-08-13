@@ -2,15 +2,26 @@ from django_filters import rest_framework as filters
 from config.utils_methods import filter_uuid
 from .models import BillPaymentTransactions, PurchaseOrders, PurchaseInvoiceOrders, PurchaseReturnOrders, PurchaseorderItems, Products
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
 
 class PurchaseOrdersFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'order_date'
+
+    # Report screens send from_date/to_date instead of order_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='order_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='order_date', lookup_expr='lte')
+
     vendor_id = filters.CharFilter(method=filter_uuid)
     vendor = filters.CharFilter(field_name='vendor_id__name', lookup_expr='icontains')
     purchase_type_id = filters.CharFilter(field_name='purchase_type_id__name', lookup_expr='icontains')
-    order_date = filters.DateFilter()
+    # Range (order_date_after / order_date_before); exact form kept for old callers.
+    order_date = filters.DateFromToRangeFilter()
+    order_date_exact = filters.DateFilter(field_name='order_date')
     order_no = filters.CharFilter(lookup_expr='icontains')
     tax = filters.ChoiceFilter(choices=PurchaseOrders.TAX_CHOICES)
     tax_amount = filters.RangeFilter()
@@ -46,11 +57,22 @@ class PurchaseOrdersFilter(filters.FilterSet):
         fields =['order_no','order_date','vendor_id','vendor','purchase_type_id','tax', 'tax_amount','total_amount','remarks','order_status_id','status_name','created_at','period_name','s','sort','page','limit']
 
 class PurchaseInvoiceOrdersFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'invoice_date'
+
+    # Report screens send from_date/to_date instead of invoice_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='invoice_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='invoice_date', lookup_expr='lte')
+
     vendor_id = filters.CharFilter(method=filter_uuid)
     vendor = filters.CharFilter(field_name='vendor_id__name', lookup_expr='icontains')
     purchase_type_id = filters.CharFilter(method=filter_uuid)
     purchase_type = filters.CharFilter(field_name='purchase_type_id__name', lookup_expr='icontains')
-    invoice_date = filters.DateFilter()
+    # Range (invoice_date_after / invoice_date_before); exact form kept for old callers.
+    invoice_date = filters.DateFromToRangeFilter()
+    invoice_date_exact = filters.DateFilter(field_name='invoice_date')
     invoice_no = filters.CharFilter(lookup_expr='icontains')
     supplier_invoice_no= filters.CharFilter(lookup_expr='icontains')
     tax = filters.ChoiceFilter(choices=PurchaseOrders.TAX_CHOICES)
@@ -96,6 +118,15 @@ class PurchaseInvoiceOrdersFilter(filters.FilterSet):
         fields =['invoice_no','invoice_date','supplier_invoice_no','vendor_id','vendor','purchase_type_id','purchase_type','tax', 'tax_amount','total_amount','advance_amount','remarks','order_status_id','status_name','created_at','period_name','vendor_name','landed_cost','s','sort','page','limit']
 
 class PurchaseReturnOrdersFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'return_date'
+
+    # Report screens send from_date/to_date instead of return_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='return_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='return_date', lookup_expr='lte')
+
     vendor_id = filters.CharFilter(method=filter_uuid)
     vendor = filters.CharFilter(field_name='vendor_id__name', lookup_expr='icontains')
     purchase_type_id = filters.CharFilter(method=filter_uuid)
@@ -117,8 +148,10 @@ class PurchaseReturnOrdersFilter(filters.FilterSet):
     limit = filters.NumberFilter(method='filter_by_limit', label="Limit")
     
   # New fields added based on the `PurchaseReturnOrders` model
-    return_date = filters.DateFilter()
-    ref_no = filters.CharFilter(lookup_expr='icontains')  
+    # Range (return_date_after / return_date_before); exact form kept for old callers.
+    return_date = filters.DateFromToRangeFilter()
+    return_date_exact = filters.DateFilter(field_name='return_date')
+    ref_no = filters.CharFilter(lookup_expr='icontains')
     ref_date = filters.DateFilter()  
     payment_term_id = filters.CharFilter(method=filter_uuid)  
     email = filters.CharFilter(lookup_expr='icontains')  
@@ -331,6 +364,15 @@ class BillPaymentTransactionsReportFilter(filters.FilterSet):
     """
     Filter for Bill Payment Transactions Report showing all vendor bill payments
     """
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'payment_date'
+
+    # Report screens send from_date/to_date instead of payment_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='payment_date', lookup_expr='lte')
+
 
     # Vendor filters
     vendor_name = filters.CharFilter(field_name='vendor__name', lookup_expr='icontains')
@@ -343,7 +385,11 @@ class BillPaymentTransactionsReportFilter(filters.FilterSet):
     invoice_no = filters.CharFilter(field_name='purchase_invoice__invoice_no', lookup_expr='icontains')
 
     # Date filters
-    payment_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    # payment_date stores a time, so the range must run to the END of the closing day or
+    # afternoon payments drop out of their own date — see DocumentDateFromToRangeFilter.
+    # The original "from this date onward" form is kept as payment_date_from.
+    payment_date = DocumentDateFromToRangeFilter(field_name='payment_date')
+    payment_date_from = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
 
     # Payment details filters
     payment_method = filters.CharFilter(lookup_expr='icontains')

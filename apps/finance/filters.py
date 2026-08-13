@@ -108,6 +108,15 @@ class ChartOfAccountsFilter(filters.FilterSet):
         
 
 class JournalEntryFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'entry_date'
+
+    # Report screens send from_date/to_date instead of entry_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='entry_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='entry_date', lookup_expr='lte')
+
     entry_date = filters.DateFromToRangeFilter()
     reference = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
@@ -140,6 +149,15 @@ class JournalEntryFilter(filters.FilterSet):
 
 
 class PaymentTransactionFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'payment_date'
+
+    # Report screens send from_date/to_date instead of payment_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='payment_date', lookup_expr='lte')
+
     invoice_id = filters.CharFilter(lookup_expr='icontains')
     order_type = filters.ChoiceFilter(choices=[('Purchase', 'Purchase'),('Sale', 'Sale')])
     payment_date = filters.DateFromToRangeFilter()
@@ -598,6 +616,15 @@ class CashFlowReportFilter(filters.FilterSet):
 
 class AgingReportFilter(filters.FilterSet):
     """Filter for Aging Report showing pending payments by age categories."""
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'payment_date'
+
+    # Report screens send from_date/to_date instead of payment_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='payment_date', lookup_expr='lte')
+
     payment_date = filters.DateFromToRangeFilter()
     payment_status = filters.ChoiceFilter(choices=[('Pending', 'Pending'), ('Completed', 'Completed'), ('Failed', 'Failed')])
     due_days = filters.RangeFilter()
@@ -655,6 +682,15 @@ class BankReconciliationReportFilter(filters.FilterSet):
 
 class JournalEntryReportFilter(filters.FilterSet):
     """Filter for Journal Entry Report showing all journal entries and their details."""
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'entry_date'
+
+    # Report screens send from_date/to_date instead of entry_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='entry_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='entry_date', lookup_expr='lte')
+
     entry_date = filters.DateFromToRangeFilter()
     reference = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
@@ -760,6 +796,15 @@ class ExpenseItemFilter(filters.FilterSet):
 
 class JournalVoucherFilter(filters.FilterSet):
     """Filter for Journal Voucher listing"""
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'voucher_date'
+
+    # Report screens send from_date/to_date instead of voucher_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='voucher_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='voucher_date', lookup_expr='lte')
+
     journal_voucher_id = filters.CharFilter(method=filter_uuid)
     voucher_no = filters.CharFilter(lookup_expr='icontains')
     voucher_date = filters.DateFromToRangeFilter()
@@ -845,6 +890,15 @@ class JournalVoucherLineFilter(filters.FilterSet):
 # ======================================
 
 class JournalBookReportFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'voucher_date'
+
+    # Report screens send from_date/to_date instead of voucher_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='voucher_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='voucher_date', lookup_expr='lte')
+
     voucher_no = filters.CharFilter(lookup_expr='icontains')
     voucher_date = filters.DateFromToRangeFilter()
     voucher_type = filters.ChoiceFilter(choices=JournalVoucher.VOUCHER_TYPE_CHOICES)

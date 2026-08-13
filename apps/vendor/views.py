@@ -17,7 +17,7 @@ from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import Vendor, VendorBalance, VendorCategory, VendorPaymentTerms, VendorAgent, VendorAttachment, VendorAddress
 from apps.masters.models import FirmStatuses, GstCategories, PriceCategories, Territory, Transporters
-from config.utils_methods import BaseBulkUpdateView
+from config.utils_methods import get_pagination_params, BaseBulkUpdateView
 from .serializers import VendorBalanceSerializer, VendorSerializer, VendorCategorySerializer, VendorPaymentTermsSerializer, VendorAgentSerializer, VendorAttachmentSerializer, VendorAddressSerializer, VendorSummaryReportSerializer, VendorsOptionsSerializer, VendorDropdownSerializer
 from config.utils_methods import delete_multi_instance, soft_delete, list_all_objects, create_instance, update_instance, build_response, validate_input_pk, validate_payload_data, validate_multiple_data, generic_data_creation, validate_put_method_data, update_multi_instances
 from uuid import UUID
@@ -195,7 +195,10 @@ class VendorViewSet(APIView):
 
             # ?minimal=true — lightweight dropdown list (vendor_id + name only, for select fields)
             if request.query_params.get("minimal", "false").lower() == "true":
-                queryset = Vendor.objects.filter(is_deleted=False).order_by('name')
+                # Deliberately unpaginated — the select fields search this in the browser.
+                # .only() keeps every row but reads just the two serialized columns.
+                queryset = (Vendor.objects.filter(is_deleted=False)
+                            .only('vendor_id', 'name').order_by('name'))
                 serializer = VendorDropdownSerializer(queryset, many=True)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -225,8 +228,7 @@ class VendorViewSet(APIView):
 
     def get_pagination_params(self, request):
         """Extracts pagination parameters from the request."""
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         return page, limit
     
     def apply_filters(self, request, queryset, filter_class, model_class):

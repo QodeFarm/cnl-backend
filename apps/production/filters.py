@@ -1,12 +1,21 @@
 from django_filters import rest_framework as filters
 from apps.production.models import Machine, ProductionStatus, WorkOrder, BOM, BillOfMaterials, WorkOrderMachine
 from config.utils_methods import filter_uuid
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 from django_filters import rest_framework as filters
 from .models import MaterialIssue, MaterialReceived, StockJournal, StockSummary
 
 
 class WorkOrderFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a work order belongs to the day production starts.
+    document_date_field = 'start_date'
+
+    # Report screens send from_date/to_date instead of start_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='start_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='start_date', lookup_expr='lte')
+
 
     # Product
     product = filters.CharFilter(field_name='product_id__name', lookup_expr='icontains')
@@ -32,6 +41,16 @@ class WorkOrderFilter(filters.FilterSet):
         field_name='sale_order_id__flow_status_id__flow_status_name',
         lookup_expr='iexact'
     )
+
+    # Production Floor. The board tabs filter by id so that renaming a floor cannot break
+    # them; the name filter mirrors MaterialIssueFilter for column search and reports.
+    # `isnull` backs the "Unassigned" tab — without it, work orders created before a floor
+    # was ever set would be reachable from no tab at all.
+    # UUIDFilter, not CharFilter: a hand-edited URL with a malformed id returns 400 from the
+    # filter form instead of raising ValidationError out of the ORM as a 500.
+    production_floor_id = filters.UUIDFilter(field_name='production_floor_id')
+    production_floor = filters.CharFilter(field_name='production_floor_id__name', lookup_expr='icontains')
+    production_floor_isnull = filters.BooleanFilter(field_name='production_floor_id', lookup_expr='isnull')
 
     quantity = filters.RangeFilter()
     completed_qty = filters.RangeFilter()
@@ -73,6 +92,9 @@ class WorkOrderFilter(filters.FilterSet):
             'size',
             'color',
             'flow_status',
+            'production_floor_id',
+            'production_floor',
+            'production_floor_isnull',
             'quantity',
             'completed_qty',
             'start_date',
@@ -456,6 +478,20 @@ class RawMaterialConsumptionReportFilter(filters.FilterSet):
 
 
 class MaterialIssueFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'issue_date'
+
+    # Report screens send from_date/to_date instead of issue_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='issue_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='issue_date', lookup_expr='lte')
+
+    # Range (issue_date_after / issue_date_before) so the date filter and Quick Period work;
+    # exact form kept for old callers. Handles DateField and DateTimeField alike.
+    issue_date = DocumentDateFromToRangeFilter()
+    issue_date_exact = filters.DateFilter(field_name='issue_date')
+
     issue_no = filters.CharFilter(lookup_expr='icontains')
     product = filters.CharFilter(field_name='materialissueitem__product_id__name', lookup_expr='icontains')
     production_floor = filters.CharFilter(field_name='production_floor_id__name', lookup_expr='icontains')
@@ -482,6 +518,20 @@ class MaterialIssueFilter(filters.FilterSet):
         fields = ['issue_no', 'production_floor', 'created_at', 'product', 's', 'sort', 'page', 'limit']
 
 class MaterialReceivedFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'receipt_date'
+
+    # Report screens send from_date/to_date instead of receipt_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='receipt_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='receipt_date', lookup_expr='lte')
+
+    # Range (receipt_date_after / receipt_date_before) so the date filter and Quick Period work;
+    # exact form kept for old callers. Handles DateField and DateTimeField alike.
+    receipt_date = DocumentDateFromToRangeFilter()
+    receipt_date_exact = filters.DateFilter(field_name='receipt_date')
+
     receipt_no = filters.CharFilter(lookup_expr='icontains')
     product = filters.CharFilter(field_name='materialreceiveditem__product_id__name', lookup_expr='icontains')
     production_floor = filters.CharFilter(field_name='production_floor_id__name', lookup_expr='icontains')

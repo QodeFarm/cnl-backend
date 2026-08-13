@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from .models import *
-from apps.masters.serializers import GPackageUnitSerializer, ModItemMasterSerializer, PackageUnitSerializer, ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer
+from apps.masters.serializers import GPackageUnitSerializer, ModItemMasterSerializer, PackageUnitSerializer, ProductUniqueQuantityCodesSerializer,ProductTypesSerializer,UnitOptionsSerializer,ProductItemTypeSerializer,ProductDrugTypesSerializer,ModProductBrandsSerializer, ModUnitOptionsSerializer, ModProductionFloorSerializer
 from apps.inventory.serializers import ModWarehouseLocationsSerializer
 
 
@@ -202,6 +202,7 @@ class productsSerializer(serializers.ModelSerializer):
     g_pack_unit = ModProductStockUnitsSerializer(source='g_pack_unit_id',read_only=True)
     product_mode = ModItemMasterSerializer(source='product_mode_id', read_only=True)
     gst = GSTMasterSerializer(source='gst_id',read_only=True)
+    default_production_floor = ModProductionFloorSerializer(source='default_production_floor_id', read_only=True)
     
     warehouse_locations = serializers.SerializerMethodField()
 

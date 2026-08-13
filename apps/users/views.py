@@ -1,6 +1,6 @@
 from .serializers import UserUpdateByAdminOnlySerializer, RoleSerializer, ActionsSerializer, ModulesSerializer, ModuleSectionsSerializer, GetUserDataSerializer, SendPasswordResetEmailSerializer, UserChangePasswordSerializer, UserLoginSerializer, UserPasswordResetSerializer, UserTimeRestrictionsSerializer, UserAllowedWeekdaysSerializer, RolePermissionsSerializer, UserRoleSerializer, ModulesOptionsSerializer, CustomUserUpdateSerializer, ActivateAndSetPasswordSerializer
 from .models import Roles, Actions, Modules, RolePermissions, ModuleSections, User, UserTimeRestrictions, UserAllowedWeekdays, UserRoles, License
-from config.utils_methods import IsAdminRoles, build_response, list_all_objects, soft_delete, create_instance, update_instance, validate_uuid
+from config.utils_methods import get_pagination_params, IsAdminRoles, build_response, list_all_objects, soft_delete, create_instance, update_instance, validate_uuid
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from .filters import RolePermissionsFilter, RolesFilter, UserFilter
@@ -718,8 +718,7 @@ class UserManageView(APIView):
                 logger.info("Retrieving all users")
 
                 # Get pagination parameters
-                page = int(request.query_params.get('page', 1))  # Default to page 1
-                limit = int(request.query_params.get('limit', 10))  # Default limit 10
+                page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
                 # Initial queryset
                 queryset = User.objects.all().order_by('is_deleted', '-created_at')

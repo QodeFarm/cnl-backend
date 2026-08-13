@@ -94,6 +94,10 @@ class WorkOrder(models.Model):
     available_qty = models.IntegerField(null=True, default=0)
     temp_quantity = models.IntegerField(null=True, default=0)
     status_id = models.ForeignKey(ProductionStatus, on_delete=models.PROTECT, null=True, default=None, db_column='status_id')
+    # The floor this job actually ran on, stamped at creation from the product's default.
+    # Stored here rather than read through the product so that changing a product's default
+    # later cannot rewrite the floor of jobs already finished.
+    production_floor_id = models.ForeignKey(ProductionFloor, on_delete=models.PROTECT, null=True, default=None, db_column='production_floor_id')
     start_date = models.DateField(null=True, default=None)
     end_date = models.DateField(null=True, default=None)
     sale_order_id = models.ForeignKey(SaleOrder, on_delete=models.PROTECT, db_column='sale_order_id', null=True, default=None)

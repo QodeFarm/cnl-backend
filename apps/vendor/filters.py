@@ -6,7 +6,7 @@ from apps.vendor.models import Vendor, VendorAgent, VendorCategory, VendorPaymen
 from config.utils_methods import filter_uuid
 from django_filters import FilterSet, ChoiceFilter, DateFromToRangeFilter
 from django_filters import rest_framework as filters
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_simple_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_simple_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
 
@@ -313,6 +313,20 @@ class VendorPaymentReportFilter(filters.FilterSet):
     """
     Filter for Vendor Payment Report showing payments made to vendors.
     """
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'payment_date'
+
+    # Report screens send from_date/to_date instead of payment_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='payment_date', lookup_expr='lte')
+
+    # Range (payment_date_after / payment_date_before) so the date filter and Quick Period work;
+    # exact form kept for old callers. Handles DateField and DateTimeField alike.
+    payment_date = DocumentDateFromToRangeFilter()
+    payment_date_exact = filters.DateFilter(field_name='payment_date')
+
     invoice_id = filters.CharFilter(lookup_expr='icontains')
     payment_date_after = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
     payment_date_before = filters.DateFilter(field_name='payment_date', lookup_expr='lte')

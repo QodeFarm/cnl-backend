@@ -5,7 +5,7 @@ from apps.customer.models import Customer, LedgerAccounts
 from apps.sales.models import SaleInvoiceOrders
 from apps.finance.models import JournalEntryLines, PaymentTransaction
 from config.utils_methods import filter_uuid
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit, filter_by_simple_search
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit, filter_by_simple_search
 import logging
 logger = logging.getLogger(__name__)
 
@@ -154,6 +154,15 @@ class CustomerSummaryReportFilter(filters.FilterSet):
         fields = ['name', 'total_sales', 'total_advance', 'outstanding_payments', 's', 'sort', 'page', 'limit']   
         
 class CustomerOrderHistoryReportFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'invoice_date'
+
+    # Report screens send from_date/to_date instead of invoice_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='invoice_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='invoice_date', lookup_expr='lte')
+
     invoice_no = filters.CharFilter(field_name='invoice_no', lookup_expr='icontains')
     customer = filters.CharFilter(field_name='customer_id__name', lookup_expr='iexact')
     invoice_date = filters.DateFromToRangeFilter(field_name='invoice_date')
@@ -323,6 +332,20 @@ class CustomerPaymentReportFilter(filters.FilterSet):
     """
     Filter for Customer Payment Report showing payments received from customers.
     """
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'payment_date'
+
+    # Report screens send from_date/to_date instead of payment_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='payment_date', lookup_expr='lte')
+
+    # Range (payment_date_after / payment_date_before) so the date filter and Quick Period work;
+    # exact form kept for old callers. Handles DateField and DateTimeField alike.
+    payment_date = DocumentDateFromToRangeFilter()
+    payment_date_exact = filters.DateFilter(field_name='payment_date')
+
     invoice_id = filters.CharFilter(lookup_expr='icontains')
     payment_date_after = filters.DateFilter(field_name='payment_date', lookup_expr='gte')
     payment_date_before = filters.DateFilter(field_name='payment_date', lookup_expr='lte')

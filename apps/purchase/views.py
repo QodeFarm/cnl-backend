@@ -15,7 +15,7 @@ from apps.purchase.filters import BillPaymentTransactionsReportFilter, PurchaseI
 from apps.purchase.filters import OutstandingPurchaseFilter, PurchaseInvoiceOrdersFilter, PurchaseOrderItemsFilter, PurchaseOrdersFilter, PurchaseReturnOrdersFilter, PurchasesByVendorReportFilter, PurchasesbyVendorReportFilter, StockReplenishmentReportFilter
 from apps.vendor.views import VendorBalanceView
 from config.utils_db_router import set_db
-from config.utils_filter_methods import filter_response
+from config.utils_filter_methods import build_default_ordering, filter_response
 from .models import *
 from .serializers import *
 from config.utils_methods import *
@@ -188,8 +188,7 @@ class PurchaseOrderViewSet(APIView):
 
     def get_pagination_params(self, request):
         """Extracts pagination parameters from the request."""
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         return page, limit
     
     # def apply_filters(self, request, queryset, filter_class, model_class):
@@ -250,7 +249,10 @@ class PurchaseOrderViewSet(APIView):
         logger.info("Retrieving Purchase order summary")
 
         page, limit = self.get_pagination_params(request)
-        queryset = PurchaseOrders.objects.all().order_by('is_deleted', '-created_at')
+        # Newest ORDER date first — this path strips page/limit before the FilterSet, so
+        # the shared sorting never runs here.
+        queryset = PurchaseOrders.objects.order_by(
+            *build_default_ordering(PurchaseOrders, 'order_date'))
 
         # ✅ Apply filters (remove pagination params to avoid conflicts)
         if request.query_params:
@@ -860,7 +862,10 @@ class PurchaseInvoiceOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Purchase Invoice orders summary")
-                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
+                # This path strips page/limit before the FilterSet, so the shared
+                # sorting never runs here — order explicitly by the document date.
+                purchaseinvoiceorders = PurchaseInvoiceOrders.objects.order_by(
+                    *build_default_ordering(PurchaseInvoiceOrders, 'invoice_date'))
                 
                 # ✅ Apply filters for summary (remove pagination params)
                 if request.query_params:
@@ -880,16 +885,13 @@ class PurchaseInvoiceOrderViewSet(APIView):
                     if filterset.is_valid():
                         purchaseinvoiceorders = filterset.qs
                 
-                data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(purchaseinvoiceorders)
-                
-                # ✅ Manual pagination for summary data
-                page = int(request.query_params.get('page', 1))
-                limit = int(request.query_params.get('limit', 10))
-                total_count = len(data)
-                
-                start_index = (page - 1) * limit
-                end_index = start_index + limit
-                paginated_data = data[start_index:end_index]
+                # ✅ Count and slice in the database, THEN serialize. Serializing first and
+                # slicing the resulting list made a 10-row page cost the whole table.
+                page, limit, start_index, end_index = get_pagination_params(request)
+                total_count = purchaseinvoiceorders.count()
+                paginated_data = PurchaseInvoiceOrdersOptionsSerializer.get_purchase_invoice_orders_summary(
+                    optimize_list_queryset(purchaseinvoiceorders, PurchaseInvoiceOrdersOptionsSerializer)[start_index:end_index]
+                )
                 
                 return filter_response(
                     total_count,
@@ -903,8 +905,7 @@ class PurchaseInvoiceOrderViewSet(APIView):
             
             logger.info("Retrieving all purchase invoice orders")
 
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             
             # Start with base queryset
             queryset = PurchaseInvoiceOrders.objects.all().order_by('is_deleted', '-created_at')
@@ -2134,7 +2135,10 @@ class PurchaseReturnOrderViewSet(APIView):
             summary = request.query_params.get("summary", "false").lower() == "true"
             if summary:
                 logger.info("Retrieving Purchase return orders summary")
-                purchasereturnorders = PurchaseReturnOrders.objects.all().order_by('is_deleted', '-created_at')
+                # This path strips page/limit before the FilterSet, so the shared
+                # sorting never runs here — order explicitly by the document date.
+                purchasereturnorders = PurchaseReturnOrders.objects.order_by(
+                    *build_default_ordering(PurchaseReturnOrders, 'return_date'))
                 
                 # ✅ Apply filters for summary (remove pagination params)
                 if request.query_params:
@@ -2154,16 +2158,13 @@ class PurchaseReturnOrderViewSet(APIView):
                     if filterset.is_valid():
                         purchasereturnorders = filterset.qs
                 
-                data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(purchasereturnorders)
-                
-                # ✅ Manual pagination for summary data
-                page = int(request.query_params.get('page', 1))
-                limit = int(request.query_params.get('limit', 10))
-                total_count = len(data)
-                
-                start_index = (page - 1) * limit
-                end_index = start_index + limit
-                paginated_data = data[start_index:end_index]
+                # ✅ Count and slice in the database, THEN serialize. Serializing first and
+                # slicing the resulting list made a 10-row page cost the whole table.
+                page, limit, start_index, end_index = get_pagination_params(request)
+                total_count = purchasereturnorders.count()
+                paginated_data = PurchaseReturnOrdersOptionsSerializer.get_purchase_return_orders_summary(
+                    optimize_list_queryset(purchasereturnorders, PurchaseReturnOrdersOptionsSerializer)[start_index:end_index]
+                )
                 
                 return filter_response(
                     total_count,
@@ -2177,8 +2178,7 @@ class PurchaseReturnOrderViewSet(APIView):
             
             logger.info("Retrieving all purchase return orders")
 
-            page = int(request.query_params.get('page', 1))
-            limit = int(request.query_params.get('limit', 10)) 
+            page, limit, _pg_start, _pg_end = get_pagination_params(request)
             
             # Start with base queryset
             queryset = PurchaseReturnOrders.objects.all().order_by('is_deleted', '-created_at')
@@ -2806,8 +2806,7 @@ class BillPaymentTransactionAPIView(APIView):
     """
     
     def get(self, request, transaction_id=None):
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
 
         # ✅ CASE 1: FETCH SINGLE RECORD
         if transaction_id:
@@ -3951,8 +3950,7 @@ class FetchPurchaseInvoicesForPaymentReceiptTable(APIView):
         the Payment Receipt. It's related to the Payment Transaction table only.'''
     def get(self, request, vendor_id):
         
-        page = int(request.query_params.get('page', 1))
-        limit = int(request.query_params.get('limit', 10))
+        page, limit, _pg_start, _pg_end = get_pagination_params(request)
         
         purchase_invoice = PurchaseInvoiceOrders.objects.filter(vendor_id=vendor_id)
         

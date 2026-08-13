@@ -1,7 +1,7 @@
 from django_filters import rest_framework as filters
 from apps.reminders.models import NotificationFrequencies, NotificationMethods, ReminderTypes, Reminders, ReminderRecipients, ReminderSettings, ReminderLogs
 from config.utils_methods import filter_uuid
-from config.utils_filter_methods import PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
+from config.utils_filter_methods import DocumentDateFromToRangeFilter, PERIOD_NAME_CHOICES, filter_by_period_name, filter_by_search, filter_by_sort, filter_by_page, filter_by_limit
 import logging
 logger = logging.getLogger(__name__)
 
@@ -81,11 +81,23 @@ class ReminderTypesFilter(filters.FilterSet):
         fields = ['reminder_type_id','type_name','created_at','s', 'sort','page','limit']
 
 class RemindersFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'reminder_date'
+
+    # Report screens send from_date/to_date instead of reminder_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='reminder_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='reminder_date', lookup_expr='lte')
+
     reminder_id = filters.CharFilter(method=filter_uuid)
     reminder_type_id = filters.CharFilter(field_name='reminder_type_id__type_name', lookup_expr='icontains')
     subject = filters.CharFilter(lookup_expr='icontains')
     description = filters.CharFilter(lookup_expr='icontains')
-    reminder_date = filters.DateFilter(lookup_expr='exact')
+    # Range (reminder_date_after / reminder_date_before) so the date filter and Quick Period work;
+    # exact form kept for old callers. Handles DateField and DateTimeField alike.
+    reminder_date = DocumentDateFromToRangeFilter()
+    reminder_date_exact = filters.DateFilter(field_name='reminder_date')
     is_recurring = filters.BooleanFilter()
     recurring_frequency = filters.ChoiceFilter(choices=Reminders.RECURRING_FREQUENCY_CHOICES)
     created_at = filters.DateFromToRangeFilter()
@@ -158,6 +170,15 @@ class ReminderSettingsFilter(filters.FilterSet):
 
 
 class ReminderLogsFilter(filters.FilterSet):
+    # Date filters and Quick Period run on the document's own date, not the row's
+    # insert timestamp — a backdated document belongs to the date on the document.
+    document_date_field = 'log_date'
+
+    # Report screens send from_date/to_date instead of log_date_after/_before.
+    # Mapped to the same document date so both spellings filter identically.
+    from_date = filters.DateFilter(field_name='log_date', lookup_expr='gte')
+    to_date = filters.DateFilter(field_name='log_date', lookup_expr='lte')
+
     log_id = filters.CharFilter(method=filter_uuid)
     reminder_id = filters.CharFilter(field_name='reminder_id__subject', lookup_expr='icontains')
     log_date = filters.DateFromToRangeFilter()
