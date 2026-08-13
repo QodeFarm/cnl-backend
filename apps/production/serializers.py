@@ -61,6 +61,7 @@ class WorkOrderSerializer(serializers.ModelSerializer):
     size = ModSizeSerializer(source='size_id',read_only=True)
     color = ColorSerializer(source='color_id',read_only=True)    
     status = ModProductionStatusSerializer(source='status_id', read_only=True)
+    production_floor = ModProductionFloorSerializer(source='production_floor_id', read_only=True)
     sale_order = UdfSaleOrderSerializer(source='sale_order_id', read_only=True)
     pending_qty = serializers.SerializerMethodField()
 

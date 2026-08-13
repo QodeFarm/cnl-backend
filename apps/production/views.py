@@ -357,7 +357,10 @@ class WorkOrderAPIView(APIView):
         page, limit = self.get_pagination_params(request)
         
         # Build base queryset with annotation
-        base_queryset = WorkOrder.objects.annotate(
+        # This view builds its queryset by hand and so does not inherit the N+1 protection in
+        # list_all_objects/optimize_list_queryset. Joining the floor the serializer now reads
+        # keeps the new column from costing one extra query per row. Nullable FK, so LEFT JOIN.
+        base_queryset = WorkOrder.objects.select_related('production_floor_id').annotate(
             pending_qty=F("quantity") - F("completed_qty"))
         
         # Create a copy of request GET params without page and limit for counting
@@ -369,19 +372,24 @@ class WorkOrderAPIView(APIView):
         if 'limit' in query_params:
             del query_params['limit']
         
-        # Apply filters WITHOUT page and limit to get correct count
+        # Apply filters WITHOUT page and limit to get correct count.
+        # An invalid filterset must return its errors: reading .qs only inside the is_valid()
+        # branch left `filtered_queryset` unbound, so one bad filter value surfaced to the user
+        # as a bare "An error occurred" 500 with no field named.
         filterset_for_count = WorkOrderFilter(query_params, queryset=base_queryset)
-        if filterset_for_count.is_valid():
-            filtered_queryset = filterset_for_count.qs
-        
+        if not filterset_for_count.is_valid():
+            return build_response(0, "Invalid filter value", [], status.HTTP_400_BAD_REQUEST, errors=filterset_for_count.errors)
+        filtered_queryset = filterset_for_count.qs
+
         # Get total count of filtered records (without pagination)
         total_count = filtered_queryset.count()
-        
+
         # Now apply filters WITH page and limit for the actual data
         filterset = WorkOrderFilter(request.GET, queryset=base_queryset)
-        if filterset.is_valid():
-            queryset = filterset.qs
-        
+        if not filterset.is_valid():
+            return build_response(0, "Invalid filter value", [], status.HTTP_400_BAD_REQUEST, errors=filterset.errors)
+        queryset = filterset.qs
+
         # Apply pagination (page and limit are already applied by the filter, 
         # but we'll slice again to be safe)
         start = (page - 1) * limit
@@ -599,8 +607,11 @@ class WorkOrderAPIView(APIView):
 
         page, limit = self.get_pagination_params(request)
 
-        # Query work orders that are still in progress
-        queryset = WorkOrder.objects.filter( completed_qty__gt=0,  # At least some work is done
+        # Query work orders that are still in progress.
+        # select_related for the same reason as get_work_orders: this report serializes its
+        # queryset whole, so the floor the serializer now reads would otherwise cost one extra
+        # query per open work order.
+        queryset = WorkOrder.objects.select_related('production_floor_id').filter( completed_qty__gt=0,  # At least some work is done
             # completed_qty__lt=F('quantity'),  # But not fully completed
             status_id__status_name ="open"  # The order is still in progress
         )
@@ -858,6 +869,21 @@ class WorkOrderAPIView(APIView):
         """
         After the data is validated, this validated data is created as new instances.
         """
+        # Default the production floor from the product, the same way status defaults to 'open'
+        # above. Placed AFTER validation on purpose: product_id is raw request data until then,
+        # and feeding a malformed one into an ORM filter raises ValidationError as an unhandled
+        # 500 instead of the per-field 400 the serializer produces.
+        # A product with no default leaves it empty; those rows show under "Unassigned" on the
+        # board rather than disappearing.
+        if not work_order_data.get('production_floor_id'):
+            product_id = work_order_data.get('product_id')
+            if product_id:
+                floor_id = Products.objects.filter(
+                    product_id=product_id
+                ).values_list('default_production_floor_id', flat=True).first()
+                if floor_id:
+                    work_order_data['production_floor_id'] = floor_id
+
         # Hence the data is validated , further it can be created.
         # Create WorkOrder Data
         order_data = generic_data_creation(self, [work_order_data], WorkOrderSerializer, {}, using=db_name)
