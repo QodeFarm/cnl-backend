@@ -148,11 +148,14 @@ def create_work_order(product_id, quantity):
     if not open_status:
         raise ValueError("ProductionStatus 'open' not found in database")
 
-    # Create the WorkOrder
+    # Create the WorkOrder. The floor comes from the product's default, matching
+    # WorkOrderAPIView.create() — an AI-suggested job must land on the same board tab as the
+    # identical hand-made one, not under "Unassigned".
     work_order = WorkOrder.objects.create(
         product_id=product,
         quantity=quantity,
         status_id=open_status,
+        production_floor_id=product.default_production_floor_id,
     )
 
     # Create BOM items for this work order and deduct raw material stock

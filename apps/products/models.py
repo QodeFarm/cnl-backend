@@ -6,7 +6,7 @@ from apps.inventory.models import WarehouseLocations, Warehouses
 from config.utils_methods import *
 from config.utils_variables import *
 from config.utils_methods import OrderNumberMixin
-from apps.masters.models import GPackageUnit, ItemMaster, PackageUnit, ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands
+from apps.masters.models import GPackageUnit, ItemMaster, PackageUnit, ProductUniqueQuantityCodes,ProductTypes,UnitOptions,ProductItemType,ProductDrugTypes,ProductBrands,ProductionFloor
 
 def product_groups_picture(instance, filename):
     # Get the file extension
@@ -245,6 +245,9 @@ class Products(OrderNumberMixin):
     name = models.CharField(max_length=255)
     product_mode_id = models.ForeignKey(ItemMaster, on_delete=models.PROTECT, null=True, default=None, db_column='product_mode_id')
     product_group_id = models.ForeignKey(ProductGroups, null=True,on_delete=models.PROTECT, db_column = 'product_group_id')
+    # Where this item is normally made. Copied onto each new work order as its default;
+    # optional, because a tenant that never sets it must keep working exactly as before.
+    default_production_floor_id = models.ForeignKey(ProductionFloor, on_delete=models.PROTECT, null=True, default=None, db_column = 'default_production_floor_id')
     category_id = models.ForeignKey(ProductCategories, on_delete=models.PROTECT, null=True, default=None, db_column = 'category_id')
     type_id = models.ForeignKey(ProductTypes, on_delete=models.PROTECT, null=True, default=None, db_column = 'type_id')
     code = models.CharField(max_length=50,null=True,)

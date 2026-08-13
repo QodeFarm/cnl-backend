@@ -42,6 +42,16 @@ class WorkOrderFilter(filters.FilterSet):
         lookup_expr='iexact'
     )
 
+    # Production Floor. The board tabs filter by id so that renaming a floor cannot break
+    # them; the name filter mirrors MaterialIssueFilter for column search and reports.
+    # `isnull` backs the "Unassigned" tab — without it, work orders created before a floor
+    # was ever set would be reachable from no tab at all.
+    # UUIDFilter, not CharFilter: a hand-edited URL with a malformed id returns 400 from the
+    # filter form instead of raising ValidationError out of the ORM as a 500.
+    production_floor_id = filters.UUIDFilter(field_name='production_floor_id')
+    production_floor = filters.CharFilter(field_name='production_floor_id__name', lookup_expr='icontains')
+    production_floor_isnull = filters.BooleanFilter(field_name='production_floor_id', lookup_expr='isnull')
+
     quantity = filters.RangeFilter()
     completed_qty = filters.RangeFilter()
 
@@ -82,6 +92,9 @@ class WorkOrderFilter(filters.FilterSet):
             'size',
             'color',
             'flow_status',
+            'production_floor_id',
+            'production_floor',
+            'production_floor_isnull',
             'quantity',
             'completed_qty',
             'start_date',
