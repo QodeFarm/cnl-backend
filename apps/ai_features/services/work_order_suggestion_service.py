@@ -149,13 +149,17 @@ def create_work_order(product_id, quantity):
         raise ValueError("ProductionStatus 'open' not found in database")
 
     # Create the WorkOrder. The floor comes from the product's default, matching
-    # WorkOrderAPIView.create() — an AI-suggested job must land on the same board tab as the
-    # identical hand-made one, not under "Unassigned".
+    # WorkOrderAPIView.create() — an AI-suggested job must land on the same board filter as
+    # the identical hand-made one, not under "Unassigned".
+    # `..._id_id` is the raw column. The descriptor `product.default_production_floor_id`
+    # would fetch the related row, costing a query and raising ProductionFloor.DoesNotExist
+    # on an id with no matching row — and schema here is hand-applied per tenant, so the FK
+    # constraint backing that assumption is not guaranteed to exist.
     work_order = WorkOrder.objects.create(
         product_id=product,
         quantity=quantity,
         status_id=open_status,
-        production_floor_id=product.default_production_floor_id,
+        production_floor_id_id=product.default_production_floor_id_id,
     )
 
     # Create BOM items for this work order and deduct raw material stock
