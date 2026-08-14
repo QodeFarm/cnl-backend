@@ -843,15 +843,20 @@ class ProductViewSet(APIView):
 
 def build_picture_link_cell(picture, base_url=''):
     """
-    Excel cell value linking to a product's first uploaded image, or '' if it has none.
+    Excel cell value holding the URL of a product's first uploaded image, or '' if it has none.
 
     Products.picture is a JSONField holding the upload endpoint's payload:
     [{'attachment_name': .., 'attachment_path': '<filename>', ..}]. Only the bare
     filename is stored, never a URL, so the servable address is rebuilt from base_url.
 
-    Emits a HYPERLINK() formula rather than an openpyxl cell hyperlink: a real
-    hyperlink writes a relationship record per cell and Excel caps those at ~65k per
-    sheet, which a full product export can exceed. The formula has no such limit.
+    Written as plain text, NOT as a =HYPERLINK() formula. Excel opens any file downloaded
+    from a website in Protected View, and Protected View does not evaluate formulas — so the
+    formula's "View Image" label rendered as an empty cell for every user who did not click
+    "Enable Editing", which looked like a broken export.
+
+    Plain text also keeps the property that made the formula attractive in the first place:
+    a real openpyxl hyperlink writes one relationship record per cell and Excel caps those at
+    ~65k per sheet, which a full product export can exceed. Text has no such limit.
 
     Returns '' on missing or malformed data — one bad row must never fail the export.
     """
@@ -863,9 +868,7 @@ def build_picture_link_cell(picture, base_url=''):
     path = str(first.get('attachment_path') or '').strip()
     if not path:
         return ''
-    # Double any quote so a filename containing one cannot terminate the formula string.
-    url = f"{base_url}{path}".replace('"', '""')
-    return f'=HYPERLINK("{url}","View Image")'
+    return f"{base_url}{path}"
 
 
 class ProductExcelImport(BaseExcelImportExport):
@@ -1870,6 +1873,11 @@ class ProductExcelImport(BaseExcelImportExport):
         # every call and this loop runs once per product.
         media_base = request.build_absolute_uri(settings.MEDIA_URL) if request else settings.MEDIA_URL
 
+        # Excel's per-sheet hyperlink ceiling, with headroom. Beyond this the picture cell
+        # falls back to the bare URL.
+        MAX_SHEET_HYPERLINKS = 60000
+        hyperlink_count = 0
+
         # iterator(): the workbook already holds every row in memory, so there is no
         # reason for the queryset to cache every model instance alongside it.
         for product in queryset.iterator(chunk_size=2000):
@@ -1896,9 +1904,28 @@ class ProductExcelImport(BaseExcelImportExport):
                         val = 'Yes' if val else 'No'
                     row.append(val if val is not None else '')
 
-            row.append(build_picture_link_cell(product.picture, media_base))
+            picture_url = build_picture_link_cell(product.picture, media_base)
+            row.append(picture_url)
 
             ws.append(row)
+
+            # Turn the URL into a real clickable "View Image" link.
+            #
+            # A real hyperlink rather than a =HYPERLINK() formula: Excel opens anything
+            # downloaded from a website in Protected View, which does not evaluate formulas,
+            # so the formula version showed an empty cell to every user who did not click
+            # "Enable Editing".
+            #
+            # Excel stores one relationship record per hyperlink and caps them at ~65k per
+            # sheet. Past the cap the cell keeps the plain URL — still usable, just not
+            # clickable — so a very large catalogue degrades instead of producing a file
+            # Excel refuses to open.
+            if picture_url and hyperlink_count < MAX_SHEET_HYPERLINKS:
+                cell = ws.cell(row=ws.max_row, column=len(row))
+                cell.hyperlink = picture_url
+                cell.value = 'View Image'
+                cell.style = 'Hyperlink'
+                hyperlink_count += 1
 
         ws.freeze_panes = 'B2'
         return wb

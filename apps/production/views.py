@@ -360,8 +360,12 @@ class WorkOrderAPIView(APIView):
         # This view builds its queryset by hand and so does not inherit the N+1 protection in
         # list_all_objects/optimize_list_queryset. Joining the floor the serializer now reads
         # keeps the new column from costing one extra query per row. Nullable FK, so LEFT JOIN.
+        # order_by is required, not cosmetic: this method slices with LIMIT/OFFSET, and without
+        # an ORDER BY MySQL may return rows in any order per query — so a work order could show
+        # on both page 1 and page 2, or on neither. work_order_id breaks ties so paging is
+        # stable when several rows share a timestamp.
         base_queryset = WorkOrder.objects.select_related('production_floor_id').annotate(
-            pending_qty=F("quantity") - F("completed_qty"))
+            pending_qty=F("quantity") - F("completed_qty")).order_by('-created_at', 'work_order_id')
         
         # Create a copy of request GET params without page and limit for counting
         query_params = request.GET.copy()
