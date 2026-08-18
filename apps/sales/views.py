@@ -2514,6 +2514,22 @@ class SaleOrderViewSet(APIView):
                 if item.get("product_id") and item.get("quantity")
             ]
             
+        for item in sale_order_items_data:
+            if item.get("amount") is not None:
+                item["amount"] = round(float(item["amount"]), 2)
+            if item.get("rate") is not None:
+                item["rate"] = round(float(item["rate"]), 2)
+            if item.get("discount") is not None:
+                item["discount"] = round(float(item["discount"]), 2)
+            if item.get("cgst") is not None:
+                item["cgst"] = round(float(item["cgst"]), 2)
+            if item.get("sgst") is not None:
+                item["sgst"] = round(float(item["sgst"]), 2)
+            if item.get("igst") is not None:
+                item["igst"] = round(float(item["igst"]), 2)
+            if item.get("tax") is not None:
+                item["tax"] = round(float(item["tax"]), 2)  
+            
         if sale_order_items_data:
             exclude_fields = ['sale_order_id']
             item_error = validate_put_method_data(self, sale_order_items_data, SaleOrderItemsSerializer,
