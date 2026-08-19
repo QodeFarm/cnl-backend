@@ -4417,6 +4417,17 @@ class SaleInvoiceOrdersViewSet(APIView):
             if item.get("tax") is not None:
                 item["tax"] = round(float(item["tax"]), 2)
         #----------------------------------------------------------
+        
+        # Round sale_invoice_order fields
+        if sale_invoice_data:
+            invoice_numeric_fields = [
+                'tax_amount', 'item_tax_amount', 'shipping_tax_amount', 
+                'item_value', 'discount', 'dis_amt', 'taxable', 
+                'cess_amount', 'round_off', 'total_amount', 'advance_amount'
+            ]
+            for field in invoice_numeric_fields:
+                if sale_invoice_data.get(field) is not None:
+                    sale_invoice_data[field] = round(float(sale_invoice_data[field]), 2)
         #----------------------------------------------------------
 
         # ---------------------- VALIDATION ----------------------------------#
