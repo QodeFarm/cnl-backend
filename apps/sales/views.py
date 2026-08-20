@@ -2642,6 +2642,142 @@ class SaleOrderViewSet(APIView):
         return build_response(1, "Records updated successfully", custom_data, status.HTTP_200_OK)
 
 
+    # def patch(self, request, pk, format=None):
+    #     # Determine which DB the sale_order belongs to
+    #     if SaleOrder.objects.using('default').filter(pk=pk).exists():
+    #         db_alias = 'default'
+    #     elif MstcnlSaleOrder.objects.using('mstcnl').filter(pk=pk).exists():
+    #         db_alias = 'mstcnl'
+    #     else:
+    #         return build_response(0, f"sale_order_id {pk} not found in either DB", [], status.HTTP_400_BAD_REQUEST)
+
+    #     # Set DB context
+    #     set_db(db_alias)
+
+    #     sale_order = self.get_object(pk)
+    #     # #print("Sale Order data : ", sale_order)
+    #     if not sale_order:
+    #         return Response(status=status.HTTP_404_NOT_FOUND)
+
+    #     flow_status_id = request.data.get("flow_status_id")
+    #     order_status_id = request.data.get("order_status_id")
+
+    #     if flow_status_id:
+    #         try:
+    #             new_flow_status = FlowStatus.objects.get(pk=flow_status_id)
+
+    #             # ── Flow-status transition validation ──────────────────────
+    #             # Allow these statuses to be set directly (from confirmReceipt / order acknowledgement).
+    #             # Compared case-insensitively: the real DB value is 'Delivery In progress' (lowercase p,
+    #             # see filters.py) but this set previously listed 'Delivery In Progress' (capital P), so a
+    #             # full-invoice advance to Delivery In progress was NOT recognised as a direct status and
+    #             # fell into the strict +1-stage check below - which rejects the (deliberately skipped)
+    #             # transition, leaving the order stuck and hiding the Order Acknowledgement button.
+    #             ALLOWED_DIRECT_STATUSES = {'completed', 'partially delivered', 'dispatch', 'delivery in progress', 'ready for invoice'}
+    #             new_status_name = new_flow_status.flow_status_name
+
+    #             if (new_status_name or '').strip().lower() not in ALLOWED_DIRECT_STATUSES:
+    #                 current_stage = WorkflowStage.objects.filter(
+    #                     flow_status_id=sale_order.flow_status_id
+    #                 ).first()
+    #                 new_stage = WorkflowStage.objects.filter(
+    #                     flow_status_id=new_flow_status
+    #                 ).first()
+
+    #                 if current_stage and new_stage:
+    #                     # Only allow forward by exactly 1 step, or reset to stage 1 (admin)
+    #                     if (new_stage.stage_order != current_stage.stage_order + 1
+    #                             and new_stage.stage_order != 1):
+    #                         return build_response(
+    #                             0,
+    #                             f"Invalid flow status transition from "
+    #                             f"'{sale_order.flow_status_id.flow_status_name}' to '{new_status_name}'.",
+    #                             [],
+    #                             status.HTTP_400_BAD_REQUEST
+    #                         )
+    #             # ── End transition validation ──────────────────────────────
+
+    #             sale_order.flow_status_id = new_flow_status
+    #         except FlowStatus.DoesNotExist:
+    #             return build_response(0, "Invalid flow_status_id", [], status.HTTP_400_BAD_REQUEST)
+
+    #     if order_status_id:
+    #         try:
+    #             new_order_status = OrderStatuses.objects.get(pk=order_status_id)
+    #             sale_order.order_status_id = new_order_status
+    #         except OrderStatuses.DoesNotExist:
+    #             return build_response(0, "Invalid order_status_id", [], status.HTTP_400_BAD_REQUEST)
+
+    #     #  Remove selected items if provided
+    #     sale_order_items_data = request.data.pop("sale_order_items", None)
+
+    #     serializer = SaleOrderOptionsSerializer(sale_order, data=request.data, partial=True)
+    #     if serializer.is_valid():
+    #         serializer.save()
+
+    #         if sale_order_items_data is not None:
+    #             # from sales.models import SaleOrderItems
+
+    #             # Delete only the selected items
+    #             selected_item_ids = [item.get('sale_order_item_id') for item in sale_order_items_data]
+    #             SaleOrderItems.objects.using(db_alias).filter(
+    #                 pk__in=selected_item_ids, sale_order_id=sale_order.pk
+    #             ).delete()
+
+    #             remaining_items = SaleOrderItems.objects.using(db_alias).filter(sale_order_id=sale_order.pk)
+
+    #             item_value_total = 0
+    #             tax_amount_total = 0
+    #             product_discount_total = 0
+
+    #             for item in remaining_items:
+    #                 try:
+    #                     quantity = float(item.quantity or 0)
+    #                     rate = float(item.rate or 0)
+    #                     discount = float(item.discount or 0)
+    #                     cgst = float(item.cgst or 0)
+    #                     sgst = float(item.sgst or 0)
+    #                     igst = float(item.igst or 0)
+
+    #                     item_value = quantity * rate
+    #                     item_discount_amount = (item_value * discount) / 100
+    #                     tax_total = cgst + sgst + igst
+
+    #                     item_value_total += item_value
+    #                     tax_amount_total += tax_total
+    #                     product_discount_total += item_discount_amount
+    #                 except Exception as e:
+    #                     print(f"Error in item {item.pk}: {e}")
+
+    #             overall_discount = float(sale_order.dis_amt or 0)
+    #             cess_amount = float(sale_order.cess_amount or 0)
+
+    #             # Final total calculation
+    #             total_amount = item_value_total - product_discount_total - overall_discount + tax_amount_total + cess_amount
+
+    #             # Round final amount (optional to 2 decimal places)
+    #             rounded_total_amount = round(total_amount, 2)
+
+    #             #  Save updated values
+    #             sale_order.total_amount = rounded_total_amount
+    #             sale_order.tax_amount = tax_amount_total
+    #             sale_order.dis_amt = overall_discount  # unchanged
+    #             sale_order.save() 
+                
+    #             # Log the Create
+    #             log_user_action(
+    #                 db_alias,
+    #                 request.user,
+    #                 "PATCH",
+    #                 "Sale Order",
+    #                 pk,
+    #                 f"{sale_order.order_no} - Sale Order Record Partially Updated by {request.user.username}"
+    #             )         
+
+    #         return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
+
+    #     return build_response(0, 'Data not updated', [], status.HTTP_400_BAD_REQUEST)
+    
     def patch(self, request, pk, format=None):
         # Determine which DB the sale_order belongs to
         if SaleOrder.objects.using('default').filter(pk=pk).exists():
@@ -2718,61 +2854,97 @@ class SaleOrderViewSet(APIView):
             if sale_order_items_data is not None:
                 # from sales.models import SaleOrderItems
 
-                # Delete only the selected items
-                selected_item_ids = [item.get('sale_order_item_id') for item in sale_order_items_data]
-                SaleOrderItems.objects.using(db_alias).filter(
-                    pk__in=selected_item_ids, sale_order_id=sale_order.pk
-                ).delete()
+                # Extract item IDs with validation
+                selected_item_ids = []
+                for item in sale_order_items_data:
+                    item_id = item.get('sale_order_item_id')
+                    if item_id:
+                        selected_item_ids.append(item_id)
+                    else:
+                        print(f"Warning: Missing sale_order_item_id in item: {item}")
 
-                remaining_items = SaleOrderItems.objects.using(db_alias).filter(sale_order_id=sale_order.pk)
+                # Check if we have valid item IDs to delete
+                if selected_item_ids:
+                    # Use the same database as the sale_order instance
+                    sale_order_db = sale_order._state.db
+                    
+                    # Check if items exist before deleting
+                    items_to_delete = SaleOrderItems.objects.using(sale_order_db).filter(
+                        pk__in=selected_item_ids, 
+                        sale_order_id=sale_order.pk
+                    )
+                    
+                    # Verify all items exist
+                    if items_to_delete.count() != len(selected_item_ids):
+                        existing_ids = list(items_to_delete.values_list('pk', flat=True))
+                        missing_ids = [str(id) for id in selected_item_ids if id not in existing_ids]
+                        return build_response(
+                            0, 
+                            f"Sale order items not found: {missing_ids}", 
+                            [], 
+                            status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # Delete the items
+                    items_to_delete.delete()
 
-                item_value_total = 0
-                tax_amount_total = 0
-                product_discount_total = 0
+                    # Get remaining items for recalculation
+                    remaining_items = SaleOrderItems.objects.using(sale_order_db).filter(sale_order_id=sale_order.pk)
 
-                for item in remaining_items:
-                    try:
-                        quantity = float(item.quantity or 0)
-                        rate = float(item.rate or 0)
-                        discount = float(item.discount or 0)
-                        cgst = float(item.cgst or 0)
-                        sgst = float(item.sgst or 0)
-                        igst = float(item.igst or 0)
+                    item_value_total = 0
+                    tax_amount_total = 0
+                    product_discount_total = 0
 
-                        item_value = quantity * rate
-                        item_discount_amount = (item_value * discount) / 100
-                        tax_total = cgst + sgst + igst
+                    for item in remaining_items:
+                        try:
+                            quantity = float(item.quantity or 0)
+                            rate = float(item.rate or 0)
+                            discount = float(item.discount or 0)
+                            cgst = float(item.cgst or 0)
+                            sgst = float(item.sgst or 0)
+                            igst = float(item.igst or 0)
 
-                        item_value_total += item_value
-                        tax_amount_total += tax_total
-                        product_discount_total += item_discount_amount
-                    except Exception as e:
-                        print(f"Error in item {item.pk}: {e}")
+                            item_value = quantity * rate
+                            item_discount_amount = (item_value * discount) / 100
+                            tax_total = cgst + sgst + igst
 
-                overall_discount = float(sale_order.dis_amt or 0)
-                cess_amount = float(sale_order.cess_amount or 0)
+                            item_value_total += item_value
+                            tax_amount_total += tax_total
+                            product_discount_total += item_discount_amount
+                        except Exception as e:
+                            print(f"Error in item {item.pk}: {e}")
 
-                # Final total calculation
-                total_amount = item_value_total - product_discount_total - overall_discount + tax_amount_total + cess_amount
+                    overall_discount = float(sale_order.dis_amt or 0)
+                    cess_amount = float(sale_order.cess_amount or 0)
 
-                # Round final amount (optional to 2 decimal places)
-                rounded_total_amount = round(total_amount, 2)
+                    # Final total calculation
+                    total_amount = item_value_total - product_discount_total - overall_discount + tax_amount_total + cess_amount
 
-                #  Save updated values
-                sale_order.total_amount = rounded_total_amount
-                sale_order.tax_amount = tax_amount_total
-                sale_order.dis_amt = overall_discount  # unchanged
-                sale_order.save() 
-                
-                # Log the Create
-                log_user_action(
-                    db_alias,
-                    request.user,
-                    "PATCH",
-                    "Sale Order",
-                    pk,
-                    f"{sale_order.order_no} - Sale Order Record Partially Updated by {request.user.username}"
-                )         
+                    # Round final amount (optional to 2 decimal places)
+                    rounded_total_amount = round(total_amount, 2)
+
+                    #  Save updated values
+                    sale_order.total_amount = rounded_total_amount
+                    sale_order.tax_amount = tax_amount_total
+                    sale_order.dis_amt = overall_discount  # unchanged
+                    sale_order.save() 
+                    
+                    # Log the Create
+                    log_user_action(
+                        sale_order_db,  # Use the same database for logging
+                        request.user,
+                        "PATCH",
+                        "Sale Order",
+                        pk,
+                        f"{sale_order.order_no} - Sale Order Record Partially Updated by {request.user.username}"
+                    )
+                else:
+                    return build_response(
+                        0, 
+                        "No valid sale_order_item_id provided for deletion", 
+                        [], 
+                        status.HTTP_400_BAD_REQUEST
+                    )
 
             return build_response(1, 'Data Updated Successfully', serializer.data, status.HTTP_200_OK)
 
