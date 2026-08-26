@@ -3874,6 +3874,13 @@ class SaleInvoiceOrdersViewSet(APIView):
                 except Exception as e:
                     logger.error(f"Error replicating invoice {instance.invoice_no} to mstcnl: {str(e)}")
 
+                
+                JournalEntryLines.objects.using(db_to_use).filter(
+                    voucher_no=instance.invoice_no,
+                    customer_id=instance.customer_id,
+                    is_deleted=False,
+                ).update(is_deleted=True)
+
                 # Now permanently delete from the current database
                 instance.delete(using=db_to_use)
                 logger.info(f"Invoice {instance.invoice_no} permanently deleted from {db_to_use} database.")

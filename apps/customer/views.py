@@ -10,6 +10,7 @@ from apps.customfields.models import CustomField, CustomFieldValue
 from apps.customfields.serializers import CustomFieldSerializer, CustomFieldValueSerializer
 from apps.sales.filters import SaleOrderFilter
 from apps.sales.models import PaymentTransactions, SaleInvoiceOrders, SaleOrder
+from apps.finance.views import customer_ledger_balance
 from config.utils_db_router import set_db
 from config.utils_filter_methods import filter_response, list_filtered_objects
 from .models import *
@@ -2556,23 +2557,10 @@ from rest_framework.response import Response
 class CustomerOutstandingAPIView(APIView):
 
     def get(self, request, customer_id):
-        from decimal import Decimal
-
-        # Outstanding must be read from each invoice's live pending_amount, NOT by
-        # summing PaymentTransactions.outstanding_amount. That column stores a
-        # per-payment running snapshot (total_amount - running_paid), so an invoice
-        # paid in several installments leaves stale non-zero snapshots on the older
-        # rows that are never zeroed — summing them double-counts (and never-paid
-        # invoices, which have no payment rows at all, would be missed entirely).
-        # pending_amount is maintained per invoice and is the single source of truth.
-        outstanding = SaleInvoiceOrders.objects.filter(
-            customer_id=customer_id,
-            is_deleted=False,
-        ).exclude(
-            order_status_id__status_name='Cancelled'
-        ).aggregate(
-            total_outstanding=Sum(Coalesce('pending_amount', 'total_amount'))
-        )['total_outstanding'] or Decimal('0.00')
+        # Outstanding is the customer's AR sub-ledger balance, read through the same
+        # helper the Account Ledger screen uses - so the sale-order/invoice strip and
+        # the ledger are computed once and can never drift apart.
+        outstanding = customer_ledger_balance(customer_id)
 
         return Response({
             "customer_id": customer_id,
