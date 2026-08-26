@@ -2514,6 +2514,22 @@ class SaleOrderViewSet(APIView):
                 if item.get("product_id") and item.get("quantity")
             ]
             
+        for item in sale_order_items_data:
+            if item.get("amount") is not None:
+                item["amount"] = round(float(item["amount"]), 2)
+            if item.get("rate") is not None:
+                item["rate"] = round(float(item["rate"]), 2)
+            if item.get("discount") is not None:
+                item["discount"] = round(float(item["discount"]), 2)
+            if item.get("cgst") is not None:
+                item["cgst"] = round(float(item["cgst"]), 2)
+            if item.get("sgst") is not None:
+                item["sgst"] = round(float(item["sgst"]), 2)
+            if item.get("igst") is not None:
+                item["igst"] = round(float(item["igst"]), 2)
+            if item.get("tax") is not None:
+                item["tax"] = round(float(item["tax"]), 2)  
+            
         if sale_order_items_data:
             exclude_fields = ['sale_order_id']
             item_error = validate_put_method_data(self, sale_order_items_data, SaleOrderItemsSerializer,
@@ -4408,6 +4424,17 @@ class SaleInvoiceOrdersViewSet(APIView):
             if item.get("tax") is not None:
                 item["tax"] = round(float(item["tax"]), 2)
         #----------------------------------------------------------
+        
+        # Round sale_invoice_order fields
+        if sale_invoice_data:
+            invoice_numeric_fields = [
+                'tax_amount', 'item_tax_amount', 'shipping_tax_amount', 
+                'item_value', 'discount', 'dis_amt', 'taxable', 
+                'cess_amount', 'round_off', 'total_amount', 'advance_amount'
+            ]
+            for field in invoice_numeric_fields:
+                if sale_invoice_data.get(field) is not None:
+                    sale_invoice_data[field] = round(float(sale_invoice_data[field]), 2)
         #----------------------------------------------------------
 
         # ---------------------- VALIDATION ----------------------------------#
@@ -4448,10 +4475,10 @@ class SaleInvoiceOrdersViewSet(APIView):
             )
 
         if not sale_invoice_data or not sale_invoice_items_data:
-            logger.error("Sale invoice and items & CustomFields are mandatory but not provided.")
+            # logger.error("Sale invoice and items & CustomFields are mandatory but not provided.")
             return build_response(
                 0,
-                "Sale invoice and items & CustomFields are mandatory",
+                "Sale invoice data & sale invoice items are mandatory, and also check the availble balance of the product in stock. If the product is not available in stock, please add it to the stock first.",
                 [],
                 status.HTTP_400_BAD_REQUEST
             )
@@ -11570,33 +11597,93 @@ class FetchSalesInvoicesForPaymentReceiptTable(APIView):
         Fetches only invoices with pending payments (outstanding_amount > 0)'''
     
     def get(self, request, customer_id):
-        # Fetch ONLY invoices with pending amount for this customer
-        sale_invoice = SaleInvoiceOrders.objects.filter(
-            customer_id=customer_id,
-            pending_amount__gt=0  # Critical filter: only pending invoices
-        )
-        
-        if not sale_invoice.exists():
-            return build_response(
-                0, 
-                "No pending invoices found for this customer",  # Updated message
-                None, 
-                status.HTTP_400_BAD_REQUEST
-            ) 
-
         try:
-            serializer = SaleInvoiceOrdersSerializer(sale_invoice, many=True)
+            # Base queryset
+            base_queryset = SaleInvoiceOrders.objects.filter(
+                customer_id=customer_id,
+                pending_amount__gt=0
+            )
+            
+            if not base_queryset.exists():
+                return build_response(
+                    0, 
+                    "No pending invoices found for this customer",
+                    None, 
+                    status.HTTP_400_BAD_REQUEST
+                )
+            
+            # ===================== HANDLE SEARCH PARAMETER =====================
+            # Support both 's' (for FilterSet) and 'search' (for frontend compatibility)
+            filter_params = request.GET.copy()
+            
+            # If 'search' param exists but 's' doesn't, map it
+            if 'search' in filter_params and 's' not in filter_params:
+                filter_params['s'] = filter_params['search']
+            
+            # Remove pagination params before applying filters to avoid conflicts
+            if 'page' in filter_params:
+                del filter_params['page']
+            if 'limit' in filter_params:
+                del filter_params['limit']
+            
+            # Apply filters using SaleInvoiceOrdersFilter
+            filterset = SaleInvoiceOrdersFilter(filter_params, queryset=base_queryset)
+            if filterset.is_valid():
+                queryset = filterset.qs
+            else:
+                queryset = base_queryset
+            
+            if not queryset.exists():
+                return build_response(
+                    0, 
+                    "No matching invoices found",
+                    None, 
+                    status.HTTP_400_BAD_REQUEST
+                )
+            
+            # ===================== APPLY PAGINATION =====================
+            # Get pagination parameters
+            page = int(request.query_params.get("page", 1))
+            limit = int(request.query_params.get("limit", 10))
+            
+            # Calculate start and end indices
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            
+            # Get total count BEFORE pagination
+            total_count = queryset.count()
+            
+            # Get paginated results
+            paginated_results = queryset[start_index:end_index]
+            
+            # Serialize paginated results
+            serializer = SaleInvoiceOrdersSerializer(paginated_results, many=True)
+            
+            # Sort the paginated data by created_at
             sorted_data = sorted(
                 serializer.data,
                 key=lambda x: x['created_at']
             )
-            return build_response(
-                len(serializer.data), 
-                "Pending Sale Invoices",  # Updated message
-                sorted_data, 
+            
+            # Calculate total pages
+            total_pages = (total_count + limit - 1) // limit if limit > 0 else 0
+            
+            # Log pagination info for debugging
+            logger.info(f"Total records: {total_count}, Page: {page}, Limit: {limit}, Total Pages: {total_pages}, Records on this page: {len(sorted_data)}")
+            
+            # Return with pagination metadata
+            return filter_response(
+                total_count,
+                "Pending Sale Invoices",
+                sorted_data,
+                page,
+                limit,
+                total_count,
                 status.HTTP_200_OK
             )
+            
         except Exception as e:
+            logger.error(f"Error in FetchSalesInvoicesForPaymentReceiptTable: {str(e)}")
             return build_response(
                 0, 
                 "An error occurred", 
