@@ -246,7 +246,8 @@ class VendorViewSet(APIView):
         logger.info("Retrieving vendor summary")
 
         page, limit = self.get_pagination_params(request)
-        queryset = Vendor.objects.all().order_by('is_deleted', '-created_at')
+        queryset = Vendor.objects.all().order_by('-created_at')
+
         queryset, total_count = self.apply_filters(request, queryset, VendorFilter, Vendor)
 
         serializer = VendorsOptionsSerializer(queryset, many=True)
@@ -257,7 +258,8 @@ class VendorViewSet(APIView):
         logger.info("Retrieving all vendors")
 
         page, limit = self.get_pagination_params(request)
-        queryset = Vendor.objects.all().order_by('is_deleted', '-created_at')
+        queryset = Vendor.objects.all().order_by('-created_at')
+
         queryset, total_count = self.apply_filters(request, queryset, VendorFilter, Vendor)
 
         serializer = VendorSerializer(queryset, many=True)

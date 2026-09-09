@@ -131,6 +131,10 @@ class Vendor(models.Model):
         """
         Override save to ensure the order number is only generated on creation, not on updates.
         """
+        
+        # Auto-fill print_name from name if print_name is not provided
+        if self.name and not self.print_name:
+            self.print_name = self.name
         # Determine if this is a new record based on the `adding` state
         is_new_record = self._state.adding
 
