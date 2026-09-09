@@ -182,6 +182,40 @@ def order_account_ledger(queryset):
     )
 
 
+def account_ledger_balance(queryset, account_type):
+    """Canonical account balance - the SINGLE source of truth for what a customer or
+    vendor owes. Every screen that shows a balance must go through this so the Account
+    Ledger and the sale-order/invoice outstanding strip can never disagree again.
+
+    It is a pure aggregate (SUM debit - SUM credit), so unlike the stored `balance`
+    column it does not depend on row order and is immune to back-dated entries.
+
+    Sign convention matches the ledger: receivable (customer) is debit-positive,
+    payable (vendor) is credit-positive - see the vendor payable-view note in
+    JournalEntryLinesAPIView. Returns (total_debit, total_credit, balance).
+    """
+    agg = queryset.aggregate(total_debit=Sum('debit'), total_credit=Sum('credit'))
+    total_debit = Decimal(str(agg['total_debit'] or '0.00'))
+    total_credit = Decimal(str(agg['total_credit'] or '0.00'))
+    if account_type == 'vendor':
+        return total_debit, total_credit, total_credit - total_debit
+    return total_debit, total_credit, total_debit - total_credit
+
+
+def customer_ledger_balance(customer_id):
+    """Live receivable balance for one customer, from the ledger.
+
+    This is what 'outstanding' means everywhere in the app. Deliberately NOT
+    SUM(sale_invoice_orders.pending_amount): that column only knows about invoices and
+    payments, so it silently ignores opening balances, credit notes and sale returns -
+    which is how the sale-order strip came to disagree with the Account Ledger.
+    """
+    return account_ledger_balance(
+        JournalEntryLines.objects.filter(customer_id=customer_id, is_deleted=False),
+        'customer',
+    )[2]
+
+
 class JournalEntryLinesAPIView(APIView):
 
     def post(self, customer_id, ledger_account_id, amount, description, invoice_no):
@@ -414,17 +448,9 @@ class JournalEntryLinesAPIView(APIView):
         # ---------------------------
         # STEP 7: ACCOUNT-WIDE AGGREGATES VIA DB (no full record load)
         # ---------------------------
-        agg = filtered_queryset.aggregate(
-            total_debit=Sum('debit'),
-            total_credit=Sum('credit'),
+        total_debit_sum, total_credit_sum, final_balance = account_ledger_balance(
+            filtered_queryset, account_type
         )
-        total_debit_sum  = Decimal(str(agg['total_debit']  or '0.00'))
-        total_credit_sum = Decimal(str(agg['total_credit'] or '0.00'))
-
-        if account_type == 'vendor':
-            final_balance = total_credit_sum - total_debit_sum
-        else:
-            final_balance = total_debit_sum - total_credit_sum
 
         # ---------------------------
         # STEP 8: OPENING BALANCE (sum of rows strictly before this page)
@@ -438,15 +464,10 @@ class JournalEntryLinesAPIView(APIView):
                 .values_list('journal_entry_line_id', flat=True)[:start]
             )
             if pre_pks:
-                pre_agg = JournalEntryLines.objects.filter(
-                    journal_entry_line_id__in=pre_pks
-                ).aggregate(pre_debit=Sum('debit'), pre_credit=Sum('credit'))
-                pre_debit  = Decimal(str(pre_agg['pre_debit']  or '0.00'))
-                pre_credit = Decimal(str(pre_agg['pre_credit'] or '0.00'))
-                if account_type == 'vendor':
-                    opening_balance = pre_credit - pre_debit
-                else:
-                    opening_balance = pre_debit - pre_credit
+                _, _, opening_balance = account_ledger_balance(
+                    JournalEntryLines.objects.filter(journal_entry_line_id__in=pre_pks),
+                    account_type,
+                )
 
         # ---------------------------
         # STEP 9: FETCH ONLY CURRENT PAGE
